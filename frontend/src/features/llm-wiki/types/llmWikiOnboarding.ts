@@ -1,7 +1,9 @@
 /**
  * LLM Wiki 온보딩(생성 마법사) 타입. 온보딩 제출 API가 백엔드에 없어 화면 계약은 mock이다.
- * [BE]는 server/wiki의 ChannelListItemResponse에 실재하는 필드, [SPEC]은 시안·명세에만 있는 값.
+ * 채널 [BE] 타입은 llmWikiModel이 원천이고, [SPEC]은 시안·명세에만 있는 값이다.
  */
+
+import type { WikiChannelListItem } from './llmWikiModel';
 
 export interface OnboardingStepInfo {
   /** 1부터 시작하는 표시 번호 */
@@ -35,26 +37,10 @@ export interface WikiToneStyleOption {
   label: string;
 }
 
-/** [BE] GET /api/v1/wiki/channels 폴더 한 줄 (FolderResponse 대응) */
-export interface WikiChannelFolder {
-  id: string;
-  name: string;
-  channelId: string;
-}
-
-/** [BE] GET /api/v1/wiki/channels 한 줄 (ChannelListItemResponse의 camelCase 전사) */
-export interface WikiChannelListItem {
-  id: string;
-  name: string;
-  workspaceId: number;
-  isAdmin: boolean;
-  documentCount: number;
-  folders: readonly WikiChannelFolder[];
-}
-
-/** 채널 표의 행. lastModifiedLabel은 [SPEC] — 백엔드 계약에 수정일 필드가 없다 */
+/** 채널 표의 행. 채널 실물은 llmWikiModel의 [BE] 타입을 그대로 소비한다 */
 export interface OnboardingChannelRow {
   channel: WikiChannelListItem;
+  /** [SPEC] 시안의 "최근 수정일" 열 — 백엔드 계약에 대응 필드가 없다 */
   lastModifiedLabel: string;
 }
 
