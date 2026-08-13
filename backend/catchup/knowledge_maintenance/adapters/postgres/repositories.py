@@ -27,6 +27,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import aliased
 
 from catchup.db.models import ArtifactDefinition as ArtifactDefinitionRow
 from catchup.db.models import KnowledgeArtifact as KnowledgeArtifactRow
@@ -84,6 +85,9 @@ from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import deserialize_blocks
 from catchup.knowledge_maintenance.domain.artifact import serialize_blocks
 from catchup.knowledge_maintenance.domain.artifact import validate_blocks
+from catchup.knowledge_maintenance.domain.artifact_definition import DIRECTION_ANY
+from catchup.knowledge_maintenance.domain.artifact_definition import DIRECTION_IN
+from catchup.knowledge_maintenance.domain.artifact_definition import DIRECTION_OUT
 from catchup.knowledge_maintenance.domain.artifact_definition import (
     deserialize_selection_spec,
 )
@@ -146,6 +150,7 @@ from catchup.knowledge_maintenance.ports.mutation_proposals import StoredMergePr
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredOperation
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPendingProposal
 from catchup.knowledge_maintenance.ports.ontology import OntologySnapshotConflict
+from catchup.knowledge_maintenance.ports.relations import StoredRelationEdge
 from catchup.observability.logging import get_logger
 
 logger = get_logger(__name__)
@@ -2990,6 +2995,133 @@ class SqlAlchemyArtifactDefinitionRepository:
                 self._session.execute(statement).all()
             )
         )
+
+
+class SqlAlchemyRelationRepository:
+    """관계 한 걸음 읽기를 PostgreSQL로 구현한다.
+
+    artifact 저장소와 같이 workspace를 생성 시점에 고정한다.
+    """
+
+    def __init__(self, session: Session, workspace_id: int | None) -> None:
+        self._session = session
+        self._scoped_workspace_id = workspace_id
+
+    @property
+    def _workspace_id(self) -> int:
+        """고정된 workspace를 돌려준다. 없으면 쓰지 못하게 막는다."""
+        if self._scoped_workspace_id is None:
+            raise RuntimeError(
+                "관계 저장소는 workspace_id를 받은 UnitOfWork에서만 쓸 수"
+                " 있다."
+            )
+        return self._scoped_workspace_id
+
+    def find_edges(
+        self,
+        *,
+        node_ids: Sequence[uuid.UUID],
+        relation_type: str,
+        direction: str,
+        now: datetime,
+    ) -> list[StoredRelationEdge]:
+        """주어진 노드에 걸린 살아 있는 관계 간선을 읽는다.
+
+        끝점 해소는 `find_claim_candidates`의 subject 해소와 같은
+        방식이다. 노드를 직접 가리키는 끝점과, 그 노드로 해소된 entity
+        후보를 가리키는 끝점은 같은 대상을 가리키기 때문이다. 두 칸을
+        coalesce로 한 값으로 합쳐, 걸러 내기와 돌려주기 양쪽이 같은
+        표현을 본다 — 주어진 노드를 원본 칸으로만 맞추면 후보를 거쳐
+        들어온 간선이 통째로 빠져 경로가 한 걸음 앞에서 끊긴다.
+
+        해소되지 않은 끝점이 있으면 그 행은 빠진다. 어느 노드를
+        가리키는지 정해지지 않은 끝점은 순회의 다음 출발점이 될 수 없다.
+
+        생사 판정은 domain.temporal.claim_not_closed_at과 같은 술어를
+        SQL로 옮긴 것이다. valid_from은 보지 않고 닫힌 관계만 뺀다.
+
+        상태로 거르는 것은 `find_claim_candidates`와 같다 — rejected는
+        참이었던 적이 없고, superseded는 재추출이 대체한 구 배치라
+        새 배치와 함께 실리면 같은 관계가 두 번 들어간다.
+
+        정렬을 DB에 맡긴다. 식별자를 문자열로 캐 C 대조 규칙으로 줄을
+        세우므로, 서버 로케일이 달라도 같은 차례가 나온다.
+        """
+        source_candidate = aliased(KnowledgeEntityCandidateRow)
+        target_candidate = aliased(KnowledgeEntityCandidateRow)
+        source_endpoint = func.coalesce(
+            KnowledgeRelationCandidateRow.source_node_id,
+            source_candidate.resolved_node_id,
+        )
+        target_endpoint = func.coalesce(
+            KnowledgeRelationCandidateRow.target_node_id,
+            target_candidate.resolved_node_id,
+        )
+        wanted = list(node_ids)
+        if direction == DIRECTION_OUT:
+            reachable = source_endpoint.in_(wanted)
+        elif direction == DIRECTION_IN:
+            reachable = target_endpoint.in_(wanted)
+        elif direction == DIRECTION_ANY:
+            reachable = or_(
+                source_endpoint.in_(wanted), target_endpoint.in_(wanted)
+            )
+        else:
+            raise ValueError(f"알 수 없는 관계 방향이다: {direction}")
+
+        statement = (
+            select(
+                KnowledgeRelationCandidateRow.id,
+                source_endpoint,
+                target_endpoint,
+                KnowledgeRelationCandidateRow.assertion_text,
+            )
+            .outerjoin(
+                source_candidate,
+                KnowledgeRelationCandidateRow.source_entity_candidate_id
+                == source_candidate.id,
+            )
+            .outerjoin(
+                target_candidate,
+                KnowledgeRelationCandidateRow.target_entity_candidate_id
+                == target_candidate.id,
+            )
+            .where(
+                KnowledgeRelationCandidateRow.workspace_id
+                == self._workspace_id,
+                KnowledgeRelationCandidateRow.relation_type == relation_type,
+                KnowledgeRelationCandidateRow.resolution_status.notin_(
+                    (
+                        AssertionResolutionStatus.REJECTED.value,
+                        AssertionResolutionStatus.SUPERSEDED.value,
+                    )
+                ),
+                or_(
+                    KnowledgeRelationCandidateRow.valid_to.is_(None),
+                    KnowledgeRelationCandidateRow.valid_to > now,
+                ),
+                source_endpoint.is_not(None),
+                target_endpoint.is_not(None),
+                reachable,
+            )
+            .order_by(
+                collate(cast(KnowledgeRelationCandidateRow.id, Text), "C")
+            )
+        )
+        return [
+            StoredRelationEdge(
+                id=relation_id,
+                source_node_id=source_node_id,
+                target_node_id=target_node_id,
+                assertion_text=assertion_text,
+            )
+            for (
+                relation_id,
+                source_node_id,
+                target_node_id,
+                assertion_text,
+            ) in self._session.execute(statement).all()
+        ]
 
 
 class SqlAlchemyBlockVerdictRepository:

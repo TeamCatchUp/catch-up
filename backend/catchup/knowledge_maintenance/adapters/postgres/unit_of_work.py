@@ -34,6 +34,9 @@ from catchup.knowledge_maintenance.adapters.postgres.repositories import (
     SqlAlchemyPipelineEventRepository,
 )
 from catchup.knowledge_maintenance.adapters.postgres.repositories import (
+    SqlAlchemyRelationRepository,
+)
+from catchup.knowledge_maintenance.adapters.postgres.repositories import (
     SqlAlchemySourceVersionRepository,
 )
 
@@ -57,6 +60,7 @@ class KnowledgeMaintenanceUnitOfWork:
     artifacts: SqlAlchemyArtifactRepository
     artifact_definitions: SqlAlchemyArtifactDefinitionRepository
     block_verdicts: SqlAlchemyBlockVerdictRepository
+    relations: SqlAlchemyRelationRepository
 
     def __init__(
         self,
@@ -67,7 +71,7 @@ class KnowledgeMaintenanceUnitOfWork:
         """transaction 경계를 만든다.
 
         `workspace_id`는 artifact 저장소와 정의 저장소와 블록 결정
-        저장소만 쓴다. 다른 저장소는 메서드마다 workspace를 받으므로
+        저장소와 관계 저장소만 쓴다. 다른 저장소는 메서드마다 workspace를 받으므로
         기본값을 두어 기존 호출자를 그대로 둔다. 문서 작업을 하려면
         반드시 넘겨야 하며, 없이 쓰면 저장소가 막는다.
 
@@ -100,6 +104,9 @@ class KnowledgeMaintenanceUnitOfWork:
             session, self._workspace_id
         )
         self.block_verdicts = SqlAlchemyBlockVerdictRepository(
+            session, self._workspace_id
+        )
+        self.relations = SqlAlchemyRelationRepository(
             session, self._workspace_id
         )
         return self
