@@ -1,31 +1,35 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { notFound, useParams, useRouter } from 'next/navigation';
 
 import WikiFolderPage from '@/features/llm-wiki/components/space/WikiFolderPage';
-import {
-  FOLDER_DOCUMENT_ROW_FIXTURES,
-  WIKI_CHANNEL_FIXTURE,
-  WIKI_FOLDER_FIXTURE,
-} from '@/features/llm-wiki/fixtures/llmWikiSpaceFixtures';
+import { findWikiDocument } from '@/features/llm-wiki/fixtures/llmWikiDocumentFixtures';
+import { FOLDER_DOCUMENT_ROW_FIXTURES, WIKI_CHANNEL_FIXTURE } from '@/features/llm-wiki/fixtures/llmWikiSpaceFixtures';
 
 const PAGE_SIZE = 20;
 
 /**
  * 폴더 화면. 폴더 내 문서 목록 API가 없어 픽스처를 렌더한다 —
- * 실 API 도착 시 이 픽스처 자리만 교체한다(id 조회 포함).
+ * 실 API 도착 시 이 픽스처 자리만 교체한다.
  */
 export default function Page() {
   const router = useRouter();
+  const { id } = useParams<{ id: string }>();
   const [currentPage, setCurrentPage] = useState(1);
-  const totalPages = Math.max(1, Math.ceil(FOLDER_DOCUMENT_ROW_FIXTURES.length / PAGE_SIZE));
+
+  const folder = WIKI_CHANNEL_FIXTURE.folders.find((item) => item.id === id);
+  if (!folder) notFound();
+
+  // 문서 픽스처에 없는 행은 열면 404라, mock에서는 나열하지 않는다
+  const documentRows = FOLDER_DOCUMENT_ROW_FIXTURES.filter((row) => findWikiDocument(row.id));
+  const totalPages = Math.max(1, Math.ceil(documentRows.length / PAGE_SIZE));
 
   return (
     <WikiFolderPage
       channel={WIKI_CHANNEL_FIXTURE}
-      folder={WIKI_FOLDER_FIXTURE}
-      documentRows={FOLDER_DOCUMENT_ROW_FIXTURES}
+      folder={folder}
+      documentRows={documentRows}
       authorName="팀원G"
       pageSize={PAGE_SIZE}
       currentPage={currentPage}
