@@ -31,11 +31,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
 from catchup.configs.config import settings
+from catchup.db.models import ArtifactOwner
 from catchup.db.models import KnowledgeArtifact
 from catchup.db.models import KnowledgeArtifactChangeProposal as ProposalRow
 from catchup.db.models import KnowledgeArtifactRevision as RevisionRow
 from catchup.db.models import KnowledgeBlockVerdict
 from catchup.db.models import KnowledgeNode as NodeRow
+from catchup.db.models import User
 from catchup.db.models import Workspace
 from catchup.evaluation.cleanup_entity_summary_artifacts import format_report
 from catchup.evaluation.cleanup_entity_summary_artifacts import run_cleanup
@@ -140,8 +142,18 @@ def _artifact(
     return artifact_id
 
 
+def _any_user_id(session: Session) -> int:
+    """담당자 행에 쓸 아무 user 하나를 고른다."""
+    user_id = session.execute(
+        select(User.id).order_by(User.id).limit(1)
+    ).scalar()
+    if user_id is None:
+        pytest.skip("user가 없어 통합 테스트를 건너뛴다.")
+    return user_id
+
+
 def _full_tree(session: Session, workspace_id: int) -> uuid.UUID:
-    """문서 한 편과 그 아래 변경안·판·블록 판정을 한 벌로 심는다.
+    """문서 한 편과 그 아래 변경안·판·판정·담당자를 한 벌로 심는다.
 
     변경안과 판이 서로를 가리키는 모양(base_revision_id ↔
     source_proposal_id)까지 그대로 만든다. 러너가 그 순환을 끊고 지우는지
@@ -149,6 +161,10 @@ def _full_tree(session: Session, workspace_id: int) -> uuid.UUID:
 
     변경안은 승인 상태로 둔다. 사람이 이미 결정한 행까지 이 러너가 지운다는
     점이 확인 대상이기 때문이다.
+
+    담당자 행도 함께 심는다. 문서 삭제에 딸려 사라지는 CASCADE와 러너가
+    직접 지우는 것은 다른 일이고, 세어 준 수가 맞는지도 이 행이 있어야
+    확인할 수 있다.
     """
     artifact_id = _artifact(session, workspace_id)
     proposal_id = uuid.uuid4()
@@ -197,6 +213,12 @@ def _full_tree(session: Session, workspace_id: int) -> uuid.UUID:
             reviewed_at=decided_at,
         )
     )
+    session.add(
+        ArtifactOwner(
+            artifact_id=artifact_id,
+            user_id=_any_user_id(session),
+        )
+    )
     session.flush()
     return artifact_id
 
@@ -220,12 +242,43 @@ def _legacy_artifacts(session: Session, workspace_id: int) -> int:
     ).scalar_one()
 
 
+def _verdict_ids(session: Session, artifact_id: uuid.UUID) -> list[uuid.UUID]:
+    """문서에 딸린 블록 판정의 식별자를 모은다.
+
+    판정을 문서로 되짚으려면 변경안을 거쳐야 한다. 지운 뒤에도 세려면
+    식별자를 미리 들고 있어야 한다 — 변경안이 사라지면 조인으로는 늘
+    0이 나와, 정말 지워졌는지 확인이 되지 않는다.
+    """
+    rows = session.execute(
+        select(KnowledgeBlockVerdict.id)
+        .join(ProposalRow, ProposalRow.id == KnowledgeBlockVerdict.proposal_id)
+        .where(ProposalRow.artifact_id == artifact_id)
+    ).scalars()
+    return list(rows)
+
+
+def _verdicts_of(session: Session, artifact_id: uuid.UUID) -> int:
+    """문서에 딸린 블록 판정 수를 센다."""
+    return len(_verdict_ids(session, artifact_id))
+
+
+def _rows_with_ids(session: Session, ids: list[uuid.UUID]) -> int:
+    """주어진 식별자로 남아 있는 블록 판정 수를 센다."""
+    if not ids:
+        return 0
+    return session.execute(
+        select(func.count())
+        .select_from(KnowledgeBlockVerdict)
+        .where(KnowledgeBlockVerdict.id.in_(ids))
+    ).scalar_one()
+
+
 def test_dry_run_deletes_nothing(
     session: Session,
     workspace_id: int,
 ) -> None:
     """기본 실행은 세어 보기만 하고 한 행도 지우지 않는다."""
-    _full_tree(session, workspace_id)
+    artifact_id = _full_tree(session, workspace_id)
     before = _legacy_artifacts(session, workspace_id)
 
     counts = run_cleanup(session, workspace_id=workspace_id, apply=False)
@@ -234,21 +287,31 @@ def test_dry_run_deletes_nothing(
     assert counts.proposals >= 1
     assert counts.revisions >= 1
     assert counts.block_verdicts >= 1
+    assert counts.artifact_owners >= 1
     assert _legacy_artifacts(session, workspace_id) == before
+    # 문서만이 아니라 파생 행 전부가 그대로 남아 있어야 dry-run이다.
+    assert _count(session, ProposalRow, artifact_id=artifact_id) == 1
+    assert _count(session, RevisionRow, artifact_id=artifact_id) == 1
+    assert _count(session, ArtifactOwner, artifact_id=artifact_id) == 1
+    assert _verdicts_of(session, artifact_id) == 1
 
 
 def test_apply_deletes_legacy_and_derived_rows(
     session: Session,
     workspace_id: int,
 ) -> None:
-    """--apply는 문서와 그 아래 변경안·판·판정을 함께 지운다."""
+    """--apply는 문서와 그 아래 변경안·판·판정·담당자를 함께 지운다."""
     artifact_id = _full_tree(session, workspace_id)
+    verdict_ids = _verdict_ids(session, artifact_id)
+    assert verdict_ids
 
     run_cleanup(session, workspace_id=workspace_id, apply=True)
 
     assert _count(session, KnowledgeArtifact, id=artifact_id) == 0
     assert _count(session, ProposalRow, artifact_id=artifact_id) == 0
     assert _count(session, RevisionRow, artifact_id=artifact_id) == 0
+    assert _count(session, ArtifactOwner, artifact_id=artifact_id) == 0
+    assert _rows_with_ids(session, verdict_ids) == 0
     assert _legacy_artifacts(session, workspace_id) == 0
 
 
@@ -281,19 +344,29 @@ def test_other_workspace_survives(
     session_factory: Callable[[], Session],
     workspace_id: int,
 ) -> None:
-    """다른 workspace의 같은 모양 문서는 건드리지 않는다."""
+    """다른 workspace의 같은 모양 문서는 파생 행까지 통째로 남는다.
+
+    문서 행만 확인하면 남의 workspace 변경안·판·판정·담당자가 딸려간
+    사고를 놓친다. 지우는 범위는 문서 하나가 아니라 나무 한 그루다.
+    """
     company_id = session.execute(
         select(Workspace.company_id).where(Workspace.id == workspace_id)
     ).scalar_one()
     other = Workspace(name=f"ws-{uuid.uuid4().hex[:8]}", company_id=company_id)
     session.add(other)
     session.flush()
-    other_id = _artifact(session, other.id)
+    other_id = _full_tree(session, other.id)
+    other_verdict_ids = _verdict_ids(session, other_id)
+    assert other_verdict_ids
     _full_tree(session, workspace_id)
 
     run_cleanup(session, workspace_id=workspace_id, apply=True)
 
     assert _count(session, KnowledgeArtifact, id=other_id) == 1
+    assert _count(session, ProposalRow, artifact_id=other_id) == 1
+    assert _count(session, RevisionRow, artifact_id=other_id) == 1
+    assert _count(session, ArtifactOwner, artifact_id=other_id) == 1
+    assert _rows_with_ids(session, other_verdict_ids) == 1
 
 
 def test_dry_run_report_mentions_reprojection(

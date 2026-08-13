@@ -117,6 +117,19 @@ def _node(
     return node.id
 
 
+def _other_workspace(session: Session, seed_workspace_id: int) -> int:
+    """경계 확인에 쓸 다른 workspace를 하나 마련한다."""
+    company_id = session.execute(
+        select(Workspace.company_id).where(Workspace.id == seed_workspace_id)
+    ).scalar_one()
+    workspace = Workspace(
+        name=f"ws-{uuid.uuid4().hex[:8]}", company_id=company_id
+    )
+    session.add(workspace)
+    session.flush()
+    return workspace.id
+
+
 def test_selects_only_matching_active_nodes(
     workspace_id: int,
     session_factory: Callable[[], Session],
@@ -142,6 +155,30 @@ def test_selects_only_matching_active_nodes(
         )
 
     assert [source.display_name for source in found] == ["요청 A", "요청 B"]
+
+
+def test_selection_hides_other_workspace_nodes(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """조건이 같아도 남의 workspace 노드는 목록에 들지 않는다.
+
+    이 질의는 문서를 세울 대상을 고르는 자리다. 경계가 새면 남의
+    workspace 지식으로 문서가 서므로, 실 DB에서 못박는다.
+    """
+    with session_factory() as session:
+        other_workspace_id = _other_workspace(session, workspace_id)
+        _node(session, workspace_id, "내 요청", "support_ticket")
+        _node(session, other_workspace_id, "남의 요청", "support_ticket")
+        session.commit()
+
+    with uow_factory() as uow:
+        found = uow.artifacts.find_entity_nodes_by_types(
+            entity_types=["support_ticket"]
+        )
+
+    assert [source.display_name for source in found] == ["내 요청"]
 
 
 def test_selection_is_deterministic(

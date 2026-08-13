@@ -40,6 +40,7 @@ from catchup.db.models import KnowledgeClaimCandidate as ClaimRow
 from catchup.db.models import KnowledgeExtractionRun as RunRow
 from catchup.db.models import KnowledgeNode as NodeRow
 from catchup.db.models import KnowledgeOntologySnapshot as SnapshotRow
+from catchup.db.models import KnowledgeRelationAssertionCandidate
 from catchup.db.models import Observation as ObservationRow
 from catchup.db.models import SourceVersion as SourceVersionRow
 from catchup.db.models import User
@@ -802,6 +803,35 @@ def _pg_claim(
     return row.id
 
 
+def _pg_relation(
+    session: Session,
+    workspace_id: int,
+    run_id: uuid.UUID,
+    *,
+    relation_id: uuid.UUID,
+    source_node_id: uuid.UUID,
+    target_node_id: uuid.UUID,
+    relation_type: str = "owned_by",
+) -> uuid.UUID:
+    """두 canonical 노드를 잇는 살아 있는 관계 후보를 하나 만든다."""
+    session.add(
+        KnowledgeRelationAssertionCandidate(
+            id=relation_id,
+            workspace_id=workspace_id,
+            extraction_run_id=run_id,
+            local_key=f"rel-{relation_id}",
+            source_node_id=source_node_id,
+            target_node_id=target_node_id,
+            relation_type=relation_type,
+            assertion_text="요청 A는 결제팀이 맡는다",
+            extraction_method="llm",
+            resolution_status="accepted",
+        )
+    )
+    session.flush()
+    return relation_id
+
+
 def test_same_input_twice_all_skipped(
     workspace_id: int,
     user_id: int,
@@ -813,8 +843,13 @@ def test_same_input_twice_all_skipped(
     fake는 정렬과 대조 규칙을 흉내 낼 뿐이다. 정의·노드·claim 조회가
     실제로 같은 차례를 내는지, 그래서 지문이 흔들리지 않는지는 실 DB에서
     확인해야 한다.
+
+    정의에 관계 경로를 함께 실어 관계 블록까지 결정론에 넣는다. 관계
+    조회는 claim 조회와 다른 질의라, claim만으로는 관계 쪽 차례가
+    흔들려도 드러나지 않는다.
     """
     channel_id = _channel(session_factory, workspace_id, user_id)
+    relation_id = uuid.uuid4()
     with session_factory() as session:
         session.add(
             ArtifactDefinition(
@@ -822,16 +857,32 @@ def test_same_input_twice_all_skipped(
                 workspace_id=workspace_id,
                 channel_id=channel_id,
                 kind=DEFINITION_KIND,
-                selection_spec=_spec(predicate_sections=["status"]),
+                selection_spec=_spec(
+                    relation_paths=[
+                        {"steps": [{"type": "owned_by", "dir": "out"}]}
+                    ],
+                    predicate_sections=["status"],
+                ),
                 created_by=user_id,
             )
         )
         run_id = _pg_extraction_run(session, workspace_id)
+        node_ids: dict[str, uuid.UUID] = {}
         for name in ("요청 A", "요청 B"):
             node_id = _pg_node(session, workspace_id, name, "feature_request")
+            node_ids[name] = node_id
             _pg_claim(
                 session, workspace_id, run_id, node_id, "status", "검토 중"
             )
+        team_id = _pg_node(session, workspace_id, "결제팀", "team")
+        _pg_relation(
+            session,
+            workspace_id,
+            run_id,
+            relation_id=relation_id,
+            source_node_id=node_ids["요청 A"],
+            target_node_id=team_id,
+        )
         session.commit()
 
     first = compile_definition_artifacts(
@@ -863,3 +914,20 @@ def test_same_input_twice_all_skipped(
         assert row.definition_id == FIRST_DEFINITION_ID
         assert row.channel_id == channel_id
         assert row.kind == DEFINITION_KIND
+
+    with session_factory() as session:
+        blocks = session.execute(
+            text(
+                "SELECT p.blocks FROM knowledge_artifact_change_proposals p"
+                " JOIN knowledge_artifacts a ON a.id = p.artifact_id"
+                " WHERE p.workspace_id = :workspace AND a.title = :title"
+            ),
+            {"workspace": workspace_id, "title": f"{DEFINITION_KIND}: 요청 A"},
+        ).scalar_one()
+    relation_blocks = [
+        block
+        for block in blocks
+        if block["block_kind"] == BLOCK_KIND_RELATION_SECTION
+    ]
+    assert len(relation_blocks) == 1
+    assert relation_blocks[0]["relation_ids"] == [str(relation_id)]
