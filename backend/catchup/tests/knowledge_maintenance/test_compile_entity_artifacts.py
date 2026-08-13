@@ -8,6 +8,7 @@ fake를 쓰면 멱등 규칙이 지켜지는지 이 테스트로 알 수 없기 
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import replace
 from datetime import datetime
 from datetime import timedelta
@@ -121,8 +122,15 @@ class FakeArtifactRepository:
     동작하기 때문이다.
     """
 
-    def __init__(self, sources: list[EntityCardSource]) -> None:
+    def __init__(
+        self,
+        sources: list[EntityCardSource],
+        nodes: list[tuple[uuid.UUID, str, str, str]] | None = None,
+    ) -> None:
         self.sources = list(sources)
+        # 정의로 고르는 질의가 보는 노드 원장이다. 한 줄은
+        # (node_id, display_name, entity_type, lifecycle_state)다.
+        self.nodes = list(nodes or ())
         self.artifacts: dict[tuple[str, uuid.UUID], uuid.UUID] = {}
         self.titles: dict[uuid.UUID, str] = {}
         self.by_key: dict[str, dict] = {}
@@ -131,6 +139,26 @@ class FakeArtifactRepository:
 
     def find_top_entity_nodes(self, *, limit: int) -> list[EntityCardSource]:
         return list(self.sources[:limit])
+
+    def find_entity_nodes_by_types(
+        self, *, entity_types: Sequence[str]
+    ) -> list[EntityCardSource]:
+        # 실 어댑터와 같은 규칙으로 고르고 줄을 세운다. 종류가 맞고 살아
+        # 있는 노드만 보며, 이름이 같으면 식별자를 문자열로 갈라 낸다.
+        wanted = set(entity_types)
+        matched = [
+            (display_name, str(node_id), node_id)
+            for node_id, display_name, entity_type, lifecycle_state in (
+                self.nodes
+            )
+            if entity_type in wanted and lifecycle_state == "active"
+        ]
+        return [
+            EntityCardSource(node_id=node_id, display_name=display_name)
+            for display_name, _, node_id in sorted(
+                matched, key=lambda row: (row[0], row[1])
+            )
+        ]
 
     def get_or_create_artifact(
         self, *, kind: str, subject_node_id: uuid.UUID, title: str

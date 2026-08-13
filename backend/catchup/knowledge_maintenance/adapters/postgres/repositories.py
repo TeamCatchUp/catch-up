@@ -16,6 +16,7 @@ from sqlalchemy import Select
 from sqlalchemy import String
 from sqlalchemy import Text
 from sqlalchemy import cast
+from sqlalchemy import collate
 from sqlalchemy import func
 from sqlalchemy import nullsfirst
 from sqlalchemy import nullslast
@@ -2425,6 +2426,47 @@ class SqlAlchemyArtifactRepository:
             for node_id, display_name, canonical_key, count in (
                 self._session.execute(statement).all()
             )
+        ]
+
+    def find_entity_nodes_by_types(
+        self,
+        *,
+        entity_types: Sequence[str],
+    ) -> list[EntityCardSource]:
+        """고른 종류의 살아 있는 entity 노드를 모두 돌려준다.
+
+        claim과 join하지 않는다. claim이 아직 없는 노드도 정의가 고른
+        종류면 대상이기 때문이다. claim 수는 이 선택의 기준이 아니므로
+        0으로 남긴다.
+
+        정렬을 DB에 맡긴다. 이름은 비어 있을 수 있어 표시에 쓰는 값과
+        같은 식으로 메워 그 값으로 줄을 세우고, 이름이 같으면 식별자를
+        문자열로 캐 갈라 실행마다 같은 차례가 나오게 한다.
+
+        줄 세우기에 C 대조 규칙을 못 박는다. DB 기본 대조 규칙은 로케일
+        설정에 따라 한글의 앞뒤가 달라져, 같은 코드가 서버마다 다른
+        차례를 내고 파이썬 쪽 문자열 비교와도 어긋나기 때문이다.
+        """
+        display_name = func.coalesce(
+            KnowledgeNodeRow.display_name,
+            KnowledgeNodeRow.canonical_key,
+            cast(KnowledgeNodeRow.id, Text),
+        )
+        statement = (
+            select(KnowledgeNodeRow.id, display_name)
+            .where(
+                KnowledgeNodeRow.workspace_id == self._workspace_id,
+                KnowledgeNodeRow.entity_type.in_(list(entity_types)),
+                KnowledgeNodeRow.lifecycle_state == "active",
+            )
+            .order_by(
+                collate(display_name, "C"),
+                collate(cast(KnowledgeNodeRow.id, Text), "C"),
+            )
+        )
+        return [
+            EntityCardSource(node_id=node_id, display_name=name)
+            for node_id, name in self._session.execute(statement).all()
         ]
 
     def get_or_create_artifact(

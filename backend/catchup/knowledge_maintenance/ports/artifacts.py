@@ -86,12 +86,14 @@ class EntityCardSource:
     Attributes:
         node_id: 대상 canonical 노드를 가리킨다.
         display_name: 문서 제목으로 쓸 이름을 담는다.
-        claim_count: 이 노드를 subject로 삼는 claim 수를 나타낸다.
+        claim_count: 이 노드를 subject로 삼는 claim 수를 나타낸다. claim
+            수로 줄을 세우는 선택에서만 채워진다. 정의로 고른 노드는 이
+            수를 보지 않으므로 0으로 남는다.
     """
 
     node_id: uuid.UUID
     display_name: str
-    claim_count: int
+    claim_count: int = 0
 
 
 class ArtifactRepository(Protocol):
@@ -107,6 +109,22 @@ class ArtifactRepository(Protocol):
 
         살아 있는(active) canonical 노드만 본다. claim이 하나도 없는
         노드는 쓸 내용이 없으므로 제외한다.
+        """
+        ...
+
+    def find_entity_nodes_by_types(
+        self,
+        *,
+        entity_types: Sequence[str],
+    ) -> list[EntityCardSource]:
+        """고른 종류의 살아 있는(active) entity 노드를 모두 돌려준다.
+
+        정의가 고른 종류에 해당하면 전부 대상이다. claim이 몇 건인지는
+        보지 않는다 — 정의는 조건이지 인기 순위가 아니므로, claim이 쌓이는
+        속도에 따라 어떤 노드가 문서가 되는지 달라지면 안 된다.
+
+        차례는 이름·식별자 사전순이다. 같은 지식 상태에서 두 번 물으면
+        같은 목록이 나와야 검토 큐에 오르는 순서가 흔들리지 않는다.
         """
         ...
 
