@@ -225,6 +225,7 @@ def compile_definition_artifacts(
                     allowed=definition.selection_spec.predicate_sections,
                     relation_blocks=_relation_blocks(
                         uow,
+                        workspace_id=workspace_id,
                         definition=definition,
                         source=source,
                         ontology_version=vocabulary.snapshot_id or None,
@@ -315,6 +316,7 @@ def _definition_title(
 def _relation_blocks(
     uow: DefinitionCompileUnitOfWork,
     *,
+    workspace_id: int,
     definition: StoredArtifactDefinition,
     source: EntityCardSource,
     ontology_version: str | None,
@@ -328,9 +330,15 @@ def _relation_blocks(
 
     이을 것도 잘린 걸음도 없는 경로는 블록을 만들지 않는다. 그 판단은
     렌더가 갖고 있으므로 여기서는 None을 거를 뿐이다.
+
+    잘린 걸음은 있는데 블록이 서지 않은 경로는 경고로 남긴다. 근거
+    장부에는 완주한 간선만 남으므로, 끝까지 간 가지가 하나도 없으면
+    근거가 비어 블록을 세울 수 없다. 그렇다고 잘라 냈다는 사실까지
+    사라지면 카드는 자신이 완전하다고 말하게 되므로, 근거 없는 블록을
+    싣는 대신 감사 로그에 적는다.
     """
     blocks: list[ArtifactBlock] = []
-    for path in definition.selection_spec.relation_paths:
+    for index, path in enumerate(definition.selection_spec.relation_paths):
         traversal = traverse_relation_path(
             uow.relations,
             start_node_id=source.node_id,
@@ -342,8 +350,18 @@ def _relation_blocks(
             traversal=traversal,
             ontology_version=ontology_version,
         )
-        if block is not None:
-            blocks.append(block)
+        if block is None:
+            if traversal.truncated_steps:
+                logger.warning(
+                    "artifact_compile_relation_path_truncated_no_block",
+                    workspace_id=workspace_id,
+                    definition_id=str(definition.id),
+                    node_id=str(source.node_id),
+                    path_index=index,
+                    truncated_steps=list(traversal.truncated_steps),
+                )
+            continue
+        blocks.append(block)
     return tuple(blocks)
 
 

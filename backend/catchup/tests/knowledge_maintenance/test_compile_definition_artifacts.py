@@ -33,6 +33,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
+from structlog.testing import capture_logs
 
 from catchup.configs.config import settings
 from catchup.db.models import ArtifactDefinition
@@ -55,6 +56,7 @@ from catchup.knowledge_maintenance.contracts.extraction import RelationTypeEntry
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_RELATION_SECTION
 from catchup.knowledge_maintenance.domain.artifact import validate_blocks
+from catchup.knowledge_maintenance.domain.artifact_definition import MAX_NODES_PER_STEP
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.ports.relations import StoredRelationEdge
 from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
@@ -423,6 +425,73 @@ def test_empty_predicate_sections_drops_claim_sections() -> None:
     assert [block.block_kind for block in row["blocks"]] == [
         BLOCK_KIND_RELATION_SECTION
     ]
+
+
+def test_truncated_path_without_ledger_warns_instead_of_blocking() -> None:
+    """잘렸는데 완주가 없으면 블록 대신 경고를 남긴다.
+
+    완주한 간선만 근거 장부에 남으므로, 잘림만 있고 끝까지 간 가지가
+    없는 경로는 근거가 비어 블록이 서지 않는다. 근거 없는 블록을 싣는
+    대신 감사 로그로 남겨, 잘라 낸 사실이 조용히 사라지지 않게 한다.
+    """
+    node_id = uuid.uuid4()
+    uow = FakeDefinitionUnitOfWork(
+        definitions=[
+            _definition_row(
+                spec=_spec(
+                    relation_paths=[
+                        {
+                            "steps": [
+                                {"type": "owned_by", "dir": "out"},
+                                {"type": "owned_by", "dir": "out"},
+                            ]
+                        }
+                    ],
+                    predicate_sections=["status"],
+                )
+            )
+        ],
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[_claim(node_id=node_id)],
+        # 첫 걸음이 상한을 넘겨 잘리고, 그 이웃에서 이을 간선은 없다.
+        relations=FakeRelationRepository(
+            [
+                (
+                    "owned_by",
+                    StoredRelationEdge(
+                        id=uuid.UUID(f"ffffffff-0000-4000-8000-{number:012d}"),
+                        source_node_id=node_id,
+                        target_node_id=uuid.UUID(
+                            f"00000000-0000-4000-8000-{number:012d}"
+                        ),
+                        assertion_text=f"이웃 {number}",
+                        source_display_name="요청 A",
+                        target_display_name=f"팀{number:03d}",
+                    ),
+                )
+                for number in range(1, MAX_NODES_PER_STEP + 2)
+            ]
+        ),
+    )
+
+    with capture_logs() as logs:
+        _run(uow)
+
+    blocks = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]["blocks"]
+    assert [block.block_kind for block in blocks] == [BLOCK_KIND_CLAIM_SECTION]
+
+    entries = [
+        entry
+        for entry in logs
+        if entry["event"] == "artifact_compile_relation_path_truncated_no_block"
+    ]
+    assert len(entries) == 1
+    assert entries[0]["log_level"] == "warning"
+    assert entries[0]["workspace_id"] == WORKSPACE
+    assert entries[0]["definition_id"] == str(FIRST_DEFINITION_ID)
+    assert entries[0]["node_id"] == str(node_id)
+    assert entries[0]["path_index"] == 0
+    assert entries[0]["truncated_steps"] == [0]
 
 
 def test_relation_blocks_included_with_ledger() -> None:
