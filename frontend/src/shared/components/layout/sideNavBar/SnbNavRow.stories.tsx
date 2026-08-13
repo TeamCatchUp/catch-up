@@ -30,10 +30,11 @@ const meta = {
         nodeId: '17895:46181',
       },
       viewport: { width: 320, height: 200 },
-      states: ['default', 'selected', 'with-count', 'count-zero', 'long-label'],
+      states: ['default', 'selected', 'with-count', 'count-zero', 'disabled', 'long-label'],
       reuseNotes: ['Figma SNB/menu type=Main menu에 대응한다. type=setting(SnbMenuItem)과 선택 색이 다르다.'],
       dataNotes: ['hover·pressed는 CSS 상태라 스토리로 고정하지 않는다.'],
       tokenNotes: [
+        'disabled는 시안에 없는 상태다 — SNB/menu는 5상태(Default·Hover·Pressed·Selected·Selected_hover)뿐이라 리포 버튼 관례(text/icon-normal-assistive)를 빌렸다. 시안 요청 진행 중.',
         'Selected는 fill-primary-normal-neutral(#EAF2FE)로 Figma와 정확히 일치한다.',
         '중립 hover/pressed는 solid 토큰을 쓴다 — Figma 알파 전환은 디자인 시스템 차원 별도 작업.',
       ],
@@ -102,6 +103,23 @@ export const CountZero: Story = {
     const canvas = within(canvasElement);
     // 0건 시 배지를 감출지 0을 쓸지는 미결이다 — 컴포넌트는 받은 값을 그대로 낸다
     await expect(canvas.getByTestId('snb-nav-row-count')).toHaveTextContent('0');
+  },
+};
+
+export const Disabled: Story = {
+  args: { label: '즐겨찾기', disabled: true },
+  render: (args) => (
+    <Frame>
+      <SnbNavRow {...args} />
+    </Frame>
+  ),
+  play: async ({ args, canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+    const row = canvas.getByRole('button', { name: '즐겨찾기' });
+
+    await expect(row).toBeDisabled();
+    await userEvent.click(row);
+    await expect(args.onClick).not.toHaveBeenCalled();
   },
 };
 

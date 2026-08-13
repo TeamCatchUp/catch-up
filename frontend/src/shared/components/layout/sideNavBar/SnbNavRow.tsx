@@ -10,6 +10,8 @@ export interface SnbNavRowProps {
   count?: number;
   /** 우측 부가 요소(베타 태그 등) */
   trailing?: React.ReactNode;
+  /** 갈 곳이 아직 없는 메뉴. 시안에 disabled 상태가 없어 리포 버튼 관례를 따른다 */
+  disabled?: boolean;
   onClick?: () => void;
   className?: string;
 }
@@ -24,6 +26,7 @@ export default function SnbNavRow({
   selected = false,
   count,
   trailing,
+  disabled = false,
   onClick,
   className,
 }: SnbNavRowProps) {
@@ -31,11 +34,16 @@ export default function SnbNavRow({
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-current={selected ? 'page' : undefined}
       className={cn(
-        'flex h-9 w-full cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5 py-1.5 transition-colors',
-        'hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed',
-        selected && 'bg-fill-primary-normal-neutral hover:bg-fill-primary-normal-interaction-hover-assistive',
+        'flex h-9 w-full items-center justify-between gap-3 rounded-lg px-2.5 py-1.5 transition-colors',
+        disabled
+          ? 'cursor-not-allowed'
+          : cn(
+              'cursor-pointer hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed',
+              selected && 'bg-fill-primary-normal-neutral hover:bg-fill-primary-normal-interaction-hover-assistive',
+            ),
         className,
       )}
     >
@@ -43,13 +51,24 @@ export default function SnbNavRow({
         {Icon && (
           <Icon
             aria-hidden
-            className={cn('size-5.5 shrink-0', selected ? 'text-icon-primary-normal' : 'text-icon-normal-normal')}
+            className={cn(
+              'size-5.5 shrink-0',
+              disabled
+                ? 'text-icon-normal-assistive'
+                : selected
+                  ? 'text-icon-primary-normal'
+                  : 'text-icon-normal-normal',
+            )}
           />
         )}
         <span
           className={cn(
             'text-body-small min-w-0 truncate text-left',
-            selected ? 'text-text-primary-normal' : 'text-text-normal-normal',
+            disabled
+              ? 'text-text-normal-assistive'
+              : selected
+                ? 'text-text-primary-normal'
+                : 'text-text-normal-normal',
           )}
         >
           {label}
