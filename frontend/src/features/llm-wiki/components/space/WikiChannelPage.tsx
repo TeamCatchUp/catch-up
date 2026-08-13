@@ -1,0 +1,73 @@
+import IconWikiChannelFilled from '@/public/icons/icon/wiki_channel_filled.svg';
+
+import type { WikiChannelListItem } from '../../types/llmWikiModel';
+import { DashboardDocumentTableHeader } from '../document/DashboardDocumentRow';
+import FolderDocumentRow, { type FolderDocumentRowItem } from '../document/FolderDocumentRow';
+import WikiPageHeader from '../header/WikiPageHeader';
+import WikiSpaceTableFooter from './WikiSpaceTableFooter';
+import WikiSpaceTitleBlock from './WikiSpaceTitleBlock';
+
+interface WikiChannelPageProps {
+  channel: WikiChannelListItem;
+  /** 폴더 행 표시 데이터 — channel.folders와 1:1. 담당자·상태 표시 필드는 목록 API 미동봉분이다 */
+  folderRows: readonly FolderDocumentRowItem[];
+  authorName?: string;
+  authorProfileImageUrl?: string | null;
+  pageSize: number;
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  onPageSizeClick?: () => void;
+  onFolderClick?: (folderId: string) => void;
+}
+
+/** 채널 메인 페이지 — breadcrumb 헤더(채널 1마디) + 이름 블록 + 폴더 목록 표. */
+export default function WikiChannelPage({
+  channel,
+  folderRows,
+  authorName,
+  authorProfileImageUrl,
+  pageSize,
+  currentPage,
+  totalPages,
+  onPageChange,
+  onPageSizeClick,
+  onFolderClick,
+}: WikiChannelPageProps) {
+  return (
+    <div className="flex flex-col">
+      <WikiPageHeader variant="detail" breadcrumbs={[{ kind: 'channel', label: channel.name }]} />
+
+      {/* 상단 영역 — 콘텐츠 미정(사진 가능성)이라 시각을 넣지 않는다 */}
+      <div aria-hidden className="h-50 shrink-0" />
+
+      <div className="flex flex-col gap-9 px-20 py-9">
+        <WikiSpaceTitleBlock
+          icon={<IconWikiChannelFilled />}
+          name={channel.name}
+          authorName={authorName}
+          authorProfileImageUrl={authorProfileImageUrl}
+        />
+
+        <div className="flex flex-col gap-8">
+          <div className="flex flex-col">
+            <DashboardDocumentTableHeader />
+            <div className="flex flex-col gap-1">
+              {folderRows.map((row) => (
+                <FolderDocumentRow key={row.id} kind="folder" item={row} onClick={onFolderClick} />
+              ))}
+            </div>
+          </div>
+
+          <WikiSpaceTableFooter
+            pageSize={pageSize}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={onPageChange}
+            onPageSizeClick={onPageSizeClick}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}

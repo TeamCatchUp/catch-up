@@ -1,4 +1,5 @@
 import type { FolderDocumentRowItem } from '../components/document/FolderDocumentRow';
+import type { WikiChannelListItem } from '../types/llmWikiModel';
 
 const BASE_ROW: FolderDocumentRowItem = {
   id: 'folder-approval-failure',
@@ -36,6 +37,16 @@ export const CHANNEL_FOLDER_ROW_FIXTURES: readonly FolderDocumentRowItem[] = [
     lastActivityLabel: '5일 전',
   }),
 ];
+
+/** ChannelListItemResponse 정합 mock — folders는 채널 페이지 행 표본과 1:1이다 */
+export const WIKI_CHANNEL_FIXTURE: WikiChannelListItem = {
+  id: 'channel-payment',
+  name: '결제',
+  workspaceId: 1,
+  isAdmin: true,
+  documentCount: 23,
+  folders: CHANNEL_FOLDER_ROW_FIXTURES.map(({ id, name }) => ({ id, name, channelId: 'channel-payment' })),
+};
 
 /** 폴더 페이지의 문서 행 표본 */
 export const FOLDER_DOCUMENT_ROW_FIXTURES: readonly FolderDocumentRowItem[] = [
