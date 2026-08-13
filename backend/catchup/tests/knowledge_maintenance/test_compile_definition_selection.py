@@ -221,7 +221,6 @@ def test_selection_accepts_several_types(
 def test_fake_selects_only_matching_active_nodes() -> None:
     """fake도 종류·상태로 거르고 이름순으로 돌려준다."""
     repository = FakeArtifactRepository(
-        [],
         nodes=[
             (uuid.uuid4(), "요청 B", "feature_request", "active"),
             (uuid.uuid4(), "요청 A", "feature_request", "active"),
@@ -240,7 +239,6 @@ def test_fake_selects_only_matching_active_nodes() -> None:
 def test_fake_breaks_name_ties_by_id() -> None:
     """fake의 동점 처리도 실 어댑터와 같이 식별자 사전순이다."""
     repository = FakeArtifactRepository(
-        [],
         nodes=[
             (LATER_ID, "같은 이름", "release", "active"),
             (EARLIER_ID, "같은 이름", "release", "active"),

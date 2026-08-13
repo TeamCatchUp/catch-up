@@ -59,6 +59,9 @@ from catchup.knowledge_maintenance.services.review_merge_proposal import (
 from catchup.knowledge_maintenance.services.store_knowledge_candidates import (
     store_knowledge_candidates,
 )
+from catchup.tests.knowledge_maintenance.test_artifact_definition_schema import (
+    _definition_with_channel,
+)
 from catchup.tests.knowledge_maintenance.test_postgres_knowledge_candidate_repository import (  # noqa: E501
     SPEC,
 )
@@ -702,6 +705,7 @@ def _artifact_proposal_over_claim(
             ontology_version="2",
         ),
     )
+    definition = _definition_with_channel(session_factory, workspace_id)
     with uow_factory() as uow:
         node = uow.knowledge_nodes.create_entity_node(
             workspace_id=workspace_id,
@@ -709,8 +713,10 @@ def _artifact_proposal_over_claim(
             canonical_key=f"test:feature:{uuid.uuid4().hex}",
             display_name="결제 기능",
         )
-        artifact_id = uow.artifacts.get_or_create_artifact(
-            kind="entity_summary",
+        artifact_id = uow.artifacts.get_or_create_definition_artifact(
+            definition_id=definition.id,
+            channel_id=definition.channel_id,
+            kind=definition.kind,
             subject_node_id=node.id,
             title="결제 기능",
         )

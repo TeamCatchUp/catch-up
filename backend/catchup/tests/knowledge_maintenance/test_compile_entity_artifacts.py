@@ -1,4 +1,8 @@
-"""entity 요약 카드 Compiler를 fake 저장소로 확인한다.
+"""문서 Compiler의 본문 조립과 검토 큐 규칙을 fake 저장소로 확인한다.
+
+정의 하나를 세워 두고 그 아래에서 본문이 어떻게 서는지만 본다. 정의
+순회 자체(정의가 여럿일 때의 차례, 깨진 정의 격리, 관계 절)는
+`test_compile_definition_artifacts.py`가 맡는다.
 
 fake는 DB 제약을 흉내 낸다. `(workspace, idempotency_key)` UNIQUE와
 결정된 행의 되살리기 거부와 반려 사유 강제가 그것이다. 조용히 덮어쓰는
@@ -17,6 +21,7 @@ from typing import Any
 
 import pytest
 
+from catchup.knowledge_maintenance.contracts.extraction import EntityTypeEntry
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
@@ -35,17 +40,42 @@ from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
 from catchup.knowledge_maintenance.ports.block_verdicts import StoredBlockVerdict
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPendingProposal
 from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
-    ARTIFACT_KIND_ENTITY_SUMMARY,
+    compile_definition_artifacts,
 )
-from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
-    compile_entity_artifacts,
+from catchup.tests.knowledge_maintenance.test_artifact_definition_repository import (
+    FakeArtifactDefinitionRepository,
 )
 
 NOW = datetime(2026, 7, 30, 9, 0, tzinfo=timezone.utc)
 WORKSPACE = 1
 
+# 노드 원장 한 줄이다. (node_id, display_name, entity_type,
+# lifecycle_state) 넷으로, 정의가 고르는 질의가 이 줄을 본다.
+_NodeRow = tuple[uuid.UUID, str, str, str]
+
+ENTITY_TYPE = "feature"
+DEFINITION_KIND = "entity_summary"
+DEFINITION_ID = uuid.UUID("00000000-0000-4000-8000-0000000000d1")
+CHANNEL_ID = uuid.UUID("00000000-0000-4000-8000-0000000000c1")
+
+# 이 파일이 세우는 정의 하나의 선택 규칙이다. 절을 고르지 않으므로
+# claim 절의 차례는 사전이 정한 그대로가 되고, 관계 경로가 없으므로
+# 본문은 claim과 계류 안건만으로 선다.
+SELECTION_SPEC: dict[str, Any] = {
+    "entity_filter": {"entity_types": [ENTITY_TYPE]},
+    "relation_paths": [],
+    "predicate_sections": None,
+}
+
 VOCABULARY = ExtractionVocabulary(
     snapshot_id="3",
+    entity_type_entries=(
+        EntityTypeEntry(
+            name=ENTITY_TYPE,
+            definition="제품이 제공하는 기능이다.",
+            identity_scope="standalone",
+        ),
+    ),
     predicate_entries=(
         PredicateEntry(
             name="release_month",
@@ -124,14 +154,11 @@ class FakeArtifactRepository:
 
     def __init__(
         self,
-        sources: list[EntityCardSource],
         nodes: list[tuple[uuid.UUID, str, str, str]] | None = None,
     ) -> None:
-        self.sources = list(sources)
         # 정의로 고르는 질의가 보는 노드 원장이다. 한 줄은
         # (node_id, display_name, entity_type, lifecycle_state)다.
         self.nodes = list(nodes or ())
-        self.artifacts: dict[tuple[str, uuid.UUID], uuid.UUID] = {}
         # 정의에 매인 문서는 (정의, 대상)으로 하나다. 실 DB의 UNIQUE와
         # 같은 키를 dict 키로 재현한다.
         self.definition_artifacts: dict[
@@ -145,9 +172,6 @@ class FakeArtifactRepository:
         self.by_key: dict[str, dict] = {}
         self.by_id: dict[uuid.UUID, dict] = {}
         self.revisions: list[dict] = []
-
-    def find_top_entity_nodes(self, *, limit: int) -> list[EntityCardSource]:
-        return list(self.sources[:limit])
 
     def find_entity_nodes_by_types(
         self, *, entity_types: Sequence[str]
@@ -168,24 +192,6 @@ class FakeArtifactRepository:
                 matched, key=lambda row: (row[0], row[1])
             )
         ]
-
-    def get_or_create_artifact(
-        self, *, kind: str, subject_node_id: uuid.UUID, title: str
-    ) -> uuid.UUID:
-        found = self.artifacts.get((kind, subject_node_id))
-        if found is not None:
-            return found
-        artifact_id = uuid.uuid4()
-        self.artifacts[(kind, subject_node_id)] = artifact_id
-        self._remember(
-            artifact_id,
-            definition_id=None,
-            channel_id=None,
-            kind=kind,
-            subject_node_id=subject_node_id,
-            title=title,
-        )
-        return artifact_id
 
     def get_or_create_definition_artifact(
         self,
@@ -493,18 +499,34 @@ class FakeBlockVerdictRepository:
         return None if row is None else row["artifact_id"]
 
 
+class NoRelationRepository:
+    """관계를 묻는 순간 터지는 저장소다.
+
+    이 파일의 정의는 관계 경로를 하나도 갖지 않는다. 그래도 조용한 빈
+    저장소를 두면 경로가 실수로 들어왔을 때 관계 절이 없는 이유를
+    알 수 없으므로, 물어보는 것 자체를 실패로 드러낸다.
+    """
+
+    def find_edges(self, **kwargs: object) -> list[object]:
+        raise AssertionError("이 시험의 정의에는 관계 경로가 없다.")
+
+
 class FakeUnitOfWork:
     def __init__(
         self,
         *,
-        sources: list[EntityCardSource],
+        nodes: list[_NodeRow],
         claims: list[StoredClaimCandidate],
         pending: dict[uuid.UUID, list[StoredPendingProposal]] | None = None,
     ) -> None:
-        self.artifacts = FakeArtifactRepository(sources)
+        self.artifacts = FakeArtifactRepository(nodes=nodes)
+        self.artifact_definitions = FakeArtifactDefinitionRepository(
+            [(DEFINITION_ID, CHANNEL_ID, DEFINITION_KIND, SELECTION_SPEC)]
+        )
         self.knowledge_candidates = FakeClaimRepository(claims)
         self.mutation_proposals = FakeMutationProposalRepository(pending)
         self.block_verdicts = FakeBlockVerdictRepository(self.artifacts.by_id)
+        self.relations = NoRelationRepository()
         self.committed = 0
 
     def __enter__(self):
@@ -517,16 +539,21 @@ class FakeUnitOfWork:
         self.committed += 1
 
 
-def _source(node_id: uuid.UUID, name: str = "결제 기능") -> EntityCardSource:
-    return EntityCardSource(node_id=node_id, display_name=name, claim_count=1)
+def _node(node_id: uuid.UUID, name: str = "결제 기능") -> _NodeRow:
+    """정의가 고를 수 있는 살아 있는 노드 한 줄을 만든다."""
+    return (node_id, name, ENTITY_TYPE, "active")
 
 
-def _run(uow: FakeUnitOfWork, *, limit: int = 2):
-    return compile_entity_artifacts(
+def _title(name: str = "결제 기능") -> str:
+    """정의가 그 이름의 노드에 지을 문서 제목을 만든다."""
+    return f"{DEFINITION_KIND}: {name}"
+
+
+def _run(uow: FakeUnitOfWork):
+    return compile_definition_artifacts(
         uow,
         workspace_id=WORKSPACE,
         vocabulary=VOCABULARY,
-        limit=limit,
     )
 
 
@@ -610,7 +637,7 @@ def test_entity_without_pending_proposal_gets_claim_sections_only() -> None:
     """계류 안건이 없으면 claim_section만 남고 열린 질문이 없다."""
     node_id = uuid.uuid4()
     uow = FakeUnitOfWork(
-        sources=[_source(node_id)],
+        nodes=[_node(node_id)],
         claims=[
             _claim(node_id=node_id, value=60),
             _claim(
@@ -640,18 +667,16 @@ def test_entity_without_pending_proposal_gets_claim_sections_only() -> None:
     assert blocks[0].body == "2026-09 (2026-07-30 관찰)"
     assert blocks[0].ontology_version == "3"
     assert row["base_revision_id"] is None
-    artifact_id = uow.artifacts.artifacts[
-        (ARTIFACT_KIND_ENTITY_SUMMARY, node_id)
-    ]
+    artifact_id = uow.artifacts.definition_artifacts[(DEFINITION_ID, node_id)]
     assert row["artifact_id"] == artifact_id
-    assert uow.artifacts.titles[artifact_id] == "결제 기능"
+    assert uow.artifacts.titles[artifact_id] == _title()
 
 
 def test_predicate_order_follows_dictionary_then_name() -> None:
     """사전 등재 predicate가 사전 순서로 먼저, 미등재는 이름순으로 뒤에 온다."""
     node_id = uuid.uuid4()
     uow = FakeUnitOfWork(
-        sources=[_source(node_id)],
+        nodes=[_node(node_id)],
         claims=[
             _claim(node_id=node_id, predicate="zeta_note", value="뒤"),
             _claim(node_id=node_id, predicate="rate_limit", value=60),
@@ -682,7 +707,7 @@ def test_multiple_values_are_all_listed_without_judgement() -> None:
     older = _claim(node_id=node_id, value=60, minutes=0)
     newer = _claim(node_id=node_id, value=120, minutes=30)
     uow = FakeUnitOfWork(
-        sources=[_source(node_id)],
+        nodes=[_node(node_id)],
         claims=[newer, older],
     )
 
@@ -702,7 +727,7 @@ def test_contradiction_predicate_renders_contested_block() -> None:
     newer = _claim(node_id=node_id, value=120, minutes=30)
     proposal = _contradiction(node_id=node_id, claim_ids=(older.id, newer.id))
     uow = FakeUnitOfWork(
-        sources=[_source(node_id)],
+        nodes=[_node(node_id)],
         claims=[older, newer],
         pending={node_id: [proposal]},
     )
@@ -748,7 +773,7 @@ def test_contested_block_replaces_its_open_question() -> None:
         resolver_metadata={"member_ids": [str(uuid.uuid4())]},
     )
     uow = FakeUnitOfWork(
-        sources=[_source(node_id)],
+        nodes=[_node(node_id)],
         claims=[older, newer],
         pending={node_id: [contradiction, duplicate]},
     )
@@ -783,7 +808,7 @@ def test_contested_variants_stay_inside_the_proposal() -> None:
     unrelated = _claim(node_id=node_id, value=240, minutes=60)
     proposal = _contradiction(node_id=node_id, claim_ids=(older.id, newer.id))
     uow = FakeUnitOfWork(
-        sources=[_source(node_id)],
+        nodes=[_node(node_id)],
         claims=[older, newer, unrelated],
         pending={node_id: [proposal]},
     )
@@ -815,12 +840,12 @@ def test_contested_blocks_are_deterministic_across_input_order() -> None:
     newer = _claim(node_id=node_id, value=120, minutes=30)
     proposal = _contradiction(node_id=node_id, claim_ids=(older.id, newer.id))
     forward = FakeUnitOfWork(
-        sources=[_source(node_id)],
+        nodes=[_node(node_id)],
         claims=[older, newer],
         pending={node_id: [proposal]},
     )
     backward = FakeUnitOfWork(
-        sources=[_source(node_id)],
+        nodes=[_node(node_id)],
         claims=[newer, older],
         pending={node_id: [proposal]},
     )
@@ -852,7 +877,7 @@ def test_single_live_claim_keeps_open_question() -> None:
     )
     proposal = _contradiction(node_id=node_id, claim_ids=(older.id, closed.id))
     uow = FakeUnitOfWork(
-        sources=[_source(node_id)],
+        nodes=[_node(node_id)],
         claims=[older, closed],
         pending={node_id: [proposal]},
     )
@@ -885,7 +910,7 @@ def test_duplicate_proposal_open_question_keeps_summary() -> None:
         resolver_metadata={"member_ids": [str(uuid.uuid4())]},
     )
     uow = FakeUnitOfWork(
-        sources=[_source(node_id)],
+        nodes=[_node(node_id)],
         claims=[_claim(node_id=node_id)],
         pending={node_id: [proposal]},
     )
@@ -902,7 +927,7 @@ def test_recompiling_same_input_does_nothing() -> None:
     """같은 입력을 다시 컴파일하면 아무것도 쓰지 않는다."""
     node_id = uuid.uuid4()
     uow = FakeUnitOfWork(
-        sources=[_source(node_id)],
+        nodes=[_node(node_id)],
         claims=[_claim(node_id=node_id)],
     )
     _run(uow)
@@ -921,7 +946,7 @@ def test_changed_claim_abandons_pending_and_writes_new() -> None:
     """claim 값이 달라지면 낡은 계류 변경안을 접고 새로 올린다."""
     node_id = uuid.uuid4()
     claim = _claim(node_id=node_id, value=60)
-    uow = FakeUnitOfWork(sources=[_source(node_id)], claims=[claim])
+    uow = FakeUnitOfWork(nodes=[_node(node_id)], claims=[claim])
     _run(uow)
     stale_id = _only_pending(uow)["id"]
 
@@ -943,7 +968,7 @@ def test_returning_to_abandoned_content_revives_that_row() -> None:
     """접힌 내용으로 되돌아오면 같은 행을 되살린다."""
     node_id = uuid.uuid4()
     claim = _claim(node_id=node_id, value=60)
-    uow = FakeUnitOfWork(sources=[_source(node_id)], claims=[claim])
+    uow = FakeUnitOfWork(nodes=[_node(node_id)], claims=[claim])
     _run(uow)
     original_id = _only_pending(uow)["id"]
 
@@ -962,7 +987,7 @@ def test_rejected_content_is_not_proposed_again() -> None:
     """사람이 반려한 내용과 지문이 같으면 다시 올리지 않는다."""
     node_id = uuid.uuid4()
     uow = FakeUnitOfWork(
-        sources=[_source(node_id)],
+        nodes=[_node(node_id)],
         claims=[_claim(node_id=node_id)],
     )
     _run(uow)
@@ -986,7 +1011,7 @@ def test_base_revision_points_at_latest_revision() -> None:
     """새 변경안은 지금 발행된 최신 판을 딛고 선다."""
     node_id = uuid.uuid4()
     claim = _claim(node_id=node_id, value=60)
-    uow = FakeUnitOfWork(sources=[_source(node_id)], claims=[claim])
+    uow = FakeUnitOfWork(nodes=[_node(node_id)], claims=[claim])
     _run(uow)
     approved_id = _only_pending(uow)["id"]
     artifact_id = uow.artifacts.by_id[approved_id]["artifact_id"]
@@ -1013,7 +1038,7 @@ def test_approved_content_is_skipped_before_conflict() -> None:
     """
     node_id = uuid.uuid4()
     claim = _claim(node_id=node_id, value=60)
-    uow = FakeUnitOfWork(sources=[_source(node_id)], claims=[claim])
+    uow = FakeUnitOfWork(nodes=[_node(node_id)], claims=[claim])
     _run(uow)
     approved_id = _only_pending(uow)["id"]
     artifact_id = uow.artifacts.by_id[approved_id]["artifact_id"]
@@ -1034,28 +1059,13 @@ def test_approved_content_is_skipped_before_conflict() -> None:
 def test_node_without_claims_is_considered_but_not_written() -> None:
     """쓸 내용이 없는 노드는 세기만 하고 빈 문서를 만들지 않는다."""
     node_id = uuid.uuid4()
-    uow = FakeUnitOfWork(sources=[_source(node_id)], claims=[])
+    uow = FakeUnitOfWork(nodes=[_node(node_id)], claims=[])
 
     result = _run(uow)
 
     assert result.nodes_considered == 1
     assert result.proposals_created == 0
     assert uow.artifacts.by_key == {}
-
-
-def test_limit_bounds_the_nodes_read() -> None:
-    """limit이 이번 실행이 볼 노드 수를 정한다."""
-    first = uuid.uuid4()
-    second = uuid.uuid4()
-    uow = FakeUnitOfWork(
-        sources=[_source(first, "첫 기능"), _source(second, "둘째 기능")],
-        claims=[_claim(node_id=first), _claim(node_id=second)],
-    )
-
-    result = _run(uow, limit=1)
-
-    assert result.nodes_considered == 1
-    assert result.proposals_created == 1
 
 
 def test_claims_via_resolved_candidate_are_attributed_to_node() -> None:
@@ -1072,7 +1082,7 @@ def test_claims_via_resolved_candidate_are_attributed_to_node() -> None:
         statement="rate_limit는 60이다",
         observed_at=NOW,
     )
-    uow = FakeUnitOfWork(sources=[_source(node_id)], claims=[claim])
+    uow = FakeUnitOfWork(nodes=[_node(node_id)], claims=[claim])
 
     _run(uow)
 
@@ -1093,9 +1103,9 @@ def test_blocks_are_deterministic_across_input_order() -> None:
             value_type="date",
         ),
     ]
-    forward = FakeUnitOfWork(sources=[_source(node_id)], claims=claims)
+    forward = FakeUnitOfWork(nodes=[_node(node_id)], claims=claims)
     backward = FakeUnitOfWork(
-        sources=[_source(node_id)], claims=list(reversed(claims))
+        nodes=[_node(node_id)], claims=list(reversed(claims))
     )
 
     _run(forward)
@@ -1114,7 +1124,7 @@ def test_written_blocks_hold_their_own_hash() -> None:
     """저장된 지문이 저장된 블록에서 다시 계산된 값과 같다."""
     node_id = uuid.uuid4()
     uow = FakeUnitOfWork(
-        sources=[_source(node_id)],
+        nodes=[_node(node_id)],
         claims=[_claim(node_id=node_id)],
     )
 
@@ -1134,7 +1144,7 @@ def test_approved_revert_becomes_new_review_event() -> None:
     """
     node_id = uuid.uuid4()
     claim = _claim(node_id=node_id, value=60)
-    uow = FakeUnitOfWork(sources=[_source(node_id)], claims=[claim])
+    uow = FakeUnitOfWork(nodes=[_node(node_id)], claims=[claim])
     _run(uow)
     first_pending = _only_pending(uow)
     original_blocks = first_pending["blocks"]
@@ -1168,14 +1178,14 @@ def test_conflicting_node_is_isolated_from_the_rest() -> None:
     first = uuid.uuid4()
     second = uuid.uuid4()
     uow = FakeUnitOfWork(
-        sources=[_source(first, "첫 기능"), _source(second, "둘째 기능")],
+        nodes=[_node(first, "첫 기능"), _node(second, "둘째 기능")],
         claims=[_claim(node_id=first, value=60), _claim(node_id=second)],
     )
     original = uow.artifacts.add_or_revive_proposal
 
     def _raising(**kwargs: object) -> uuid.UUID:
-        first_artifact = uow.artifacts.artifacts.get(
-            (ARTIFACT_KIND_ENTITY_SUMMARY, first)
+        first_artifact = uow.artifacts.definition_artifacts.get(
+            (DEFINITION_ID, first)
         )
         if kwargs["artifact_id"] == first_artifact:
             raise ArtifactProposalConflict("이상 상태 재현")
@@ -1183,15 +1193,13 @@ def test_conflicting_node_is_isolated_from_the_rest() -> None:
 
     uow.artifacts.add_or_revive_proposal = _raising  # type: ignore[method-assign]
 
-    result = _run(uow, limit=2)
+    result = _run(uow)
 
     assert result.nodes_considered == 2
     assert result.proposals_conflicted == 1
     assert result.proposals_created == 1
     row = _only_pending(uow)
-    artifact_id = uow.artifacts.artifacts[
-        (ARTIFACT_KIND_ENTITY_SUMMARY, second)
-    ]
+    artifact_id = uow.artifacts.definition_artifacts[(DEFINITION_ID, second)]
     assert row["artifact_id"] == artifact_id
 
 
@@ -1199,7 +1207,7 @@ def test_skipped_node_abandons_stale_pending() -> None:
     """지문이 그대로라 넘기는 노드도 내용이 다른 낡은 계류는 접는다."""
     node_id = uuid.uuid4()
     claim = _claim(node_id=node_id, value=60)
-    uow = FakeUnitOfWork(sources=[_source(node_id)], claims=[claim])
+    uow = FakeUnitOfWork(nodes=[_node(node_id)], claims=[claim])
     _run(uow)
     _publish(uow, revision_number=1)
     uow.knowledge_candidates.claims = [replace(claim, value=120)]
@@ -1241,7 +1249,7 @@ def test_skipped_node_keeps_matching_pending_and_abandons_other_pending() -> Non
 
 def test_fake_refuses_to_revive_decided_rows() -> None:
     """fake가 결정된 행의 되살리기를 실 DB처럼 거절한다."""
-    repository = FakeArtifactRepository([])
+    repository = FakeArtifactRepository()
     artifact_id = uuid.uuid4()
     blocks = (
         ArtifactBlock(
@@ -1281,7 +1289,7 @@ def test_closed_claims_leave_the_card() -> None:
     closed = _claim(
         node_id=node_id, value=120, valid_to=NOW + timedelta(days=1)
     )
-    uow = FakeUnitOfWork(sources=[_source(node_id)], claims=[alive, closed])
+    uow = FakeUnitOfWork(nodes=[_node(node_id)], claims=[alive, closed])
 
     _run(uow)
 
@@ -1312,7 +1320,7 @@ def test_future_valid_from_claim_stays_on_the_card() -> None:
         value_type="boolean",
         valid_from=NOW + timedelta(days=3650),
     )
-    uow = FakeUnitOfWork(sources=[_source(node_id)], claims=[alive, upcoming])
+    uow = FakeUnitOfWork(nodes=[_node(node_id)], claims=[alive, upcoming])
 
     _run(uow)
 
@@ -1339,7 +1347,7 @@ def test_future_valid_to_claim_stays_on_the_card() -> None:
         valid_to=datetime.now(timezone.utc) + timedelta(days=30),
     )
     uow = FakeUnitOfWork(
-        sources=[_source(node_id)], claims=[closing_soon]
+        nodes=[_node(node_id)], claims=[closing_soon]
     )
 
     _run(uow)
@@ -1364,7 +1372,7 @@ def test_section_disappears_when_every_value_is_closed() -> None:
     )
     alive = _claim(node_id=node_id, predicate="is_supported", value=True,
                    value_type="boolean")
-    uow = FakeUnitOfWork(sources=[_source(node_id)], claims=[closed, alive])
+    uow = FakeUnitOfWork(nodes=[_node(node_id)], claims=[closed, alive])
 
     _run(uow)
 
@@ -1385,7 +1393,7 @@ def test_claim_section_sources_follow_member_order() -> None:
     )
     # 입력 순서를 관찰 시각 역순으로 준다. 정렬이 sources에도 걸리는지
     # 보려면 입력 순서와 기대 순서가 달라야 한다.
-    uow = FakeUnitOfWork(sources=[_source(node_id)], claims=[newer, older])
+    uow = FakeUnitOfWork(nodes=[_node(node_id)], claims=[newer, older])
 
     _run(uow)
 
@@ -1441,7 +1449,7 @@ def test_open_question_sources_skip_missing_statement() -> None:
         },
     )
     uow = FakeUnitOfWork(
-        sources=[_source(node_id)],
+        nodes=[_node(node_id)],
         claims=[older, newer],
         pending={node_id: [proposal]},
     )
@@ -1461,7 +1469,7 @@ def test_rejected_block_is_dropped_from_the_next_compile() -> None:
     """사람이 반려한 블록은 같은 내용이면 다시 실리지 않는다."""
     node_id = uuid.uuid4()
     uow = FakeUnitOfWork(
-        sources=[_source(node_id)],
+        nodes=[_node(node_id)],
         claims=[
             _claim(node_id=node_id, value=60),
             _claim(
@@ -1502,7 +1510,7 @@ def test_rejected_contested_block_reopens_its_question() -> None:
         node_id=node_id, claim_ids=(older.id, newer.id)
     )
     uow = FakeUnitOfWork(
-        sources=[_source(node_id)],
+        nodes=[_node(node_id)],
         claims=[older, newer],
         pending={node_id: [contradiction]},
     )
@@ -1540,7 +1548,7 @@ def test_reopened_question_can_be_rejected_too() -> None:
         node_id=node_id, claim_ids=(older.id, newer.id)
     )
     uow = FakeUnitOfWork(
-        sources=[_source(node_id)],
+        nodes=[_node(node_id)],
         claims=[older, newer],
         pending={node_id: [contradiction]},
     )
@@ -1565,7 +1573,7 @@ def test_changed_block_reappears_after_rejection() -> None:
         value_type="date",
     )
     uow = FakeUnitOfWork(
-        sources=[_source(node_id)],
+        nodes=[_node(node_id)],
         claims=[_claim(node_id=node_id, value=60), month],
     )
     _run(uow)
@@ -1595,7 +1603,7 @@ def test_node_with_every_block_rejected_is_skipped() -> None:
     """
     node_id = uuid.uuid4()
     uow = FakeUnitOfWork(
-        sources=[_source(node_id)],
+        nodes=[_node(node_id)],
         claims=[_claim(node_id=node_id, value=60)],
     )
     _run(uow)
@@ -1619,7 +1627,7 @@ def test_compiled_blocks_pass_validation_with_sources() -> None:
     newer = _claim(node_id=node_id, value=120, minutes=30)
     proposal = _contradiction(node_id=node_id, claim_ids=(older.id, newer.id))
     uow = FakeUnitOfWork(
-        sources=[_source(node_id)],
+        nodes=[_node(node_id)],
         claims=[older, newer],
         pending={node_id: [proposal]},
     )

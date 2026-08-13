@@ -51,7 +51,7 @@ from catchup.knowledge_maintenance.services.apply_mutation_proposals import (
     apply_mutation_proposals,
 )
 from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
-    compile_entity_artifacts,
+    compile_definition_artifacts,
 )
 from catchup.knowledge_maintenance.services.resolve_claim_conflicts import (
     resolve_claim_conflicts,
@@ -86,9 +86,6 @@ logger = get_logger(__name__)
 
 ONTOLOGY_VERSION = "2"
 DEFAULT_WORKSPACE_ID = 902
-# 컴파일 대상은 전체 entity다. 사람이 읽을 카드를 고르는 자리가 아니라
-# 평가가 물을 모든 대상을 문서로 만들어야 하는 자리이기 때문이다.
-DEFAULT_COMPILE_LIMIT = 100_000
 
 DECISION_EVENT = "bench_adjudication_decided"
 TIE_EXHAUSTED_EVENT = "bench_adjudication_tie_exhausted"
@@ -265,23 +262,26 @@ def _compile_artifacts(
     *,
     workspace_id: int,
     vocabulary: ExtractionVocabulary,
-    limit: int,
 ) -> StepOutcome:
-    """모든 entity의 카드를 컴파일해 변경안으로 올린다.
+    """정의가 고른 문서를 컴파일해 변경안으로 올린다.
 
     멱등 키가 이미 결정된 변경안과 부딪힌 노드는 컴파일러가 건너뛰고
     충돌로 센다. 그 entity의 새 카드는 만들어지지 않으므로 실패로 올려
     보낸다 — 로그에만 남기면 exit 0으로 끝나 오케스트레이터가 카드 빠진
     workspace를 완료로 기록한다.
+
+    읽은 정의가 하나도 없으면 그 자체를 실패 한 건으로 센다. 무엇을
+    문서로 만들지는 정의가 정하므로, 정의가 없는 workspace는 카드가
+    한 장도 없이 조용히 통과해 답이 빈 채로 채점된다.
     """
-    result = compile_entity_artifacts(
+    result = compile_definition_artifacts(
         uow,
         workspace_id=workspace_id,
         vocabulary=vocabulary,
-        limit=limit,
     )
     logger.info(
         "bench_adjudication_compiled",
+        definitions_considered=result.definitions_considered,
         nodes_considered=result.nodes_considered,
         created=result.proposals_created,
         revived=result.proposals_revived,
@@ -289,6 +289,12 @@ def _compile_artifacts(
         conflicted=result.proposals_conflicted,
         blocks_suppressed=result.blocks_suppressed,
     )
+    if result.definitions_considered == 0:
+        logger.warning(
+            "bench_adjudication_no_definitions",
+            workspace_id=workspace_id,
+        )
+        return StepOutcome(done=0, failed=1)
     return StepOutcome(
         done=result.proposals_created + result.proposals_revived,
         failed=result.proposals_conflicted,
@@ -382,12 +388,6 @@ def main() -> int:
         default=ONTOLOGY_VERSION,
         help="모순 비교와 카드에 쓸 어휘 스냅샷 버전을 정한다.",
     )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=DEFAULT_COMPILE_LIMIT,
-        help="카드를 만들 대상 노드 수를 제한한다. 기본은 사실상 전체다.",
-    )
     args = parser.parse_args()
 
     engine = create_engine(settings.sqlalchemy_database_url)
@@ -443,7 +443,6 @@ def main() -> int:
                 uow,
                 workspace_id=args.workspace_id,
                 vocabulary=vocabulary,
-                limit=args.limit,
             ),
             approve_artifacts=lambda: _approve_artifacts(uow),
         )

@@ -2375,64 +2375,6 @@ class SqlAlchemyArtifactRepository:
             )
         return self._scoped_workspace_id
 
-    def find_top_entity_nodes(self, *, limit: int) -> list[EntityCardSource]:
-        """카드를 만들 대상 노드를 claim이 많은 순으로 고른다.
-
-        claim의 subject는 canonical 노드를 직접 가리키거나, 해소를 마친
-        entity 후보를 거쳐 가리킨다. 지금 파이프라인은 뒤쪽으로 저장하므로
-        두 경로를 coalesce로 합쳐 센다. 한쪽만 보면 대부분의 노드가 0건이
-        된다.
-
-        claim과 inner join하므로 claim이 없는 노드는 자연히 빠진다. 순위가
-        같을 때는 노드 식별자로 갈라 실행마다 순서가 흔들리지 않게 한다.
-        """
-        subject_node_id = func.coalesce(
-            KnowledgeClaimCandidateRow.subject_node_id,
-            KnowledgeEntityCandidateRow.resolved_node_id,
-        )
-        claim_count = func.count(KnowledgeClaimCandidateRow.id)
-        statement = (
-            select(
-                KnowledgeNodeRow.id,
-                KnowledgeNodeRow.display_name,
-                KnowledgeNodeRow.canonical_key,
-                claim_count,
-            )
-            .select_from(KnowledgeClaimCandidateRow)
-            .outerjoin(
-                KnowledgeEntityCandidateRow,
-                KnowledgeClaimCandidateRow.subject_entity_candidate_id
-                == KnowledgeEntityCandidateRow.id,
-            )
-            .join(
-                KnowledgeNodeRow,
-                KnowledgeNodeRow.id == subject_node_id,
-            )
-            .where(
-                KnowledgeClaimCandidateRow.workspace_id == self._workspace_id,
-                KnowledgeNodeRow.workspace_id == self._workspace_id,
-                KnowledgeNodeRow.node_kind == NodeKind.ENTITY.value,
-                KnowledgeNodeRow.lifecycle_state == "active",
-            )
-            .group_by(
-                KnowledgeNodeRow.id,
-                KnowledgeNodeRow.display_name,
-                KnowledgeNodeRow.canonical_key,
-            )
-            .order_by(claim_count.desc(), KnowledgeNodeRow.id)
-            .limit(limit)
-        )
-        return [
-            EntityCardSource(
-                node_id=node_id,
-                display_name=display_name or canonical_key or str(node_id),
-                claim_count=count,
-            )
-            for node_id, display_name, canonical_key, count in (
-                self._session.execute(statement).all()
-            )
-        ]
-
     def find_entity_nodes_by_types(
         self,
         *,
@@ -2441,8 +2383,7 @@ class SqlAlchemyArtifactRepository:
         """고른 종류의 살아 있는 entity 노드를 모두 돌려준다.
 
         claim과 join하지 않는다. claim이 아직 없는 노드도 정의가 고른
-        종류면 대상이기 때문이다. claim 수는 이 선택의 기준이 아니므로
-        0으로 남긴다.
+        종류면 대상이기 때문이다.
 
         정렬을 DB에 맡긴다. 이름은 비어 있을 수 있어 표시에 쓰는 값과
         같은 식으로 메워 그 값으로 줄을 세우고, 이름이 같으면 식별자를
@@ -2473,46 +2414,6 @@ class SqlAlchemyArtifactRepository:
             EntityCardSource(node_id=node_id, display_name=name)
             for node_id, name in self._session.execute(statement).all()
         ]
-
-    def get_or_create_artifact(
-        self,
-        *,
-        kind: str,
-        subject_node_id: uuid.UUID,
-        title: str,
-    ) -> uuid.UUID:
-        """대상에 붙는 문서를 만들거나 이미 있는 것을 돌려준다.
-
-        이미 있으면 제목을 덮어쓰지 않는다. 제목은 문서의 정체성이라
-        컴파일을 다시 돌 때마다 바뀌면 사람이 같은 문서인지 알 수 없다.
-
-        정의 없는 문서만 찾고 만든다. (workspace, kind, 대상)이 하나임은
-        정의 이전 문서에서만 성립하므로, 정의에 매인 문서까지 후보로 보면
-        엉뚱한 문서에 판을 얹게 된다.
-        """
-        found = self._session.scalar(
-            select(KnowledgeArtifactRow.id).where(
-                KnowledgeArtifactRow.workspace_id == self._workspace_id,
-                KnowledgeArtifactRow.kind == kind,
-                KnowledgeArtifactRow.subject_node_id == subject_node_id,
-                KnowledgeArtifactRow.definition_id.is_(None),
-            )
-        )
-        if found is not None:
-            return found
-
-        artifact_id = uuid.uuid4()
-        self._session.add(
-            KnowledgeArtifactRow(
-                id=artifact_id,
-                workspace_id=self._workspace_id,
-                kind=kind,
-                subject_node_id=subject_node_id,
-                title=title,
-            )
-        )
-        self._session.flush()
-        return artifact_id
 
     def get_or_create_definition_artifact(
         self,

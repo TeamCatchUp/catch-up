@@ -1,8 +1,13 @@
-"""claim이 많은 entity의 요약 카드를 컴파일해 검토 큐에 올린다.
+"""채널에 걸린 정의가 고른 문서를 컴파일해 검토 큐에 올린다.
 
 `run_claim_conflict_pipeline.py`의 다음 단계다. 저쪽이 값이 어긋나는
 쌍을 안건으로 남긴다면, 이 스크립트는 그렇게 쌓인 claim과 안건을 카드
 한 장으로 늘어놓아 사람이 한눈에 보게 만든다.
+
+무엇을 문서로 만들지는 정의가 정한다. 몇 개를 만들지 고르는 인자는
+없다 — 정의가 고른 노드는 전부 대상이며, 그중 일부만 만들면 같은
+정의가 실행마다 다른 문서 묶음을 낳는다. 정의 하나만 시험하고 싶으면
+`--definition-id`로 정의 목록 쪽을 좁힌다.
 
 LLM을 부르지 않는다. 카드 본문은 이미 저장된 것을 정해진 순서로 옮긴
 것뿐이므로, 같은 입력이면 같은 본문이 나온다. 그래서 여러 번 돌려도
@@ -20,12 +25,15 @@ LLM을 부르지 않는다. 카드 본문은 이미 저장된 것을 정해진 �
 실행:
     uv run python -m catchup.evaluation.run_artifact_compile_pipeline
     uv run python -m catchup.evaluation.run_artifact_compile_pipeline \
-        --workspace-id 1 --limit 5
+        --workspace-id 1 --definition-id 0a1b2c3d-...
 """
 
 from __future__ import annotations
 
 import argparse
+import uuid
+from types import TracebackType
+from typing import Any
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -37,14 +45,92 @@ from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
+from catchup.knowledge_maintenance.ports.artifact_definitions import (
+    ArtifactDefinitionRepository,
+)
+from catchup.knowledge_maintenance.ports.artifact_definitions import (
+    StoredArtifactDefinition,
+)
 from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
-    compile_entity_artifacts,
+    compile_definition_artifacts,
 )
 from catchup.knowledge_maintenance.services.converge_vocabulary import (
     resolve_latest_published_version,
 )
 
-DEFAULT_LIMIT = 2
+
+class _SingleDefinitionRepository:
+    """정의 하나만 보이도록 가린 정의 저장소다."""
+
+    def __init__(
+        self,
+        inner: ArtifactDefinitionRepository,
+        definition_id: uuid.UUID,
+    ) -> None:
+        self._inner = inner
+        self._definition_id = definition_id
+
+    def list_definitions(self) -> tuple[StoredArtifactDefinition, ...]:
+        """고른 정의만 돌려준다. 그런 정의가 없으면 빈 목록이다."""
+        return tuple(
+            definition
+            for definition in self._inner.list_definitions()
+            if definition.id == self._definition_id
+        )
+
+
+class _SingleDefinitionUnitOfWork:
+    """정의 목록만 가려 넘기는 UnitOfWork 껍데기다.
+
+    거르는 자리를 러너에 둔다. 컴파일 서비스의 계약은 "workspace의 정의를
+    전부 돈다"이므로, 몇 개만 돌라는 인자를 서비스에 두면 러너의 편의가
+    컴파일 규칙이 된다.
+
+    정의 저장소는 그때그때 감싼다. 실제 UnitOfWork는 저장소를 `__enter__`
+    에서 만들므로, 만들기 전에 붙들면 지난 실행의 저장소를 잡는다.
+    """
+
+    def __init__(
+        self,
+        inner: KnowledgeMaintenanceUnitOfWork,
+        definition_id: uuid.UUID,
+    ) -> None:
+        self._inner = inner
+        self._definition_id = definition_id
+
+    @property
+    def artifact_definitions(self) -> _SingleDefinitionRepository:
+        """가려 둔 정의 저장소를 돌려준다."""
+        return _SingleDefinitionRepository(
+            self._inner.artifact_definitions, self._definition_id
+        )
+
+    def __getattr__(self, name: str) -> Any:
+        """정의 말고는 감싼 UnitOfWork의 것을 그대로 쓴다."""
+        return getattr(self._inner, name)
+
+    def __enter__(self) -> _SingleDefinitionUnitOfWork:
+        self._inner.__enter__()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self._inner.__exit__(exc_type, exc_value, traceback)
+
+    def commit(self) -> None:
+        self._inner.commit()
+
+
+def only_definition(
+    uow: KnowledgeMaintenanceUnitOfWork,
+    definition_id: uuid.UUID,
+) -> _SingleDefinitionUnitOfWork:
+    """정의 하나만 보이는 UnitOfWork로 감싼다."""
+    return _SingleDefinitionUnitOfWork(uow, definition_id)
 
 
 def _load_vocabulary(
@@ -86,10 +172,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workspace-id", type=int, default=1)
     parser.add_argument(
-        "--limit",
-        type=int,
-        default=DEFAULT_LIMIT,
-        help="카드를 만들 대상 노드 수를 claim이 많은 순으로 제한한다.",
+        "--definition-id",
+        type=uuid.UUID,
+        default=None,
+        help=(
+            "이 정의 하나만 컴파일한다. 생략하면 workspace의 정의를 모두 "
+            "돈다."
+        ),
     )
     parser.add_argument(
         "--ontology-version",
@@ -150,14 +239,22 @@ def main() -> None:
             f"{len(vocabulary.predicate_entries)}종 주입"
         )
 
-    result = compile_entity_artifacts(
-        uow,
+    result = compile_definition_artifacts(
+        uow
+        if args.definition_id is None
+        else only_definition(uow, args.definition_id),
         workspace_id=args.workspace_id,
         vocabulary=vocabulary,
-        limit=args.limit,
     )
 
-    print("=== Entity 카드 컴파일 결과 ===")
+    print("=== 정의 기반 문서 컴파일 결과 ===")
+    if result.definitions_considered == 0:
+        # 정의가 없으면 문서도 없다. 조용히 0으로 끝나면 컴파일이 돈
+        # 것처럼 보이므로 무엇이 빠졌는지 적는다.
+        print(
+            "  읽은 정의가 없다. 채널에 정의를 걸어야 문서가 만들어진다."
+        )
+    print(f"  읽은 정의 {result.definitions_considered}")
     print(f"  대상 노드 {result.nodes_considered}")
     # 서비스 필드 이름과 달리 뜻은 "처음 올림"과 "직전 계류를 대신해
     # 다시 올림"이다. 이름을 그대로 적으면 되살아난 행으로 읽히므로

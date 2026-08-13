@@ -68,8 +68,10 @@ from catchup.knowledge_maintenance.services.review_block_verdict import (
 from catchup.knowledge_maintenance.services.review_contradiction_proposal import (
     review_contradiction_proposal,
 )
+from catchup.tests.knowledge_maintenance.test_artifact_definition_schema import (
+    _definition_with_channel,
+)
 
-ARTIFACT_KIND = "entity_summary"
 REVIEWER = "tester"
 
 
@@ -176,6 +178,7 @@ def seed(
         )
         session.commit()
 
+    definition = _definition_with_channel(session_factory, workspace_id)
     with uow_factory() as uow:
         release_contradiction = _contradiction(
             uow, workspace_id, node_id, "release_month", release
@@ -183,8 +186,10 @@ def seed(
         owner_contradiction = _contradiction(
             uow, workspace_id, node_id, "owner", owner
         )
-        artifact_id = uow.artifacts.get_or_create_artifact(
-            kind=ARTIFACT_KIND,
+        artifact_id = uow.artifacts.get_or_create_definition_artifact(
+            definition_id=definition.id,
+            channel_id=definition.channel_id,
+            kind=definition.kind,
             subject_node_id=node_id,
             title="결제 기능",
         )

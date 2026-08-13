@@ -228,7 +228,7 @@ class FakeDefinitionUnitOfWork:
         claims: Sequence[StoredClaimCandidate] = (),
         relations: FakeRelationRepository | None = None,
     ) -> None:
-        self.artifacts = FakeArtifactRepository([], nodes=list(nodes))
+        self.artifacts = FakeArtifactRepository(nodes=list(nodes))
         self.artifact_definitions = FakeArtifactDefinitionRepository(
             list(definitions)
         )

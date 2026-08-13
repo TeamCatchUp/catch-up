@@ -48,6 +48,7 @@ from catchup.audit.base import AuditLevel
 from catchup.audit.base import AuditStatus
 from catchup.configs.config import settings
 from catchup.db.dependencies import get_db
+from catchup.db.models import ArtifactDefinition
 from catchup.db.models import ArtifactOwner
 from catchup.db.models import Channel
 from catchup.db.models import ChannelAdmin
@@ -1200,8 +1201,59 @@ def test_detail_block_carries_recorded_verdict(
 # 코드가 그대로 돌게 둔다.
 
 
+def _seed_definition(
+    session_factory: Callable[[], Session],
+    *,
+    workspace_id: int,
+    admin_user_id: int | None = None,
+) -> tuple[uuid.UUID, uuid.UUID]:
+    """문서가 딛고 설 채널과 정의를 실 DB에 심는다.
+
+    문서 행은 정의에 매여 있어, 계류 변경안 하나를 심으려면 정의가 먼저
+    서 있어야 한다. 돌려주는 것은 (정의, 채널)이다.
+
+    정의가 만든 문서는 그 채널에 놓이므로 검수 권한도 채널 관리자에게
+    간다. 전역 ADMIN은 미분류 문서의 폴백일 뿐이라 채널에 놓인 문서에는
+    서지 않는다. 그래서 검수까지 가는 시험은 `admin_user_id`로 그 채널의
+    관리자를 함께 세운다.
+    """
+    with session_factory() as session:
+        created_by = session.execute(
+            select(User.id).order_by(User.id).limit(1)
+        ).scalar()
+        if created_by is None:
+            pytest.skip("user가 없어 통합 테스트를 건너뛴다.")
+        channel_id = _make_channel(
+            session, workspace_id=workspace_id, created_by=created_by
+        )
+        definition_id = uuid.uuid4()
+        session.add(
+            ArtifactDefinition(
+                id=definition_id,
+                workspace_id=workspace_id,
+                channel_id=channel_id,
+                kind="entity_summary",
+                selection_spec={
+                    "entity_filter": {"entity_types": ["feature"]},
+                    "relation_paths": [],
+                    "predicate_sections": None,
+                },
+                created_by=created_by,
+            )
+        )
+        if admin_user_id is not None:
+            session.add(
+                ChannelAdmin(channel_id=channel_id, user_id=admin_user_id)
+            )
+        session.commit()
+    return definition_id, channel_id
+
+
 def _seed_pending_proposal(
-    session_factory: Callable[[], Session], *, workspace_id: int
+    session_factory: Callable[[], Session],
+    *,
+    workspace_id: int,
+    admin_user_id: int | None = None,
 ) -> uuid.UUID:
     """어느 workspace에 계류 변경안 하나를 실 DB로 심는다."""
     node_id = uuid.uuid4()
@@ -1229,10 +1281,17 @@ def _seed_pending_proposal(
         ),
     )
     content_hash = blocks_content_hash(blocks)
+    definition_id, channel_id = _seed_definition(
+        session_factory,
+        workspace_id=workspace_id,
+        admin_user_id=admin_user_id,
+    )
     with KnowledgeMaintenanceUnitOfWork(
         session_factory, workspace_id=workspace_id
     ) as uow:
-        artifact_id = uow.artifacts.get_or_create_artifact(
+        artifact_id = uow.artifacts.get_or_create_definition_artifact(
+            definition_id=definition_id,
+            channel_id=channel_id,
             kind="entity_summary",
             subject_node_id=node_id,
             title="오픈 API",
@@ -1275,11 +1334,13 @@ def test_detail_hides_other_workspace_proposal(
     아님이 증명된다.
     """
     first, second = workspace_ids
-    proposal_id = _seed_pending_proposal(session_factory, workspace_id=second)
-
     insider = _make_user(db, email="ws-insider@example.com")
     _join(db, user=insider, workspace_id=second)
     _grant(db, user=insider, workspace_id=second)
+    proposal_id = _seed_pending_proposal(
+        session_factory, workspace_id=second, admin_user_id=insider.id
+    )
+
     as_user(insider)
     with _real_session_local(session_factory):
         allowed = client.get(f"/api/v1/knowledge-review/queue/{proposal_id}")
@@ -1964,7 +2025,10 @@ def test_missing_proposal_decision_returns_404(
 
 
 def _seed_two_block_proposal(
-    session_factory: Callable[[], Session], *, workspace_id: int
+    session_factory: Callable[[], Session],
+    *,
+    workspace_id: int,
+    admin_user_id: int | None = None,
 ) -> tuple[uuid.UUID, tuple[ArtifactBlock, ...]]:
     """블록 두 칸짜리 계류 변경안을 실 DB로 심는다."""
     node_id = uuid.uuid4()
@@ -2000,10 +2064,17 @@ def _seed_two_block_proposal(
         ),
     )
     content_hash = blocks_content_hash(blocks)
+    definition_id, channel_id = _seed_definition(
+        session_factory,
+        workspace_id=workspace_id,
+        admin_user_id=admin_user_id,
+    )
     with KnowledgeMaintenanceUnitOfWork(
         session_factory, workspace_id=workspace_id
     ) as uow:
-        artifact_id = uow.artifacts.get_or_create_artifact(
+        artifact_id = uow.artifacts.get_or_create_definition_artifact(
+            definition_id=definition_id,
+            channel_id=channel_id,
             kind="entity_summary",
             subject_node_id=node_id,
             title="오픈 API",
@@ -2039,7 +2110,9 @@ def test_block_verdict_records_and_absorbs_redecision(
     """블록 결정은 저장한 그대로 나오고, 다시 누르면 갱신으로 흡수된다."""
     workspace_id, _ = workspace_ids
     proposal_id, blocks = _seed_two_block_proposal(
-        session_factory, workspace_id=workspace_id
+        session_factory,
+        workspace_id=workspace_id,
+        admin_user_id=reviewer.id,
     )
 
     with _real_session_local(session_factory):
@@ -2090,7 +2163,9 @@ def test_block_verdict_stale_hash_returns_409(
     """검토자가 본 본문의 지문이 다르면 409 STALE_BLOCK이다."""
     workspace_id, _ = workspace_ids
     proposal_id, _ = _seed_two_block_proposal(
-        session_factory, workspace_id=workspace_id
+        session_factory,
+        workspace_id=workspace_id,
+        admin_user_id=reviewer.id,
     )
 
     with _real_session_local(session_factory):
@@ -2119,7 +2194,9 @@ def test_block_verdict_rejection_without_reason_is_422(
     """
     workspace_id, _ = workspace_ids
     proposal_id, blocks = _seed_two_block_proposal(
-        session_factory, workspace_id=workspace_id
+        session_factory,
+        workspace_id=workspace_id,
+        admin_user_id=reviewer.id,
     )
 
     with _real_session_local(session_factory):
@@ -2214,7 +2291,9 @@ def test_publish_partial_approval_creates_revision(
     """승인된 블록만으로 새 판을 쌓고 반려 블록은 빠진다."""
     workspace_id, _ = workspace_ids
     proposal_id, blocks = _seed_two_block_proposal(
-        session_factory, workspace_id=workspace_id
+        session_factory,
+        workspace_id=workspace_id,
+        admin_user_id=reviewer.id,
     )
 
     with _real_session_local(session_factory):
@@ -2267,7 +2346,9 @@ def test_publish_undecided_blocks_returns_409_with_indexes(
     """결정이 빠진 블록이 있으면 409에 그 번호가 실린다."""
     workspace_id, _ = workspace_ids
     proposal_id, blocks = _seed_two_block_proposal(
-        session_factory, workspace_id=workspace_id
+        session_factory,
+        workspace_id=workspace_id,
+        admin_user_id=reviewer.id,
     )
 
     with _real_session_local(session_factory):
@@ -2299,7 +2380,9 @@ def test_publish_stale_base_returns_409(
     """클라이언트가 본 기준 판이 다르면 409 STALE_BASE다."""
     workspace_id, _ = workspace_ids
     proposal_id, blocks = _seed_two_block_proposal(
-        session_factory, workspace_id=workspace_id
+        session_factory,
+        workspace_id=workspace_id,
+        admin_user_id=reviewer.id,
     )
 
     with _real_session_local(session_factory):
@@ -2413,7 +2496,9 @@ def test_approve_after_block_verdict_is_blocked_and_publish_works(
     """
     workspace_id, _ = workspace_ids
     proposal_id, blocks = _seed_two_block_proposal(
-        session_factory, workspace_id=workspace_id
+        session_factory,
+        workspace_id=workspace_id,
+        admin_user_id=reviewer.id,
     )
 
     with _real_session_local(session_factory):
@@ -2466,7 +2551,9 @@ def test_block_verdict_on_decided_proposal_returns_409(
     """이미 확정된 변경안에는 블록 결정을 더 적을 수 없다."""
     workspace_id, _ = workspace_ids
     proposal_id, blocks = _seed_two_block_proposal(
-        session_factory, workspace_id=workspace_id
+        session_factory,
+        workspace_id=workspace_id,
+        admin_user_id=reviewer.id,
     )
 
     with _real_session_local(session_factory):
@@ -2505,7 +2592,9 @@ def test_publish_stale_block_returns_409(
     """결정을 적은 뒤 본문이 바뀌면 발행이 409 STALE_BLOCK으로 멈춘다."""
     workspace_id, _ = workspace_ids
     proposal_id, blocks = _seed_two_block_proposal(
-        session_factory, workspace_id=workspace_id
+        session_factory,
+        workspace_id=workspace_id,
+        admin_user_id=reviewer.id,
     )
 
     with _real_session_local(session_factory):

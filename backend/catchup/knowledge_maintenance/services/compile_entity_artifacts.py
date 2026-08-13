@@ -87,9 +87,6 @@ from catchup.observability.logging import get_logger
 
 logger = get_logger(__name__)
 
-# entity 하나를 설명하는 요약 카드의 문서 종류다.
-ARTIFACT_KIND_ENTITY_SUMMARY = "entity_summary"
-
 # 값이 갈렸음을 알리는 계류 안건의 종류다.
 PROPOSAL_KIND_CONTRADICTION = "contradiction"
 
@@ -157,113 +154,6 @@ class ArtifactCompileResult:
     unchanged_skipped: int = 0
     proposals_conflicted: int = 0
     blocks_suppressed: int = 0
-
-
-def compile_entity_artifacts(
-    uow: ArtifactCompileUnitOfWork,
-    *,
-    workspace_id: int,
-    vocabulary: ExtractionVocabulary,
-    limit: int = 2,
-    clock: Callable[[], datetime] | None = None,
-) -> ArtifactCompileResult:
-    """claim이 많은 entity의 요약 카드를 변경안으로 올린다.
-
-    어휘 사전은 호출자가 스냅샷에서 읽어 넘긴다. 어느 판본으로 카드를
-    만들었는지가 블록에 남아야 하고, 그 판본을 고르는 일은 실행을
-    시작하는 쪽의 결정이기 때문이다.
-
-    한 노드가 실패해도 나머지 노드의 작업은 살린다. 커밋이 루프 끝에
-    한 번뿐이라 예외가 그대로 올라가면 다른 노드의 카드까지 통째로
-    되돌아가기 때문이다. 승인된 옛 판 내용으로의 회귀 제안은 현재 멱등
-    키 설계상 자동 재제안이 불가능하므로 그 노드만 건너뛰고 센다. 사람이
-    그 회귀를 다시 볼 값어치가 있는지는 후속 스펙 판단으로 남긴다.
-    """
-    created = 0
-    revived = 0
-    abandoned = 0
-    skipped = 0
-    conflicted = 0
-    suppressed = 0
-    now = (clock or _utcnow)()
-    with uow:
-        sources = uow.artifacts.find_top_entity_nodes(limit=limit)
-        claims = uow.knowledge_candidates.find_claim_candidates(
-            workspace_id=workspace_id,
-        )
-        by_node = _group_claims_by_node(claims)
-
-        for source in sources:
-            node_claims = by_node.get(source.node_id, ())
-            pending = uow.mutation_proposals.find_pending_for_subject_node(
-                workspace_id=workspace_id,
-                node_id=source.node_id,
-            )
-            blocks = _build_blocks(
-                claims=node_claims,
-                pending=pending,
-                vocabulary=vocabulary,
-                now=now,
-            )
-            if not blocks:
-                # 쓸 내용이 없으면 빈 카드를 만들지 않는다. 검토자에게
-                # 보여 줄 문장이 하나도 없기 때문이다.
-                logger.info(
-                    "artifact_compile_node_empty",
-                    workspace_id=workspace_id,
-                    node_id=str(source.node_id),
-                )
-                continue
-
-            # 근거 없는 문장을 막는 첫 자리다. 저장 계층도 같은 검사를
-            # 하지만 서비스가 먼저 잡아야 잘못된 블록이 transaction에
-            # 실리지 않는다.
-            validate_blocks(blocks)
-            # 반려 판정은 문서에 매여 있으므로 문서를 먼저 확보한다.
-            artifact_id = uow.artifacts.get_or_create_artifact(
-                kind=ARTIFACT_KIND_ENTITY_SUMMARY,
-                subject_node_id=source.node_id,
-                title=source.display_name,
-            )
-            outcome = _propose_node_blocks(
-                uow,
-                workspace_id=workspace_id,
-                node_id=source.node_id,
-                artifact_id=artifact_id,
-                blocks=blocks,
-                pending=pending,
-                ontology_version=vocabulary.snapshot_id or None,
-            )
-            created += outcome.created
-            revived += outcome.revived
-            abandoned += outcome.abandoned
-            skipped += outcome.skipped
-            conflicted += outcome.conflicted
-            suppressed += outcome.suppressed
-
-        uow.commit()
-
-    result = ArtifactCompileResult(
-        nodes_considered=len(sources),
-        proposals_created=created,
-        proposals_revived=revived,
-        proposals_abandoned=abandoned,
-        unchanged_skipped=skipped,
-        proposals_conflicted=conflicted,
-        blocks_suppressed=suppressed,
-    )
-    logger.info(
-        "artifact_compile_completed",
-        workspace_id=workspace_id,
-        nodes_considered=result.nodes_considered,
-        proposals_created=result.proposals_created,
-        proposals_revived=result.proposals_revived,
-        proposals_abandoned=result.proposals_abandoned,
-        unchanged_skipped=result.unchanged_skipped,
-        proposals_conflicted=result.proposals_conflicted,
-        blocks_suppressed=result.blocks_suppressed,
-    )
-    return result
 
 
 def compile_definition_artifacts(

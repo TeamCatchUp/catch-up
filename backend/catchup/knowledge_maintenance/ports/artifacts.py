@@ -86,14 +86,10 @@ class EntityCardSource:
     Attributes:
         node_id: 대상 canonical 노드를 가리킨다.
         display_name: 문서 제목으로 쓸 이름을 담는다.
-        claim_count: 이 노드를 subject로 삼는 claim 수를 나타낸다. claim
-            수로 줄을 세우는 선택에서만 채워진다. 정의로 고른 노드는 이
-            수를 보지 않으므로 0으로 남는다.
     """
 
     node_id: uuid.UUID
     display_name: str
-    claim_count: int = 0
 
 
 class ArtifactRepository(Protocol):
@@ -103,14 +99,6 @@ class ArtifactRepository(Protocol):
     메서드마다 같은 workspace를 다시 넘기게 하면 호출자가 그것을 틀릴
     자리가 생기기 때문이다.
     """
-
-    def find_top_entity_nodes(self, *, limit: int) -> list[EntityCardSource]:
-        """카드를 만들 대상 노드를 claim이 많은 순으로 고른다.
-
-        살아 있는(active) canonical 노드만 본다. claim이 하나도 없는
-        노드는 쓸 내용이 없으므로 제외한다.
-        """
-        ...
 
     def find_entity_nodes_by_types(
         self,
@@ -126,16 +114,6 @@ class ArtifactRepository(Protocol):
         차례는 이름·식별자 사전순이다. 같은 지식 상태에서 두 번 물으면
         같은 목록이 나와야 검토 큐에 오르는 순서가 흔들리지 않는다.
         """
-        ...
-
-    def get_or_create_artifact(
-        self,
-        *,
-        kind: str,
-        subject_node_id: uuid.UUID,
-        title: str,
-    ) -> uuid.UUID:
-        """대상에 붙는 문서를 만들거나 이미 있는 것을 돌려준다."""
         ...
 
     def get_or_create_definition_artifact(
