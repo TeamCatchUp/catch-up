@@ -427,63 +427,75 @@ def test_empty_predicate_sections_drops_claim_sections() -> None:
     ]
 
 
-def test_truncated_path_without_ledger_warns_instead_of_blocking() -> None:
-    """잘렸는데 완주가 없으면 블록 대신 경고를 남긴다.
+TRUNCATED_PATH_SPEC = _spec(
+    relation_paths=[
+        {
+            "steps": [
+                {"type": "owned_by", "dir": "out"},
+                {"type": "owned_by", "dir": "out"},
+            ]
+        }
+    ],
+    predicate_sections=["status"],
+)
+
+
+def _dead_end_after_truncation(
+    node_id: uuid.UUID,
+) -> FakeRelationRepository:
+    """첫 걸음이 상한을 넘겨 잘리고 다음 걸음이 끊기는 그래프를 만든다.
+
+    이웃이 상한보다 하나 많으므로 첫 걸음은 잘린다. 그 이웃에서 나가는
+    간선은 하나도 없으므로 둘째 걸음에서 frontier가 비고, 완주한 가지가
+    없어 근거 장부도 빈다.
+    """
+    return FakeRelationRepository(
+        [
+            (
+                "owned_by",
+                StoredRelationEdge(
+                    id=uuid.UUID(f"ffffffff-0000-4000-8000-{number:012d}"),
+                    source_node_id=node_id,
+                    target_node_id=uuid.UUID(
+                        f"00000000-0000-4000-8000-{number:012d}"
+                    ),
+                    assertion_text=f"이웃 {number}",
+                    source_display_name="요청 A",
+                    target_display_name=f"팀{number:03d}",
+                ),
+            )
+            for number in range(1, MAX_NODES_PER_STEP + 2)
+        ]
+    )
+
+
+def test_truncated_path_without_ledger_fails_the_document() -> None:
+    """잘렸는데 완주가 없으면 그 문서의 컴파일이 실패한다.
 
     완주한 간선만 근거 장부에 남으므로, 잘림만 있고 끝까지 간 가지가
-    없는 경로는 근거가 비어 블록이 서지 않는다. 근거 없는 블록을 싣는
-    대신 감사 로그로 남겨, 잘라 낸 사실이 조용히 사라지지 않게 한다.
+    없는 경로는 근거가 비어 관계 절을 세울 수 없다. 그 절만 빼고 문서를
+    올리면 읽는 사람은 잘려 나간 것이 있다는 사실을 알 길이 없다.
+    불완전할 수 있는 문서는 소비 표면에 올리지 않는다.
     """
     node_id = uuid.uuid4()
     uow = FakeDefinitionUnitOfWork(
-        definitions=[
-            _definition_row(
-                spec=_spec(
-                    relation_paths=[
-                        {
-                            "steps": [
-                                {"type": "owned_by", "dir": "out"},
-                                {"type": "owned_by", "dir": "out"},
-                            ]
-                        }
-                    ],
-                    predicate_sections=["status"],
-                )
-            )
-        ],
+        definitions=[_definition_row(spec=TRUNCATED_PATH_SPEC)],
         nodes=[(node_id, "요청 A", "feature_request", "active")],
         claims=[_claim(node_id=node_id)],
-        # 첫 걸음이 상한을 넘겨 잘리고, 그 이웃에서 이을 간선은 없다.
-        relations=FakeRelationRepository(
-            [
-                (
-                    "owned_by",
-                    StoredRelationEdge(
-                        id=uuid.UUID(f"ffffffff-0000-4000-8000-{number:012d}"),
-                        source_node_id=node_id,
-                        target_node_id=uuid.UUID(
-                            f"00000000-0000-4000-8000-{number:012d}"
-                        ),
-                        assertion_text=f"이웃 {number}",
-                        source_display_name="요청 A",
-                        target_display_name=f"팀{number:03d}",
-                    ),
-                )
-                for number in range(1, MAX_NODES_PER_STEP + 2)
-            ]
-        ),
+        relations=_dead_end_after_truncation(node_id),
     )
 
     with capture_logs() as logs:
-        _run(uow)
+        result = _run(uow)
 
-    blocks = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]["blocks"]
-    assert [block.block_kind for block in blocks] == [BLOCK_KIND_CLAIM_SECTION]
+    assert _pending_by_title(uow) == {}
+    assert result.proposals_created == 0
+    assert result.nodes_failed == 1
 
     entries = [
         entry
         for entry in logs
-        if entry["event"] == "artifact_compile_relation_path_truncated_no_block"
+        if entry["event"] == "artifact_compile_node_failed_truncated_path"
     ]
     assert len(entries) == 1
     assert entries[0]["log_level"] == "warning"
@@ -492,6 +504,54 @@ def test_truncated_path_without_ledger_warns_instead_of_blocking() -> None:
     assert entries[0]["node_id"] == str(node_id)
     assert entries[0]["path_index"] == 0
     assert entries[0]["truncated_steps"] == [0]
+
+
+def test_truncated_path_failure_does_not_stop_other_nodes() -> None:
+    """한 문서가 잘림으로 실패해도 다른 문서는 그대로 만들어진다.
+
+    격리가 없으면 허브 노드 하나가 그 정의의 카드 전부를 멈춘다.
+    """
+    failing = uuid.uuid4()
+    healthy = uuid.uuid4()
+    uow = FakeDefinitionUnitOfWork(
+        definitions=[_definition_row(spec=TRUNCATED_PATH_SPEC)],
+        nodes=[
+            (failing, "요청 A", "feature_request", "active"),
+            (healthy, "요청 B", "feature_request", "active"),
+        ],
+        claims=[_claim(node_id=failing), _claim(node_id=healthy)],
+        relations=_dead_end_after_truncation(failing),
+    )
+
+    result = _run(uow)
+
+    titles = _pending_by_title(uow)
+    assert f"{DEFINITION_KIND}: 요청 A" not in titles
+    assert f"{DEFINITION_KIND}: 요청 B" in titles
+    assert result.nodes_considered == 2
+    assert result.nodes_failed == 1
+    assert result.proposals_created == 1
+
+
+def test_dead_path_without_truncation_stays_silent() -> None:
+    """잘림 없이 이을 것만 없는 경로는 문서를 세우지도 실패시키지도 않는다.
+
+    잘라 낸 것이 없으면 감춘 것도 없다. 관계 절만 빠지고 나머지는
+    그대로 실린다.
+    """
+    node_id = uuid.uuid4()
+    uow = FakeDefinitionUnitOfWork(
+        definitions=[_definition_row(spec=TRUNCATED_PATH_SPEC)],
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[_claim(node_id=node_id)],
+        relations=FakeRelationRepository([]),
+    )
+
+    result = _run(uow)
+
+    blocks = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]["blocks"]
+    assert [block.block_kind for block in blocks] == [BLOCK_KIND_CLAIM_SECTION]
+    assert result.nodes_failed == 0
 
 
 def test_relation_blocks_included_with_ledger() -> None:

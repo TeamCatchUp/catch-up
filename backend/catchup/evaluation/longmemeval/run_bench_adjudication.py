@@ -481,6 +481,9 @@ def _compile_artifacts(
     보낸다 — 로그에만 남기면 exit 0으로 끝나 오케스트레이터가 카드 빠진
     workspace를 완료로 기록한다.
 
+    컴파일러가 접은 노드도 같은 이유로 실패에 더한다. 접힌 문서만큼
+    카드가 비는 것은 충돌로 건너뛴 노드와 다르지 않다.
+
     읽은 정의가 하나도 없으면 그 자체를 실패 한 건으로 센다. 무엇을
     문서로 만들지는 정의가 정하므로, 정의가 없는 workspace는 카드가
     한 장도 없이 조용히 통과해 답이 빈 채로 채점된다. 벤치 정의는
@@ -501,6 +504,7 @@ def _compile_artifacts(
         unchanged=result.unchanged_skipped,
         conflicted=result.proposals_conflicted,
         blocks_suppressed=result.blocks_suppressed,
+        nodes_failed=result.nodes_failed,
     )
     if result.definitions_considered == 0:
         logger.warning(
@@ -510,7 +514,7 @@ def _compile_artifacts(
         return StepOutcome(done=0, failed=1)
     return StepOutcome(
         done=result.proposals_created + result.proposals_revived,
-        failed=result.proposals_conflicted,
+        failed=result.proposals_conflicted + result.nodes_failed,
     )
 
 

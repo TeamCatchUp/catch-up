@@ -123,6 +123,25 @@ class DefinitionCompileUnitOfWork(ArtifactCompileUnitOfWork, Protocol):
     relations: RelationRepository
 
 
+class RelationPathTruncatedError(RuntimeError):
+    """잘린 경로에서 완주한 가지가 없어 문서를 세울 수 없음을 나타낸다.
+
+    Attributes:
+        path_index: 정의에 적힌 경로 중 몇 번째에서 났는지 나타낸다.
+        truncated_steps: 그 경로에서 잘린 걸음 번호들을 나타낸다.
+    """
+
+    def __init__(
+        self, *, path_index: int, truncated_steps: tuple[int, ...]
+    ) -> None:
+        super().__init__(
+            f"경로 {path_index}이 잘렸는데 완주한 가지가 없다:"
+            f" 잘린 걸음 {list(truncated_steps)}"
+        )
+        self.path_index = path_index
+        self.truncated_steps = truncated_steps
+
+
 @dataclass(frozen=True, slots=True)
 class ArtifactCompileResult:
     """카드 컴파일 한 번의 집계를 표현한다.
@@ -144,6 +163,9 @@ class ArtifactCompileResult:
             건너뛴 문서 수를 나타낸다.
         blocks_suppressed: 사람이 반려한 내용과 지문이 같아 카드에서 뺀
             블록 수를 나타낸다.
+        nodes_failed: 문서를 세울 수 없어 컴파일을 접은 노드 수를
+            나타낸다. 접은 문서만큼 카드가 비므로 호출자가 이 수를 보고
+            실행을 실패로 다룰 수 있어야 한다.
     """
 
     definitions_considered: int = 0
@@ -154,6 +176,7 @@ class ArtifactCompileResult:
     unchanged_skipped: int = 0
     proposals_conflicted: int = 0
     blocks_suppressed: int = 0
+    nodes_failed: int = 0
 
 
 def compile_definition_artifacts(
@@ -185,6 +208,7 @@ def compile_definition_artifacts(
     conflicted = 0
     suppressed = 0
     nodes_considered = 0
+    nodes_failed = 0
     now = datetime.now(timezone.utc)
     with uow:
         definitions = uow.artifact_definitions.list_definitions()
@@ -217,20 +241,36 @@ def compile_definition_artifacts(
                         node_id=source.node_id,
                     )
                 )
+                try:
+                    relation_blocks = _relation_blocks(
+                        uow,
+                        definition=definition,
+                        source=source,
+                        ontology_version=vocabulary.snapshot_id or None,
+                        now=now,
+                    )
+                except RelationPathTruncatedError as error:
+                    # 이 문서만 접는다. 정의 하나가 어긋났을 때와 같은
+                    # 격리다 — 허브 노드 하나가 그 정의의 카드 전부를
+                    # 멈추게 두지 않는다.
+                    logger.warning(
+                        "artifact_compile_node_failed_truncated_path",
+                        workspace_id=workspace_id,
+                        definition_id=str(definition.id),
+                        node_id=str(source.node_id),
+                        path_index=error.path_index,
+                        truncated_steps=list(error.truncated_steps),
+                    )
+                    nodes_failed += 1
+                    continue
+
                 blocks = _build_blocks(
                     claims=by_node.get(source.node_id, ()),
                     pending=pending,
                     vocabulary=vocabulary,
                     now=now,
                     allowed=definition.selection_spec.predicate_sections,
-                    relation_blocks=_relation_blocks(
-                        uow,
-                        workspace_id=workspace_id,
-                        definition=definition,
-                        source=source,
-                        ontology_version=vocabulary.snapshot_id or None,
-                        now=now,
-                    ),
+                    relation_blocks=relation_blocks,
                 )
                 if not blocks:
                     # 쓸 내용이 없으면 빈 문서를 만들지 않는다. 검토자에게
@@ -284,6 +324,7 @@ def compile_definition_artifacts(
         unchanged_skipped=skipped,
         proposals_conflicted=conflicted,
         blocks_suppressed=suppressed,
+        nodes_failed=nodes_failed,
     )
     logger.info(
         "artifact_compile_completed",
@@ -296,6 +337,7 @@ def compile_definition_artifacts(
         unchanged_skipped=result.unchanged_skipped,
         proposals_conflicted=result.proposals_conflicted,
         blocks_suppressed=result.blocks_suppressed,
+        nodes_failed=result.nodes_failed,
     )
     return result
 
@@ -316,7 +358,6 @@ def _definition_title(
 def _relation_blocks(
     uow: DefinitionCompileUnitOfWork,
     *,
-    workspace_id: int,
     definition: StoredArtifactDefinition,
     source: EntityCardSource,
     ontology_version: str | None,
@@ -328,14 +369,20 @@ def _relation_blocks(
     컴파일러가 판단할 일이 아니고, 사람이 적어 둔 차례가 곧 읽는
     차례이기 때문이다.
 
-    이을 것도 잘린 걸음도 없는 경로는 블록을 만들지 않는다. 그 판단은
-    렌더가 갖고 있으므로 여기서는 None을 거를 뿐이다.
+    이을 것도 잘린 걸음도 없는 경로는 블록을 만들지 않는다. 잘라 낸
+    것이 없으면 감춘 것도 없으므로 그 문서는 나머지 절로 그대로 선다.
 
-    잘린 걸음은 있는데 블록이 서지 않은 경로는 경고로 남긴다. 근거
-    장부에는 완주한 간선만 남으므로, 끝까지 간 가지가 하나도 없으면
-    근거가 비어 블록을 세울 수 없다. 그렇다고 잘라 냈다는 사실까지
-    사라지면 카드는 자신이 완전하다고 말하게 되므로, 근거 없는 블록을
-    싣는 대신 감사 로그에 적는다.
+    잘림만 있고 완주가 없으면 그 문서의 컴파일은 실패한다 — 불완전할
+    수 있는 문서를 소비 표면에 올리지 않는다. 근거 장부에는 완주한
+    간선만 남으므로 이때 관계 절은 근거가 비어 설 수 없고, 그 절만
+    빼고 문서를 올리면 읽는 사람은 잘려 나간 것이 있다는 사실을 알
+    길이 없다. 잘림을 알리는 문구를 블록으로 싣는 길도 막혀 있다 —
+    근거 없는 블록은 블록 계약이 받지 않고, 읽는 사람에게 보여 줄 것도
+    아니다.
+
+    Raises:
+        RelationPathTruncatedError: 잘린 걸음이 있는데 완주한 가지가
+            없을 때 던진다. 부르는 쪽이 이 문서 하나만 접는다.
     """
     blocks: list[ArtifactBlock] = []
     for index, path in enumerate(definition.selection_spec.relation_paths):
@@ -352,13 +399,9 @@ def _relation_blocks(
         )
         if block is None:
             if traversal.truncated_steps:
-                logger.warning(
-                    "artifact_compile_relation_path_truncated_no_block",
-                    workspace_id=workspace_id,
-                    definition_id=str(definition.id),
-                    node_id=str(source.node_id),
+                raise RelationPathTruncatedError(
                     path_index=index,
-                    truncated_steps=list(traversal.truncated_steps),
+                    truncated_steps=traversal.truncated_steps,
                 )
             continue
         blocks.append(block)
