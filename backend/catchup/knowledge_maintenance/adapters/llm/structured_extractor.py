@@ -16,6 +16,8 @@ from catchup.knowledge_maintenance.contracts.extraction import (
 )
 from catchup.knowledge_maintenance.contracts.extraction import metadata_local_key
 from catchup.knowledge_maintenance.domain.observation import MetadataEntity
+from catchup.knowledge_maintenance.ports.extraction import ExtractionAPIError
+from catchup.knowledge_maintenance.ports.extraction import ExtractionContractError
 from catchup.observability.logging import get_logger
 from catchup.prompts.loader import prompt_loader
 
@@ -58,9 +60,13 @@ class StructuredKnowledgeExtractor:
         request: KnowledgeExtractionRequest,
     ) -> KnowledgeCandidateBatch:
         """원문 하나에서 지식 후보를 뽑는다."""
-        batch, _ = await self.extract_with_diagnostics(request)
+        batch, diagnostics = await self.extract_with_diagnostics(request)
         if batch is None:
-            raise ValueError("추출 결과가 계약을 만족하지 않는다.")
+            raise ExtractionContractError(
+                diagnostics.parse_error
+                or "추출 결과가 계약을 만족하지 않는다.",
+                raw_output=diagnostics.raw_output,
+            )
         return batch
 
     async def extract_with_diagnostics(
@@ -118,7 +124,7 @@ class StructuredKnowledgeExtractor:
                 elapsed=round(time.perf_counter() - started, 3),
                 **call_context,
             )
-            raise
+            raise ExtractionAPIError(str(error)) from error
         elapsed = round(time.perf_counter() - started, 3)
         raw = response.get("raw")
 
@@ -196,6 +202,8 @@ def _dump(raw: object) -> dict | None:
     """LLM 원본 응답을 JSON 호환 형태로 바꾼다."""
     if raw is None:
         return None
+    if isinstance(raw, dict):
+        return raw
     if hasattr(raw, "model_dump"):
         return raw.model_dump(mode="json")
     return {"repr": repr(raw)}

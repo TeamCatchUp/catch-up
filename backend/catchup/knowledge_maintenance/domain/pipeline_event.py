@@ -44,6 +44,10 @@ class FailureKind(StrEnum):
     CONTRACT_VIOLATION = "contract_violation"
     # throttling이나 timeout이다. 오래 갈 수 있으므로 더 봐준다.
     API_ERROR = "api_error"
+    # DB 등 내부 저장소의 일시적 실패다.
+    STORAGE_ERROR = "storage_error"
+    # 앞 단계가 보장해야 할 데이터가 사라진 상태다. 재시도로 복구되지 않는다.
+    INVARIANT_VIOLATION = "invariant_violation"
 
 
 # 실패를 다시 시도하기까지 기다리는 시간이다. 시도가 거듭될수록 배로 늘려
@@ -55,6 +59,8 @@ BACKOFF_BASE = timedelta(minutes=1)
 RETRY_LIMITS = {
     FailureKind.CONTRACT_VIOLATION: 2,
     FailureKind.API_ERROR: 5,
+    FailureKind.STORAGE_ERROR: 5,
+    FailureKind.INVARIANT_VIOLATION: 1,
 }
 
 
