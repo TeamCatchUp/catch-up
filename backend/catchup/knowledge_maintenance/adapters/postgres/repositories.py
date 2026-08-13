@@ -2514,6 +2514,49 @@ class SqlAlchemyArtifactRepository:
         self._session.flush()
         return artifact_id
 
+    def get_or_create_definition_artifact(
+        self,
+        *,
+        definition_id: uuid.UUID,
+        channel_id: uuid.UUID,
+        kind: str,
+        subject_node_id: uuid.UUID,
+        title: str,
+    ) -> uuid.UUID:
+        """정의가 대상에 만드는 문서를 찾거나 새로 만든다.
+
+        (정의, 대상)으로만 찾는다. 그 짝의 UNIQUE가 이 문서의 유일성을
+        말하는 제약이므로, 조건을 넓히면 정의가 kind나 채널을 바꾼 뒤
+        같은 짝에 문서가 둘 생기려다 제약에 막힌다.
+
+        이미 있으면 제목도 채널도 덮어쓰지 않는다. 제목은 문서의 정체성
+        이고, 채널을 옮기는 일은 컴파일이 아니라 사람의 결정이다.
+        """
+        found = self._session.scalar(
+            select(KnowledgeArtifactRow.id).where(
+                KnowledgeArtifactRow.workspace_id == self._workspace_id,
+                KnowledgeArtifactRow.definition_id == definition_id,
+                KnowledgeArtifactRow.subject_node_id == subject_node_id,
+            )
+        )
+        if found is not None:
+            return found
+
+        artifact_id = uuid.uuid4()
+        self._session.add(
+            KnowledgeArtifactRow(
+                id=artifact_id,
+                workspace_id=self._workspace_id,
+                definition_id=definition_id,
+                channel_id=channel_id,
+                kind=kind,
+                subject_node_id=subject_node_id,
+                title=title,
+            )
+        )
+        self._session.flush()
+        return artifact_id
+
     def find_latest_revision_id_and_number(
         self,
         *,

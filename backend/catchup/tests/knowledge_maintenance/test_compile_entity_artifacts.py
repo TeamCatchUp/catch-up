@@ -132,6 +132,15 @@ class FakeArtifactRepository:
         # (node_id, display_name, entity_type, lifecycle_state)다.
         self.nodes = list(nodes or ())
         self.artifacts: dict[tuple[str, uuid.UUID], uuid.UUID] = {}
+        # 정의에 매인 문서는 (정의, 대상)으로 하나다. 실 DB의 UNIQUE와
+        # 같은 키를 dict 키로 재현한다.
+        self.definition_artifacts: dict[
+            tuple[uuid.UUID, uuid.UUID], uuid.UUID
+        ] = {}
+        # 문서 행에 실제로 적히는 칸들이다. 정의·채널·kind가 함께
+        # 남는지 시험이 볼 자리가 있어야 한다.
+        self.artifact_rows: dict[uuid.UUID, dict] = {}
+        self.subjects: dict[uuid.UUID, uuid.UUID] = {}
         self.titles: dict[uuid.UUID, str] = {}
         self.by_key: dict[str, dict] = {}
         self.by_id: dict[uuid.UUID, dict] = {}
@@ -168,8 +177,68 @@ class FakeArtifactRepository:
             return found
         artifact_id = uuid.uuid4()
         self.artifacts[(kind, subject_node_id)] = artifact_id
-        self.titles[artifact_id] = title
+        self._remember(
+            artifact_id,
+            definition_id=None,
+            channel_id=None,
+            kind=kind,
+            subject_node_id=subject_node_id,
+            title=title,
+        )
         return artifact_id
+
+    def get_or_create_definition_artifact(
+        self,
+        *,
+        definition_id: uuid.UUID,
+        channel_id: uuid.UUID,
+        kind: str,
+        subject_node_id: uuid.UUID,
+        title: str,
+    ) -> uuid.UUID:
+        """정의가 대상에 만드는 문서를 찾거나 새로 만든다.
+
+        실 저장소와 같이 (정의, 대상)으로만 찾고, 이미 있으면 제목을
+        덮어쓰지 않는다.
+        """
+        found = self.definition_artifacts.get((definition_id, subject_node_id))
+        if found is not None:
+            return found
+        artifact_id = uuid.uuid4()
+        self.definition_artifacts[(definition_id, subject_node_id)] = (
+            artifact_id
+        )
+        self._remember(
+            artifact_id,
+            definition_id=definition_id,
+            channel_id=channel_id,
+            kind=kind,
+            subject_node_id=subject_node_id,
+            title=title,
+        )
+        return artifact_id
+
+    def _remember(
+        self,
+        artifact_id: uuid.UUID,
+        *,
+        definition_id: uuid.UUID | None,
+        channel_id: uuid.UUID | None,
+        kind: str,
+        subject_node_id: uuid.UUID,
+        title: str,
+    ) -> None:
+        """새로 만든 문서 행의 칸들을 적어 둔다."""
+        self.artifact_rows[artifact_id] = {
+            "id": artifact_id,
+            "definition_id": definition_id,
+            "channel_id": channel_id,
+            "kind": kind,
+            "subject_node_id": subject_node_id,
+            "title": title,
+        }
+        self.subjects[artifact_id] = subject_node_id
+        self.titles[artifact_id] = title
 
     def find_latest_revision_id_and_number(
         self, *, artifact_id: uuid.UUID
@@ -322,10 +391,7 @@ class FakeArtifactRepository:
         limit: int | None = None,
         offset: int = 0,
     ) -> list[StoredArtifactProposal]:
-        nodes = {
-            artifact_id: node_id
-            for (_, node_id), artifact_id in self.artifacts.items()
-        }
+        nodes = self.subjects
         return [
             StoredArtifactProposal(
                 id=row["id"],

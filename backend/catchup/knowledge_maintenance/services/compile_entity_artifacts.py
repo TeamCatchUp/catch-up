@@ -53,10 +53,21 @@ from catchup.knowledge_maintenance.domain.artifact import artifact_idempotency_k
 from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.domain.artifact import validate_blocks
+from catchup.knowledge_maintenance.domain.artifact_definition import SelectionSpecError
+from catchup.knowledge_maintenance.domain.artifact_definition import (
+    validate_selection_spec,
+)
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.domain.temporal import claim_not_closed_at
+from catchup.knowledge_maintenance.ports.artifact_definitions import (
+    ArtifactDefinitionRepository,
+)
+from catchup.knowledge_maintenance.ports.artifact_definitions import (
+    StoredArtifactDefinition,
+)
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConflict
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactRepository
+from catchup.knowledge_maintenance.ports.artifacts import EntityCardSource
 from catchup.knowledge_maintenance.ports.block_verdicts import BlockVerdictRepository
 from catchup.knowledge_maintenance.ports.knowledge_candidates import (
     KnowledgeCandidateRepository,
@@ -65,6 +76,13 @@ from catchup.knowledge_maintenance.ports.mutation_proposals import (
     MutationProposalRepository,
 )
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPendingProposal
+from catchup.knowledge_maintenance.ports.relations import RelationRepository
+from catchup.knowledge_maintenance.services.traverse_relations import (
+    relation_section_block,
+)
+from catchup.knowledge_maintenance.services.traverse_relations import (
+    traverse_relation_path,
+)
 from catchup.observability.logging import get_logger
 
 logger = get_logger(__name__)
@@ -96,11 +114,26 @@ class ArtifactCompileUnitOfWork(Protocol):
     def commit(self) -> None: ...
 
 
+class DefinitionCompileUnitOfWork(ArtifactCompileUnitOfWork, Protocol):
+    """정의 순회 컴파일이 쓰는 transaction 경계를 정의한다.
+
+    카드 컴파일이 쓰던 저장소에 정의와 관계를 더한다. 입구가 정의 목록
+    이고 본문에 관계 절이 서므로, 두 저장소 없이는 이 컴파일이 성립하지
+    않는다.
+    """
+
+    artifact_definitions: ArtifactDefinitionRepository
+    relations: RelationRepository
+
+
 @dataclass(frozen=True, slots=True)
 class ArtifactCompileResult:
     """카드 컴파일 한 번의 집계를 표현한다.
 
     Attributes:
+        definitions_considered: 이번 실행이 읽은 정의 수를 나타낸다.
+            선택 규칙이 어휘와 어긋나 건너뛴 정의도 읽기는 했으므로
+            함께 센다.
         nodes_considered: 이번 실행이 살펴본 대상 노드 수를 나타낸다.
         proposals_created: 계류 변경안이 없던 문서에 새로 올린 수를
             나타낸다.
@@ -116,6 +149,7 @@ class ArtifactCompileResult:
             블록 수를 나타낸다.
     """
 
+    definitions_considered: int = 0
     nodes_considered: int = 0
     proposals_created: int = 0
     proposals_revived: int = 0
@@ -191,109 +225,21 @@ def compile_entity_artifacts(
                 subject_node_id=source.node_id,
                 title=source.display_name,
             )
-            rejected = uow.block_verdicts.find_rejected_hashes(
-                artifact_id=artifact_id,
-            )
-            blocks, dropped, suppressed_ids = _drop_rejected_blocks(
-                blocks,
-                rejected,
+            outcome = _propose_node_blocks(
+                uow,
                 workspace_id=workspace_id,
+                node_id=source.node_id,
                 artifact_id=artifact_id,
+                blocks=blocks,
+                pending=pending,
+                ontology_version=vocabulary.snapshot_id or None,
             )
-            suppressed += dropped
-            reopened, dropped_again, _ = _drop_rejected_blocks(
-                _revive_suppressed_questions(
-                    blocks,
-                    pending=pending,
-                    suppressed_ids=suppressed_ids,
-                    ontology_version=vocabulary.snapshot_id or None,
-                ),
-                rejected,
-                workspace_id=workspace_id,
-                artifact_id=artifact_id,
-            )
-            # 되살린 열린 질문도 같은 반려 장부를 거친다. 그 형태까지
-            # 사람이 반려했다면 되살릴 것이 아니라 빠져야 한다.
-            suppressed += dropped_again
-            if reopened:
-                validate_blocks(reopened)
-                blocks = (*blocks, *reopened)
-            if not blocks:
-                # 남은 문장이 없으면 빈 카드 규칙과 같이 건너뛴다. 다만
-                # 큐에 남은 계류는 접는다. 그 계류가 담은 본문이 바로
-                # 방금 반려된 내용이라, 두면 사람이 같은 것을 또 본다.
-                abandoned += uow.artifacts.abandon_pending_proposals(
-                    artifact_id=artifact_id,
-                )
-                logger.info(
-                    "artifact_compile_node_all_blocks_suppressed",
-                    workspace_id=workspace_id,
-                    node_id=str(source.node_id),
-                    artifact_id=str(artifact_id),
-                    blocks_suppressed=dropped,
-                )
-                continue
-
-            content_hash = blocks_content_hash(blocks)
-            known = uow.artifacts.find_latest_content_hashes(
-                artifact_id=artifact_id,
-            )
-            if content_hash in known:
-                skipped += 1
-                abandoned += _abandon_stale_pending(
-                    uow,
-                    artifact_id=artifact_id,
-                    content_hash=content_hash,
-                )
-                continue
-
-            replaced = uow.artifacts.abandon_pending_proposals(
-                artifact_id=artifact_id,
-            )
-            abandoned += replaced
-            latest = uow.artifacts.find_latest_revision_id_and_number(
-                artifact_id=artifact_id,
-            )
-            base_revision_id = None if latest is None else latest[0]
-            try:
-                proposal_id = uow.artifacts.add_or_revive_proposal(
-                    artifact_id=artifact_id,
-                    blocks=blocks,
-                    content_hash=content_hash,
-                    idempotency_key=artifact_idempotency_key(
-                        artifact_id,
-                        content_hash,
-                        base_revision_id=base_revision_id,
-                    ),
-                    base_revision_id=base_revision_id,
-                )
-            except ArtifactProposalConflict:
-                # 키에 기준 판이 들어가므로 정상 흐름에서는 결정된 행과
-                # 부딪히지 않는다. 그래도 부딪히면 데이터 이상 신호이므로
-                # 이 노드만 건너뛰고 나머지 노드의 작업은 그대로 커밋한다.
-                # 바로 위에서 접은 계류는 되돌리지 않는다.
-                conflicted += 1
-                logger.warning(
-                    "artifact_compile_proposal_conflict",
-                    workspace_id=workspace_id,
-                    node_id=str(source.node_id),
-                    artifact_id=str(artifact_id),
-                    content_hash=content_hash,
-                )
-                continue
-            if replaced:
-                revived += 1
-            else:
-                created += 1
-            logger.info(
-                "artifact_compile_proposed",
-                workspace_id=workspace_id,
-                node_id=str(source.node_id),
-                artifact_id=str(artifact_id),
-                proposal_id=str(proposal_id),
-                block_count=len(blocks),
-                replaced_pending=replaced,
-            )
+            created += outcome.created
+            revived += outcome.revived
+            abandoned += outcome.abandoned
+            skipped += outcome.skipped
+            conflicted += outcome.conflicted
+            suppressed += outcome.suppressed
 
         uow.commit()
 
@@ -318,6 +264,344 @@ def compile_entity_artifacts(
         blocks_suppressed=result.blocks_suppressed,
     )
     return result
+
+
+def compile_definition_artifacts(
+    uow: DefinitionCompileUnitOfWork,
+    *,
+    workspace_id: int,
+    vocabulary: ExtractionVocabulary,
+) -> ArtifactCompileResult:
+    """workspace의 정의를 돌며 정의가 고른 문서를 변경안으로 올린다.
+
+    무엇을 문서로 만들지는 사람이 채널에 걸어 둔 정의가 정한다. 몇 개를
+    만들지 고르는 자리가 없으므로 상한 인자도 없다 — 정의가 고른 노드는
+    전부 대상이며, 그중 일부만 만들면 같은 정의가 실행마다 다른 문서
+    묶음을 낳는다.
+
+    정의 하나가 어휘와 어긋나면 그 정의만 건너뛴다. 어휘 개정으로
+    이름이 사라진 정의를 그대로 컴파일하면 조건에 맞는 노드가 없어
+    조용히 빈 문서가 되고, 반대로 실행 전체를 세우면 멀쩡한 정의의
+    문서까지 함께 멈춘다. 노드 단위 격리와 같은 원칙이다.
+
+    시점은 실행 시작에 한 번 읽어 순회와 claim 판정이 함께 쓴다. 걸음
+    마다 시계를 새로 읽으면 같은 실행 안에서도 살아 있는 것의 기준이
+    흔들린다.
+    """
+    created = 0
+    revived = 0
+    abandoned = 0
+    skipped = 0
+    conflicted = 0
+    suppressed = 0
+    nodes_considered = 0
+    now = datetime.now(timezone.utc)
+    with uow:
+        definitions = uow.artifact_definitions.list_definitions()
+        claims = uow.knowledge_candidates.find_claim_candidates(
+            workspace_id=workspace_id,
+        )
+        by_node = _group_claims_by_node(claims)
+
+        for definition in definitions:
+            try:
+                validate_selection_spec(definition.selection_spec, vocabulary)
+            except SelectionSpecError as error:
+                logger.warning(
+                    "artifact_compile_definition_invalid",
+                    workspace_id=workspace_id,
+                    definition_id=str(definition.id),
+                    kind=definition.kind,
+                    reason=str(error),
+                )
+                continue
+
+            sources = uow.artifacts.find_entity_nodes_by_types(
+                entity_types=definition.selection_spec.entity_types,
+            )
+            nodes_considered += len(sources)
+            for source in sources:
+                pending = (
+                    uow.mutation_proposals.find_pending_for_subject_node(
+                        workspace_id=workspace_id,
+                        node_id=source.node_id,
+                    )
+                )
+                blocks = _build_blocks(
+                    claims=by_node.get(source.node_id, ()),
+                    pending=pending,
+                    vocabulary=vocabulary,
+                    now=now,
+                    allowed=definition.selection_spec.predicate_sections,
+                    relation_blocks=_relation_blocks(
+                        uow,
+                        definition=definition,
+                        source=source,
+                        ontology_version=vocabulary.snapshot_id or None,
+                        now=now,
+                    ),
+                )
+                if not blocks:
+                    # 쓸 내용이 없으면 빈 문서를 만들지 않는다. 검토자에게
+                    # 보여 줄 문장이 하나도 없기 때문이다.
+                    logger.info(
+                        "artifact_compile_node_empty",
+                        workspace_id=workspace_id,
+                        definition_id=str(definition.id),
+                        node_id=str(source.node_id),
+                    )
+                    continue
+
+                # 근거 없는 문장을 막는 첫 자리다. 저장 계층도 같은 검사를
+                # 하지만 서비스가 먼저 잡아야 잘못된 블록이 transaction에
+                # 실리지 않는다.
+                validate_blocks(blocks)
+                # 반려 판정은 문서에 매여 있으므로 문서를 먼저 확보한다.
+                artifact_id = (
+                    uow.artifacts.get_or_create_definition_artifact(
+                        definition_id=definition.id,
+                        channel_id=definition.channel_id,
+                        kind=definition.kind,
+                        subject_node_id=source.node_id,
+                        title=_definition_title(definition, source),
+                    )
+                )
+                outcome = _propose_node_blocks(
+                    uow,
+                    workspace_id=workspace_id,
+                    node_id=source.node_id,
+                    artifact_id=artifact_id,
+                    blocks=blocks,
+                    pending=pending,
+                    ontology_version=vocabulary.snapshot_id or None,
+                )
+                created += outcome.created
+                revived += outcome.revived
+                abandoned += outcome.abandoned
+                skipped += outcome.skipped
+                conflicted += outcome.conflicted
+                suppressed += outcome.suppressed
+
+        uow.commit()
+
+    result = ArtifactCompileResult(
+        definitions_considered=len(definitions),
+        nodes_considered=nodes_considered,
+        proposals_created=created,
+        proposals_revived=revived,
+        proposals_abandoned=abandoned,
+        unchanged_skipped=skipped,
+        proposals_conflicted=conflicted,
+        blocks_suppressed=suppressed,
+    )
+    logger.info(
+        "artifact_compile_completed",
+        workspace_id=workspace_id,
+        definitions_considered=result.definitions_considered,
+        nodes_considered=result.nodes_considered,
+        proposals_created=result.proposals_created,
+        proposals_revived=result.proposals_revived,
+        proposals_abandoned=result.proposals_abandoned,
+        unchanged_skipped=result.unchanged_skipped,
+        proposals_conflicted=result.proposals_conflicted,
+        blocks_suppressed=result.blocks_suppressed,
+    )
+    return result
+
+
+def _definition_title(
+    definition: StoredArtifactDefinition,
+    source: EntityCardSource,
+) -> str:
+    """정의가 만드는 문서의 제목을 짓는다.
+
+    정의가 정한 앞자리에 대상 이름을 잇는다. 같은 대상에 여러 정의가
+    문서를 만들 수 있어, 이름만으로는 검토자가 어느 정의의 문서인지
+    가릴 수 없기 때문이다.
+    """
+    return f"{definition.title_prefix}: {source.display_name}"
+
+
+def _relation_blocks(
+    uow: DefinitionCompileUnitOfWork,
+    *,
+    definition: StoredArtifactDefinition,
+    source: EntityCardSource,
+    ontology_version: str | None,
+    now: datetime,
+) -> tuple[ArtifactBlock, ...]:
+    """정의가 고른 경로마다 관계 절을 하나씩 만든다.
+
+    차례는 정의에 적힌 경로 차례 그대로다. 어느 관계가 더 중요한지는
+    컴파일러가 판단할 일이 아니고, 사람이 적어 둔 차례가 곧 읽는
+    차례이기 때문이다.
+
+    이을 것도 잘린 걸음도 없는 경로는 블록을 만들지 않는다. 그 판단은
+    렌더가 갖고 있으므로 여기서는 None을 거를 뿐이다.
+    """
+    blocks: list[ArtifactBlock] = []
+    for path in definition.selection_spec.relation_paths:
+        traversal = traverse_relation_path(
+            uow.relations,
+            start_node_id=source.node_id,
+            path=path,
+            now=now,
+        )
+        block = relation_section_block(
+            path=path,
+            traversal=traversal,
+            ontology_version=ontology_version,
+        )
+        if block is not None:
+            blocks.append(block)
+    return tuple(blocks)
+
+
+@dataclass(frozen=True, slots=True)
+class _NodeOutcome:
+    """노드 하나를 컴파일한 결과의 집계를 담는다.
+
+    Attributes:
+        created: 새로 올린 변경안 수를 나타낸다.
+        revived: 낡은 계류를 접고 그 자리를 대신한 수를 나타낸다.
+        abandoned: 접은 계류 변경안 수를 나타낸다.
+        skipped: 지문이 그대로라 아무것도 쓰지 않았는지 나타낸다.
+        conflicted: 멱등 키가 결정된 행과 부딪혀 건너뛰었는지 나타낸다.
+        suppressed: 반려 장부에 걸려 카드에서 뺀 블록 수를 나타낸다.
+    """
+
+    created: int = 0
+    revived: int = 0
+    abandoned: int = 0
+    skipped: int = 0
+    conflicted: int = 0
+    suppressed: int = 0
+
+
+def _propose_node_blocks(
+    uow: ArtifactCompileUnitOfWork,
+    *,
+    workspace_id: int,
+    node_id: uuid.UUID,
+    artifact_id: uuid.UUID,
+    blocks: tuple[ArtifactBlock, ...],
+    pending: Sequence[StoredPendingProposal],
+    ontology_version: str | None,
+) -> _NodeOutcome:
+    """만들어 둔 블록을 반려 장부와 지문을 거쳐 변경안으로 올린다.
+
+    무엇을 싣느냐는 입구가 정하고, 그것을 사람 앞에 어떻게 올리느냐는
+    여기가 정한다. 두 입구가 이 자리를 나눠 쓰므로 반려 억제와 지문
+    비교와 멱등 키 규칙이 입구마다 갈리지 않는다.
+    """
+    rejected = uow.block_verdicts.find_rejected_hashes(
+        artifact_id=artifact_id,
+    )
+    blocks, dropped, suppressed_ids = _drop_rejected_blocks(
+        blocks,
+        rejected,
+        workspace_id=workspace_id,
+        artifact_id=artifact_id,
+    )
+    suppressed = dropped
+    reopened, dropped_again, _ = _drop_rejected_blocks(
+        _revive_suppressed_questions(
+            blocks,
+            pending=pending,
+            suppressed_ids=suppressed_ids,
+            ontology_version=ontology_version,
+        ),
+        rejected,
+        workspace_id=workspace_id,
+        artifact_id=artifact_id,
+    )
+    # 되살린 열린 질문도 같은 반려 장부를 거친다. 그 형태까지 사람이
+    # 반려했다면 되살릴 것이 아니라 빠져야 한다.
+    suppressed += dropped_again
+    if reopened:
+        validate_blocks(reopened)
+        blocks = (*blocks, *reopened)
+    if not blocks:
+        # 남은 문장이 없으면 빈 카드 규칙과 같이 건너뛴다. 다만 큐에
+        # 남은 계류는 접는다. 그 계류가 담은 본문이 바로 방금 반려된
+        # 내용이라, 두면 사람이 같은 것을 또 본다.
+        abandoned = uow.artifacts.abandon_pending_proposals(
+            artifact_id=artifact_id,
+        )
+        logger.info(
+            "artifact_compile_node_all_blocks_suppressed",
+            workspace_id=workspace_id,
+            node_id=str(node_id),
+            artifact_id=str(artifact_id),
+            blocks_suppressed=dropped,
+        )
+        return _NodeOutcome(abandoned=abandoned, suppressed=suppressed)
+
+    content_hash = blocks_content_hash(blocks)
+    known = uow.artifacts.find_latest_content_hashes(
+        artifact_id=artifact_id,
+    )
+    if content_hash in known:
+        return _NodeOutcome(
+            skipped=1,
+            abandoned=_abandon_stale_pending(
+                uow,
+                artifact_id=artifact_id,
+                content_hash=content_hash,
+            ),
+            suppressed=suppressed,
+        )
+
+    replaced = uow.artifacts.abandon_pending_proposals(
+        artifact_id=artifact_id,
+    )
+    latest = uow.artifacts.find_latest_revision_id_and_number(
+        artifact_id=artifact_id,
+    )
+    base_revision_id = None if latest is None else latest[0]
+    try:
+        proposal_id = uow.artifacts.add_or_revive_proposal(
+            artifact_id=artifact_id,
+            blocks=blocks,
+            content_hash=content_hash,
+            idempotency_key=artifact_idempotency_key(
+                artifact_id,
+                content_hash,
+                base_revision_id=base_revision_id,
+            ),
+            base_revision_id=base_revision_id,
+        )
+    except ArtifactProposalConflict:
+        # 키에 기준 판이 들어가므로 정상 흐름에서는 결정된 행과 부딪히지
+        # 않는다. 그래도 부딪히면 데이터 이상 신호이므로 이 노드만
+        # 건너뛰고 나머지 노드의 작업은 그대로 커밋한다. 바로 위에서
+        # 접은 계류는 되돌리지 않는다.
+        logger.warning(
+            "artifact_compile_proposal_conflict",
+            workspace_id=workspace_id,
+            node_id=str(node_id),
+            artifact_id=str(artifact_id),
+            content_hash=content_hash,
+        )
+        return _NodeOutcome(
+            abandoned=replaced, conflicted=1, suppressed=suppressed
+        )
+
+    logger.info(
+        "artifact_compile_proposed",
+        workspace_id=workspace_id,
+        node_id=str(node_id),
+        artifact_id=str(artifact_id),
+        proposal_id=str(proposal_id),
+        block_count=len(blocks),
+        replaced_pending=replaced,
+    )
+    return _NodeOutcome(
+        created=0 if replaced else 1,
+        revived=1 if replaced else 0,
+        abandoned=replaced,
+        suppressed=suppressed,
+    )
 
 
 def _drop_rejected_blocks(
@@ -442,11 +726,17 @@ def _build_blocks(
     pending: Sequence[StoredPendingProposal],
     vocabulary: ExtractionVocabulary,
     now: datetime,
+    allowed: tuple[str, ...] | None = None,
+    relation_blocks: tuple[ArtifactBlock, ...] = (),
 ) -> tuple[ArtifactBlock, ...]:
     """카드 본문을 이룰 블록을 정해진 순서로 만든다.
 
     대조로 실린 모순 안건은 열린 질문에서 뺀다. 같은 안건이 카드에 두 번
     나오면 검토자가 한 결정을 두 자리에서 내려야 하기 때문이다.
+
+    관계 절은 claim 절과 열린 질문 사이에 놓는다. 앞쪽은 이 대상이
+    무엇인지를, 뒤쪽은 사람에게 묻는 것을 말하므로, 대상과 이웃의
+    관계는 그 사이에 온다.
     """
     ontology_version = vocabulary.snapshot_id or None
     sections = _claim_sections(
@@ -455,6 +745,7 @@ def _build_blocks(
         ontology_version,
         now,
         _contradictions(pending),
+        allowed=allowed,
     )
     contested_ids = {
         proposal_id
@@ -466,7 +757,7 @@ def _build_blocks(
         [item for item in pending if item.id not in contested_ids],
         ontology_version,
     )
-    return tuple([*sections, *questions])
+    return tuple([*sections, *relation_blocks, *questions])
 
 
 @dataclass(frozen=True, slots=True)
@@ -509,13 +800,21 @@ def _claim_sections(
     ontology_version: str | None,
     now: datetime,
     contradictions: Sequence[_Contradiction],
+    *,
+    allowed: tuple[str, ...] | None = None,
 ) -> list[ArtifactBlock]:
-    """predicate별 claim_section 블록을 사전 순서대로 만든다.
+    """predicate별 claim_section 블록을 정해진 순서대로 만든다.
 
-    사전에 등재된 predicate가 사전이 정의한 순서로 먼저 오고, 미등재
-    predicate가 이름순으로 뒤를 잇는다. 사전 순서는 사람이 정한 읽는
-    순서이므로 그것이 카드의 순서가 된다. 미등재를 이름순으로 두는 것은
-    기댈 순서가 이름밖에 없기 때문이다.
+    고른 절(allowed)이 없으면 사전 순서를 따른다. 사전에 등재된
+    predicate가 사전이 정의한 순서로 먼저 오고, 미등재 predicate가
+    이름순으로 뒤를 잇는다. 사전 순서는 사람이 정한 읽는 순서이므로
+    그것이 카드의 순서가 된다. 미등재를 이름순으로 두는 것은 기댈
+    순서가 이름밖에 없기 때문이다.
+
+    고른 절이 있으면 그 이름들만 그 차례로 싣는다. 정의가 적어 둔
+    차례가 곧 사람이 읽겠다고 정한 차례이므로 사전 순서보다 앞선다.
+    빈 목록은 "하나도 고르지 않음"이라 claim 절이 없는 문서가 된다 —
+    고르지 않음(None)과 뜻이 다르므로 같이 다루지 않는다.
 
     now 시점에 구간이 닫힌 주장은 싣지 않는다. 문서의 현재 판은 지금
     믿는 것을 말해야 하기 때문이다. 지나간 값은 claim 행과 옛 판에
@@ -538,10 +837,18 @@ def _claim_sections(
             continue
         grouped.setdefault(claim.predicate, []).append(claim)
 
-    order = {
-        entry.name: index
-        for index, entry in enumerate(vocabulary.predicate_entries)
-    }
+    if allowed is None:
+        order = {
+            entry.name: index
+            for index, entry in enumerate(vocabulary.predicate_entries)
+        }
+    else:
+        order = {name: index for index, name in enumerate(allowed)}
+        grouped = {
+            predicate: members
+            for predicate, members in grouped.items()
+            if predicate in order
+        }
     sections: list[ArtifactBlock] = []
     for predicate in sorted(
         grouped,

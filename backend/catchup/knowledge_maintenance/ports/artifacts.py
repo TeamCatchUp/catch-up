@@ -138,6 +138,29 @@ class ArtifactRepository(Protocol):
         """대상에 붙는 문서를 만들거나 이미 있는 것을 돌려준다."""
         ...
 
+    def get_or_create_definition_artifact(
+        self,
+        *,
+        definition_id: uuid.UUID,
+        channel_id: uuid.UUID,
+        kind: str,
+        subject_node_id: uuid.UUID,
+        title: str,
+    ) -> uuid.UUID:
+        """정의가 대상에 만드는 문서를 찾거나 새로 만든다.
+
+        찾는 기준은 (정의, 대상) 하나뿐이다. 그 짝이 유일하다는 것이
+        저장 계층의 제약이므로, kind나 채널을 조건에 더하면 정의가
+        바뀐 뒤 같은 짝의 문서를 새로 만들어 문서가 갈라진다.
+
+        이미 있으면 제목을 덮어쓰지 않는다. 제목은 문서의 정체성이라
+        컴파일을 다시 돌 때마다 바뀌면 사람이 같은 문서인지 알 수 없다.
+
+        채널과 kind는 정의에서 그대로 이어받아 새 행에만 적는다. 문서가
+        딛고 선 정의와 같은 채널·kind임을 저장 계층이 보증하기 때문이다.
+        """
+        ...
+
     def find_latest_revision_id_and_number(
         self,
         *,
