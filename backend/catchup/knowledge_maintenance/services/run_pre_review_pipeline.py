@@ -6,6 +6,8 @@ Source 변경을 Human Review 직전의 Artifact Proposal까지 처리한다.
 Stage 1부터 Stage 5까지의 실행 순서와 ``observation.ready`` event 정산만 맡는다.
 """
 
+# ruff: noqa: I001
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -18,12 +20,8 @@ from time import perf_counter
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
-    KnowledgeMaintenanceUnitOfWork,
-)
-from catchup.knowledge_maintenance.contracts.extraction import (
-    KnowledgeExtractionRequest,
-)
+from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import KnowledgeMaintenanceUnitOfWork
+from catchup.knowledge_maintenance.contracts.extraction import KnowledgeExtractionRequest
 from catchup.knowledge_maintenance.contracts.source_change import SourceChangeEnvelope
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunSpec
 from catchup.knowledge_maintenance.domain.observation import StoredObservation
@@ -36,44 +34,20 @@ from catchup.knowledge_maintenance.ports.extraction import ExtractionAPIError
 from catchup.knowledge_maintenance.ports.extraction import ExtractionContractError
 from catchup.knowledge_maintenance.ports.extraction import KnowledgeExtractionPort
 from catchup.knowledge_maintenance.ports.identity_judge import IdentityJudge
-from catchup.knowledge_maintenance.ports.observation_normalizer import (
-    ObservationNormalizer,
-)
+from catchup.knowledge_maintenance.ports.observation_normalizer import ObservationNormalizer
 from catchup.knowledge_maintenance.ports.source_poller import SkippedItem
 from catchup.knowledge_maintenance.ports.source_poller import SourcePollResult
-from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
-    ArtifactCompileResult,
-)
-from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
-    compile_entity_artifacts,
-)
-from catchup.knowledge_maintenance.services.ingest_and_normalize import (
-    SourceIntakeResult,
-)
-from catchup.knowledge_maintenance.services.ingest_and_normalize import (
-    ingest_and_normalize,
-)
-from catchup.knowledge_maintenance.services.resolve_claim_conflicts import (
-    ClaimConflictResult,
-)
-from catchup.knowledge_maintenance.services.resolve_claim_conflicts import (
-    resolve_claim_conflicts,
-)
-from catchup.knowledge_maintenance.services.resolve_entity_candidates import (
-    ResolutionResult,
-)
-from catchup.knowledge_maintenance.services.resolve_entity_candidates import (
-    resolve_entity_candidates,
-)
-from catchup.knowledge_maintenance.services.store_knowledge_candidates import (
-    ObservationNodeMissing,
-)
-from catchup.knowledge_maintenance.services.store_knowledge_candidates import (
-    record_failed_extraction,
-)
-from catchup.knowledge_maintenance.services.store_knowledge_candidates import (
-    store_knowledge_candidates,
-)
+from catchup.knowledge_maintenance.services.compile_entity_artifacts import ArtifactCompileResult
+from catchup.knowledge_maintenance.services.compile_entity_artifacts import compile_entity_artifacts
+from catchup.knowledge_maintenance.services.ingest_and_normalize import SourceIntakeResult
+from catchup.knowledge_maintenance.services.ingest_and_normalize import ingest_and_normalize
+from catchup.knowledge_maintenance.services.resolve_claim_conflicts import ClaimConflictResult
+from catchup.knowledge_maintenance.services.resolve_claim_conflicts import resolve_claim_conflicts
+from catchup.knowledge_maintenance.services.resolve_entity_candidates import ResolutionResult
+from catchup.knowledge_maintenance.services.resolve_entity_candidates import resolve_entity_candidates
+from catchup.knowledge_maintenance.services.store_knowledge_candidates import ObservationNodeMissing
+from catchup.knowledge_maintenance.services.store_knowledge_candidates import record_failed_extraction
+from catchup.knowledge_maintenance.services.store_knowledge_candidates import store_knowledge_candidates
 from catchup.observability.logging import get_logger
 
 logger = get_logger(__name__)
@@ -149,10 +123,11 @@ async def run_pre_review_pipeline(
     artifact_limit: int = 2,
     clock: Callable[[], datetime] | None = None,
 ) -> PreReviewPipelineResult:
-    """Source Change를 Human Review 입력까지 처리한다.
+    """
+    Source Change를 Human Review 이전인 Artifact Proposal까지 처리하는 진입점.
 
-    항목 단위 실패는 ``PARTIAL_FAILURE`` 결과로 반환한다. 파이프라인 자체를
-    계속할 수 없는 예외는 ``failed``로 기록하고 호출자에게 다시 던진다.
+    항목 단위 실패는 `PARTIAL_FAILURE` 결과로 반환하며
+    파이프라인 자체를 계속할 수 없는 예외는 `failed`로 처리하여 호출자에게 전달한다.
     """
     started_at = perf_counter()
     pipeline_logger = logger.bind(
@@ -232,16 +207,20 @@ async def _execute_pre_review_pipeline(
         raise PollWindowTruncatedError(
             "source poll result is truncated; no envelope is safe to ingest"
         )
+
     artifact_uow = _require_workspace_bound_uow(
         uow_factory,
         workspace_id=workspace_id,
     )
 
     clock = clock or _utcnow
+
+    # 삭제 예정
     ingest_now, barrier_held_back = _split_by_barrier(
         poll_result.envelopes,
         poll_result.skipped,
     )
+
     intake_results, intake_failure, failure_held_back = _run_intake(
         ingest_now,
         normalizer=normalizer,
@@ -258,17 +237,20 @@ async def _execute_pre_review_pipeline(
         event_limit=event_limit,
         clock=clock,
     )
+
     resolution = resolve_entity_candidates(
         workspace_id=workspace_id,
         judge=judge,
         uow=uow_factory(),
     )
+
     claim_conflicts = resolve_claim_conflicts(
         workspace_id=workspace_id,
         vocabulary=extraction_spec.vocabulary,
         uow=uow_factory(),
         clock=clock,
     )
+
     artifacts = compile_entity_artifacts(
         artifact_uow,
         workspace_id=workspace_id,
@@ -301,35 +283,6 @@ async def _execute_pre_review_pipeline(
     return result
 
 
-def _derive_status(
-    *,
-    skipped_item_count: int,
-    held_back_item_count: int,
-    intake_failure: PipelineItemFailure | None,
-    extraction: ExtractionStageResult,
-    resolution: ResolutionResult,
-) -> PreReviewPipelineStatus:
-    """Scheduler가 재시도·알림에 쓸 한 회차의 상태를 계산한다.
-
-    Artifact의 ``proposals_conflicted``는 이미 결정된 동일 멱등 키를 다시
-    쓰지 않은 정상적인 동시성 결과이므로 부분 실패에 포함하지 않는다.
-    """
-    has_incomplete_work = any(
-        (
-            skipped_item_count,
-            held_back_item_count,
-            intake_failure is not None,
-            extraction.failures,
-            resolution.groups_failed,
-        )
-    )
-    return (
-        PreReviewPipelineStatus.PARTIAL_FAILURE
-        if has_incomplete_work
-        else PreReviewPipelineStatus.COMPLETED
-    )
-
-
 def _validate_inputs(
     poll_result: SourcePollResult,
     *,
@@ -357,6 +310,28 @@ def _validate_inputs(
         )
 
 
+def _item_id(envelope: SourceChangeEnvelope) -> str:
+    return envelope.source_identity.external_document_id
+
+
+def _require_workspace_bound_uow(
+    uow_factory: UnitOfWorkFactory,
+    *,
+    workspace_id: int,
+) -> KnowledgeMaintenanceUnitOfWork:
+
+    uow = uow_factory()
+    if uow.workspace_id != workspace_id:
+        raise ValueError(
+            "uow_factory must create a UoW bound to the pipeline workspace"
+        )
+    return uow
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 def _split_by_barrier(
     envelopes: Sequence[SourceChangeEnvelope],
     skipped: Sequence[SkippedItem],
@@ -377,6 +352,10 @@ def _split_by_barrier(
         envelope for envelope in envelopes if _ordering_marker(envelope) >= barrier
     ]
     return ingest_now, held_back
+
+
+def _ordering_marker(envelope: SourceChangeEnvelope) -> datetime:
+    return envelope.source_updated_at or envelope.observed_at
 
 
 def _run_intake(
@@ -648,20 +627,6 @@ def _load_pending_observations(
     return tuple(pending)
 
 
-def _require_workspace_bound_uow(
-    uow_factory: UnitOfWorkFactory,
-    *,
-    workspace_id: int,
-) -> KnowledgeMaintenanceUnitOfWork:
-    """Artifact 쓰기 범위를 실제 작업 전에 확인한다."""
-    uow = uow_factory()
-    if uow.workspace_id != workspace_id:
-        raise ValueError(
-            "uow_factory must create a UoW bound to the pipeline workspace"
-        )
-    return uow
-
-
 def _missing_pending(event: PipelineEvent, message: str) -> _PendingObservation:
     return _PendingObservation(
         event=event,
@@ -671,17 +636,6 @@ def _missing_pending(event: PipelineEvent, message: str) -> _PendingObservation:
         observed_at=None,
         load_error=message,
     )
-
-
-def _mark_event_processed(
-    event: PipelineEvent,
-    *,
-    uow_factory: UnitOfWorkFactory,
-    clock: Callable[[], datetime],
-) -> None:
-    with uow_factory() as uow:
-        uow.pipeline_events.mark_processed(event_id=event.id, now=clock())
-        uow.commit()
 
 
 def _fail_event(
@@ -724,13 +678,41 @@ def _fail_event(
     )
 
 
-def _ordering_marker(envelope: SourceChangeEnvelope) -> datetime:
-    return envelope.source_updated_at or envelope.observed_at
+def _mark_event_processed(
+    event: PipelineEvent,
+    *,
+    uow_factory: UnitOfWorkFactory,
+    clock: Callable[[], datetime],
+) -> None:
+    with uow_factory() as uow:
+        uow.pipeline_events.mark_processed(event_id=event.id, now=clock())
+        uow.commit()
 
 
-def _item_id(envelope: SourceChangeEnvelope) -> str:
-    return envelope.source_identity.external_document_id
+def _derive_status(
+    *,
+    skipped_item_count: int,
+    held_back_item_count: int,
+    intake_failure: PipelineItemFailure | None,
+    extraction: ExtractionStageResult,
+    resolution: ResolutionResult,
+) -> PreReviewPipelineStatus:
+    """Scheduler가 재시도·알림에 쓸 한 회차의 상태를 계산한다.
 
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    Artifact의 ``proposals_conflicted``는 이미 결정된 동일 멱등 키를 다시
+    쓰지 않은 정상적인 동시성 결과이므로 부분 실패에 포함하지 않는다.
+    """
+    has_incomplete_work = any(
+        (
+            skipped_item_count,
+            held_back_item_count,
+            intake_failure is not None,
+            extraction.failures,
+            resolution.groups_failed,
+        )
+    )
+    return (
+        PreReviewPipelineStatus.PARTIAL_FAILURE
+        if has_incomplete_work
+        else PreReviewPipelineStatus.COMPLETED
+    )
