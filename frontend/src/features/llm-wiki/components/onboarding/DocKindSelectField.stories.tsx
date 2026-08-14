@@ -50,7 +50,7 @@ const meta = {
         '리스트에 스크롤이 실재한다(시안 scrollbar 노드). max-h-125 + overflow-y-auto, 항목은 shrink-0.',
       ],
       tokenNotes: [
-        'request·client 아이콘이 리포에 없어 tree·building으로 임시 대체했다(감사 §7 — Figma asset write가 Dev Mode allowed directories 미설정으로 차단).',
+        '아이콘 6종 중 request·client는 8/14 Figma에서 새로 받아 추가했다 — 20×20 그리드로 감싸고 fill을 currentColor로 정규화(리포 관례). 나머지 4종은 기존 자산 재사용.',
       ],
     }),
   },

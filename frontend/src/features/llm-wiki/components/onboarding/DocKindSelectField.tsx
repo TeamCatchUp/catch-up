@@ -3,19 +3,18 @@
 import type { FC, SVGProps } from 'react';
 
 import IconBook from '@/public/icons/icon/book.svg';
-import IconClient from '@/public/icons/icon/building.svg';
 import IconCheckCircle from '@/public/icons/icon/check_circle.svg';
 import IconCheckCircleFilled from '@/public/icons/icon/check_circle_filled.svg';
+import IconClient from '@/public/icons/icon/client.svg';
 import IconError from '@/public/icons/icon/error.svg';
 import IconFile from '@/public/icons/icon/file.svg';
 import IconHelp from '@/public/icons/icon/help.svg';
 import IconHistory from '@/public/icons/icon/history.svg';
-import IconRequest from '@/public/icons/icon/tree.svg';
+import IconRequest from '@/public/icons/icon/request.svg';
 
 import type { KnownDocKindIcon, WikiDocKindPreset } from '../../types/llmWikiOnboarding';
 import OnboardingFieldLabel from './OnboardingFieldLabel';
 
-// request·client는 시안 자산이 리포에 없어 근접 자산으로 대체했다(감사 §7)
 const DOC_KIND_ICONS: Record<KnownDocKindIcon, FC<SVGProps<SVGSVGElement>>> = {
   request: IconRequest,
   error: IconError,
