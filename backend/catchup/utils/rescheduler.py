@@ -35,3 +35,25 @@ def reschedule_one_shot_job(
         trigger="date",
         run_date=next_run_at,
     )
+
+
+def reschedule_interval_job(
+    scheduler: DynamicRescheduler,
+    *,
+    job_id: str,
+    anchor_at: datetime,
+    interval_minutes: int,
+) -> Job:
+    normalized_job_id = job_id.strip()
+    if not normalized_job_id:
+        raise ValueError("job_id must not be blank")
+    if anchor_at.tzinfo is None or anchor_at.utcoffset() is None:
+        raise ValueError("anchor_at must include timezone information")
+    if interval_minutes <= 0:
+        raise ValueError("interval_minutes must be positive")
+    return scheduler.reschedule_job(
+        normalized_job_id,
+        trigger="interval",
+        minutes=interval_minutes,
+        start_date=anchor_at,
+    )

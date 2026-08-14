@@ -7,6 +7,7 @@ from typing import cast
 import pytest
 from apscheduler.job import Job
 
+from catchup.utils.rescheduler import reschedule_interval_job
 from catchup.utils.rescheduler import reschedule_one_shot_job
 
 
@@ -45,4 +46,41 @@ def test_reschedule_one_shot_job_rejects_naive_datetime() -> None:
             _FakeScheduler(),
             job_id="llm-wiki:workspace:1",
             next_run_at=datetime(2026, 8, 10, 15),
+        )
+
+
+def test_reschedule_interval_job_uses_anchor_and_minutes() -> None:
+    scheduler = _FakeScheduler()
+    anchor_at = datetime(2026, 8, 10, 15, tzinfo=timezone.utc)
+
+    result = reschedule_interval_job(
+        scheduler,
+        job_id="test-knowledge-maintenance:1",
+        anchor_at=anchor_at,
+        interval_minutes=30,
+    )
+
+    assert result is scheduler.job
+    assert scheduler.calls == [
+        (
+            "test-knowledge-maintenance:1",
+            {
+                "trigger": "interval",
+                "minutes": 30,
+                "start_date": anchor_at,
+            },
+        )
+    ]
+
+
+@pytest.mark.parametrize("interval_minutes", [0, -1])
+def test_reschedule_interval_job_rejects_non_positive_interval(
+    interval_minutes: int,
+) -> None:
+    with pytest.raises(ValueError, match="positive"):
+        reschedule_interval_job(
+            _FakeScheduler(),
+            job_id="test-knowledge-maintenance:1",
+            anchor_at=datetime(2026, 8, 10, 15, tzinfo=timezone.utc),
+            interval_minutes=interval_minutes,
         )

@@ -34,8 +34,15 @@ from catchup.db.atlassian.oauth_repository import (
 )
 from catchup.db.engine import SessionLocal
 from catchup.db.incremental import recover_stale_processing_records
+from catchup.db.models import TestKnowledgeMaintenanceSetting
+from catchup.db.test_knowledge_maintenance_settings import (
+    list_test_knowledge_maintenance_settings,
+)
 from catchup.events.enums import EventType
 from catchup.events.enums import IntegrationEventAction
+from catchup.knowledge_maintenance.services.run_channel_talk_pre_review_job import (
+    run_channel_talk_pre_review_job,
+)
 from catchup.sync.backfill.channel_talk_document_article_v2 import (
     ChannelTalkArticleV2BackfillService,
 )
@@ -54,12 +61,14 @@ from catchup.sync.incremental import get_incremental_service
 from catchup.sync.incremental.dead_record_recovery import (
     recover_incremental_dead_records,
 )
+from catchup.utils.rescheduler import reschedule_interval_job
 from catchup.utils.rescheduler import reschedule_one_shot_job
 
 logger = logging.getLogger(__name__)
 
 _scheduler: AsyncIOScheduler | None = None
 SEOUL_TZ = ZoneInfo("Asia/Seoul")
+TEST_KNOWLEDGE_MAINTENANCE_JOB_PREFIX = "test-knowledge-maintenance"
 VECTOR_STORE_V2_BACKFILL_SEQUENCE: tuple[SequentialBackfillSpec, ...] = (
     SequentialBackfillSpec(
         key="confluence/page",
@@ -316,11 +325,18 @@ def init_scheduler():
         logger.warning("Scheduler already Initialized")
         return
 
-    _scheduler = AsyncIOScheduler(timezone=SEOUL_TZ)
+    with SessionLocal() as db:
+        test_knowledge_maintenance_settings = (
+            list_test_knowledge_maintenance_settings(db, workspace_id=None)
+        )
 
-    # TODO(llm-wiki-settings-db): 별도 LLM Wiki 설정 테이블이 추가되면 여기서
-    # 기존 작업을 등록하고 DB의 next_run_at으로 ``reschedule_dynamic_job``을
-    # 호출한다.
+    _scheduler = AsyncIOScheduler(timezone=SEOUL_TZ)
+    for maintenance_setting in test_knowledge_maintenance_settings:
+        if maintenance_setting.enabled:
+            _add_test_knowledge_maintenance_job(
+                _scheduler,
+                maintenance_setting,
+            )
 
     jira_webhook_refresh_hours = settings.JIRA_WEBHOOK_REFRESH_INTERVAL_HOURS
     _scheduler.add_job(
@@ -447,3 +463,48 @@ def reschedule_dynamic_job(
         job_id=job_id,
         next_run_at=next_run_at,
     )
+
+
+def apply_test_knowledge_maintenance_schedule(
+    setting: TestKnowledgeMaintenanceSetting,
+) -> None:
+    if _scheduler is None:
+        raise RuntimeError("scheduler is not initialized")
+    job_id = _test_knowledge_maintenance_job_id(setting.id)
+    existing = _scheduler.get_job(job_id)
+    if not setting.enabled:
+        if existing is not None:
+            _scheduler.remove_job(job_id)
+        return
+    if existing is None:
+        _add_test_knowledge_maintenance_job(_scheduler, setting)
+        return
+    reschedule_interval_job(
+        _scheduler,
+        job_id=job_id,
+        anchor_at=setting.execution_anchor_at,
+        interval_minutes=setting.interval_minutes,
+    )
+
+
+def _add_test_knowledge_maintenance_job(
+    scheduler: AsyncIOScheduler,
+    setting: TestKnowledgeMaintenanceSetting,
+) -> None:
+    scheduler.add_job(
+        run_channel_talk_pre_review_job,
+        trigger="interval",
+        minutes=setting.interval_minutes,
+        start_date=setting.execution_anchor_at,
+        id=_test_knowledge_maintenance_job_id(setting.id),
+        name=f"Test Knowledge Maintenance {setting.id}",
+        kwargs={"setting_id": setting.id},
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=300,
+    )
+
+
+def _test_knowledge_maintenance_job_id(setting_id: int) -> str:
+    return f"{TEST_KNOWLEDGE_MAINTENANCE_JOB_PREFIX}:{setting_id}"
