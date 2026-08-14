@@ -4,7 +4,9 @@ import { expect, fn, within } from 'storybook/test';
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
 import {
   DOC_KIND_FIELD_LABEL,
+  DOC_KIND_SAMPLE_CAPTION,
   DOC_KIND_SAMPLE_TITLE,
+  TEMPLATE_SAMPLE_TEXT_TBD,
   WIKI_DOC_KIND_PRESETS,
 } from '../../fixtures/llmWikiOnboardingFixtures';
 import DocKindSelectField from './DocKindSelectField';
@@ -15,7 +17,8 @@ const baseArgs = {
   selectedId: WIKI_DOC_KIND_PRESETS[0].id,
   onSelect: fn(),
   sampleTitle: DOC_KIND_SAMPLE_TITLE,
-  sampleText: WIKI_DOC_KIND_PRESETS[0].sampleText,
+  sampleCaption: DOC_KIND_SAMPLE_CAPTION,
+  sampleText: TEMPLATE_SAMPLE_TEXT_TBD,
 };
 
 const meta = {
@@ -38,15 +41,16 @@ const meta = {
       viewport: { width: 1008 },
       states: ['default', 'narrow-slot'],
       dataNotes: [
-        '프리셋 4종 라벨·설명은 시안 실카피. 단 "의사결정 이력" 설명이 "서비스 개요"와 동일한 복붙 카피(카피 미정 신호, design-request 참조).',
-        '예시 문장은 앞 문장만 실카피이고 뒷부분은 시안 필러(TBD). 선택 변경 시 예시가 바뀌는지는 시안에 한 상태뿐이라 미확정 — sampleText를 부모가 주도록 뒀다.',
+        '**8/14 시안 갱신으로 항목이 전면 교체됐다.** 기존 4종(용어집·팀/인물·서비스 개요·의사결정 이력) → 6종(기능 요청·고객 불편사항·자주 묻는 질문·고객사별 요청사항·고객사 히스토리·정책 예외사항). 라벨·설명 모두 실카피이고, 8/13 감사가 지적한 설명 복붙 문제는 해당 항목 소멸로 해소됐다.',
+        '우측 패널 제목이 "예시 문장" → "템플릿 예시"로 바뀌고, 목적 오해 방지 카피가 이 헤더 우측으로 이동했다.',
+        '패널 본문은 여전히 시안 필러(TBD) — 선택별로 갈리는지도 미정이라 부모가 문자열을 준다.',
       ],
       layoutNotes: [
-        '좌 리스트:우 패널 = 400:606 ≈ 2fr:3fr — px 고정 대신 비율로 옮겼다. 패널은 border-l로 가른다.',
-        '옵션 카드 111은 결과값(p-4 + 라벨 23 + gap + 설명 2줄)이라 h-*로 고정하지 않는다.',
+        '좌 리스트:우 패널 = 400:606 비율(grid-cols-[400fr_606fr]) — px 고정 대신 비율로 옮겼다.',
+        '리스트에 스크롤이 실재한다(시안 scrollbar 노드). max-h-125 + overflow-y-auto, 항목은 shrink-0.',
       ],
       tokenNotes: [
-        '종류 아이콘 4종(file·group·graph·search_file)은 기존 public 자산 재사용 — 신규 다운로드 0. 미지 icon 값은 file로 떨어뜨린다(열린 타입 규칙).',
+        'request·client 아이콘이 리포에 없어 tree·building으로 임시 대체했다(감사 §7 — Figma asset write가 Dev Mode allowed directories 미설정으로 차단).',
       ],
     }),
   },
@@ -60,20 +64,23 @@ export const Default: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const radios = canvas.getAllByRole('radio');
-    await expect(radios).toHaveLength(4);
+    await expect(radios).toHaveLength(6);
     await expect(radios[0]).toHaveAttribute('aria-checked', 'true');
 
     await expect(canvas.getByText(DOC_KIND_SAMPLE_TITLE)).toBeInTheDocument();
-    await expect(canvas.getByText(WIKI_DOC_KIND_PRESETS[0].sampleText)).toBeInTheDocument();
+    await expect(canvas.getByText(DOC_KIND_SAMPLE_CAPTION)).toBeInTheDocument();
 
-    // 좌우 2열이 유지되는지 — 리스트와 패널이 세로로 무너지면 x가 같아진다
+    // 좌우 2열이 유지되는지 — 세로로 무너지면 x가 같아진다
     const list = radios[0].closest('[role="radiogroup"]')!;
     const panel = canvas.getByText(DOC_KIND_SAMPLE_TITLE).parentElement!;
     await expect(list.getBoundingClientRect().left).toBeLessThan(panel.getBoundingClientRect().left);
+
+    // 6개가 스크롤 안에 들어간다 — 목록이 카드 밖으로 흘러넘치면 안 된다
+    await expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
   },
 };
 
-/** 좁은 슬롯에서 카드 설명·라벨이 수습되는지 — grid 비율이 px로 박히면 여기서 넘친다 */
+/** 좁은 슬롯에서 카드가 수습되는지 — grid 비율이 px로 박히면 여기서 넘친다 */
 export const NarrowSlot: Story = {
   args: baseArgs,
   render: (args) => (

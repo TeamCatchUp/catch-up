@@ -1,101 +1,98 @@
 'use client';
 
-import IconAddCircleFilled from '@/public/icons/icon/add_circle_filled.svg';
+import IconArrowRight2 from '@/public/icons/icon/arrow_right2.svg';
 import IconCheckCircle from '@/public/icons/icon/check_circle.svg';
 import IconCheckCircleFilled from '@/public/icons/icon/check_circle_filled.svg';
+import IconTag from '@/public/icons/icon/tag.svg';
 import { cn } from '@/shared/utils/cn';
 
-import type { WikiPurposeOption } from '../../types/llmWikiOnboarding';
+import type { WikiInfoCategory } from '../../types/llmWikiOnboarding';
 import OnboardingFieldLabel from './OnboardingFieldLabel';
 
 interface PurposeSelectFieldProps {
-  label: string;
-  /** 라벨 우측 안내 카피 — 목적이 수집 범위에 영향 없다는 오해 방지 문구 */
-  caption: string;
-  options: readonly WikiPurposeOption[];
-  selectedId: string | null;
-  onSelect?: (id: string) => void;
-  followUpValue: string;
-  onFollowUpChange?: (next: string) => void;
-  followUpPlaceholder: string;
-  followUpMaxLength: number;
-  /** 후속 질문 아래 예시 카피 — 없으면 줄 자체를 그리지 않는다 */
-  followUpExample?: string;
+  categoryLabel: string;
+  categories: readonly WikiInfoCategory[];
+  selectedCategoryId: string | null;
+  onSelectCategory?: (id: string) => void;
+  purposeLabel: string;
+  selectedPurposeId: string | null;
+  onSelectPurpose?: (id: string) => void;
 }
 
-// 목적 단일 선택 + 선택별 후속 질문. 커스텀의 후속 UI는 시안에 없어 질문 null이면 패널을 접는다
+// 정보 카테고리 칩 + 선택한 카테고리의 목적 선택. 목적이 없는 카테고리는 분기 구역을 접는다
 export default function PurposeSelectField({
-  label,
-  caption,
-  options,
-  selectedId,
-  onSelect,
-  followUpValue,
-  onFollowUpChange,
-  followUpPlaceholder,
-  followUpMaxLength,
-  followUpExample,
+  categoryLabel,
+  categories,
+  selectedCategoryId,
+  onSelectCategory,
+  purposeLabel,
+  selectedPurposeId,
+  onSelectPurpose,
 }: PurposeSelectFieldProps) {
-  const selected = options.find((option) => option.id === selectedId) ?? null;
+  const selectedCategory = categories.find((category) => category.id === selectedCategoryId) ?? null;
+  const purposeOptions = selectedCategory?.purposeOptions ?? [];
 
   return (
-    <div className="flex w-full flex-col gap-3">
-      <div className="flex items-end justify-between gap-4">
-        <OnboardingFieldLabel label={label} required />
-        <span className="text-label-xsmall text-text-normal-alternative truncate">{caption}</span>
+    <div className="flex w-full flex-col gap-7">
+      <div className="flex flex-col gap-3">
+        <OnboardingFieldLabel label={categoryLabel} required />
+        <div role="radiogroup" aria-label={categoryLabel} className="flex flex-wrap gap-3">
+          {categories.map((category) => {
+            const checked = category.id === selectedCategoryId;
+
+            return (
+              <button
+                key={category.id}
+                type="button"
+                role="radio"
+                aria-checked={checked}
+                onClick={() => onSelectCategory?.(category.id)}
+                className={cn(
+                  'text-body-small flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors',
+                  checked
+                    ? 'bg-accent-black-lighten text-text-normal-inverse'
+                    : 'border-line-normal-normal text-text-normal-neutral hover:bg-fill-normal-interaction-hover border',
+                )}
+              >
+                <IconTag
+                  className={cn('size-5 shrink-0', checked ? 'text-icon-normal-inverse' : 'text-icon-normal-normal')}
+                />
+                {category.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <div
-        role="radiogroup"
-        aria-label={label}
-        className="border-line-normal-neutral divide-line-normal-neutral divide-y overflow-hidden rounded-xl border"
-      >
-        {options.map((option) => {
-          const checked = option.id === selectedId;
+      {purposeOptions.length > 0 && (
+        <div className="border-line-normal-neutral flex border-l pl-8">
+          <IconArrowRight2 className="text-icon-normal-alternative mt-6 size-6 shrink-0" />
+          <div className="flex min-w-0 flex-1 flex-col gap-3 pl-4">
+            <OnboardingFieldLabel label={purposeLabel} required size="body" />
+            <div role="radiogroup" aria-label={purposeLabel} className="grid grid-cols-3 gap-4">
+              {purposeOptions.map((option) => {
+                const checked = option.id === selectedPurposeId;
 
-          return (
-            <button
-              key={option.id}
-              type="button"
-              role="radio"
-              aria-checked={checked}
-              onClick={() => onSelect?.(option.id)}
-              className="hover:bg-fill-normal-interaction-hover flex h-14 w-full cursor-pointer items-center justify-between gap-4 px-4 text-left transition-colors"
-            >
-              <span className="text-body-small text-text-normal-normal truncate">{option.label}</span>
-              {checked ? (
-                <IconCheckCircleFilled className="text-icon-primary-normal size-6 shrink-0" />
-              ) : (
-                <IconCheckCircle className="text-icon-normal-alternative size-6 shrink-0" />
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {selected?.followUpQuestion && (
-        <div className="bg-fill-normal-strong flex flex-col gap-2.5 rounded-2xl p-5">
-          <div className="flex items-center gap-2.5">
-            <IconAddCircleFilled className="text-icon-primary-normal size-6 shrink-0" />
-            <span className="text-body-small text-text-normal-normal min-w-0 truncate">{selected.followUpQuestion}</span>
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={checked}
+                    onClick={() => onSelectPurpose?.(option.id)}
+                    className="border-line-normal-neutral hover:bg-fill-normal-interaction-hover flex min-w-0 cursor-pointer items-start justify-between gap-3 rounded-xl border p-4 text-left transition-colors"
+                  >
+                    <span className="text-body-small text-text-normal-normal min-w-0">{option.label}</span>
+                    {checked ? (
+                      <IconCheckCircleFilled className="text-icon-primary-normal size-6 shrink-0" />
+                    ) : (
+                      <IconCheckCircle className="text-icon-normal-alternative size-6 shrink-0" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div className="bg-fill-normal-normal flex flex-col gap-2.5 rounded-xl p-4">
-            <textarea
-              rows={1}
-              value={followUpValue}
-              maxLength={followUpMaxLength}
-              placeholder={followUpPlaceholder}
-              aria-label={selected.followUpQuestion}
-              onChange={(event) => onFollowUpChange?.(event.target.value)}
-              className="text-body-small text-text-normal-normal placeholder:text-text-normal-assistive w-full resize-none bg-transparent outline-none"
-            />
-            <span className="text-body-small text-text-normal-assistive">
-              {followUpValue.length}/{followUpMaxLength}
-            </span>
-          </div>
-          {followUpExample && (
-            <span className={cn('text-label-xsmall text-text-normal-assistive')}>{followUpExample}</span>
-          )}
         </div>
       )}
     </div>

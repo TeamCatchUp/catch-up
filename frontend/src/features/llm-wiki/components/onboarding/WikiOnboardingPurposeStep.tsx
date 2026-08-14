@@ -2,10 +2,9 @@
 
 import type { ComponentProps } from 'react';
 
-import { Button } from '@/shared/components/ui/button';
-
 import type { OnboardingStepInfo } from '../../types/llmWikiOnboarding';
 import DocKindSelectField from './DocKindSelectField';
+import OnboardingActionBar from './OnboardingActionBar';
 import OnboardingFieldLabel from './OnboardingFieldLabel';
 import OnboardingStepper from './OnboardingStepper';
 import PurposeSelectField from './PurposeSelectField';
@@ -21,7 +20,7 @@ interface WikiOnboardingPurposeStepProps {
   namePlaceholder: string;
   nameMaxLength: number;
   purpose: ComponentProps<typeof PurposeSelectField>;
-  formatTitle: string;
+  docSettingTitle: string;
   docKind: ComponentProps<typeof DocKindSelectField>;
   tone: ComponentProps<typeof ToneStyleField>;
   nextLabel: string;
@@ -39,7 +38,7 @@ export default function WikiOnboardingPurposeStep({
   namePlaceholder,
   nameMaxLength,
   purpose,
-  formatTitle,
+  docSettingTitle,
   docKind,
   tone,
   nextLabel,
@@ -49,11 +48,11 @@ export default function WikiOnboardingPurposeStep({
     <div className="flex w-full flex-col">
       <div className="flex flex-col gap-8 px-16 pt-5 pb-9">
         <OnboardingStepper steps={steps} currentStep={1} />
-        <h1 className="text-display-xlarge text-text-normal-strong">{heading}</h1>
+        <h1 className="text-heading-xlarge text-text-normal-normal">{heading}</h1>
 
         <div className="flex flex-col gap-5">
-          <section className="bg-fill-normal-assistive border-line-normal-neutral flex flex-col gap-8 rounded-2xl border p-8">
-            <h2 className="text-heading-large text-text-normal-strong">{basicInfoTitle}</h2>
+          <section className="bg-fill-normal-normal border-line-normal-neutral flex flex-col gap-8 rounded-2xl border p-8">
+            <h2 className="text-heading-medium text-text-normal-normal">{basicInfoTitle}</h2>
 
             <div className="flex items-center">
               <OnboardingFieldLabel label={nameLabel} required className="w-[157px] shrink-0" />
@@ -76,19 +75,15 @@ export default function WikiOnboardingPurposeStep({
             <PurposeSelectField {...purpose} />
           </section>
 
-          <section className="bg-fill-normal-assistive border-line-normal-neutral flex flex-col gap-8 rounded-2xl border p-8">
-            <h2 className="text-heading-large text-text-normal-strong">{formatTitle}</h2>
+          <section className="bg-fill-normal-normal border-line-normal-neutral flex flex-col gap-8 rounded-2xl border p-8">
+            <h2 className="text-heading-medium text-text-normal-normal">{docSettingTitle}</h2>
             <DocKindSelectField {...docKind} />
             <ToneStyleField {...tone} />
           </section>
         </div>
       </div>
 
-      <div className="border-line-normal-neutral flex justify-end border-t px-16 py-2">
-        <Button variant="box-solid-primary" size="md" onClick={onNext}>
-          {nextLabel}
-        </Button>
-      </div>
+      <OnboardingActionBar nextLabel={nextLabel} onNext={onNext} />
     </div>
   );
 }

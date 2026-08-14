@@ -1,7 +1,7 @@
 'use client';
 
-import IconFile from '@/public/icons/icon/file.svg';
-import CheckboxIcon from '@/shared/components/ui/checkbox-icon';
+import IconCheckCircle from '@/public/icons/icon/check_circle.svg';
+import IconCheckCircleFilled from '@/public/icons/icon/check_circle_filled.svg';
 
 import type { WikiToneStyleOption } from '../../types/llmWikiOnboarding';
 import OnboardingFieldLabel from './OnboardingFieldLabel';
@@ -9,78 +9,52 @@ import OnboardingFieldLabel from './OnboardingFieldLabel';
 interface ToneStyleFieldProps {
   label: string;
   options: readonly WikiToneStyleOption[];
-  /** 체크박스형 카드라 선택을 목록으로 받는다 — 다중 허용 여부는 미확정 */
-  selectedIds: readonly string[];
-  onToggle?: (id: string) => void;
-  customLabel: string;
-  customDescription: string;
-  customValue: string;
-  onCustomChange?: (next: string) => void;
-  customPlaceholder: string;
-  customMaxLength: number;
+  selectedId: string | null;
+  onSelect?: (id: string) => void;
+  /** 예시 문장 앞에 붙는 태그 라벨 */
+  sampleTagLabel: string;
 }
 
-// 문체 카드 선택 + 커스텀 작성 입력. 카드 썸네일은 시안에서도 빈 자리라 배경만 그린다
-export default function ToneStyleField({
-  label,
-  options,
-  selectedIds,
-  onToggle,
-  customLabel,
-  customDescription,
-  customValue,
-  onCustomChange,
-  customPlaceholder,
-  customMaxLength,
-}: ToneStyleFieldProps) {
+// 문체 단일 선택 3열 카드. 각 카드가 자기 예시 문장을 함께 보여준다
+export default function ToneStyleField({ label, options, selectedId, onSelect, sampleTagLabel }: ToneStyleFieldProps) {
   return (
     <div className="flex w-full flex-col gap-3">
       <OnboardingFieldLabel label={label} required />
 
-      <div className="grid grid-cols-4 gap-6">
+      <div role="radiogroup" aria-label={label} className="grid grid-cols-3 gap-4">
         {options.map((option) => {
-          const checked = selectedIds.includes(option.id);
+          const checked = option.id === selectedId;
 
           return (
             <button
               key={option.id}
               type="button"
-              role="checkbox"
+              role="radio"
               aria-checked={checked}
-              onClick={() => onToggle?.(option.id)}
-              className="flex min-w-0 cursor-pointer flex-col gap-4 text-left"
+              onClick={() => onSelect?.(option.id)}
+              className="border-line-normal-neutral hover:bg-fill-normal-interaction-hover flex min-w-0 cursor-pointer flex-col gap-5 rounded-xl border p-4 text-left transition-colors"
             >
-              <span className="bg-fill-normal-strong relative block h-35 w-full rounded-lg">
-                <CheckboxIcon checked={checked} className="size-5" wrapperClassName="absolute top-2 right-2" />
+              <span className="flex items-start justify-between gap-3">
+                <span className="flex min-w-0 flex-col gap-2">
+                  <span className="text-heading-small text-text-normal-normal truncate">{option.label}</span>
+                  <span className="text-body-small text-text-normal-alternative">{option.description}</span>
+                </span>
+                {checked ? (
+                  <IconCheckCircleFilled className="text-icon-primary-normal size-6 shrink-0" />
+                ) : (
+                  <IconCheckCircle className="text-icon-normal-assistive size-6 shrink-0" />
+                )}
               </span>
-              <span className="flex items-center gap-2">
-                <IconFile className="text-icon-normal-normal size-5 shrink-0" />
-                <span className="text-body-small text-text-normal-normal truncate">{option.label}</span>
+
+              <span className="flex flex-col gap-2">
+                <span className="bg-accent-light-blue-neutral text-text-normal-normal text-body-xsmall rounded-md2 w-fit px-1.5 py-0.5">
+                  {sampleTagLabel}
+                </span>
+                <span className="text-body-small text-text-normal-alternative">{option.sampleText}</span>
               </span>
             </button>
           );
         })}
-      </div>
-
-      <div className="border-line-normal-neutral flex flex-col gap-4 rounded-2xl border p-4">
-        <div className="flex flex-col gap-3">
-          <span className="text-body-small text-text-normal-normal">{customLabel}</span>
-          <span className="text-body-small text-text-normal-alternative">{customDescription}</span>
-        </div>
-        <div className="border-line-normal-neutral bg-fill-normal-normal flex flex-col gap-2.5 rounded-xl border p-4">
-          <textarea
-            rows={8}
-            value={customValue}
-            maxLength={customMaxLength}
-            placeholder={customPlaceholder}
-            aria-label={customLabel}
-            onChange={(event) => onCustomChange?.(event.target.value)}
-            className="text-body-small text-text-normal-normal placeholder:text-text-normal-assistive w-full resize-none bg-transparent outline-none"
-          />
-          <span className="text-body-small text-text-normal-assistive">
-            {customValue.length}/{customMaxLength}
-          </span>
-        </div>
       </div>
     </div>
   );

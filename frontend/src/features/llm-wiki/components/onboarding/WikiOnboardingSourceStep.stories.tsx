@@ -8,13 +8,18 @@ import {
   CHANNEL_FIELD_LABEL,
   CHANNEL_PICKER_PLACEHOLDER,
   CHANNEL_TABLE_HEADERS,
+  ONBOARDING_BACK_LABEL,
   ONBOARDING_CHANNEL_ROWS,
+  ONBOARDING_FINISH_LABEL,
   ONBOARDING_SOURCE_HEADING,
   ONBOARDING_STEPS,
   SCHEDULE_FIELDS,
   SCHEDULE_RESULT_TEXT,
 } from '../../fixtures/llmWikiOnboardingFixtures';
 import WikiOnboardingSourceStep from './WikiOnboardingSourceStep';
+
+const onNext = fn();
+const onBack = fn();
 
 const baseArgs = {
   steps: ONBOARDING_STEPS,
@@ -29,6 +34,10 @@ const baseArgs = {
   onOpenScheduleField: fn(),
   resultText: SCHEDULE_RESULT_TEXT,
   backfillNoticeText: BACKFILL_NOTICE_TEXT,
+  backLabel: ONBOARDING_BACK_LABEL,
+  onBack,
+  nextLabel: ONBOARDING_FINISH_LABEL,
+  onNext,
 };
 
 const meta = {
@@ -44,25 +53,19 @@ const meta = {
       dataProfile: 'realistic-fixture',
       designSource: 'figma',
       figma: {
-        url: 'https://www.figma.com/design/7UwupbVvmHkElmP2OBJQio/Design-System?node-id=18071-83320',
+        url: 'https://www.figma.com/design/7UwupbVvmHkElmP2OBJQio/Design-System?node-id=18071-83322',
         fileKey: '7UwupbVvmHkElmP2OBJQio',
-        nodeId: '18071:83320',
+        nodeId: '18071:83322',
       },
       viewport: { width: 1200 },
       states: ['default', 'channel-list-loading', 'channel-list-error'],
       dataNotes: [
-        '채널 라벨·수집 범위 캡션·백필 배너·결과 문장·"지금부터"는 시안 실카피. 채널 행·주기/실행 시간 표시값("1분")은 필러라 카피 미정(TBD) — 스토리명에 반영. 명세 기본값은 매일/자정이나 시안이 우선.',
-        '드롭다운은 닫힌 트리거만 그린다 — 열림 메뉴·옵션 집합·백필 비활성 옵션은 시안에 없다(감사 UNKNOWN, 발명 금지).',
-        '결과 문장의 값 조합별 변형 규칙은 미확정이라 문자열 props로만 받는다.',
-        '⚠️ 채널 목록의 로딩·빈·에러는 Figma 근거 없이 2026-08-13 사용자 승인으로 구현했다 — 디자이너 승인본이 아니다. 상세는 OnboardingChannelTable 스토리.',
+        '**8/14 델타 반영**: 일정 필드가 2열+별도줄 → 3열 한 줄, 배너 아이콘 info_filled → megaphone, 날짜 표기 2025-01-23 → 2025.01.23.',
+        '**하단 액션 바가 신설됐다** — 8/13 감사에서 MISSING이던 진행 CTA가 FOUND가 됐다. 이전 스토리의 "CTA 부재" 어서션은 폐기하고 존재 어서션으로 뒤집었다.',
+        '드롭다운은 닫힌 트리거만 그린다 — 열림 메뉴·옵션 집합은 여전히 시안에 없다(감사 UNKNOWN). 표시값 "1분"과 완료 화면 요약 "매일"·"자정"이 어긋난 채 남아 있어 디자이너 질문 대상이다.',
+        '채널 목록의 로딩·빈·에러는 8/14 시안에도 없다 — 8/13 사용자 승인 구현분을 유지한다.',
       ],
-      layoutNotes: [
-        '주기·백필 2열 = grid-cols-2 gap-x-6(시안 열 간격 24). 트리거 높이 46 = h-11.5(ChannelTalk 드롭다운과 동일 규격), 채널 피커는 54 = h-13.5.',
-        '카드 p-8, 구획 간 gap-8, 구획 내 gap-3 — 시안 오프셋(라벨→캡션→인풋→표 12px 간격, 구획 간 32px)에서 유도.',
-      ],
-      interactionNotes: [
-        '하단 진행 CTA는 시안 부재(감사 MISSING) — 렌더하지 않으며 play가 부재를 어서션으로 고정한다. 디자이너가 그리면 이 어서션부터 풀 것.',
-      ],
+      layoutNotes: ['일정 3열 grid-cols-3 gap-4 — 시안 필드 폭 325.33은 (1008−32)/3의 결과값이라 고정하지 않는다.'],
     }),
   },
 } satisfies Meta<typeof WikiOnboardingSourceStep>;
@@ -70,39 +73,35 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof WikiOnboardingSourceStep>;
 
-export const DefaultCopyTBD: Story = {
+export const Default: Story = {
   args: baseArgs,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('heading', { level: 1, name: ONBOARDING_SOURCE_HEADING })).toBeInTheDocument();
     await expect(canvas.getByText(CHANNEL_FIELD_CAPTION)).toBeInTheDocument();
-    await expect(canvas.getByText(CHANNEL_PICKER_PLACEHOLDER)).toBeInTheDocument();
-
-    // 일정 필드 3종의 닫힌 트리거 + 결과 문장 + 백필 배너
-    await expect(canvas.getByText('얼마나 자주 갱신할까요?')).toBeInTheDocument();
-    await expect(canvas.getByText('지금부터')).toBeInTheDocument();
     await expect(canvas.getByText(SCHEDULE_RESULT_TEXT)).toBeInTheDocument();
     await expect(canvas.getByText(BACKFILL_NOTICE_TEXT)).toBeInTheDocument();
-
-    // 채널 표가 5행으로 그려진다 (헤더 1 + 데이터 5)
     await expect(canvas.getAllByRole('row')).toHaveLength(6);
 
-    // 진행 CTA 부재 고정 — 시안 MISSING이라 발명하지 않았다는 회귀 방지 어서션
-    await expect(canvas.queryByRole('button', { name: '다음단계' })).not.toBeInTheDocument();
-    await expect(canvas.queryByRole('button', { name: '완료' })).not.toBeInTheDocument();
-    await expect(canvas.queryByRole('button', { name: '위키 만들기' })).not.toBeInTheDocument();
+    // 일정 3필드가 한 행에 놓인다(8/14 변경분)
+    const triggers = SCHEDULE_FIELDS.map((field) => canvas.getByText(field.label).closest('div')!);
+    const tops = triggers.map((el) => el.getBoundingClientRect().top);
+    await expect(new Set(tops).size).toBe(1);
+
+    // 하단 액션 바 2개 — 8/13 MISSING이 FOUND로 뒤집힌 지점
+    await userEvent.click(canvas.getByRole('button', { name: ONBOARDING_BACK_LABEL }));
+    await expect(onBack).toHaveBeenCalled();
+    await userEvent.click(canvas.getByRole('button', { name: ONBOARDING_FINISH_LABEL }));
+    await expect(onNext).toHaveBeenCalled();
   },
 };
 
-/** 채널 목록만 로딩이고 나머지 폼은 그대로 조작 가능한지 — 로딩이 화면 전체를 덮지 않는다 */
+/** 채널 목록만 로딩이고 나머지 폼은 그대로 — 로딩이 화면 전체를 덮지 않는다 */
 export const ChannelListLoading: Story = {
   args: { ...baseArgs, channelRows: [], channelListStatus: 'loading' },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('status', { name: '채널 목록 불러오는 중' })).toBeInTheDocument();
-
-    // 일정 필드와 결과 문장은 목록과 무관하게 계속 보인다
-    await expect(canvas.getByText('얼마나 자주 갱신할까요?')).toBeInTheDocument();
     await expect(canvas.getByText(SCHEDULE_RESULT_TEXT)).toBeInTheDocument();
   },
 };

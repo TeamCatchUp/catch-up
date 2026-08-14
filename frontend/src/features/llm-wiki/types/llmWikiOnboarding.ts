@@ -11,30 +11,41 @@ export interface OnboardingStepInfo {
   label: string;
 }
 
-/** 목적 선택지. 선택하면 후속 질문이 갈리고, 질문 미확정(커스텀)은 null */
+/** 목적 선택지. 정보 카테고리를 고르면 그 아래로 갈린다 */
 export interface WikiPurposeOption {
   id: string;
   label: string;
-  followUpQuestion: string | null;
 }
 
-// 아이콘이 정의된 종류만 알려져 있고 나머지는 열어둔다 — 미지 아이콘은 file로 렌더
-export type KnownDocKindIcon = 'file' | 'group' | 'graph' | 'search-file';
+/**
+ * [SPEC] 1단계 정보 카테고리 칩.
+ * 시안은 "고객 문의 (VOC)"를 고른 상태만 그려 나머지 카테고리의 목적 목록은 미정이다 —
+ * 빈 배열이면 목적 구역을 렌더하지 않는다.
+ */
+export interface WikiInfoCategory {
+  id: string;
+  label: string;
+  purposeOptions: readonly WikiPurposeOption[];
+}
+
+// 문서 종류 아이콘. 시안 6종만 알려져 있고 나머지는 열어둔다 — 미지 아이콘은 file로 렌더
+export type KnownDocKindIcon = 'request' | 'error' | 'help' | 'client' | 'history' | 'book';
 export type DocKindIcon = KnownDocKindIcon | (string & {});
 
-/** 문서 종류 프리셋(단일 선택). sampleText 뒷부분은 카피 미정 */
+/** 문서 종류 프리셋(단일 선택). 우측 템플릿 예시는 선택 연동 여부가 미정이라 여기 두지 않는다 */
 export interface WikiDocKindPreset {
   id: string;
   icon: DocKindIcon;
   label: string;
   description: string;
-  sampleText: string;
 }
 
-/** 문체 카드. 다중 선택 여부가 미확정이라 선택 상태를 목록으로 받는다 */
+/** 문체 카드(단일 선택). 예시 문장은 8/14 시안에서 실카피로 확보됐다 */
 export interface WikiToneStyleOption {
   id: string;
   label: string;
+  description: string;
+  sampleText: string;
 }
 
 /** 채널 표의 행. 채널 실물은 llmWikiModel의 [BE] 타입을 그대로 소비한다 */
@@ -56,4 +67,16 @@ export interface ScheduleFieldData {
   label: string;
   /** 트리거에 표시되는 현재 값 문자열 */
   valueLabel: string;
+}
+
+/** [SPEC] 완료 화면 요약 행. 문서 종류·채널처럼 값이 여러 개인 행이 있어 배열이다 */
+export interface OnboardingSummaryRow {
+  label: string;
+  values: readonly string[];
+}
+
+/** [SPEC] 완료 화면 요약 구역(위키 목적 / 수집 설정) */
+export interface OnboardingSummarySection {
+  title: string;
+  rows: readonly OnboardingSummaryRow[];
 }

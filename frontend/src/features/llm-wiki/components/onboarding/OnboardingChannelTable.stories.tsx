@@ -59,8 +59,8 @@ export const DefaultCopyTBD: Story = {
       getComputedStyle(firstBodyRow).gridTemplateColumns,
     );
 
-    // 수정일 열은 우측 정렬
-    const dateCell = within(firstBodyRow).getByText('2025-01-23');
+    // 수정일 열은 우측 정렬 (8/14 시안에서 표기가 점 구분으로 바뀌었다)
+    const dateCell = within(firstBodyRow).getByText(ONBOARDING_CHANNEL_ROWS[0].lastModifiedLabel);
     await expect(getComputedStyle(dateCell).textAlign).toBe('right');
   },
 };

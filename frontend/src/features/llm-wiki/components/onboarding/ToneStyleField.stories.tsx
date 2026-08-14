@@ -3,9 +3,7 @@ import { expect, fn, within } from 'storybook/test';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
 import {
-  FOLLOW_UP_PLACEHOLDER_TBD,
-  TONE_CUSTOM_MAX_LENGTH,
-  TONE_CUSTOM_OPTION,
+  TONE_SAMPLE_TAG_LABEL,
   TONE_STYLE_FIELD_LABEL,
   WIKI_TONE_STYLE_OPTIONS,
 } from '../../fixtures/llmWikiOnboardingFixtures';
@@ -14,14 +12,9 @@ import ToneStyleField from './ToneStyleField';
 const baseArgs = {
   label: TONE_STYLE_FIELD_LABEL,
   options: WIKI_TONE_STYLE_OPTIONS,
-  selectedIds: [WIKI_TONE_STYLE_OPTIONS[0].id],
-  onToggle: fn(),
-  customLabel: TONE_CUSTOM_OPTION.label,
-  customDescription: TONE_CUSTOM_OPTION.description,
-  customValue: '',
-  onCustomChange: fn(),
-  customPlaceholder: FOLLOW_UP_PLACEHOLDER_TBD,
-  customMaxLength: TONE_CUSTOM_MAX_LENGTH,
+  selectedId: WIKI_TONE_STYLE_OPTIONS[0].id,
+  onSelect: fn(),
+  sampleTagLabel: TONE_SAMPLE_TAG_LABEL,
 };
 
 const meta = {
@@ -44,15 +37,15 @@ const meta = {
       viewport: { width: 1008 },
       states: ['default'],
       dataNotes: [
-        '카드 라벨 4종은 시안 실카피 — 단 4번째 "의사결정 이력"이 문서 종류 항목명과 중복(카피 미정 신호, design-request 참조).',
-        '커스텀 설명은 프리셋 설명과 동일한 복붙 필러 추정(TBD). 커스텀 입력 placeholder도 시안 필러 유지.',
-        '체크박스형이지만 시안에는 1개 선택 상태만 있다 — 다중 허용 여부 미확정이라 선택을 목록 props로 받는다.',
+        '**8/14 시안 갱신으로 재설계됐다.** 기존(썸네일 이미지 4장 + 체크박스 + 커스텀 작성 입력 0/500) → 3열 카드 3종에 설명과 예시 문장이 붙었다. 4번째 문체("의사결정 이력")와 커스텀 입력은 소멸.',
+        '**예시 문장 3종이 실카피로 확보됐다** — 8/13 감사의 카피 미정(TBD)이 여기서 해소됐다.',
+        '선택 표시가 checkbox → check_circle로 바뀌었다. 다중 선택이 아니라 단일 선택이라는 뜻이라 selectedIds(배열) → selectedId(단수)로 계약을 좁혔다.',
       ],
-      layoutNotes: [
-        '카드 4열 = grid-cols-4 gap-6(시안 열 간격 24). 카드 폭 234는 1008 4등분의 결과값이라 고정하지 않는다.',
-        '썸네일 140 = h-35 고정 — 시안에서도 빈 자리 표시라 배경(bg-fill-normal-strong)만 그린다. 체크박스는 우상단 absolute.',
+      layoutNotes: ['3열 grid-cols-3 gap-4 — 시안 카드 폭 325.33은 (1008−32)/3의 결과값이라 고정하지 않는다.'],
+      tokenNotes: [
+        '"예시" 태그 = bg-accent-light-blue-neutral(#C4ECFE) + radius 6(rounded-md2). shared Badge에 light-blue variant가 없어 span으로 그렸다.',
+        '미선택 체크 아이콘은 icon-normal-assistive(#CDD1D5) — 선택 카드 defs와 대조해 확인했다.',
       ],
-      reuseNotes: ['체크박스는 shared CheckboxIcon 재사용 — 선택 파랑(icon-primary-normal)이 DS와 일치한다.'],
     }),
   },
 } satisfies Meta<typeof ToneStyleField>;
@@ -64,16 +57,18 @@ export const Default: Story = {
   args: baseArgs,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const checkboxes = canvas.getAllByRole('checkbox');
-    await expect(checkboxes).toHaveLength(4);
-    await expect(checkboxes[0]).toHaveAttribute('aria-checked', 'true');
-    await expect(checkboxes[1]).toHaveAttribute('aria-checked', 'false');
+    const radios = canvas.getAllByRole('radio');
+    await expect(radios).toHaveLength(3);
+    await expect(radios[0]).toHaveAttribute('aria-checked', 'true');
+    await expect(radios[1]).toHaveAttribute('aria-checked', 'false');
 
-    await expect(canvas.getByText(TONE_CUSTOM_OPTION.label)).toBeInTheDocument();
-    await expect(canvas.getByText('0/500')).toBeInTheDocument();
+    // 카드마다 자기 예시 문장을 갖는다 — 8/14에 확보된 실카피
+    await expect(canvas.getByText(WIKI_TONE_STYLE_OPTIONS[0].sampleText)).toBeInTheDocument();
+    await expect(canvas.getByText(WIKI_TONE_STYLE_OPTIONS[2].sampleText)).toBeInTheDocument();
+    await expect(canvas.getAllByText(TONE_SAMPLE_TAG_LABEL)).toHaveLength(3);
 
-    // 썸네일 높이 140 고정 — 시안의 빈 썸네일 자리 규격
-    const thumbnail = checkboxes[0].querySelector('span.relative')!;
-    await expect(Math.round(thumbnail.getBoundingClientRect().height)).toBe(140);
+    // 3열이 유지되는지 — 첫 카드와 둘째 카드가 같은 행에 있어야 한다
+    const [first, second] = radios;
+    await expect(first.getBoundingClientRect().top).toBe(second.getBoundingClientRect().top);
   },
 };
