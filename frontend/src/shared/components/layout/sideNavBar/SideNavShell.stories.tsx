@@ -44,7 +44,7 @@ const meta = {
       states: ['home-expanded', 'wiki-expanded', 'empty-sections'],
       layoutNotes: [
         '섹션 구성은 소비처가 조립한다 — 홈과 위키가 다르고 그 구성 자체가 미결이다.',
-        '위키만 스크롤 페이드를 가진다(Figma 실측).',
+        'Figma 실측으로는 위키만 스크롤 페이드를 가진다. 홈에도 켠 것은 최근 질문 목록 복원에 따른 잠정이다(design-request #15).',
       ],
       dataNotes: [
         '로딩·빈 목록·에러 스토리를 만들지 않는다 — 시안에 없다(docs/state-audit/전역-snb.md §7).',
@@ -62,7 +62,7 @@ type Story = StoryObj<typeof SideNavShell>;
 const noop = () => {};
 
 export const HomeExpanded: Story = {
-  args: { onCollapse: fn() },
+  args: { onCollapse: fn(), showScrollFade: true },
   render: (args) => (
     <SideNavShell
       {...args}
