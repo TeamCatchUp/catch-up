@@ -11,7 +11,10 @@ interface OnboardingStepperProps {
 // 온보딩 상단 단계 세그먼트. 진행 표시 전용이라 버튼이 아니다(시안에 클릭 동작 없음)
 export default function OnboardingStepper({ steps, currentStep }: OnboardingStepperProps) {
   return (
-    <ol className="bg-fill-normal-strong flex w-full items-stretch rounded-xl p-1" aria-label="온보딩 단계">
+    <ol
+      className="bg-fill-normal-strong border-line-normal-assistive flex w-full items-stretch gap-0.5 rounded-xl border p-1"
+      aria-label="온보딩 단계"
+    >
       {steps.map((step) => {
         const active = step.number === currentStep;
 

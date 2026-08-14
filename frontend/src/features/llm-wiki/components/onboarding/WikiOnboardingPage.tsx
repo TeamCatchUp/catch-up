@@ -77,6 +77,7 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
         onBack={() => goToStep(2)}
         finishLabel={ONBOARDING_FINISH_LABEL}
         onFinish={() => router.push('/llm-wiki')}
+        onExit={() => router.back()}
       />
     );
   }
@@ -98,6 +99,7 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
         onBack={() => goToStep(1)}
         nextLabel={ONBOARDING_FINISH_LABEL}
         onNext={() => goToStep(3)}
+        onExit={() => router.back()}
       />
     );
   }
@@ -145,6 +147,7 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
       }}
       nextLabel={ONBOARDING_NEXT_LABEL}
       onNext={() => goToStep(2)}
+      onExit={() => router.back()}
     />
   );
 }

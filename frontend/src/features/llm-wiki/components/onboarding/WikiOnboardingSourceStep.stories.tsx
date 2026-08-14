@@ -38,6 +38,7 @@ const baseArgs = {
   onBack,
   nextLabel: ONBOARDING_FINISH_LABEL,
   onNext,
+  onExit: fn(),
 };
 
 const meta = {

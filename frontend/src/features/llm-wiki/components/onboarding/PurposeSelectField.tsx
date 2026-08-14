@@ -33,8 +33,8 @@ export default function PurposeSelectField({
   const purposeOptions = selectedCategory?.purposeOptions ?? [];
 
   return (
-    <div className="flex w-full flex-col gap-7">
-      <div className="flex flex-col gap-3">
+    <div className="flex w-full flex-col gap-8">
+      <div className="flex flex-col gap-5">
         <OnboardingFieldLabel label={categoryLabel} required />
         <div role="radiogroup" aria-label={categoryLabel} className="flex flex-wrap gap-3">
           {categories.map((category) => {
@@ -65,7 +65,7 @@ export default function PurposeSelectField({
       </div>
 
       {purposeOptions.length > 0 && (
-        <div className="border-line-normal-neutral flex border-l pl-8">
+        <div className="border-line-normal-neutral flex border-l pl-14">
           <IconArrowRight2 className="text-icon-normal-alternative mt-6 size-6 shrink-0" />
           <div className="flex min-w-0 flex-1 flex-col gap-3 pl-4">
             <OnboardingFieldLabel label={purposeLabel} required size="body" />
@@ -80,13 +80,13 @@ export default function PurposeSelectField({
                     role="radio"
                     aria-checked={checked}
                     onClick={() => onSelectPurpose?.(option.id)}
-                    className="border-line-normal-neutral hover:bg-fill-normal-interaction-hover flex min-w-0 cursor-pointer items-start justify-between gap-3 rounded-xl border p-4 text-left transition-colors"
+                    className="border-line-normal-neutral hover:bg-fill-normal-interaction-hover flex min-w-0 cursor-pointer items-start gap-6 rounded-xl border p-4 text-left transition-colors"
                   >
-                    <span className="text-body-small text-text-normal-normal min-w-0">{option.label}</span>
+                    <span className="text-body-small text-text-normal-neutral min-w-0 flex-1">{option.label}</span>
                     {checked ? (
                       <IconCheckCircleFilled className="text-icon-primary-normal size-6 shrink-0" />
                     ) : (
-                      <IconCheckCircle className="text-icon-normal-alternative size-6 shrink-0" />
+                      <IconCheckCircle className="text-icon-normal-assistive size-6 shrink-0" />
                     )}
                   </button>
                 );

@@ -13,7 +13,7 @@ export default function OnboardingSummaryCard({ sections }: OnboardingSummaryCar
       {sections.map((section, index) => (
         <Fragment key={section.title}>
           {index > 0 && <hr className="border-line-normal-normal" />}
-          <section className="flex flex-col gap-6">
+          <section className="flex flex-col gap-8">
             <h3 className="text-heading-medium text-text-normal-normal">{section.title}</h3>
             <dl className="flex flex-col gap-4">
               {section.rows.map((row) => (

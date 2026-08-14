@@ -34,8 +34,8 @@ export default function ToneStyleField({ label, options, selectedId, onSelect, s
               onClick={() => onSelect?.(option.id)}
               className="border-line-normal-neutral hover:bg-fill-normal-interaction-hover flex min-w-0 cursor-pointer flex-col gap-5 rounded-xl border p-4 text-left transition-colors"
             >
-              <span className="flex items-start justify-between gap-3">
-                <span className="flex min-w-0 flex-col gap-2">
+              <span className="flex items-start gap-5">
+                <span className="flex min-w-0 flex-1 flex-col gap-2">
                   <span className="text-heading-small text-text-normal-normal truncate">{option.label}</span>
                   <span className="text-body-small text-text-normal-alternative">{option.description}</span>
                 </span>

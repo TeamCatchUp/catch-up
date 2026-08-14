@@ -66,9 +66,9 @@ export default function DocKindSelectField({
                 role="radio"
                 aria-checked={checked}
                 onClick={() => onSelect?.(preset.id)}
-                className="border-line-normal-neutral hover:bg-fill-normal-interaction-hover flex w-full shrink-0 cursor-pointer items-start justify-between gap-3 rounded-xl border p-4 text-left transition-colors"
+                className="border-line-normal-neutral hover:bg-fill-normal-interaction-hover flex w-full shrink-0 cursor-pointer items-start gap-5 rounded-xl border p-4 text-left transition-colors"
               >
-                <span className="flex min-w-0 flex-col gap-2">
+                <span className="flex min-w-0 flex-1 flex-col gap-2">
                   <span className="flex items-center gap-2">
                     <Icon className="text-icon-normal-normal size-5 shrink-0" />
                     <span className="text-heading-small text-text-normal-normal truncate">{preset.label}</span>

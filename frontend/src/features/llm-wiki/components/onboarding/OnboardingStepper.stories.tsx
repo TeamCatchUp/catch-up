@@ -58,7 +58,8 @@ export const PurposeStepActive: Story = {
 
     const list = canvas.getByRole('list');
     await expect(getComputedStyle(list).borderRadius).toBe('12px');
-    await expect(Math.round(list.getBoundingClientRect().height)).toBe(46);
+    // 시안 프레임 46 = padding 4×2 + 세그먼트 38. 테두리 1px가 그 밖에 얹혀 48이 된다
+    await expect(Math.round(list.getBoundingClientRect().height)).toBe(48);
   },
 };
 

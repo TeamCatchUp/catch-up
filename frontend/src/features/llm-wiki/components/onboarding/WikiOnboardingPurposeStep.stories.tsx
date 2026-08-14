@@ -62,6 +62,7 @@ const baseArgs = {
   },
   nextLabel: ONBOARDING_NEXT_LABEL,
   onNext,
+  onExit: fn(),
 };
 
 const meta = {
@@ -114,7 +115,11 @@ export const Default: Story = {
 
     await expect(canvas.getByText('0/20')).toBeInTheDocument();
 
-    // 1단계에는 이전 버튼이 없다(시안대로) — 다음 버튼만
+    // 상단 바에 뒤로가기가 있고, 더보기는 콜백이 없으면 그리지 않는다(죽은 버튼 방지)
+    await expect(canvas.getByRole('button', { name: '뒤로 가기' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: '더보기' })).not.toBeInTheDocument();
+
+    // 1단계에는 하단 이전 버튼이 없다(시안대로) — 다음 버튼만
     await expect(canvas.queryByRole('button', { name: '이전' })).not.toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: ONBOARDING_NEXT_LABEL }));
     await expect(onNext).toHaveBeenCalled();

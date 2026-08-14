@@ -16,6 +16,7 @@ import OnboardingActionBar from './OnboardingActionBar';
 import OnboardingChannelTable from './OnboardingChannelTable';
 import OnboardingFieldLabel from './OnboardingFieldLabel';
 import OnboardingStepper from './OnboardingStepper';
+import OnboardingTopBar from './OnboardingTopBar';
 
 interface ScheduleTriggerFieldProps {
   field: ScheduleFieldData;
@@ -63,6 +64,8 @@ interface WikiOnboardingSourceStepProps {
   onBack?: () => void;
   nextLabel: string;
   onNext?: () => void;
+  /** 상단 바 뒤로가기 — 하단 "이전"(단계 후퇴)과 달리 온보딩을 벗어난다 */
+  onExit?: () => void;
 }
 
 // 온보딩 2단계 화면 조립. 8/14 시안에서 일정이 3열로 바뀌고 하단 액션 바가 신설됐다
@@ -85,9 +88,11 @@ export default function WikiOnboardingSourceStep({
   onBack,
   nextLabel,
   onNext,
+  onExit,
 }: WikiOnboardingSourceStepProps) {
   return (
-    <div className="flex w-full flex-col">
+    <div className="bg-fill-normal-assistive flex w-full flex-col">
+      <OnboardingTopBar onBack={onExit} />
       <div className="flex flex-col gap-8 px-16 pt-5 pb-9">
         <OnboardingStepper steps={steps} currentStep={2} />
         <h1 className="text-heading-xlarge text-text-normal-normal">{heading}</h1>
