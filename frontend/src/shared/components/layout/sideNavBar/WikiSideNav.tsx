@@ -33,10 +33,8 @@ import SnbSpaceSwitcher from './SnbSpaceSwitcher';
 import SnbTeamspaceCard from './SnbTeamspaceCard';
 
 /**
- * LLM Wiki 경로 전용 사이드 내비.
- *
- * 목록·트리는 아직 fixture다 — 채널 목록 API는 있으나 프론트 쿼리가 없고,
- * 문서 목록은 계약 자체가 없다. 로딩·빈·에러는 시안이 없어 만들지 않는다.
+ * LLM Wiki 경로 전용 사이드 내비. 목록·트리는 fixture이고,
+ * 로딩·빈·에러 표시는 시안이 없어 만들지 않는다.
  */
 export default function WikiSideNav() {
   const router = useRouter();

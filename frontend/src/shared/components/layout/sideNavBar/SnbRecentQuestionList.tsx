@@ -2,19 +2,18 @@
 
 import { useEffect, useMemo, useRef } from 'react';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 
 import { chatQueries } from '@/shared/queries/chatroom.queries';
 
 import SnbChatTitleRow from './SnbChatTitleRow';
 
 /**
- * 홈 SNB의 최근 질문 목록. 조회·무한스크롤·갱신 이벤트 계약은 구 사이드바와 같다.
- * 목록이 비어도 대체 문구를 만들지 않는다 — 승인된 빈 상태 카피가 없다.
+ * 홈 SNB의 최근 질문 목록. 조회·무한스크롤·갱신 이벤트는 구 사이드바 계약 그대로다.
+ * 빈 목록 문구는 만들지 않는다 — 승인된 카피가 없다.
  */
 export default function SnbRecentQuestionList() {
   const pathname = usePathname();
-  const router = useRouter();
   const queryClient = useQueryClient();
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -51,10 +50,13 @@ export default function SnbRecentQuestionList() {
         <SnbChatTitleRow
           key={chatroom.session_id}
           label={chatroom.title}
+          href={`/chat/${chatroom.session_id}`}
           selected={pathname === `/chat/${chatroom.session_id}`}
-          onClick={() => router.push(`/chat/${chatroom.session_id}`)}
         />
       ))}
+      {isFetchingNextPage && (
+        <div className="text-body-xsmall text-text-normal-assistive py-2 text-center">불러오는 중...</div>
+      )}
       <div ref={sentinelRef} className="h-1 shrink-0" />
     </div>
   );

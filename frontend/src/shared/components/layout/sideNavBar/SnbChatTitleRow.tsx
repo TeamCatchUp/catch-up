@@ -1,9 +1,13 @@
+import Link from 'next/link';
+
 import IconMore from '@/public/icons/icon/kebab_horizontal.svg';
 import { cn } from '@/shared/utils/cn';
 
 export interface SnbChatTitleRowProps {
   label: string;
   selected?: boolean;
+  /** 전달 시 링크로 렌더한다 — 새 탭·미들클릭·prefetch가 필요한 행에 쓴다 */
+  href?: string;
   onClick?: () => void;
   /** 전달 시에만 더보기(⋯)를 만든다. 메뉴 내용은 이 컴포넌트가 모른다 */
   onMoreClick?: () => void;
@@ -16,10 +20,24 @@ export interface SnbChatTitleRowProps {
 export default function SnbChatTitleRow({
   label,
   selected = false,
+  href,
   onClick,
   onMoreClick,
   className,
 }: SnbChatTitleRowProps) {
+  // 라벨 span이 flex 아이템이어야 truncate가 동작한다
+  const titleClass = 'flex min-w-0 flex-1 cursor-pointer';
+  const title = (
+    <span
+      className={cn(
+        'text-body-small min-w-0 truncate text-left',
+        selected ? 'text-text-primary-normal' : 'text-text-normal-normal',
+      )}
+    >
+      {label}
+    </span>
+  );
+
   return (
     <div
       className={cn(
@@ -30,22 +48,15 @@ export default function SnbChatTitleRow({
         className,
       )}
     >
-      <button
-        type="button"
-        onClick={onClick}
-        aria-current={selected ? 'page' : undefined}
-        // 라벨 span이 flex 아이템이어야 truncate가 동작한다
-        className="flex min-w-0 flex-1 cursor-pointer"
-      >
-        <span
-          className={cn(
-            'text-body-small min-w-0 truncate text-left',
-            selected ? 'text-text-primary-normal' : 'text-text-normal-normal',
-          )}
-        >
-          {label}
-        </span>
-      </button>
+      {href ? (
+        <Link href={href} onClick={onClick} aria-current={selected ? 'page' : undefined} className={titleClass}>
+          {title}
+        </Link>
+      ) : (
+        <button type="button" onClick={onClick} aria-current={selected ? 'page' : undefined} className={titleClass}>
+          {title}
+        </button>
+      )}
       {onMoreClick && (
         <button
           type="button"
