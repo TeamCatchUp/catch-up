@@ -25,6 +25,8 @@ export interface SnbNavFixtureItem {
   selected?: boolean;
   count?: number;
   hasNotification?: boolean;
+  /** 라벨 우측 베타 태그를 붙일 항목인가 */
+  beta?: boolean;
 }
 
 export const SPACE_HOME_ICON = IconHomeFilled;
@@ -34,9 +36,11 @@ export const TEAMSPACE_ICON = IconTeamspace;
 /** 요청됨 배지 건수. 집계 API 계약이 없어 시안 값을 그대로 쓴다 */
 export const REQUESTED_COUNT = 1;
 
+// 문서 탐색은 시안 펼침에 없지만 구 사이드바가 양쪽에 두던 메뉴라 홈 구성에 남긴다
 export const HOME_PRIMARY_ITEMS: readonly SnbNavFixtureItem[] = [
   { id: 'new-chat', label: '새 채팅', Icon: IconAdd },
   { id: 'search', label: '검색', Icon: IconSearch300 },
+  { id: 'doc-search', label: '문서 탐색', Icon: IconDocumentSearch, beta: true },
   { id: 'requested', label: '요청됨', Icon: IconUpdate, selected: true, count: REQUESTED_COUNT },
 ];
 

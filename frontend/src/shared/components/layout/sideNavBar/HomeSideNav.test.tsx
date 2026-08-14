@@ -66,8 +66,21 @@ describe('HomeSideNav 펼침', () => {
     await user.click(screen.getByRole('button', { name: '문의 대응' }));
     expect(mockPush).toHaveBeenCalledWith('/agent-studio');
 
+    // 구 사이드바는 문서 탐색을 펼침·닫힘 양쪽에 뒀다
+    await user.click(screen.getByRole('button', { name: /^문서 탐색/ }));
+    expect(mockPush).toHaveBeenCalledWith('/?mode=docs');
+
     await user.click(screen.getByRole('button', { name: '설정' }));
     expect(mockPush).toHaveBeenCalledWith('/mypage/profile');
+  });
+
+  it('최근 질문 머리글이 질문 히스토리 패널을 연다', async () => {
+    const user = userEvent.setup();
+    render(<HomeSideNav />);
+
+    await user.click(screen.getByRole('button', { name: '최근 질문' }));
+
+    expect(mockSidebarState.togglePanel).toHaveBeenCalledWith('questionsHistory');
   });
 
   it('요청됨과 모드 스위처가 위키 쪽으로 이동한다', async () => {
@@ -106,10 +119,11 @@ describe('HomeSideNav 펼침', () => {
     expect(screen.getByRole('button', { name: '새 채팅' })).not.toHaveAttribute('aria-current');
   });
 
-  it('로딩·빈 목록·에러 문구를 만들지 않는다', () => {
+  // 페이지네이션 "불러오는 중..."은 구 사이드바 동작이라 이 금지 목록에서 뺀다
+  it('승인 안 된 빈 목록·에러 문구를 만들지 않는다', () => {
     const { container } = render(<HomeSideNav />);
 
-    expect(container.textContent).not.toMatch(/불러오는|로딩|없습니다|비어|다시 시도|실패/);
+    expect(container.textContent).not.toMatch(/없습니다|비어|다시 시도|실패/);
   });
 });
 

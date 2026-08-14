@@ -88,6 +88,7 @@ export default function HomeSideNav() {
   return (
     <SideNavShell
       onCollapse={() => setSidebarOpen(false)}
+      showScrollFade
       spaceSwitcher={
         <>
           <SnbSpaceSwitcher Icon={SPACE_HOME_ICON} label="홈" selected />
@@ -98,6 +99,13 @@ export default function HomeSideNav() {
         <div className="flex flex-col">
           <SnbNavRow Icon={IconAdd} label="새 채팅" selected={isHome} onClick={go('/')} />
           <SnbNavRow Icon={IconSearch300} label="검색" selected={isSearch} onClick={go('/search')} />
+          <SnbNavRow
+            Icon={IconDocumentSearch}
+            label="문서 탐색"
+            trailing={<SnbBetaBadge />}
+            selected={isDocsMode}
+            onClick={go('/?mode=docs')}
+          />
           <SnbNavRow Icon={IconUpdate} label="요청됨" count={REQUESTED_COUNT} onClick={go('/llm-wiki/review')} />
         </div>
       }
@@ -122,7 +130,8 @@ export default function HomeSideNav() {
         ))}
       </div>
       <div className="flex flex-col gap-1.5">
-        <SnbSectionHeader label="최근 질문" />
+        {/* 머리글 클릭은 구 "내 질문" 진입점을 잇는 잠정 어포던스다 — 신 시안에는 없다 */}
+        <SnbSectionHeader label="최근 질문" onClick={() => togglePanel('questionsHistory')} />
         <SnbRecentQuestionList />
       </div>
       <div className="flex flex-col gap-1.5">

@@ -75,7 +75,7 @@ export const HomeExpanded: Story = {
       primaryItems={
         <div className="flex flex-col">
           {HOME_PRIMARY_ITEMS.map((item) => (
-            <SnbNavRow key={item.id} {...item} onClick={noop} />
+            <SnbNavRow key={item.id} {...item} trailing={item.beta ? <SnbBetaBadge /> : undefined} onClick={noop} />
           ))}
         </div>
       }
