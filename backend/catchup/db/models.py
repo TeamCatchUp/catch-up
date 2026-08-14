@@ -1571,6 +1571,54 @@ class ChannelTalkCredentials(Base):
     )
 
 
+class TestKnowledgeMaintenanceSetting(Base):
+    __tablename__ = "test_knowledge_maintaince_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    channel_talk_credential_id: Mapped[int] = mapped_column(
+        ForeignKey("channel_talk_credentials.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
+    execution_anchor_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    interval_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "channel_talk_credential_id",
+            name="uq_test_knowledge_maintaince_workspace_credential",
+        ),
+        CheckConstraint(
+            "interval_minutes > 0",
+            name="ck_test_knowledge_maintaince_interval_positive",
+        ),
+    )
+
+
 class ChannelTalkDocumentCredentials(Base):
     __tablename__ = "channel_talk_document_credentials"
 
