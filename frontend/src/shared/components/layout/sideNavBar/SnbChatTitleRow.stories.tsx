@@ -24,11 +24,12 @@ const meta = {
         nodeId: '413:2139',
       },
       viewport: { width: 320, height: 200 },
-      states: ['default', 'selected', 'with-more', 'long-label'],
+      states: ['default', 'selected', 'with-more', 'long-label', 'as-link'],
       reuseNotes: ['Figma SNB/menu type=Chat Title. 아이콘 슬롯이 없고 gap이 4다(주 메뉴는 12).'],
       interactionNotes: [
         '더보기 버튼은 hover와 focus-within에서만 나타난다 — 키보드로도 도달할 수 있어야 한다.',
         'hover는 플레이로 어서션하지 않는다 — userEvent.hover()는 합성 이벤트라 브라우저의 :hover를 켜지 못한다. focus로 검증한다.',
+        'pressed도 같은 이유로 클래스로 고정한다. href 분기는 행 안에 button이 없어 a:active까지 받아야 한다.',
       ],
       dataNotes: ['더보기 메뉴 항목은 미정이라 핸들러만 받는다.'],
     }),
@@ -92,6 +93,25 @@ export const WithMore: Story = {
     await expect(args.onMoreClick).toHaveBeenCalledTimes(1);
     // 행 클릭과 더보기 클릭이 섞이면 안 된다
     await expect(args.onClick).not.toHaveBeenCalled();
+  },
+};
+
+export const AsLink: Story = {
+  args: { href: '/chat/session-1' },
+  render: (args) => (
+    <Frame>
+      <SnbChatTitleRow {...args} />
+    </Frame>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const link = canvas.getByRole('link', { name: '연동 테스트 중단 리스크' });
+
+    await expect(link).toHaveAttribute('href', '/chat/session-1');
+    await expect(canvas.queryByRole('button', { name: '연동 테스트 중단 리스크' })).toBeNull();
+
+    // 행에 button이 하나도 없는 분기라 a:active가 없으면 pressed 피드백이 사라진다
+    await expect(link.parentElement).toHaveClass('has-[a:active]:bg-fill-normal-interaction-pressed');
   },
 };
 
