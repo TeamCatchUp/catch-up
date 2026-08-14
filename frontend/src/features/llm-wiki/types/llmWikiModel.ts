@@ -62,8 +62,11 @@ export interface DocumentRowData {
   /** [BE] 채널 > 폴더 경로. 실물은 WikiChannel·WikiFolder — 경로 조립은 프론트 몫 */
   breadcrumbs: readonly DocumentBreadcrumb[];
   status: DocumentStatus;
-  /** [BE] 담당자 표시명. 지정 API는 실물이나 목록 응답에 이름·이미지 미동봉(협상 대상) */
-  ownerName: string;
+  /**
+   * [BE] 담당자 표시명. null은 미지정이다 — 지정·해제 API가 실물이라 실제로 발생하는 상태다.
+   * 목록 응답에 이름·이미지는 미동봉(협상 대상).
+   */
+  ownerName: string | null;
   ownerProfileImageUrl: string | null;
   /** [SPEC] 최근 활동 표시 문자열 (예: "3시간 전", "2024.12.12") */
   lastActivityLabel: string;

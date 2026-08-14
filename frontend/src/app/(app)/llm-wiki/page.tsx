@@ -1,12 +1,18 @@
 'use client';
 
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import WikiDashboardPage from '@/features/llm-wiki/components/dashboard/WikiDashboardPage';
-import { DOCUMENT_ROW_FIXTURES, REVIEW_STAT_CARD_FIXTURES } from '@/features/llm-wiki/fixtures/llmWikiFixtures';
+import {
+  DOCUMENT_ROW_FIXTURES,
+  REVIEW_QUEUE_ASSIGNEE_OPTIONS,
+  REVIEW_STAT_CARD_FIXTURES,
+} from '@/features/llm-wiki/fixtures/llmWikiFixtures';
 
 const PAGE_SIZE = 20;
+
+/** 로그인 사용자 API가 없어 픽스처 담당자 한 명을 "나"로 둔다 — "내 담당" 필터의 기준이다. */
+const CURRENT_USER_NAME = '팀원F';
 
 /**
  * LLM Wiki 대시보드. 목록·집계 API가 없어 픽스처를 렌더한다 —
@@ -14,18 +20,15 @@ const PAGE_SIZE = 20;
  */
 export default function Page() {
   const router = useRouter();
-  const [currentPage, setCurrentPage] = useState(1);
-  const totalPages = Math.max(1, Math.ceil(DOCUMENT_ROW_FIXTURES.length / PAGE_SIZE));
 
   return (
     <WikiDashboardPage
       stats={REVIEW_STAT_CARD_FIXTURES}
       documents={DOCUMENT_ROW_FIXTURES}
+      currentUserName={CURRENT_USER_NAME}
+      assigneeOptions={REVIEW_QUEUE_ASSIGNEE_OPTIONS}
       sortLabel="최근 변경 순"
       pageSize={PAGE_SIZE}
-      currentPage={currentPage}
-      totalPages={totalPages}
-      onPageChange={setCurrentPage}
       onDocumentClick={(documentId) => router.push(`/llm-wiki/${documentId}`)}
     />
   );

@@ -79,10 +79,19 @@ export default function DashboardDocumentRow({ document, onClick }: DashboardDoc
       </span>
 
       <span className={DASHBOARD_DOCUMENT_META_GRID}>
-        {/* 담당자 열 — 이름이 바로 옆이라 아바타 alt는 비운다(중복 낭독 방지) */}
+        {/* 담당자 열 — 이름이 바로 옆이라 아바타 alt는 비운다(중복 낭독 방지).
+            미지정(null)은 표기 시안이 없어 자리만 비운다 */}
         <span className="flex min-w-0 items-center gap-3">
-          <Avatar size="small" src={ownerProfileImageUrl} className="border-line-normal-assistive shrink-0 rounded-xl" />
-          <span className="text-body-small text-text-normal-normal truncate">{ownerName}</span>
+          {ownerName !== null && (
+            <>
+              <Avatar
+                size="small"
+                src={ownerProfileImageUrl}
+                className="border-line-normal-assistive shrink-0 rounded-xl"
+              />
+              <span className="text-body-small text-text-normal-normal truncate">{ownerName}</span>
+            </>
+          )}
         </span>
 
         {/* 상태 열 */}

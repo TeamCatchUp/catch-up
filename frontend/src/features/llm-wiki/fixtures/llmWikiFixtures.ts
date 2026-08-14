@@ -140,6 +140,17 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
     ownerName: '윤서아',
     lastActivityLabel: '2024.12.01',
   }),
+  // 담당자 미지정 표본 — 지표 카드의 같은 이름 필터가 실제로 걸리는지 보려면 이 행이 있어야 한다
+  createDocumentRow({
+    id: 'doc-webhook-retry',
+    title: '웹훅 재전송 정책',
+    breadcrumbs: [
+      { kind: 'channel', label: '운영' },
+      { kind: 'folder', label: '연동' },
+    ],
+    ownerName: null,
+    lastActivityLabel: '2024.11.28',
+  }),
 ];
 
 const BASE_REVIEW_QUEUE_ITEM: ReviewQueueItemData = {

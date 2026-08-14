@@ -2,7 +2,11 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
-import { DOCUMENT_ROW_FIXTURES, REVIEW_STAT_CARD_FIXTURES } from '../../fixtures/llmWikiFixtures';
+import {
+  DOCUMENT_ROW_FIXTURES,
+  REVIEW_QUEUE_ASSIGNEE_OPTIONS,
+  REVIEW_STAT_CARD_FIXTURES,
+} from '../../fixtures/llmWikiFixtures';
 import WikiDashboardPage from './WikiDashboardPage';
 
 const meta = {
@@ -12,15 +16,12 @@ const meta = {
   args: {
     stats: REVIEW_STAT_CARD_FIXTURES,
     documents: DOCUMENT_ROW_FIXTURES,
+    currentUserName: '팀원F',
+    assigneeOptions: REVIEW_QUEUE_ASSIGNEE_OPTIONS,
     sortLabel: '최근 변경 순',
     pageSize: 20,
-    currentPage: 1,
-    totalPages: 5,
-    onPageChange: fn(),
     onDocumentClick: fn(),
-    onFilterClick: fn(),
     onSortClick: fn(),
-    onClearFilters: fn(),
   },
   parameters: {
     ...catchupParameters({
@@ -36,7 +37,7 @@ const meta = {
         nodeId: '17595:148922',
       },
       viewport: { width: 1200, height: 1571 },
-      states: ['default', 'narrow-viewport'],
+      states: ['default', 'stat-card-filters-table', 'narrow-viewport'],
       reuseNotes: [
         'WikiPageHeader(main)·ReviewStatCard·DashboardDocumentTableHeader·DashboardDocumentRow·WikiSpaceTableFooter를 조립만 한다 — 전부 무수정 소비. 푸터는 채널·폴더 세션 파일이라 소비만 하고 손대지 않았다.',
         '필터 칩은 shared Chip(variant=square)이다 — 미선택 토큰(흰 배경·Line/Normal/Neutral·Text/Normal/Normal)과 선택 토큰(Fill/Primary/Normal/Assistive·Line/Primary/Normal·Text/Primary/Normal)이 시안과 그대로 일치해 새 칩을 만들지 않았다. 시안 gap 8·padding 10만 className으로 덮는다.',
@@ -46,7 +47,9 @@ const meta = {
       dataNotes: [
         '지표·문서 목록은 전부 fixture다(REVIEW_STAT_CARD_FIXTURES·DOCUMENT_ROW_FIXTURES). 페이지는 API를 부르지 않는다 — Mock 앱 푸시 원칙대로 실 API 도착 시 픽스처 자리만 교체한다.',
         '로딩·빈 목록·에러 스토리는 만들지 않는다 — 디자인 MISSING(감사 §7 금지 목록). 로딩·에러가 없는 것이 이 단계의 정상이다.',
-        '필터 칩·정렬 칩의 드롭다운 메뉴는 시안에 없다 — 트리거까지만 구현하고 콜백만 올려보낸다. 열림 내용은 소비처·후속 시안 몫이다(ReviewQueueFilterDropdown이 8/7에 같은 방식으로 처리한 선례).',
+        '지표 카드를 누르면 아래 표에 같은 이름의 필터가 걸린다(사용자 확정 8/14). 매핑과 술어는 순수 모듈 dashboardFilters가 갖고 unit이 지킨다 — 카드·드롭다운이 같은 필터 자리를 놓고 서로를 덮어쓴다.',
+        '필터 축은 한 번에 하나만 걸린다. 축을 겹쳐 거는 계약은 시안에 없어 만들지 않았고, 해제 경로는 시안에 있는 "필터 초기화"뿐이다.',
+        '검색은 제목 대조다 — 본문·태그 검색은 계약이 없다. 시안이 검색창을 그려 둔 이상 죽은 입력으로 두지 않는 선에서 최소로 붙였다.',
         '표 푸터 우측의 같은 페이지 크기 컨트롤은 렌더하지 않는다 — 레이어명이 "Page Size (중복?)"이라 디자이너 본인이 중복을 의심하고 있다.',
       ],
       tokenNotes: [
@@ -88,23 +91,52 @@ export const Default: Story = {
     await expect(canvas.getByText('결제 승인 실패 시 재시도 정책')).toBeInTheDocument();
     await expect(canvas.getByText('계정 삭제 요청과 보관 기간')).toBeInTheDocument();
 
-    // 필터 바 4칩 + 초기화.
-    await expect(canvas.getByRole('button', { name: /담당자/ })).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: /상태/ })).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: /생성일/ })).toBeInTheDocument();
+    // 필터 바 4칩 + 초기화. 지표 카드도 버튼이라 축 칩은 이름 완전일치로 집는다
+    // ("담당자 미지정" 카드가 /담당자/에 함께 걸린다).
+    await expect(canvas.getByRole('button', { name: '담당자' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: '상태' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: '생성일' })).toBeInTheDocument();
     await expect(canvas.getByPlaceholderText('검색어를 입력하세요.')).toBeInTheDocument();
 
     // 정렬 칩만 선택 톤이다 — 나머지 칩과 배경이 갈려야 한다.
     const sortChip = canvas.getByRole('button', { name: /최근 변경 순/ });
-    const assigneeChip = canvas.getByRole('button', { name: /담당자/ });
+    const assigneeChip = canvas.getByRole('button', { name: '담당자' });
     await expect(sortChip).toHaveAttribute('data-selected', 'true');
     await expect(getComputedStyle(sortChip).backgroundColor).not.toBe(getComputedStyle(assigneeChip).backgroundColor);
 
-    await userEvent.click(assigneeChip);
-    await expect(args.onFilterClick).toHaveBeenCalledWith('assignee');
-
     await userEvent.click(canvas.getByText('결제 승인 실패 시 재시도 정책'));
     await expect(args.onDocumentClick).toHaveBeenCalledWith('doc-payment-retry');
+  },
+};
+
+/** 지표 카드 클릭 → 아래 표가 좁혀지고 해당 축 칩이 "축: 값"으로 켜진다. */
+export const StatCardFiltersTable: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const rowCount = () => canvas.getAllByRole('button').filter((el) => el.querySelector('.text-heading-small')).length;
+
+    const before = rowCount();
+    const statsGrid = canvasElement.querySelector('div.grid') as HTMLElement;
+
+    // "검토 대기" 카드를 누르면 상태 축이 켜진다.
+    await userEvent.click(within(statsGrid).getByText('검토 대기'));
+
+    // 활성화되면 칩 이름이 "상태: 검토 대기"로 바뀐다 — 접두사로 집는다.
+    const statusChip = canvas.getByRole('button', { name: /^상태/ });
+    // 두 조각은 flex gap으로 벌어져 있어 문자열에는 공백이 없다.
+    await expect(statusChip).toHaveTextContent(/상태:\s*검토 대기/);
+    await expect(statusChip).toHaveAttribute('data-selected', 'true');
+
+    // 표가 실제로 좁혀졌고, 남은 행은 전부 검토 대기다.
+    const after = rowCount();
+    await expect(after).toBeLessThan(before);
+    await expect(canvas.getAllByText('검토 대기').length).toBeGreaterThan(1);
+    await expect(canvas.queryByText('검토 완료')).toBeNull();
+
+    // 초기화하면 원래 목록으로 돌아온다.
+    await userEvent.click(canvas.getByRole('button', { name: /필터 초기화/ }));
+    await expect(canvas.getByRole('button', { name: '상태' })).toHaveAttribute('data-selected', 'false');
+    await expect(rowCount()).toBe(before);
   },
 };
 

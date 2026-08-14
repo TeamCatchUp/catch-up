@@ -6,6 +6,8 @@ import type { ReviewStatCardData } from '../../types/llmWikiModel';
 
 interface ReviewStatCardProps {
   stat: ReviewStatCardData;
+  /** 주면 카드가 버튼이 된다 — 누르면 소비처가 아래 표에 같은 이름의 필터를 건다. */
+  onClick?: (statId: string) => void;
 }
 
 /**
@@ -18,13 +20,13 @@ const ILLUSTRATION_BY_STAT_ID: Record<string, typeof IconStatPendingReview> = {
   'stat-unassigned': IconStatUnassigned,
 };
 
-export default function ReviewStatCard({ stat }: ReviewStatCardProps) {
+export default function ReviewStatCard({ stat, onClick }: ReviewStatCardProps) {
   const Illustration = ILLUSTRATION_BY_STAT_ID[stat.id];
 
   // 폭·높이를 고정하지 않는다 — 슬롯이 폭을 주고 높이는 내용물의 결과값이다.
-  return (
-    <div className="border-line-normal-neutral flex items-stretch overflow-clip rounded-xl border">
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5 px-5 py-4">
+  const content = (
+    <>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5 px-5 py-4 text-left">
         {/* 타이포 토큰이 weight까지 들고 있어 font-*를 덧붙이지 않는다 */}
         <span className="text-body-small text-text-normal-alternative truncate">{stat.label}</span>
         <span className="text-heading-xlarge text-text-normal-normal truncate">{stat.count}</span>
@@ -33,6 +35,18 @@ export default function ReviewStatCard({ stat }: ReviewStatCardProps) {
       <div className="bg-fill-normal-strong flex w-25 shrink-0 items-center justify-center self-stretch">
         {Illustration && <Illustration aria-hidden className="h-full w-full" />}
       </div>
-    </div>
+    </>
+  );
+
+  const shellClass = 'border-line-normal-neutral flex items-stretch overflow-clip rounded-xl border';
+
+  // 핸들러가 없으면 버튼이 아니다 — 누를 곳처럼 보이게 두지 않는다(NavTree 정적 표시형 선례).
+  // 선택된 카드의 시각은 시안에 없어 넣지 않았다 — 활성 표시는 아래 필터 칩이 맡는다.
+  if (!onClick) return <div className={shellClass}>{content}</div>;
+
+  return (
+    <button type="button" onClick={() => onClick(stat.id)} className={`${shellClass} w-full cursor-pointer`}>
+      {content}
+    </button>
   );
 }

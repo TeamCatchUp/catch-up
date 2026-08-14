@@ -1,33 +1,100 @@
 'use client';
 
-import type { ComponentType, SVGProps } from 'react';
+import type { ComponentProps, ComponentType, ReactNode, SVGProps } from 'react';
 
 import IconAlign from '@/public/icons/icon/align.svg';
 import IconCalendar from '@/public/icons/icon/calendar.svg';
 import IconCancelSmall from '@/public/icons/icon/cancel_small.svg';
 import IconDropdownDown from '@/public/icons/icon/dropdown_down.svg';
 import IconPerson from '@/public/icons/icon/person.svg';
+import IconPersonFilled from '@/public/icons/icon/person_filled.svg';
 import IconProgress from '@/public/icons/icon/progress.svg';
 import IconSearch from '@/public/icons/icon/search_300.svg';
 import { Chip } from '@/shared/components/ui/chips';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/components/ui/dropdown-menu';
 
-/** 필터 축. 메뉴 시안이 없어 칩은 트리거까지만이고 열림 내용은 소비처 몫이다. */
+import type { KnownDocumentStatus } from '../../types/llmWikiModel';
+import DocumentStatusBadge from '../document/DocumentStatusBadge';
+import ReviewQueueFilterSearchPanel, {
+  type ReviewQueueFilterOption,
+} from '../review-queue/ReviewQueueFilterSearchPanel';
+import { DASHBOARD_STATUS_OPTIONS } from './dashboardFilters';
+
+/** 필터 축. 생성일은 캘린더 시안이 별도라 아직 트리거까지만이다. */
 export type DashboardFilterId = 'assignee' | 'status' | 'created-at';
-
-const FILTER_CHIPS: readonly { id: DashboardFilterId; label: string; Icon: ComponentType<SVGProps<SVGSVGElement>> }[] = [
-  { id: 'assignee', label: '담당자', Icon: IconPerson },
-  { id: 'status', label: '상태', Icon: IconProgress },
-  { id: 'created-at', label: '생성일', Icon: IconCalendar },
-];
 
 /** 칩 기하는 시안값이고 색은 shared Chip의 square 변형을 그대로 쓴다. */
 const CHIP_CLASS = 'max-w-45 min-w-9 gap-2 px-2.5';
 
+interface ChipLabelProps {
+  axisLabel: string;
+  valueLabel?: string;
+}
+
+/** 활성 칩은 "축: 값"으로 적힌다 — 축만 남기면 담당자 축의 두 값이 구분되지 않는다. */
+function ChipLabel({ axisLabel, valueLabel }: ChipLabelProps) {
+  if (!valueLabel) return <>{axisLabel}</>;
+
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <span className="shrink-0">{axisLabel}:</span>
+      <span className="min-w-0 flex-1 truncate">{valueLabel}</span>
+    </span>
+  );
+}
+
+type FilterChipProps = ComponentProps<typeof Chip> & {
+  axisLabel: string;
+  valueLabel?: string;
+  Icon: ComponentType<SVGProps<SVGSVGElement>>;
+};
+
+/** rest를 그대로 넘긴다 — 드롭다운 트리거로 쓸 때 Radix가 얹는 ref·aria가 여기서 끊기면 메뉴가 열리지 않는다. */
+function FilterChip({ axisLabel, valueLabel, Icon, ...rest }: FilterChipProps) {
+  return (
+    <Chip
+      {...rest}
+      variant="square"
+      selected={Boolean(valueLabel)}
+      leadingIcon={<Icon />}
+      trailingIcon={<IconDropdownDown />}
+      className={CHIP_CLASS}
+    >
+      <ChipLabel axisLabel={axisLabel} valueLabel={valueLabel} />
+    </Chip>
+  );
+}
+
+/** 드롭다운 카드는 축마다 폭만 다르고 나머지 기하는 같다. */
+function FilterDropdown({ trigger, width, children }: { trigger: ReactNode; width: string; children: ReactNode }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className={`${width} rounded-xl`}>
+        {children}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 interface DashboardFilterBarProps {
-  /** 정렬 칩 라벨. 옵션 목록 시안이 없어 현재값만 표시한다. */
+  /** 정렬 칩 라벨. 옵션 목록 시안이 별도라 아직 현재값만 표시한다. */
   sortLabel: string;
+  /** 활성 필터 — 해당 축 칩이 선택 톤이 되고 "축: 값"으로 표기된다. */
+  activeAxis?: DashboardFilterId | null;
+  activeValueLabel?: string;
+  /** 담당자 축 옵션과 현재 선택. 검토 큐와 같은 검색 패널을 쓴다. */
+  assigneeOptions: readonly ReviewQueueFilterOption[];
+  selectedAssigneeIds: readonly string[];
+  onAssigneeToggle: (optionId: string) => void;
+  onStatusSelect: (status: KnownDocumentStatus) => void;
   onSearchChange?: (keyword: string) => void;
-  onFilterClick?: (filterId: DashboardFilterId) => void;
+  onCreatedAtClick?: () => void;
   onSortClick?: () => void;
   onClearFilters?: () => void;
 }
@@ -35,11 +102,19 @@ interface DashboardFilterBarProps {
 /** 대시보드 문서 표 위의 검색·필터 바. 축 목록은 시안 실재 3종으로 고정이다. */
 export default function DashboardFilterBar({
   sortLabel,
+  activeAxis,
+  activeValueLabel,
+  assigneeOptions,
+  selectedAssigneeIds,
+  onAssigneeToggle,
+  onStatusSelect,
   onSearchChange,
-  onFilterClick,
+  onCreatedAtClick,
   onSortClick,
   onClearFilters,
 }: DashboardFilterBarProps) {
+  const valueOf = (axis: DashboardFilterId) => (activeAxis === axis ? activeValueLabel : undefined);
+
   return (
     <div className="border-line-normal-neutral bg-fill-normal-assistive flex flex-col gap-3 rounded-xl border p-5">
       {/* 검색창 — 공용 Input에는 아이콘 슬롯이 없어 같은 토큰으로 직접 조립한다 */}
@@ -56,20 +131,43 @@ export default function DashboardFilterBar({
 
       <div className="flex items-center gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          {FILTER_CHIPS.map(({ id, label, Icon }) => (
-            <Chip
-              key={id}
-              variant="square"
-              onClick={() => onFilterClick?.(id)}
-              leadingIcon={<Icon />}
-              trailingIcon={<IconDropdownDown />}
-              className={CHIP_CLASS}
-            >
-              {label}
-            </Chip>
-          ))}
+          {/* 담당자 — 검토 큐와 같은 검색 멀티셀렉트 패널(시안 노드도 같은 구조다) */}
+          <FilterDropdown
+            width="w-75"
+            trigger={<FilterChip axisLabel="담당자" valueLabel={valueOf('assignee')} Icon={IconPerson} />}
+          >
+            <div onKeyDown={(event) => event.stopPropagation()}>
+              <ReviewQueueFilterSearchPanel
+                options={assigneeOptions}
+                selectedIds={selectedAssigneeIds}
+                onToggle={onAssigneeToggle}
+                placeholder="담당자 검색"
+                OptionIcon={IconPersonFilled}
+              />
+            </div>
+          </FilterDropdown>
 
-          {/* 정렬 칩만 selected 톤이다 — 항상 정렬이 걸려 있기 때문 */}
+          {/* 상태 — 옵션이 배지 그 자체다. 하나만 고를 수 있고 해제는 "필터 초기화"가 맡는다 */}
+          <FilterDropdown
+            width="w-62.5"
+            trigger={<FilterChip axisLabel="상태" valueLabel={valueOf('status')} Icon={IconProgress} />}
+          >
+            {DASHBOARD_STATUS_OPTIONS.map((status) => (
+              <DropdownMenuItem key={status} onSelect={() => onStatusSelect(status)} className="h-10">
+                <DocumentStatusBadge status={status} />
+              </DropdownMenuItem>
+            ))}
+          </FilterDropdown>
+
+          {/* 생성일 — 캘린더 시안이 별도 구획이라 아직 콜백만 올려보낸다 */}
+          <FilterChip
+            axisLabel="생성일"
+            valueLabel={valueOf('created-at')}
+            Icon={IconCalendar}
+            onClick={onCreatedAtClick}
+          />
+
+          {/* 정렬 칩만 항상 선택 톤이다 — 정렬은 늘 걸려 있다 */}
           <Chip
             variant="square"
             selected

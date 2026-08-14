@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
+import { REVIEW_QUEUE_ASSIGNEE_OPTIONS } from '../../fixtures/llmWikiFixtures';
 import DashboardFilterBar from './DashboardFilterBar';
 
 const meta = {
@@ -10,8 +11,12 @@ const meta = {
   tags: ['autodocs'],
   args: {
     sortLabel: '최근 변경 순',
+    assigneeOptions: REVIEW_QUEUE_ASSIGNEE_OPTIONS,
+    selectedAssigneeIds: [],
+    onAssigneeToggle: fn(),
+    onStatusSelect: fn(),
     onSearchChange: fn(),
-    onFilterClick: fn(),
+    onCreatedAtClick: fn(),
     onSortClick: fn(),
     onClearFilters: fn(),
   },
@@ -24,32 +29,38 @@ const meta = {
       dataProfile: 'static',
       designSource: 'figma',
       figma: {
-        url: 'https://www.figma.com/design/7UwupbVvmHkElmP2OBJQio/Design-System?node-id=17681-153545',
+        url: 'https://www.figma.com/design/7UwupbVvmHkElmP2OBJQio/Design-System?node-id=18116-58674',
         fileKey: '7UwupbVvmHkElmP2OBJQio',
-        nodeId: '17681:153545',
+        nodeId: '18116:58674',
       },
-      viewport: { width: 1040, height: 168 },
-      states: ['default', 'narrow-slot'],
+      viewport: { width: 1040, height: 460 },
+      states: ['default', 'active-status', 'status-dropdown', 'assignee-dropdown', 'narrow-slot'],
       reuseNotes: [
-        '필터 칩은 shared Chip(variant=square)이다 — 미선택 토큰(흰 배경·Line/Normal/Neutral·Text/Normal/Normal)과 선택 토큰(Fill/Primary/Normal/Assistive·Line/Primary/Normal·Text/Primary/Normal)이 시안과 그대로 일치해 새 칩을 만들지 않았다. 시안 gap 8·padding 10만 className으로 덮는다.',
-        '검색창만 직접 조립했다 — 공용 Input에 아이콘 슬롯이 없고, 시안 배경(Fill/Normal/Strong)·테두리(Line/Normal/Assistive)가 Input의 두 size 어느 쪽과도 다르다.',
-        'align·progress·calendar·person·search_300·cancel_small·dropdown_down 전부 기존 에셋이고 Figma 컴포넌트명과 1:1 — 신규 export 없음.',
+        '필터 칩은 shared Chip(variant=square)이다 — 미선택·선택 토큰이 시안과 그대로 일치해 새 칩을 만들지 않았다. 활성 칩의 선택 톤(Fill/Primary/Normal/Assistive·Line/Primary/Normal·Text/Primary/Normal)이 시안 18183:139291과 같다.',
+        '상태 드롭다운의 옵션은 DocumentStatusBadge 그 자체다 — 시안 18127:61560의 옵션이 배지(violet/green + dash-circle/verified + px8 py4 radius8)와 규격까지 같아 배지를 그대로 넣었다.',
+        '담당자 드롭다운은 검토 큐의 ReviewQueueFilterSearchPanel을 그대로 쓴다 — 시안 노드(18183:137504·137516)가 검토 큐(18112:47410·47865)와 같은 구조다. 사용자 확인 완료(8/14).',
+        '검색창만 직접 조립했다 — 공용 Input에 아이콘 슬롯이 없고 시안 배경·테두리가 Input의 두 size와 다르다.',
       ],
       dataNotes: [
-        '축 3종(담당자·상태·생성일)은 시안 실재분으로 컴포넌트가 들고 있다 — 화면 하나에만 쓰이고 시안이 고정한 목록이라 props로 열지 않았다. 늘어나면 그때 연다.',
-        '칩의 드롭다운 메뉴는 시안에 없다 — 트리거까지만 구현하고 콜백만 올려보낸다(ReviewQueueFilterDropdown이 8/7에 같은 방식으로 처리한 선례).',
-        '검색 결과·필터 적용 결과는 이 컴포넌트의 관심사가 아니다 — 입력만 올려보내고 목록은 페이지가 갖는다.',
+        '축 3종(담당자·상태·생성일)은 시안이 고정한 목록이라 컴포넌트가 들고 있다. 옵션 데이터(담당자)는 props다.',
+        '상태 옵션은 검토 대기·검토 완료 2종이고 하나만 고를 수 있다 — 시안 메모 "하나 만 선택 가능하게(기본이 전체)". 전체로 되돌리는 경로는 "필터 초기화"뿐이라 옵션에 전체를 넣지 않았다.',
+        '생성일은 캘린더 시안이 별도 구획(18183:138806 Date picker 580×360)이라 이번 범위에서 제외했다 — 칩은 콜백만 올려보낸다.',
+        '정렬 드롭다운(18183:139128, 2옵션)도 이번 범위 밖이다 — 현재값만 표시한다.',
       ],
       tokenNotes: [
         '바 컨테이너: 배경 Fill/Normal/Assistive(흰색) + Line/Normal/Neutral 테두리 + radius 12 + padding 20 + gap 12.',
-        '검색창: Fill/Normal/Strong 배경 + Line/Normal/Assistive 1px 테두리 + radius 8 + px 12 py 8, min-h 40. placeholder Text/Normal/Assistive.',
-        '칩: h 36 + radius 8 + px 10 + gap 8, 아이콘 20. 정렬 칩만 선택 톤이다.',
-        '필터 초기화: heading(sb)/small + Text/Normal/Alternative, 아이콘 cancel_small 20 + gap 6, h 36.',
+        '검색창: Fill/Normal/Strong 배경 + Line/Normal/Assistive 1px 테두리 + radius 8 + px 12 py 8, min-h 40.',
+        '칩: h 36 + radius 8 + px 10 + gap 8, 아이콘 20. 활성 칩은 "축: 값" 두 조각이고 축 라벨은 shrink-0, 값이 폭을 흡수한다.',
+        '드롭다운 카드: radius 12(래퍼 기본 16 오버라이드) + Shadow/Dropdown menu. 폭은 상태 250(w-62.5)·담당자 300(w-75)으로 축마다 다르다.',
       ],
       layoutNotes: [
         '폭을 갖지 않는다 — 1040은 대시보드 콘텐츠 열의 값이고 슬롯이 준다.',
         '폭 흡수는 칩 묶음 하나다(min-w-0 flex-1). 초기화 버튼은 shrink-0이라 좁아져도 밀리지 않는다.',
-        '칩 상한 180(max-w-45)·하한 36(min-w-9)은 시안 고정값이고, 긴 정렬 라벨은 그 안에서 잘린다.',
+        '칩 상한 180(max-w-45)·하한 36(min-w-9)은 시안 고정값이고, 긴 값은 그 안에서 잘린다.',
+      ],
+      interactionNotes: [
+        '드롭다운은 포털로 렌더되므로 play는 `canvasElement.ownerDocument.body` 스코프로 찾는다.',
+        '담당자 패널은 검색 입력을 갖는다 — Radix 메뉴의 타이핑 탐색이 가로채지 않도록 콘텐츠 안에서 키를 끊는다(검토 큐와 동일).',
       ],
     }),
   },
@@ -71,22 +82,71 @@ export const Default: Story = {
     await expect(canvas.getAllByRole('button')).toHaveLength(5);
     await expect(assigneeChip.getBoundingClientRect().height).toBe(36);
 
-    // 정렬 칩만 선택 톤이다 — 나머지와 배경·테두리가 갈려야 한다.
-    await expect(sortChip).toHaveAttribute('data-selected', 'true');
+    // 필터가 없으면 축 칩은 전부 미선택이고 정렬 칩만 선택 톤이다.
     await expect(assigneeChip).toHaveAttribute('data-selected', 'false');
-    await expect(getComputedStyle(sortChip).backgroundColor).not.toBe(getComputedStyle(assigneeChip).backgroundColor);
-
-    await userEvent.click(assigneeChip);
-    await expect(args.onFilterClick).toHaveBeenCalledWith('assignee');
-
-    await userEvent.click(sortChip);
-    await expect(args.onSortClick).toHaveBeenCalled();
-
-    await userEvent.type(canvas.getByPlaceholderText('검색어를 입력하세요.'), '결제');
-    await expect(args.onSearchChange).toHaveBeenCalled();
+    await expect(sortChip).toHaveAttribute('data-selected', 'true');
 
     await userEvent.click(canvas.getByRole('button', { name: /필터 초기화/ }));
     await expect(args.onClearFilters).toHaveBeenCalled();
+  },
+};
+
+/** 활성 필터. 해당 축 칩만 선택 톤이 되고 "축: 값"으로 적힌다. */
+export const ActiveStatus: Story = {
+  args: { activeAxis: 'status', activeValueLabel: '검토 대기' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    const statusChip = canvas.getByRole('button', { name: /^상태/ });
+    await expect(statusChip).toHaveAttribute('data-selected', 'true');
+    // 두 조각은 flex gap으로 벌어져 있어 문자열에는 공백이 없다.
+    await expect(statusChip).toHaveTextContent(/상태:\s*검토 대기/);
+
+    // 다른 축은 켜지지 않는다 — 활성 축은 하나다.
+    await expect(canvas.getByRole('button', { name: /담당자/ })).toHaveAttribute('data-selected', 'false');
+  },
+};
+
+/** 상태 드롭다운. 옵션은 배지 그 자체이고 2종뿐이다. */
+export const StatusDropdown: Story = {
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    await userEvent.click(canvas.getByRole('button', { name: /상태/ }));
+
+    const items = await body.findAllByRole('menuitem');
+    await expect(items).toHaveLength(2);
+    await expect(body.getByText('검토 대기')).toBeInTheDocument();
+    await expect(body.getByText('검토 완료')).toBeInTheDocument();
+
+    // 카드 폭은 250 고정이다.
+    await expect(window.getComputedStyle(body.getByRole('menu')).width).toBe('250px');
+
+    await userEvent.click(body.getByText('검토 완료'));
+    await expect(args.onStatusSelect).toHaveBeenCalledWith('reviewed');
+  },
+};
+
+/** 담당자 드롭다운. 검토 큐와 같은 검색 멀티셀렉트 패널이 열린다. */
+export const AssigneeDropdown: Story = {
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    await userEvent.click(canvas.getByRole('button', { name: /담당자/ }));
+
+    const input = await body.findByPlaceholderText('담당자 검색');
+    // Radix 메뉴가 타이핑을 가로채면 입력값이 남지 않는다.
+    await userEvent.type(input, '박서');
+    await expect(input).toHaveValue('박서');
+    await expect(body.getAllByRole('option')).toHaveLength(1);
+
+    // 카드 폭은 300 고정이다(상태 250과 다른 값).
+    await expect(window.getComputedStyle(input.closest('[role=menu]') as HTMLElement).width).toBe('300px');
+
+    await userEvent.click(body.getByText('직원10'));
+    await expect(args.onAssigneeToggle).toHaveBeenCalledWith('u-seoyeon');
   },
 };
 
@@ -104,14 +164,11 @@ export const NarrowSlot: Story = {
     const canvas = within(canvasElement);
     const slot = canvasElement.querySelector('div.w-160') as HTMLElement;
 
-    // 바가 슬롯을 넘지 않는다.
     await expect(slot.scrollWidth).toBeLessThanOrEqual(slot.clientWidth);
 
-    // 긴 정렬 라벨은 칩 상한 180 안에서 잘린다.
     const sortChip = canvas.getByRole('button', { name: /최근 변경 순으로/ });
     await expect(sortChip.getBoundingClientRect().width).toBeLessThanOrEqual(180);
 
-    // 초기화 버튼은 좁아져도 온전히 남는다.
     await expect(canvas.getByRole('button', { name: /필터 초기화/ })).toBeVisible();
   },
 };

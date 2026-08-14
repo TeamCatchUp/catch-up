@@ -29,6 +29,11 @@ const SIZE_CLASS: Record<DocumentStatusBadgeSize, { badge: string; icon: string 
   sm: { badge: 'text-body-xsmall gap-1 rounded-md2 px-1.5 py-0.5', icon: 'size-4.5 shrink-0' },
 };
 
+/** 라벨 단일 공급원. 배지 밖(필터 칩 등)에서 같은 문자열이 필요할 때 쓴다. */
+export function getDocumentStatusLabel(status: DocumentStatus): string | undefined {
+  return STATUS_PRESET[status as KnownDocumentStatus]?.label;
+}
+
 interface DocumentStatusBadgeProps {
   status: DocumentStatus;
   size?: DocumentStatusBadgeSize;
