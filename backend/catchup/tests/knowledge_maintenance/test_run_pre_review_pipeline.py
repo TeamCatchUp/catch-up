@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from datetime import timezone
 from types import SimpleNamespace
@@ -230,11 +231,15 @@ async def test_pipeline_reports_partial_failures_and_propagates_clock(
         # 이미 결정된 동일 멱등 키는 정상적인 no-op이며 상태를 낮추지 않는다.
         return ArtifactCompileResult(proposals_conflicted=1)
 
+    def resolve_candidates(**_: object) -> ResolutionResult:
+        asyncio.run(asyncio.sleep(0))
+        return ResolutionResult()
+
     monkeypatch.setattr(pipeline, "_run_extraction", run_extraction)
     monkeypatch.setattr(
         pipeline,
         "resolve_entity_candidates",
-        lambda **_: ResolutionResult(),
+        resolve_candidates,
     )
     monkeypatch.setattr(pipeline, "resolve_claim_conflicts", resolve_conflicts)
     monkeypatch.setattr(pipeline, "compile_entity_artifacts", compile_artifacts)

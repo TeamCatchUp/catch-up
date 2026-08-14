@@ -10,6 +10,8 @@ Stage 1부터 Stage 5까지의 실행 순서와 ``observation.ready`` event 정�
 
 from __future__ import annotations
 
+import asyncio
+
 from collections.abc import Callable
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -238,7 +240,8 @@ async def _execute_pre_review_pipeline(
         clock=clock,
     )
 
-    resolution = resolve_entity_candidates(
+    resolution = await asyncio.to_thread(
+        resolve_entity_candidates,
         workspace_id=workspace_id,
         judge=judge,
         uow=uow_factory(),
