@@ -6,8 +6,7 @@ import { usePathname } from 'next/navigation';
 import InboxPanel from '@/shared/components/layout/panels/InboxPanel';
 import QuestionsHistoryPanel from '@/shared/components/layout/panels/QuestionsHistoryPanel';
 import SettingsPanel from '@/shared/components/layout/panels/SettingsPanel';
-import SideNavBar from '@/shared/components/layout/sideNavBar/SideNavBar';
-import WikiSideNav from '@/shared/components/layout/sideNavBar/WikiSideNav';
+import AppSideNav from '@/shared/components/layout/sideNavBar/AppSideNav';
 import ServiceNoticeMount from '@/shared/components/notice/ServiceNoticeMount';
 import FloatingActionButton from '@/shared/components/ui/floating-action-button';
 import Toast from '@/shared/components/ui/toast';
@@ -25,8 +24,6 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
   const { isLoading } = useCurrentUser();
   const { activePanel, isSidebarOpen, setActivePanel, setLastSettingsPath } = useSidebarStore();
   const isSettingsRoute = pathname.startsWith('/mypage') || pathname.startsWith('/admin');
-  // LLM Wiki는 리디자인된 SNB를 쓴다. 나머지 화면은 메뉴 구성이 미결이라 기존 것을 유지한다
-  const isWikiRoute = pathname.startsWith('/llm-wiki');
 
   // mypage/admin 경로 진입 시 설정 패널 열기 + 경로 저장, 이탈 시 패널 닫기
   useEffect(() => {
@@ -60,7 +57,11 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
           설정 경로에서는 전역 SNB를 렌더하지 않는다.
           신규 IA에서 SettingsPanel이 그 자리를 대신하고, 복귀는 '메인으로 가기' 버튼이 맡는다.
         */}
-        {!isSettingsRoute && <aside className="shrink-0">{isWikiRoute ? <WikiSideNav /> : <SideNavBar />}</aside>}
+        {!isSettingsRoute && (
+          <aside className="shrink-0">
+            <AppSideNav />
+          </aside>
+        )}
         <div
           className={cn(
             'z-panel absolute top-0 h-full overflow-hidden transition-[width,left] duration-300 ease-out',
