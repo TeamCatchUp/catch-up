@@ -1,6 +1,7 @@
 import IconAdd from '@/public/icons/icon/add_small.svg';
 import IconProfile from '@/public/icons/icon/profile.svg';
 import IconSettings from '@/public/icons/icon/settings.svg';
+import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
 import { cn } from '@/shared/utils/cn';
 
 export interface SnbFooterProps {
@@ -10,6 +11,8 @@ export interface SnbFooterProps {
   onNewClick?: () => void;
   onProfileClick?: () => void;
   onSettingsClick?: () => void;
+  /** 전달 시 프로필 버튼이 이 내용을 여는 트리거가 된다. 메뉴 항목은 소비처가 안다 */
+  profileMenu?: React.ReactNode;
   className?: string;
 }
 
@@ -23,8 +26,23 @@ export default function SnbFooter({
   onNewClick,
   onProfileClick,
   onSettingsClick,
+  profileMenu,
   className,
 }: SnbFooterProps) {
+  const profileButton = (
+    <button
+      type="button"
+      onClick={onProfileClick}
+      className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
+    >
+      <IconProfile aria-hidden className="border-line-normal-assistive size-9 shrink-0 rounded-xl border" />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-body-small text-text-normal-normal truncate">{userName}</span>
+        <span className="text-label-xsmall text-text-normal-alternative truncate">{userRole}</span>
+      </span>
+    </button>
+  );
+
   return (
     <div className={cn('border-line-normal-neutral flex flex-col gap-1 border-t px-2 pt-2.5', className)}>
       <div className="flex items-center justify-center px-1">
@@ -39,17 +57,14 @@ export default function SnbFooter({
       </div>
 
       <div className="hover:bg-fill-normal-interaction-hover flex items-center gap-3 rounded-lg px-2.5 py-0.5 transition-colors">
-        <button
-          type="button"
-          onClick={onProfileClick}
-          className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
-        >
-          <IconProfile aria-hidden className="border-line-normal-assistive size-9 shrink-0 rounded-xl border" />
-          <span className="flex min-w-0 flex-1 flex-col">
-            <span className="text-body-small text-text-normal-normal truncate">{userName}</span>
-            <span className="text-label-xsmall text-text-normal-alternative truncate">{userRole}</span>
-          </span>
-        </button>
+        {profileMenu ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>{profileButton}</DropdownMenuTrigger>
+            {profileMenu}
+          </DropdownMenu>
+        ) : (
+          profileButton
+        )}
         <button
           type="button"
           aria-label="설정"

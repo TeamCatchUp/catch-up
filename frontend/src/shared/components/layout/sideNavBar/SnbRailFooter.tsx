@@ -1,5 +1,6 @@
 import IconProfile from '@/public/icons/icon/profile.svg';
 import IconSettings from '@/public/icons/icon/settings.svg';
+import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
 import { cn } from '@/shared/utils/cn';
 
 export interface SnbRailFooterProps {
@@ -9,6 +10,8 @@ export interface SnbRailFooterProps {
   hasSettingsNotification?: boolean;
   onSettingsClick?: () => void;
   onProfileClick?: () => void;
+  /** 전달 시 프로필 버튼이 이 내용을 여는 트리거가 된다. 메뉴 항목은 소비처가 안다 */
+  profileMenu?: React.ReactNode;
   className?: string;
 }
 
@@ -21,8 +24,20 @@ export default function SnbRailFooter({
   hasSettingsNotification = false,
   onSettingsClick,
   onProfileClick,
+  profileMenu,
   className,
 }: SnbRailFooterProps) {
+  const profileButton = (
+    <button
+      type="button"
+      aria-label={userName}
+      onClick={onProfileClick}
+      className="flex size-9 cursor-pointer items-center justify-center"
+    >
+      <IconProfile aria-hidden className="border-line-normal-assistive size-9 rounded-xl border" />
+    </button>
+  );
+
   return (
     <div className={cn('flex flex-col items-center gap-4', className)}>
       <button
@@ -39,14 +54,14 @@ export default function SnbRailFooter({
           />
         )}
       </button>
-      <button
-        type="button"
-        aria-label={userName}
-        onClick={onProfileClick}
-        className="flex size-9 cursor-pointer items-center justify-center"
-      >
-        <IconProfile aria-hidden className="border-line-normal-assistive size-9 rounded-xl border" />
-      </button>
+      {profileMenu ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>{profileButton}</DropdownMenuTrigger>
+          {profileMenu}
+        </DropdownMenu>
+      ) : (
+        profileButton
+      )}
     </div>
   );
 }
