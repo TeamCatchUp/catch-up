@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
+from datetime import datetime
+from datetime import timezone
+from types import SimpleNamespace
+
 import pytest
 
 from catchup.utils import scheduler
@@ -23,6 +28,19 @@ class _FakeScheduler:
     def add_job(self, func, **kwargs) -> None:
         self.jobs.append({"func": func, **kwargs})
 
+    def get_job(self, job_id: str):
+        return next((job for job in self.jobs if job["id"] == job_id), None)
+
+    def reschedule_job(self, job_id: str, **kwargs):
+        job = self.get_job(job_id)
+        if job is None:
+            raise LookupError(job_id)
+        job["rescheduled"] = kwargs
+        return job
+
+    def remove_job(self, job_id: str) -> None:
+        self.jobs = [job for job in self.jobs if job["id"] != job_id]
+
     def start(self) -> None:
         self.started = True
 
@@ -36,6 +54,12 @@ def _reset_scheduler(monkeypatch):
     monkeypatch.setattr(scheduler, "_scheduler", None)
     monkeypatch.setattr(scheduler, "AsyncIOScheduler", _FakeScheduler)
     monkeypatch.setattr(scheduler, "CronTrigger", _FakeCronTrigger)
+    monkeypatch.setattr(scheduler, "SessionLocal", lambda: nullcontext(object()))
+    monkeypatch.setattr(
+        scheduler,
+        "list_test_knowledge_maintenance_settings",
+        lambda _db, workspace_id=None: [],
+    )
     yield
     monkeypatch.setattr(scheduler, "_scheduler", None)
     _FakeScheduler.instances.clear()
@@ -84,6 +108,55 @@ def test_vector_store_v2_backfill_sequence_orders_providers() -> None:
         "confluence/page",
         "confluence/blogpost",
     ]
+
+
+def test_scheduler_registers_enabled_knowledge_maintenance_setting(
+    monkeypatch,
+) -> None:
+    setting = SimpleNamespace(
+        id=7,
+        enabled=True,
+        execution_anchor_at=datetime(2026, 8, 15, tzinfo=timezone.utc),
+        interval_minutes=30,
+    )
+    monkeypatch.setattr(
+        scheduler,
+        "list_test_knowledge_maintenance_settings",
+        lambda _db, workspace_id=None: [setting],
+    )
+
+    scheduler.init_scheduler()
+
+    job = _FakeScheduler.instances[0].get_job("test-knowledge-maintenance:7")
+    assert job is not None
+    assert job["func"] is scheduler.run_channel_talk_pre_review_job
+    assert job["trigger"] == "interval"
+    assert job["minutes"] == 30
+    assert job["start_date"] == setting.execution_anchor_at
+    assert job["max_instances"] == 1
+    assert job["coalesce"] is True
+
+
+def test_apply_knowledge_maintenance_schedule_updates_and_removes_job() -> None:
+    fake_scheduler = _FakeScheduler(timezone=scheduler.SEOUL_TZ)
+    scheduler._scheduler = fake_scheduler
+    setting = SimpleNamespace(
+        id=9,
+        enabled=True,
+        execution_anchor_at=datetime(2026, 8, 15, tzinfo=timezone.utc),
+        interval_minutes=15,
+    )
+
+    scheduler.apply_test_knowledge_maintenance_schedule(setting)
+    setting.interval_minutes = 45
+    scheduler.apply_test_knowledge_maintenance_schedule(setting)
+
+    job = fake_scheduler.get_job("test-knowledge-maintenance:9")
+    assert job["rescheduled"]["minutes"] == 45
+
+    setting.enabled = False
+    scheduler.apply_test_knowledge_maintenance_schedule(setting)
+    assert fake_scheduler.get_job("test-knowledge-maintenance:9") is None
 
 
 def test_scheduler_skips_v2_backfill_job_when_flag_is_disabled(monkeypatch) -> None:

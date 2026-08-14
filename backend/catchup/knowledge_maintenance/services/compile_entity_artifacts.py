@@ -31,6 +31,7 @@ proposal을 가리키므로, 저장 전에 그 계약을 이 자리에서 먼저
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from collections.abc import Iterable
 from collections.abc import Mapping
 from collections.abc import Sequence
@@ -130,6 +131,7 @@ def compile_entity_artifacts(
     workspace_id: int,
     vocabulary: ExtractionVocabulary,
     limit: int = 2,
+    clock: Callable[[], datetime] | None = None,
 ) -> ArtifactCompileResult:
     """claim이 많은 entity의 요약 카드를 변경안으로 올린다.
 
@@ -149,7 +151,7 @@ def compile_entity_artifacts(
     skipped = 0
     conflicted = 0
     suppressed = 0
-    now = datetime.now(timezone.utc)
+    now = (clock or _utcnow)()
     with uow:
         sources = uow.artifacts.find_top_entity_nodes(limit=limit)
         claims = uow.knowledge_candidates.find_claim_candidates(
@@ -411,14 +413,10 @@ def _abandon_stale_pending(
     지금 지문과 같은 계류가 있으면 아무것도 접지 않는다. 그 행이 곧
     이번 내용이라 접으면 검토 큐가 이유 없이 비기 때문이다.
     """
-    hashes = {
-        proposal.content_hash
-        for proposal in uow.artifacts.list_pending_proposals()
-        if proposal.artifact_id == artifact_id
-    }
-    if not hashes or content_hash in hashes:
-        return 0
-    return uow.artifacts.abandon_pending_proposals(artifact_id=artifact_id)
+    return uow.artifacts.abandon_pending_proposals(
+        artifact_id=artifact_id,
+        except_content_hash=content_hash,
+    )
 
 
 def _group_claims_by_node(
@@ -793,3 +791,7 @@ def _value_sources(
             )
         )
     return tuple(sources)
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)

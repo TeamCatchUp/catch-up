@@ -16,22 +16,26 @@ from catchup.knowledge_maintenance.contracts.extraction import (
     KnowledgeExtractionRequest,
 )
 from catchup.knowledge_maintenance.domain.observation import MetadataEntity
+from catchup.knowledge_maintenance.ports.extraction import ExtractionAPIError
+from catchup.knowledge_maintenance.ports.extraction import ExtractionContractError
 
 
 class _StubStructuredRunnable:
-    def __init__(self, response: dict[str, Any]) -> None:
+    def __init__(self, response: dict[str, Any] | Exception) -> None:
         self._response = response
         self.rendered_prompt: str | None = None
 
     async def ainvoke(self, prompt: str) -> dict[str, Any]:
         self.rendered_prompt = prompt
+        if isinstance(self._response, Exception):
+            raise self._response
         return self._response
 
 
 class _StubChatModel:
     """with_structured_output만 흉내내는 최소 대역이다."""
 
-    def __init__(self, response: dict[str, Any]) -> None:
+    def __init__(self, response: dict[str, Any] | Exception) -> None:
         self.runnable = _StubStructuredRunnable(response)
 
     def with_structured_output(self, *args: Any, **kwargs: Any):
@@ -125,6 +129,29 @@ async def test_contract_violation_is_reported_instead_of_raising() -> None:
 
     assert batch is None
     assert "subject" in diagnostics.parse_error
+
+
+@pytest.mark.asyncio
+async def test_extract_exposes_contract_and_api_failures_separately() -> None:
+    contract_extractor = StructuredKnowledgeExtractor(
+        _StubChatModel(
+            {
+                "parsed": None,
+                "raw": {"answer": "invalid"},
+                "parsing_error": "subject가 없다",
+            }
+        )
+    )
+    api_extractor = StructuredKnowledgeExtractor(
+        _StubChatModel(TimeoutError("LLM timed out"))
+    )
+
+    with pytest.raises(ExtractionContractError) as captured:
+        await contract_extractor.extract(_request())
+    assert captured.value.raw_output == {"answer": "invalid"}
+    assert "subject" in str(captured.value)
+    with pytest.raises(ExtractionAPIError, match="LLM timed out"):
+        await api_extractor.extract(_request())
 
 
 @pytest.mark.asyncio

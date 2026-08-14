@@ -85,6 +85,8 @@ def ingest_within_transaction(
     source_identity = _to_source_identity(envelope)
     payload_hash = _payload_hash(envelope)
 
+    # TODO(review): SourceVersion만으로 검증할 수 없는 항목이 있는지,
+    # idempotency key를 별도로 유지해야 하는지 재검토한다.
     existing = uow.source_versions.get_by_idempotency_key(
         workspace_id=envelope.workspace_id,
         idempotency_key=envelope.idempotency_key,

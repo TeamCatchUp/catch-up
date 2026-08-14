@@ -14,9 +14,42 @@ ORM 모델을 그대로 내보내지 않고 여기서 한 번 옮겨 담는다. 
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
+from pydantic import field_validator
+
+
+class TestKnowledgeMaintenanceSettingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+    execution_anchor_at: datetime
+    interval_minutes: int = Field(gt=0)
+
+    @field_validator("execution_anchor_at")
+    @classmethod
+    def require_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("execution_anchor_at must include timezone information")
+        return value
+
+
+class TestKnowledgeMaintenanceSettingResponse(BaseModel):
+    id: int
+    workspace_id: int
+    channel_talk_credential_id: int
+    enabled: bool
+    execution_anchor_at: datetime
+    interval_minutes: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TestKnowledgeMaintenanceSettingListResponse(BaseModel):
+    items: list[TestKnowledgeMaintenanceSettingResponse]
 
 
 class ChannelCreateRequest(BaseModel):

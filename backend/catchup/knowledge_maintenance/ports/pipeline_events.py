@@ -30,7 +30,7 @@ class PipelineEventRepository(Protocol):
         """
         ...
 
-    def claim_pending(
+    def list_pending(
         self,
         *,
         workspace_id: int,
@@ -38,10 +38,10 @@ class PipelineEventRepository(Protocol):
         now: datetime,
         limit: int | None = None,
     ) -> tuple[PipelineEvent, ...]:
-        """지금 처리할 수 있는 일을 집는다.
+        """지금 처리할 수 있는 일을 조회한다.
 
         `available_at`이 지난 `pending`만 고른다. 백오프로 미뤄 둔 것은
-        시각이 될 때까지 보이지 않는다.
+        시각이 될 때까지 보이지 않는다. 상태를 바꾸거나 잠그지는 않는다.
         """
         ...
 

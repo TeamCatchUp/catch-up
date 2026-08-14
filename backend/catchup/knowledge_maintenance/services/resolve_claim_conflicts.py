@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from collections.abc import Callable
 from collections.abc import Iterable
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -127,9 +128,10 @@ def resolve_claim_conflicts(
     workspace_id: int,
     vocabulary: ExtractionVocabulary,
     uow: ClaimConflictUnitOfWork,
+    clock: Callable[[], datetime] | None = None,
 ) -> ClaimConflictResult:
     """claim 값의 모순을 찾아 proposal로 남기고 집계를 돌려준다."""
-    now = datetime.now(timezone.utc)
+    now = (clock or _utcnow)()
     with uow:
         claims = uow.knowledge_candidates.find_claim_candidates(
             workspace_id=workspace_id,
@@ -436,3 +438,7 @@ def _json_value(value: object) -> JsonValue:
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
     return str(value)
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)

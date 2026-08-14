@@ -228,6 +228,21 @@ class SqlAlchemySourceVersionRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
+    def get_by_id(
+        self,
+        *,
+        workspace_id: int,
+        source_version_id: uuid.UUID,
+    ) -> SourceVersion | None:
+        """workspace 안에서 SourceVersion 식별자로 찾는다."""
+        row = self._session.scalar(
+            select(SourceVersionRow).where(
+                SourceVersionRow.workspace_id == workspace_id,
+                SourceVersionRow.id == source_version_id,
+            )
+        )
+        return source_version_to_domain(row) if row is not None else None
+
     def get_by_idempotency_key(
         self,
         *,
@@ -303,6 +318,21 @@ class SqlAlchemyObservationRepository:
 
     def __init__(self, session: Session) -> None:
         self._session = session
+
+    def get_by_id(
+        self,
+        *,
+        workspace_id: int,
+        observation_id: uuid.UUID,
+    ) -> StoredObservation | None:
+        """workspace 안에서 Observation 식별자로 찾는다."""
+        row = self._session.scalar(
+            select(ObservationRow).where(
+                ObservationRow.workspace_id == workspace_id,
+                ObservationRow.id == observation_id,
+            )
+        )
+        return observation_to_domain(row) if row is not None else None
 
     def get_by_normalizer(
         self,
@@ -2585,18 +2615,25 @@ class SqlAlchemyArtifactRepository:
         )
         return hashes
 
-    def abandon_pending_proposals(self, *, artifact_id: uuid.UUID) -> int:
-        """문서에 계류 중인 변경안을 모두 접고 접은 수를 돌려준다."""
-        result = self._session.execute(
-            update(KnowledgeArtifactChangeProposalRow)
-            .where(
+    def abandon_pending_proposals(
+        self,
+        *,
+        artifact_id: uuid.UUID,
+        except_content_hash: str | None = None,
+    ) -> int:
+        """문서의 계류안을 접되 지정한 현재 내용은 남긴다."""
+        statement = update(KnowledgeArtifactChangeProposalRow).where(
                 KnowledgeArtifactChangeProposalRow.workspace_id
                 == self._workspace_id,
                 KnowledgeArtifactChangeProposalRow.artifact_id == artifact_id,
                 KnowledgeArtifactChangeProposalRow.status == "pending",
             )
-            .values(status="abandoned")
-        )
+        if except_content_hash is not None:
+            statement = statement.where(
+                KnowledgeArtifactChangeProposalRow.content_hash
+                != except_content_hash
+            )
+        result = self._session.execute(statement.values(status="abandoned"))
         self._session.flush()
         return result.rowcount
 
@@ -3231,7 +3268,7 @@ class SqlAlchemyPipelineEventRepository:
         self._session.flush()
         return _pipeline_event_to_domain(row)
 
-    def claim_pending(
+    def list_pending(
         self,
         *,
         workspace_id: int,
@@ -3239,7 +3276,7 @@ class SqlAlchemyPipelineEventRepository:
         now: datetime,
         limit: int | None = None,
     ) -> tuple[PipelineEvent, ...]:
-        """지금 처리할 수 있는 일을 집는다."""
+        """지금 처리할 수 있는 일을 상태 변경 없이 조회한다."""
         statement = (
             select(PipelineOutboxRow)
             .where(

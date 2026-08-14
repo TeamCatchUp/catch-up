@@ -148,7 +148,7 @@ def _claim(
     now: datetime = SOON,
 ) -> tuple:
     with KnowledgeMaintenanceUnitOfWork(session_factory) as reader:
-        return reader.pipeline_events.claim_pending(
+        return reader.pipeline_events.list_pending(
             workspace_id=workspace_id,
             event_type=PipelineEventType.OBSERVATION_READY,
             now=now,

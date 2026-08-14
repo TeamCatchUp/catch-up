@@ -37,8 +37,6 @@ from catchup.components.llm.constants import LlmProvider
 from catchup.components.llm.constants import ModelCapacity
 from catchup.components.llm.factory import get_llm_service
 from catchup.configs.config import settings
-from catchup.db.models import Observation as ObservationRow
-from catchup.db.models import SourceVersion as SourceVersionRow
 from catchup.evaluation.eval_llm_wiki_extraction import CONTRACT_VERSION
 from catchup.evaluation.eval_llm_wiki_extraction import _grow_vocabulary
 from catchup.evaluation.eval_llm_wiki_extraction import _harvest
@@ -48,9 +46,6 @@ from catchup.knowledge_maintenance.adapters.llm.structured_extractor import (
 )
 from catchup.knowledge_maintenance.adapters.llm.structured_extractor import (
     StructuredKnowledgeExtractor,
-)
-from catchup.knowledge_maintenance.adapters.postgres.mappers import (
-    observation_to_domain,
 )
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
@@ -312,7 +307,7 @@ async def main() -> None:
 
     now = datetime.now(timezone.utc)
     with KnowledgeMaintenanceUnitOfWork(session_factory) as reader:
-        events = reader.pipeline_events.claim_pending(
+        events = reader.pipeline_events.list_pending(
             workspace_id=args.workspace_id,
             event_type=PipelineEventType.OBSERVATION_READY,
             now=now,
@@ -476,21 +471,26 @@ def _observation_of(
     건을 건너뛰며 소리를 낸다 — 사슬에 없는 단계를 몰래 끼워 넣으면
     기준 시각의 출처가 거짓이 된다.
     """
-    session = uow.observations._session  # noqa: SLF001
-    row = session.get(ObservationRow, event.aggregate_id)
-    if row is None:
+    observation = uow.observations.get_by_id(
+        workspace_id=workspace_id,
+        observation_id=event.aggregate_id,
+    )
+    if observation is None:
         return None
-    version = session.get(SourceVersionRow, row.source_version_id)
+    version = uow.source_versions.get_by_id(
+        workspace_id=workspace_id,
+        source_version_id=observation.source_version_id,
+    )
     if version is None:
         logger.error(
             "extraction_source_version_missing",
-            observation_id=str(row.id),
-            source_version_id=str(row.source_version_id),
+            observation_id=str(observation.id),
+            source_version_id=str(observation.source_version_id),
         )
         return None
     return PendingEntry(
         event_id=event.id,
-        observation=observation_to_domain(row),
+        observation=observation,
         source_updated_at=version.source_updated_at,
         observed_at=version.observed_at,
     )

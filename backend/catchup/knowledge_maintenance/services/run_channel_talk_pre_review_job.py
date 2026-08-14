@@ -1,0 +1,216 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
+
+from sqlalchemy import func
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from catchup.components.llm.constants import LlmProvider
+from catchup.components.llm.constants import ModelCapacity
+from catchup.components.llm.factory import get_llm_service
+from catchup.configs.config import settings
+from catchup.connectors.channel_talk.core.client import ChannelTalkCoreApiClient
+from catchup.connectors.channel_talk.credential_loader import (
+    load_channel_talk_connection_by_id,
+)
+from catchup.db.engine import SessionLocal
+from catchup.db.models import SourceVersion as SourceVersionRow
+from catchup.db.test_knowledge_maintenance_settings import (
+    get_test_knowledge_maintenance_setting,
+)
+from catchup.knowledge_maintenance.adapters.connectors.channel_talk.observation_normalizer import (
+    ChannelTalkUserChatNormalizer,
+)
+from catchup.knowledge_maintenance.adapters.connectors.channel_talk.user_chat_poller import (
+    ChannelTalkUserChatPoller,
+)
+from catchup.knowledge_maintenance.adapters.llm.identity_judge import (
+    BedrockIdentityJudge,
+)
+from catchup.knowledge_maintenance.adapters.llm.structured_extractor import CONTRACT_ID
+from catchup.knowledge_maintenance.adapters.llm.structured_extractor import (
+    PROMPT_VERSION,
+)
+from catchup.knowledge_maintenance.adapters.llm.structured_extractor import (
+    StructuredKnowledgeExtractor,
+)
+from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
+    KnowledgeMaintenanceUnitOfWork,
+)
+from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
+from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunSpec
+from catchup.knowledge_maintenance.services.converge_vocabulary import (
+    resolve_latest_published_version,
+)
+from catchup.knowledge_maintenance.services.run_pre_review_pipeline import (
+    PreReviewPipelineResult,
+)
+from catchup.knowledge_maintenance.services.run_pre_review_pipeline import (
+    PreReviewPipelineStatus,
+)
+from catchup.knowledge_maintenance.services.run_pre_review_pipeline import (
+    run_pre_review_pipeline,
+)
+from catchup.observability.logging import get_logger
+
+logger = get_logger(__name__)
+
+_BACKFILL_DAYS = 30
+_LOOKBACK_OVERLAP_MINUTES = 5
+_POLL_LIMIT = 50
+_MAX_PAGES = 20
+_EXTRACTION_CONTRACT_VERSION = "1"
+
+
+async def run_channel_talk_pre_review_job(
+    setting_id: int,
+) -> PreReviewPipelineResult | None:
+    with SessionLocal() as db:
+        setting = get_test_knowledge_maintenance_setting(
+            db,
+            setting_id=setting_id,
+        )
+        if setting is None or not setting.enabled:
+            return None
+        workspace_id = setting.workspace_id
+        credential_id = setting.channel_talk_credential_id
+
+    credential = load_channel_talk_connection_by_id(credential_id)
+    if credential is None:
+        raise RuntimeError(f"ChannelTalk credential not found: {credential_id}")
+    if not credential.access_key or not credential.access_secret:
+        raise RuntimeError(f"ChannelTalk credential is incomplete: {credential_id}")
+
+    lookback_start = _derive_lookback_start(
+        SessionLocal,
+        workspace_id=workspace_id,
+        channel_id=credential.channel_id,
+    )
+    poller = ChannelTalkUserChatPoller(
+        client=ChannelTalkCoreApiClient(),
+        access_key=credential.access_key,
+        access_secret=credential.access_secret,
+        channel_id=credential.channel_id,
+    )
+    poll_result = await poller.poll(
+        workspace_id=workspace_id,
+        lookback_start=lookback_start,
+        limit=_POLL_LIMIT,
+        max_pages=_MAX_PAGES,
+    )
+    if poll_result.list_truncated or poll_result.skipped:
+        raise RuntimeError(
+            "ChannelTalk poll was incomplete: "
+            f"list_truncated={poll_result.list_truncated}, "
+            f"skipped={len(poll_result.skipped)}"
+        )
+
+    uow_factory = _uow_factory(workspace_id)
+    vocabulary = _load_published_vocabulary(
+        uow_factory,
+        workspace_id=workspace_id,
+    )
+    llm = get_llm_service(
+        provider=LlmProvider.AWS_BEDROCK,
+        model_capacity=ModelCapacity.LARGE,
+        streaming=False,
+    ).get_llm()
+    extraction_spec = ExtractionRunSpec(
+        provider=LlmProvider.AWS_BEDROCK.value,
+        extractor_version=f"{CONTRACT_ID}/{_EXTRACTION_CONTRACT_VERSION}",
+        ontology_id=CONTRACT_ID,
+        vocabulary=vocabulary,
+        model=settings.AWS_BEDROCK_LARGE_MODEL,
+        prompt_version=PROMPT_VERSION,
+    )
+    result = await run_pre_review_pipeline(
+        poll_result,
+        workspace_id=workspace_id,
+        normalizer=ChannelTalkUserChatNormalizer(),
+        extractor=StructuredKnowledgeExtractor(llm),
+        extraction_spec=extraction_spec,
+        extraction_contract_version=_EXTRACTION_CONTRACT_VERSION,
+        judge=BedrockIdentityJudge(
+            llm,
+            entity_types=vocabulary.entity_type_entries,
+        ),
+        uow_factory=uow_factory,
+    )
+    if result.status is PreReviewPipelineStatus.PARTIAL_FAILURE:
+        logger.warning(
+            "knowledge_maintenance.channel_talk_job.partial_failure",
+            setting_id=setting_id,
+            workspace_id=workspace_id,
+        )
+    return result
+
+
+def _derive_lookback_start(
+    session_factory: Callable[[], Session],
+    *,
+    workspace_id: int,
+    channel_id: str,
+    now: Callable[[], datetime] | None = None,
+) -> datetime:
+    with session_factory() as db:
+        latest = db.scalar(
+            select(func.max(SourceVersionRow.source_updated_at)).where(
+                SourceVersionRow.workspace_id == workspace_id,
+                SourceVersionRow.source_type == "channel_talk",
+                SourceVersionRow.entity_type == "user_chat",
+                SourceVersionRow.scope_id == channel_id,
+            )
+        )
+    if latest is not None:
+        if latest.tzinfo is None:
+            latest = latest.replace(tzinfo=timezone.utc)
+        return latest.astimezone(timezone.utc) - timedelta(
+            minutes=_LOOKBACK_OVERLAP_MINUTES
+        )
+    current = (now or _utcnow)()
+    return current - timedelta(days=_BACKFILL_DAYS)
+
+
+def _load_published_vocabulary(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    *,
+    workspace_id: int,
+) -> ExtractionVocabulary:
+    with uow_factory() as uow:
+        version = resolve_latest_published_version(
+            uow.ontology.list_versions(
+                workspace_id=workspace_id,
+                ontology_id=CONTRACT_ID,
+            )
+        )
+        vocabulary = (
+            uow.ontology.get(
+                workspace_id=workspace_id,
+                ontology_id=CONTRACT_ID,
+                version=version,
+            )
+            if version is not None
+            else None
+        )
+    if vocabulary is None:
+        raise RuntimeError(
+            f"Published knowledge vocabulary not found for workspace {workspace_id}"
+        )
+    return vocabulary
+
+
+def _uow_factory(
+    workspace_id: int,
+) -> Callable[[], KnowledgeMaintenanceUnitOfWork]:
+    return lambda: KnowledgeMaintenanceUnitOfWork(
+        SessionLocal,
+        workspace_id=workspace_id,
+    )
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
