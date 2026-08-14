@@ -27,18 +27,29 @@ import uuid
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import Response
+from fastapi import status
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from catchup.audit.actions import KnowledgeReviewAction
 from catchup.audit.base import AuditStatus
 from catchup.audit.emitters import emit_audit_event
 from catchup.audit.metadata import KnowledgeReviewAuditMetadata
+from catchup.auth.dependencies import require_admin_user
 from catchup.db import wiki as wiki_queries
 from catchup.db.dependencies import get_db
 from catchup.db.models import Channel
 from catchup.db.models import ChannelFolder
+from catchup.db.models import ChannelTalkCredentials
 from catchup.db.models import KnowledgeArtifact
+from catchup.db.test_knowledge_maintenance_settings import (
+    list_test_knowledge_maintenance_settings,
+)
+from catchup.db.test_knowledge_maintenance_settings import (
+    upsert_test_knowledge_maintenance_setting,
+)
+from catchup.observability.logging import get_logger
 from catchup.server.wiki.dependencies import MemberContext
 from catchup.server.wiki.dependencies import deny_reviewer
 from catchup.server.wiki.dependencies import resolve_member_workspace
@@ -55,11 +66,17 @@ from catchup.server.wiki.schemas import ChannelResponse
 from catchup.server.wiki.schemas import FolderCreateRequest
 from catchup.server.wiki.schemas import FolderRenameRequest
 from catchup.server.wiki.schemas import FolderResponse
+from catchup.server.wiki.schemas import TestKnowledgeMaintenanceSettingListResponse
+from catchup.server.wiki.schemas import TestKnowledgeMaintenanceSettingRequest
+from catchup.server.wiki.schemas import TestKnowledgeMaintenanceSettingResponse
+from catchup.utils.scheduler import apply_test_knowledge_maintenance_schedule
 
 router = APIRouter(
     prefix="/api/v1/wiki",
     tags=["Wiki Channels"],
 )
+
+logger = get_logger(__name__)
 
 _CHANNEL_NAME_CONSTRAINT = "uq_channels_workspace_name"
 _FOLDER_NAME_CONSTRAINT = "uq_channel_folders_channel_name"
@@ -208,6 +225,83 @@ def _load_channel_admin_ids(
 ) -> list[int]:
     """채널 관리자 명단을 정렬된 순서로 읽는다."""
     return sorted(wiki_queries.list_channel_admin_ids(db, channel_id))
+
+
+@router.get(
+    path="/knowledge-maintenance-settings",
+    response_model=TestKnowledgeMaintenanceSettingListResponse,
+    dependencies=[Depends(require_admin_user)],
+)
+def list_knowledge_maintenance_settings(
+    context: MemberContext = Depends(resolve_member_workspace),
+    db: Session = Depends(get_db),
+) -> TestKnowledgeMaintenanceSettingListResponse:
+    return TestKnowledgeMaintenanceSettingListResponse(
+        items=[
+            TestKnowledgeMaintenanceSettingResponse.model_validate(setting)
+            for setting in list_test_knowledge_maintenance_settings(
+                db,
+                workspace_id=context.workspace_id,
+            )
+        ]
+    )
+
+
+@router.put(
+    path="/knowledge-maintenance-settings/{channel_talk_credential_id}",
+    response_model=TestKnowledgeMaintenanceSettingResponse,
+    dependencies=[Depends(require_admin_user)],
+)
+def update_knowledge_maintenance_setting(
+    channel_talk_credential_id: int,
+    payload: TestKnowledgeMaintenanceSettingRequest,
+    context: MemberContext = Depends(resolve_member_workspace),
+    db: Session = Depends(get_db),
+) -> TestKnowledgeMaintenanceSettingResponse:
+    if db.get(ChannelTalkCredentials, channel_talk_credential_id) is None:
+        raise review_error(
+            404,
+            code="CHANNEL_TALK_CREDENTIAL_NOT_FOUND",
+            message="ChannelTalk 연결 정보를 찾을 수 없습니다.",
+        )
+    try:
+        setting = upsert_test_knowledge_maintenance_setting(
+            db,
+            workspace_id=context.workspace_id,
+            channel_talk_credential_id=channel_talk_credential_id,
+            enabled=payload.enabled,
+            execution_anchor_at=payload.execution_anchor_at,
+            interval_minutes=payload.interval_minutes,
+        )
+        db.commit()
+        db.refresh(setting)
+    except SQLAlchemyError as error:
+        db.rollback()
+        logger.exception(
+            "test_knowledge_maintenance_setting_update_failed",
+            workspace_id=context.workspace_id,
+            channel_talk_credential_id=channel_talk_credential_id,
+        )
+        raise review_error(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            code="KNOWLEDGE_MAINTENANCE_SETTING_UPDATE_FAILED",
+            message="지식 유지보수 설정을 저장하지 못했습니다.",
+        ) from error
+
+    try:
+        apply_test_knowledge_maintenance_schedule(setting)
+    except Exception as error:
+        logger.exception(
+            "test_knowledge_maintenance_schedule_apply_failed",
+            setting_id=setting.id,
+            workspace_id=context.workspace_id,
+        )
+        raise review_error(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            code="KNOWLEDGE_MAINTENANCE_SCHEDULE_NOT_APPLIED",
+            message="설정은 저장했지만 실행 중인 스케줄에 반영하지 못했습니다.",
+        ) from error
+    return TestKnowledgeMaintenanceSettingResponse.model_validate(setting)
 
 
 @router.post(
