@@ -110,6 +110,17 @@ def ingest_and_normalize(
             normalizer=normalizer,
             uow=uow,
         )
+
+        # TODO(review): 원문과 처리 지시가 한 transaction에서 커밋되므로
+        # Outbox 패턴이 필요한지 재검토한다.
+        # TODO(review): 원본 SoT인 SourceVersion과 파생 스냅샷인 Observation을
+        # 모두 영속화해야 하는지 재검토한다. Normalizer는 결정적인 변환만
+        # 수행하므로 Extraction 이전에 변환하면 중복 저장을 피할 수 있다.
+        # Normalizer 버전에 따른 재현이 필요하다면 ExtractionRun에
+        # normalizer id/version과 실제 normalized input을 보존할 수 있다.
+        # 이 경우 Source Change와 Observation 각각에 KnowledgeNode을 유지할
+        # 이유도 함께 검토한다.
+
         # 같은 transaction에서 다음 단계 지시를 적는다. 원문이 확정됐는데
         # 처리하라는 지시만 유실되는 경우를 없앤다.
         #

@@ -332,6 +332,9 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# TODO(review): Poller의 수집 실패를 파이프라인까지 전달하지 않는다.
+# Poller가 재시도 후 완전한 결과를 전달하거나 해당 회차를 실패 처리하면
+# 이 barrier를 삭제한다.
 def _split_by_barrier(
     envelopes: Sequence[SourceChangeEnvelope],
     skipped: Sequence[SkippedItem],
