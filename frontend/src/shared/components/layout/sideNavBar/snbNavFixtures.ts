@@ -31,10 +31,13 @@ export const SPACE_HOME_ICON = IconHomeFilled;
 export const SPACE_WIKI_ICON = IconStacksFilled;
 export const TEAMSPACE_ICON = IconTeamspace;
 
+/** 요청됨 배지 건수. 집계 API 계약이 없어 시안 값을 그대로 쓴다 */
+export const REQUESTED_COUNT = 1;
+
 export const HOME_PRIMARY_ITEMS: readonly SnbNavFixtureItem[] = [
   { id: 'new-chat', label: '새 채팅', Icon: IconAdd },
   { id: 'search', label: '검색', Icon: IconSearch300 },
-  { id: 'requested', label: '요청됨', Icon: IconUpdate, selected: true, count: 1 },
+  { id: 'requested', label: '요청됨', Icon: IconUpdate, selected: true, count: REQUESTED_COUNT },
 ];
 
 export const HOME_AGENT_ITEMS: readonly SnbNavFixtureItem[] = [
@@ -62,7 +65,7 @@ export const HOME_RAIL_ITEMS: readonly SnbNavFixtureItem[] = [
 export const WIKI_PRIMARY_ITEMS: readonly SnbNavFixtureItem[] = [
   { id: 'new-chat', label: '새 채팅', Icon: IconAdd },
   { id: 'search', label: '검색', Icon: IconSearch300 },
-  { id: 'requested', label: '요청됨', Icon: IconUpdate, count: 1 },
+  { id: 'requested', label: '요청됨', Icon: IconUpdate, count: REQUESTED_COUNT },
 ];
 
 export const WIKI_DROPDOWN_ITEMS: readonly SnbNavFixtureItem[] = [
@@ -98,3 +101,16 @@ export const PROJECT_TREE_NODES: readonly NavTreeNode[] = [
   { id: 'channel-2', label: '채널명 text text text text text text text text', Icon: IconWikiChannel, canAddChild: true },
   { id: 'channel-3', label: '채널명 text text text text text text text text', Icon: IconWikiChannel, canAddChild: true },
 ];
+
+/** 트리 노드 id → 라우트. id 접두사가 fixture 규칙이라 실제 체계가 잡히면 여기만 바꾼다 */
+export function projectTreeHref(id: string): string {
+  if (id.startsWith('channel-')) return `/llm-wiki/channel/${id}`;
+  if (id.startsWith('folder-')) return `/llm-wiki/folder/${id}`;
+  return `/llm-wiki/${id}`;
+}
+
+/** 현재 경로에 해당하는 트리 노드 id. 없으면 undefined */
+export function findActiveTreeId(pathname: string): string | undefined {
+  const flatten = (node: NavTreeNode): string[] => [node.id, ...(node.children ?? []).flatMap(flatten)];
+  return PROJECT_TREE_NODES.flatMap(flatten).find((id) => pathname === projectTreeHref(id));
+}

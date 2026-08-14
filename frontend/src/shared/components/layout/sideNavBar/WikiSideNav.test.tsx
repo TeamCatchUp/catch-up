@@ -12,6 +12,8 @@ vi.mock('next/navigation', () => ({
 
 const mockSidebarState = {
   isSidebarOpen: true,
+  lastSettingsPath: '/mypage/profile',
+  setActivePanel: vi.fn(),
   setSidebarOpen: vi.fn(),
 };
 
@@ -27,6 +29,9 @@ vi.mock('@/shared/store/userStore', () => ({
   useUserStore: (selector: (s: { user: { name: string; email: string } }) => unknown) =>
     selector({ user: { name: '팀원G', email: 'teamlead@catchup.com' } }),
 }));
+
+// 사용자 메뉴는 쿼리·테마 provider를 요구한다 — 목적지 검증 범위 밖이다
+vi.mock('@/shared/components/layout/sideNavBar/modal/UserModal', () => ({ UserMenuContent: () => null }));
 
 import WikiSideNav from './WikiSideNav';
 
@@ -45,7 +50,8 @@ describe('WikiSideNav 펼침', () => {
 
     expect(screen.getByRole('button', { name: '새 채팅' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '검색' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '요청됨' })).toBeInTheDocument();
+    // 접근 이름에 배지 건수가 붙는다
+    expect(screen.getByRole('button', { name: /^요청됨/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '지식 대시보드' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '즐겨찾기' })).toBeInTheDocument();
     expect(screen.getByText('프로젝트')).toBeInTheDocument();
@@ -70,7 +76,7 @@ describe('WikiSideNav 펼침', () => {
     const user = userEvent.setup();
     render(<WikiSideNav />);
 
-    await user.click(screen.getByRole('button', { name: '요청됨' }));
+    await user.click(screen.getByRole('button', { name: /^요청됨/ }));
     expect(mockPush).toHaveBeenCalledWith('/llm-wiki/review');
 
     await user.click(screen.getByRole('button', { name: '새 채팅' }));
@@ -106,7 +112,7 @@ describe('WikiSideNav 펼침', () => {
     mockUsePathname.mockReturnValue('/llm-wiki/review');
     render(<WikiSideNav />);
 
-    expect(screen.getByRole('button', { name: '요청됨' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: /^요청됨/ })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: '지식 대시보드' })).not.toHaveAttribute('aria-current');
   });
 
