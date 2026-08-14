@@ -5,6 +5,13 @@ import IconArrowDown from '@/public/icons/icon/arrow_down.svg';
 import IconCheck from '@/public/icons/icon/check.svg';
 import IconClock from '@/public/icons/icon/clock.svg';
 import IconMegaphone from '@/public/icons/icon/megaphone.svg';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/components/ui/dropdown-menu';
+import { cn } from '@/shared/utils/cn';
 
 import type {
   OnboardingChannelListStatus,
@@ -20,25 +27,58 @@ import OnboardingTopBar from './OnboardingTopBar';
 
 interface ScheduleTriggerFieldProps {
   field: ScheduleFieldData;
+  onSelectOption?: (fieldId: string, optionId: string) => void;
   onOpenRequest?: (id: string) => void;
 }
 
-// 닫힌 드롭다운 트리거만 그린다 — 열림 메뉴·옵션 목록은 시안에 없다
-function ScheduleTriggerField({ field, onOpenRequest }: ScheduleTriggerFieldProps) {
+/**
+ * 일정 필드. 선택지가 있으면 드롭다운으로 열고, 없으면 트리거만 그린다 —
+ * 열림 UI는 시안에 없어 선택지가 확정된 필드에서만 연다.
+ */
+function ScheduleTriggerField({ field, onSelectOption, onOpenRequest }: ScheduleTriggerFieldProps) {
+  const trigger = (
+    <button
+      type="button"
+      onClick={field.options ? undefined : () => onOpenRequest?.(field.id)}
+      className="border-line-normal-neutral bg-fill-normal-normal hover:bg-fill-normal-interaction-hover data-[state=open]:bg-fill-normal-interaction-pressed flex h-11.5 w-full cursor-pointer items-center gap-2 rounded-xl border px-3 transition-colors"
+    >
+      <IconClock className="text-icon-normal-normal size-5.5 shrink-0" />
+      <span className="text-body-small text-text-normal-normal min-w-0 flex-1 truncate text-left">
+        {field.valueLabel}
+      </span>
+      <IconArrowDown className="text-icon-normal-normal size-6 shrink-0" />
+    </button>
+  );
+
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <OnboardingFieldLabel label={field.label} required size="body" />
-      <button
-        type="button"
-        onClick={() => onOpenRequest?.(field.id)}
-        className="border-line-normal-neutral bg-fill-normal-normal hover:bg-fill-normal-interaction-hover flex h-11.5 w-full cursor-pointer items-center gap-2 rounded-xl border px-3 transition-colors"
-      >
-        <IconClock className="text-icon-normal-normal size-5.5 shrink-0" />
-        <span className="text-body-small text-text-normal-normal min-w-0 flex-1 truncate text-left">
-          {field.valueLabel}
-        </span>
-        <IconArrowDown className="text-icon-normal-normal size-6 shrink-0" />
-      </button>
+      {field.options ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            sideOffset={2}
+            className="bg-fill-normal-normal w-[var(--radix-dropdown-menu-trigger-width)] min-w-0 rounded-lg p-1"
+          >
+            {field.options.map((option) => (
+              <DropdownMenuItem
+                key={option.id}
+                disabled={option.disabled}
+                onSelect={() => onSelectOption?.(field.id, option.id)}
+                className={cn(
+                  'text-body-small text-text-normal-normal h-10 gap-2 px-2',
+                  option.label === field.valueLabel && 'bg-fill-normal-interaction-hover',
+                )}
+              >
+                <span className="flex-1 truncate">{option.label}</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        trigger
+      )}
     </div>
   );
 }
@@ -56,6 +96,7 @@ interface WikiOnboardingSourceStepProps {
   channelListStatus?: OnboardingChannelListStatus;
   onRetryChannelList?: () => void;
   scheduleFields: readonly ScheduleFieldData[];
+  onSelectScheduleOption?: (fieldId: string, optionId: string) => void;
   onOpenScheduleField?: (id: string) => void;
   /** 실행 시각 아래 결과 문장 — 값 조합별 변형 규칙은 미확정이라 문자열로 받는다 */
   resultText: string;
@@ -81,6 +122,7 @@ export default function WikiOnboardingSourceStep({
   channelListStatus,
   onRetryChannelList,
   scheduleFields,
+  onSelectScheduleOption,
   onOpenScheduleField,
   resultText,
   backfillNoticeText,
@@ -125,7 +167,12 @@ export default function WikiOnboardingSourceStep({
           <div className="flex flex-col gap-3">
             <div className="grid grid-cols-3 gap-4">
               {scheduleFields.map((field) => (
-                <ScheduleTriggerField key={field.id} field={field} onOpenRequest={onOpenScheduleField} />
+                <ScheduleTriggerField
+                  key={field.id}
+                  field={field}
+                  onSelectOption={onSelectScheduleOption}
+                  onOpenRequest={onOpenScheduleField}
+                />
               ))}
             </div>
             <div className="flex items-center gap-1">

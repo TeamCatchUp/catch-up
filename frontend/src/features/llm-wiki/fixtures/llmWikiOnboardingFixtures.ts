@@ -147,11 +147,26 @@ export const ONBOARDING_CHANNEL_ROWS: readonly OnboardingChannelRow[] = Array.fr
   }),
 );
 
+/**
+ * 기본값과 주기 선택지는 기획 문서(Confluence 160301060 §3.2)가 원천이다 —
+ * 시안 트리거의 "1분"은 공용 컴포넌트 필러였고 완료 화면 요약("매일"·"자정")이 기획과 일치한다.
+ */
 export const SCHEDULE_FIELDS: readonly ScheduleFieldData[] = [
-  // 표시값은 시안 필러 추정 — 완료 화면 요약은 "매일"·"자정"이라 서로 어긋난 채 남아 있다(감사 §8)
-  { id: 'polling-interval', label: '얼마나 자주 갱신할까요?', valueLabel: '1분' },
+  {
+    id: 'polling-interval',
+    label: '얼마나 자주 갱신할까요?',
+    valueLabel: '매일',
+    options: [
+      { id: '6h', label: '6시간마다' },
+      { id: '12h', label: '12시간마다' },
+      { id: 'daily', label: '매일' },
+      { id: 'weekly', label: '주 1회' },
+    ],
+  },
+  // 백필은 "지금부터"만 지원하고 나머지는 추후다. 선택지 라벨이 기획에 확정돼 있지 않아 목록을 두지 않는다
   { id: 'backfill-range', label: '언제부터의 상담을 가져올까요?', valueLabel: '지금부터' },
-  { id: 'run-time', label: '실행 시간', valueLabel: '1분' },
+  // 실행 시각은 기획이 "시각 선택, 기본 자정"까지만 정했다 — 목록·표기 규칙 미정
+  { id: 'run-time', label: '실행 시간', valueLabel: '자정' },
 ];
 
 export const SCHEDULE_RESULT_TEXT = '매일 자정에 새 상담을 확인하고 문서 초안을 만들어요.';

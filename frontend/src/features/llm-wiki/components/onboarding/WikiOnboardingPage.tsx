@@ -61,6 +61,13 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
   const [purposeId, setPurposeId] = useState<string | null>(WIKI_INFO_CATEGORIES[0].purposeOptions[0]?.id ?? null);
   const [docKindId, setDocKindId] = useState<string | null>(WIKI_DOC_KIND_PRESETS[0].id);
   const [toneId, setToneId] = useState<string | null>(WIKI_TONE_STYLE_OPTIONS[0].id);
+  // 선택지가 있는 일정 필드만 값이 바뀐다 — 나머지는 픽스처 기본값을 유지한다
+  const [scheduleSelection, setScheduleSelection] = useState<Record<string, string>>({});
+
+  const scheduleFields = SCHEDULE_FIELDS.map((field) => {
+    const picked = field.options?.find((option) => option.id === scheduleSelection[field.id]);
+    return picked ? { ...field, valueLabel: picked.label } : field;
+  });
 
   const goToStep = (next: OnboardingStepNumber) =>
     router.push(next === 1 ? ONBOARDING_PATH : `${ONBOARDING_PATH}?step=${next}`);
@@ -92,7 +99,10 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
         channelPickerPlaceholder={CHANNEL_PICKER_PLACEHOLDER}
         channelTableHeaders={CHANNEL_TABLE_HEADERS}
         channelRows={ONBOARDING_CHANNEL_ROWS}
-        scheduleFields={SCHEDULE_FIELDS}
+        scheduleFields={scheduleFields}
+        onSelectScheduleOption={(fieldId, optionId) =>
+          setScheduleSelection((current) => ({ ...current, [fieldId]: optionId }))
+        }
         resultText={SCHEDULE_RESULT_TEXT}
         backfillNoticeText={BACKFILL_NOTICE_TEXT}
         backLabel={ONBOARDING_BACK_LABEL}

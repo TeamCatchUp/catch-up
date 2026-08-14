@@ -61,12 +61,24 @@ export interface OnboardingChannelRow {
  */
 export type OnboardingChannelListStatus = 'loading' | 'ready' | 'error';
 
-/** 2단계 수집 일정 필드 하나(닫힌 드롭다운 트리거). 열림 상태는 시안에 없다 */
+/** [SPEC] 일정 선택지. 추후 지원 항목은 고를 수 없이 노출된다(기획 3.2) */
+export interface ScheduleOption {
+  id: string;
+  label: string;
+  disabled?: boolean;
+}
+
+/**
+ * 2단계 수집 일정 필드 하나.
+ * 시안에는 닫힌 트리거만 있고, 선택지는 기획 문서(Confluence 160301060 §3.2)가 원천이다 —
+ * 목록이 없는 필드는 트리거만 그린다.
+ */
 export interface ScheduleFieldData {
   id: string;
   label: string;
   /** 트리거에 표시되는 현재 값 문자열 */
   valueLabel: string;
+  options?: readonly ScheduleOption[];
 }
 
 /** [SPEC] 완료 화면 요약 행. 문서 종류·채널처럼 값이 여러 개인 행이 있어 배열이다 */
