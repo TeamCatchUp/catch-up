@@ -142,3 +142,52 @@ class ChannelAdminResponse(BaseModel):
 
     channel_id: str
     user_ids: list[int]
+
+
+class PresetKindResponse(BaseModel):
+    """온보딩이 고를 문서 종류 하나를 담는다.
+
+    선택 규칙(spec_template)은 싣지 않는다. 규칙이 응답에 나가면
+    소비자가 그것을 손봐 되돌려 보낼 입구가 생기고, 정의를 만드는 길이
+    카탈로그 밖으로 하나 더 열린다.
+    """
+
+    kind: str
+    label: str
+    description: str
+    example_text: str
+
+
+class PresetPurposeResponse(BaseModel):
+    """채널을 왜 만드는지에 해당하는 목적 하나를 담는다."""
+
+    id: str
+    label: str
+    recommended_kind: str
+
+
+class PresetDomainResponse(BaseModel):
+    """한 업무 영역의 preset 묶음을 담는다.
+
+    seed 어휘는 싣지 않는다. 온보딩 화면이 쓰지 않는 값이라, 내보내면
+    소비자가 기대할 계약만 늘어난다.
+    """
+
+    id: str
+    label: str
+    purposes: list[PresetPurposeResponse]
+    kinds: list[PresetKindResponse]
+
+
+class PresetStyleResponse(BaseModel):
+    """문서를 어떤 문체로 쓸지 고르는 preset 하나를 담는다."""
+
+    id: str
+    label: str
+
+
+class DefinitionPresetsResponse(BaseModel):
+    """온보딩이 고를 preset 카탈로그 전체를 담는다."""
+
+    domains: list[PresetDomainResponse]
+    styles: list[PresetStyleResponse]

@@ -49,6 +49,8 @@ from catchup.db.test_knowledge_maintenance_settings import (
 from catchup.db.test_knowledge_maintenance_settings import (
     upsert_test_knowledge_maintenance_setting,
 )
+from catchup.knowledge_maintenance.domain.preset_catalog import PRESET_DOMAINS
+from catchup.knowledge_maintenance.domain.preset_catalog import PRESET_STYLES
 from catchup.observability.logging import get_logger
 from catchup.server.wiki.dependencies import MemberContext
 from catchup.server.wiki.dependencies import deny_reviewer
@@ -63,9 +65,14 @@ from catchup.server.wiki.schemas import ChannelListItemResponse
 from catchup.server.wiki.schemas import ChannelListResponse
 from catchup.server.wiki.schemas import ChannelRenameRequest
 from catchup.server.wiki.schemas import ChannelResponse
+from catchup.server.wiki.schemas import DefinitionPresetsResponse
 from catchup.server.wiki.schemas import FolderCreateRequest
 from catchup.server.wiki.schemas import FolderRenameRequest
 from catchup.server.wiki.schemas import FolderResponse
+from catchup.server.wiki.schemas import PresetDomainResponse
+from catchup.server.wiki.schemas import PresetKindResponse
+from catchup.server.wiki.schemas import PresetPurposeResponse
+from catchup.server.wiki.schemas import PresetStyleResponse
 from catchup.server.wiki.schemas import TestKnowledgeMaintenanceSettingListResponse
 from catchup.server.wiki.schemas import TestKnowledgeMaintenanceSettingRequest
 from catchup.server.wiki.schemas import TestKnowledgeMaintenanceSettingResponse
@@ -401,6 +408,54 @@ def list_channels(
             )
             for channel in channels
         ]
+    )
+
+
+@router.get(
+    path="/definition-presets",
+    response_model=DefinitionPresetsResponse,
+    description="온보딩이 고를 도메인·목적·문서 종류·문체를 조회한다.",
+)
+def list_definition_presets(
+    context: MemberContext = Depends(resolve_member_workspace),
+) -> DefinitionPresetsResponse:
+    """preset 카탈로그를 그대로 옮겨 돌려준다.
+
+    DB를 읽지 않는다. 카탈로그는 코드 안의 상수라 workspace마다 달라질
+    것이 없고, 인가는 구성원인지만 본다.
+
+    선택 규칙과 seed 어휘는 빼고 담는다. 화면이 쓰지 않는 값인데다,
+    규칙을 내보내면 소비자가 그것을 되돌려 보낼 입구가 생긴다.
+    """
+    return DefinitionPresetsResponse(
+        domains=[
+            PresetDomainResponse(
+                id=domain.id,
+                label=domain.label,
+                purposes=[
+                    PresetPurposeResponse(
+                        id=purpose.id,
+                        label=purpose.label,
+                        recommended_kind=purpose.recommended_kind,
+                    )
+                    for purpose in domain.purposes
+                ],
+                kinds=[
+                    PresetKindResponse(
+                        kind=preset_kind.kind,
+                        label=preset_kind.label,
+                        description=preset_kind.description,
+                        example_text=preset_kind.example_text,
+                    )
+                    for preset_kind in domain.kinds
+                ],
+            )
+            for domain in PRESET_DOMAINS
+        ],
+        styles=[
+            PresetStyleResponse(id=style.id, label=style.label)
+            for style in PRESET_STYLES
+        ],
     )
 
 
