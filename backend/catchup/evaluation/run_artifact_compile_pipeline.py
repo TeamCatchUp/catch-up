@@ -106,7 +106,13 @@ from catchup.knowledge_maintenance.services.converge_vocabulary import (
 
 
 class _SingleDefinitionRepository:
-    """정의 하나만 보이도록 가린 정의 저장소다."""
+    """정의 하나만 보이도록 가린 정의 저장소다.
+
+    가리는 것은 정의 목록뿐이고, 포트의 나머지 조회는 그대로 감싼
+    저장소에 넘긴다. 넘기는 자리를 메서드로 적어 둔다 — `__getattr__`로
+    받아 넘기면 이 껍데기가 어떤 포트를 채우고 있는지 코드에서 보이지
+    않아, 포트에 조회가 늘 때 러너만 조용히 깨진다.
+    """
 
     def __init__(
         self,
@@ -123,6 +129,10 @@ class _SingleDefinitionRepository:
             for definition in self._inner.list_definitions()
             if definition.id == self._definition_id
         )
+
+    def find_channel_style(self, *, channel_id: uuid.UUID) -> str | None:
+        """채널에 걸린 문체 조회는 감싼 저장소에 그대로 넘긴다."""
+        return self._inner.find_channel_style(channel_id=channel_id)
 
 
 class _SingleDefinitionUnitOfWork:
@@ -237,8 +247,11 @@ def main() -> int:
     parser.add_argument(
         "--capacity",
         choices=[capacity.value for capacity in ModelCapacity],
-        default=ModelCapacity.LARGE.value,
-        help="산문을 쓸 모델 등급이다. 기본은 large다.",
+        default=None,
+        help=(
+            "산문을 쓸 모델 등급이다. 기본은 large다. --no-narrate와 "
+            "함께 주면 부를 모델이 없으므로 무시한다."
+        ),
     )
     parser.add_argument(
         "--no-narrate",
@@ -298,16 +311,23 @@ def main() -> int:
             f"{len(vocabulary.predicate_entries)}종 주입"
         )
 
+    capacity = args.capacity or ModelCapacity.LARGE.value
     narrator = None
-    if not args.no_narrate:
+    if args.no_narrate:
+        if args.capacity is not None:
+            print(
+                "--no-narrate라 산문을 쓰지 않는다. "
+                f"--capacity {args.capacity}는 무시한다."
+            )
+    else:
         service = get_llm_service(
             provider=LlmProvider.AWS_BEDROCK,
-            model_capacity=ModelCapacity(args.capacity),
+            model_capacity=ModelCapacity(capacity),
             streaming=False,
             read_timeout=120,
         )
         narrator = LlmBlockNarrator(service.get_llm())
-        print(f"산문 모델 등급 {args.capacity} 주입")
+        print(f"산문 모델 등급 {capacity} 주입")
 
     result = compile_definition_artifacts(
         uow

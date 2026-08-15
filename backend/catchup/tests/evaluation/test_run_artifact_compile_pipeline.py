@@ -56,9 +56,14 @@ class _FakeDefinitionRepository:
 
     def __init__(self, definitions: tuple[StoredArtifactDefinition, ...]):
         self.definitions = definitions
+        self.style_calls: list[uuid.UUID] = []
 
     def list_definitions(self) -> tuple[StoredArtifactDefinition, ...]:
         return self.definitions
+
+    def find_channel_style(self, *, channel_id: uuid.UUID) -> str | None:
+        self.style_calls.append(channel_id)
+        return "style.faq"
 
 
 class _FakeUnitOfWork:
@@ -125,6 +130,25 @@ def test_other_repositories_and_boundary_pass_through() -> None:
     assert inner.entered == 1
     assert inner.exited == 1
     assert inner.committed == 1
+
+
+def test_channel_style_lookup_passes_through() -> None:
+    """문체 조회는 가림막을 지나 감싼 저장소에 그대로 닿는다.
+
+    산문을 쓰려면 채널 문체를 읽어야 한다. 가림막이 그 조회를 넘기지
+    않으면 --definition-id로 돌린 실행만 서술 자리에서 터진다.
+    """
+    inner = _FakeUnitOfWork((_definition(FIRST_ID),))
+    wrapped = only_definition(inner, FIRST_ID)
+    channel_id = uuid.uuid4()
+
+    with wrapped:
+        found = wrapped.artifact_definitions.find_channel_style(
+            channel_id=channel_id
+        )
+        assert inner.artifact_definitions.style_calls == [channel_id]
+
+    assert found == "style.faq"
 
 
 class _FakeEngine:
@@ -348,3 +372,34 @@ def test_prints_narration_counts(
     printed = capsys.readouterr().out
     assert "산문 서술 3" in printed
     assert "재사용 5" in printed
+
+
+def test_capacity_with_no_narrate_is_reported_as_ignored(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--no-narrate와 함께 준 --capacity는 무시한다고 알린다."""
+    _stub_run(
+        monkeypatch,
+        result=ArtifactCompileResult(),
+        extra_args=["--no-narrate", "--capacity", "small"],
+    )
+
+    assert runner.main() == 0
+    printed = capsys.readouterr().out
+    assert "--capacity small는 무시한다" in printed
+
+
+def test_capacity_is_not_reported_without_no_narrate(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--no-narrate만 주면 무시 안내를 적지 않는다."""
+    _stub_run(
+        monkeypatch,
+        result=ArtifactCompileResult(),
+        extra_args=["--no-narrate"],
+    )
+
+    assert runner.main() == 0
+    assert "무시한다" not in capsys.readouterr().out
