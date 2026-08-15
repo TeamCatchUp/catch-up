@@ -49,8 +49,21 @@ from catchup.db.test_knowledge_maintenance_settings import (
 from catchup.db.test_knowledge_maintenance_settings import (
     upsert_test_knowledge_maintenance_setting,
 )
+from catchup.knowledge_maintenance.adapters.llm.structured_extractor import CONTRACT_ID
+from catchup.knowledge_maintenance.adapters.postgres.session_bound import (
+    SessionBoundOntologyUnitOfWork,
+)
+from catchup.knowledge_maintenance.domain.artifact_definition import (
+    serialize_selection_spec,
+)
 from catchup.knowledge_maintenance.domain.preset_catalog import PRESET_DOMAINS
 from catchup.knowledge_maintenance.domain.preset_catalog import PRESET_STYLES
+from catchup.knowledge_maintenance.domain.preset_catalog import find_kind
+from catchup.knowledge_maintenance.domain.preset_catalog import find_purpose
+from catchup.knowledge_maintenance.domain.preset_catalog import find_style
+from catchup.knowledge_maintenance.services.install_seed_vocabulary import (
+    install_seed_vocabulary,
+)
 from catchup.observability.logging import get_logger
 from catchup.server.wiki.dependencies import MemberContext
 from catchup.server.wiki.dependencies import deny_reviewer
@@ -63,6 +76,8 @@ from catchup.server.wiki.schemas import ChannelAdminResponse
 from catchup.server.wiki.schemas import ChannelCreateRequest
 from catchup.server.wiki.schemas import ChannelListItemResponse
 from catchup.server.wiki.schemas import ChannelListResponse
+from catchup.server.wiki.schemas import ChannelOnboardingRequest
+from catchup.server.wiki.schemas import ChannelOnboardingResponse
 from catchup.server.wiki.schemas import ChannelRenameRequest
 from catchup.server.wiki.schemas import ChannelResponse
 from catchup.server.wiki.schemas import DefinitionPresetsResponse
@@ -359,6 +374,113 @@ def create_channel(
         id=str(channel.id),
         name=channel.name,
         workspace_id=channel.workspace_id,
+    )
+
+
+@router.post(
+    path="/channels/onboarding",
+    response_model=ChannelOnboardingResponse,
+    status_code=201,
+    description="preset 선택 하나로 채널·관리자·정의·seed 어휘를 만든다.",
+)
+def onboard_channel(
+    request: ChannelOnboardingRequest,
+    context: MemberContext = Depends(resolve_member_workspace),
+    db: Session = Depends(get_db),
+) -> ChannelOnboardingResponse:
+    """preset 선택으로 채널·관리자·정의·seed 어휘를 한 번에 만든다.
+
+    네 가지가 한 트랜잭션이다. 나뉘면 관리자 없는 채널이나 정의 없는
+    채널이 남아, 온보딩을 끝낸 사람이 아무것도 못 하는 자리가 생긴다.
+
+    정의를 만들 때 어휘를 검증하지 않는다. 선택 규칙이 가리키는 이름이
+    아직 사전에 없어도 정의는 그대로 선다 — 검증은 컴파일 시점의 일이고,
+    그때의 skip과 경고가 아직 안 모인 이름을 기다려 준다. 입구에서 막으면
+    어휘가 자라기 전에는 채널을 세울 수 없다.
+
+    Raises:
+        HTTPException: 카탈로그에 없는 preset이면 400, 같은 workspace에
+            같은 이름의 채널이 있으면 409를 던진다.
+    """
+    found = find_purpose(request.purpose_preset)
+    if found is None:
+        raise review_error(
+            400,
+            code="UNKNOWN_PURPOSE_PRESET",
+            message="카탈로그에 없는 목적 preset입니다.",
+        )
+    domain, _purpose = found
+
+    if find_style(request.style_preset) is None:
+        raise review_error(
+            400,
+            code="UNKNOWN_STYLE_PRESET",
+            message="카탈로그에 없는 문체 preset입니다.",
+        )
+
+    preset_kind = find_kind(domain, request.kind)
+    if preset_kind is None:
+        raise review_error(
+            400,
+            code="UNKNOWN_KIND_PRESET",
+            message="이 목적의 도메인에 없는 문서 종류입니다.",
+        )
+
+    channel = wiki_queries.add_channel(
+        db,
+        workspace_id=context.workspace_id,
+        name=request.name,
+        created_by=context.user.id,
+        purpose_preset=request.purpose_preset,
+        style_preset=request.style_preset,
+    )
+    try:
+        db.flush()
+        wiki_queries.add_channel_admin(
+            db,
+            channel_id=channel.id,
+            user_id=context.user.id,
+            granted_by=context.user.id,
+        )
+        definition = wiki_queries.add_artifact_definition(
+            db,
+            workspace_id=context.workspace_id,
+            channel_id=channel.id,
+            kind=preset_kind.kind,
+            selection_spec=serialize_selection_spec(
+                preset_kind.spec_template()
+            ),
+            created_by=context.user.id,
+        )
+        db.flush()
+        vocabulary_version = install_seed_vocabulary(
+            SessionBoundOntologyUnitOfWork(db),
+            workspace_id=context.workspace_id,
+            seed=domain.seed_vocabulary,
+            ontology_id=CONTRACT_ID,
+        )
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        if _violates(error, _CHANNEL_NAME_CONSTRAINT):
+            raise review_error(
+                409,
+                code="CHANNEL_NAME_TAKEN",
+                message="같은 이름의 채널이 이미 있습니다.",
+            ) from error
+        raise
+
+    return ChannelOnboardingResponse(
+        channel=ChannelResponse(
+            id=str(channel.id),
+            name=channel.name,
+            workspace_id=channel.workspace_id,
+        ),
+        definition_id=str(definition.id),
+        kind=definition.kind,
+        purpose_preset=request.purpose_preset,
+        style_preset=request.style_preset,
+        vocabulary_version=vocabulary_version,
     )
 
 

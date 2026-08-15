@@ -60,6 +60,22 @@ class ChannelCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
 
 
+class ChannelOnboardingRequest(BaseModel):
+    """온보딩 위자드 1단계의 선택 결과를 담는다.
+
+    고르는 것은 preset id뿐이다. 선택 규칙을 직접 실어 보낼 자리는 두지
+    않는다 — raw spec 입구가 열리면 카탈로그가 규칙의 유일한 출처라는
+    약속이 깨진다.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=20)
+    purpose_preset: str
+    style_preset: str
+    kind: str
+
+
 class ChannelRenameRequest(BaseModel):
     """채널 이름 변경 요청을 담는다."""
 
@@ -93,6 +109,21 @@ class ChannelResponse(BaseModel):
     id: str
     name: str
     workspace_id: int
+
+
+class ChannelOnboardingResponse(BaseModel):
+    """만들어진 채널·정의와 어휘 발행 결과를 담는다.
+
+    vocabulary_version이 None이면 더할 어휘가 없어 발행을 건너뛴 것이다.
+    같은 도메인으로 두 번째 채널을 만든 자리가 그렇다.
+    """
+
+    channel: ChannelResponse
+    definition_id: str
+    kind: str
+    purpose_preset: str
+    style_preset: str
+    vocabulary_version: str | None
 
 
 class FolderResponse(BaseModel):
