@@ -141,6 +141,32 @@ def test_prompt_keeps_variants_apart() -> None:
     assert "do not judge" in rendered
 
 
+def test_prompt_says_the_variant_list_may_be_partial() -> None:
+    """후보 목록이 전부가 아닐 수 있음을 프롬프트가 못박는다.
+
+    검증된 인용이 없는 후보는 요청에서 빠진다. 그 사실을 알리지 않으면
+    모델이 남은 후보를 두고 갈린 값이 전부라고 셀 수 있다.
+    """
+    llm = _FakeLlm(_parsed("문장이다."))
+    request = NarrationRequest(
+        block_kind="contested",
+        heading="rate_limit",
+        topic_hint="상충하는 값 2개 — 검토 필요",
+        statements=(),
+        edges=(),
+        variants=(("60", ("한도는 60이다",)),),
+        style_instruction="담백하게 쓴다.",
+        purpose_sentence="이 문서는 현황을 보는 데 쓴다.",
+    )
+
+    LlmBlockNarrator(llm).narrate(request)
+
+    rendered = llm.structured.prompts[0]
+    assert "The list may be partial" in rendered
+    assert "candidates with no" in rendered
+    assert "verified quote are left out" in rendered
+
+
 def test_prompt_lists_relation_edges() -> None:
     """관계 절의 본문 줄이 그래프 사실로 프롬프트에 실린다."""
     llm = _FakeLlm(_parsed("문장이다."))
@@ -166,6 +192,12 @@ def test_prompt_lists_relation_edges() -> None:
     assert "일부만 따라감" in rendered
     assert "never infer another connection" in rendered
     assert "(no direct quotes for this block)" in rendered
+    # 관계 절은 인용이 없고 관계 줄만 사실 입력이다. 규칙 1이 인용만
+    # 말하면 이 블록에서는 쓸 수 있는 사실이 하나도 없는 셈이 된다.
+    assert (
+        "State only what the quotes and relation lines above already say"
+        in rendered
+    )
 
 
 def test_empty_narrative_is_an_error() -> None:

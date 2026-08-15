@@ -182,7 +182,8 @@ class ArtifactCompileResult:
             나타낸다. 접은 문서만큼 카드가 비므로 호출자가 이 수를 보고
             실행을 실패로 다룰 수 있어야 한다.
         blocks_narrated: 이번 실행이 새로 산문을 받은 블록 수를
-            나타낸다. LLM 호출 수와 같다.
+            나타낸다. 성공한 노드의 서술 수다 — 서술 도중 접힌 노드의
+            중간 집계는 버리므로 실제 LLM 호출 수보다 작을 수 있다.
         blocks_narrative_reused: 지난 산문을 그대로 다시 쓴 블록 수를
             나타낸다. 이 수가 클수록 검수자가 볼 산문 diff가 작다.
     """
@@ -470,11 +471,14 @@ def _purpose_sentence(definition: StoredArtifactDefinition) -> str:
 
     카탈로그는 코드 상수라 포트를 거치지 않고 직접 읽는다. 카탈로그 밖
     kind는 기본 한 줄로 떨어진다 — 손으로 넣은 정의도 컴파일돼야 한다.
+
+    설명 자체가 이미 끝맺은 한 문장이라 뒤에 용도를 덧붙이지 않는다.
+    덧붙이면 한 줄 안에 문장이 둘 겹쳐 읽힌다.
     """
     preset_kind = find_kind_by_name(definition.kind)
     if preset_kind is None:
         return DEFAULT_PURPOSE_SENTENCE
-    return f"이 문서는 {preset_kind.description} 그 용도로 쓴다."
+    return f"이 문서는 {preset_kind.description}"
 
 
 def _relation_blocks(
@@ -743,7 +747,10 @@ def _narration_request(
     넘긴다.
 
     대조 블록은 자기 sources를 비우고 근거를 후보마다 나눠 갖는다. 후보를
-    합치면 어느 인용이 어느 값의 근거인지 사라지므로 갈라서 넘긴다.
+    합치면 어느 인용이 어느 값의 근거인지 사라지므로 갈라서 넘긴다. 검증된
+    인용이 하나도 없는 후보는 아예 뺀다. 프롬프트는 후보 본문을 사실로
+    싣고 모든 후보를 서술하라고 시키므로, 근거 없는 후보를 남기면 검증되지
+    않은 값이 사실로 나간다.
 
     검증된 인용이 하나도 없으면 서술하지 않는다. 근거 없는 문장을 만들지
     않는 것이지 오류가 아니므로 예외가 아니라 None으로 알린다.
@@ -770,17 +777,21 @@ def _narration_request(
         if source.citation_verified
     )
     variants = tuple(
-        (
-            variant.body,
-            tuple(
-                source.statement
-                for source in variant.sources
-                if source.citation_verified
-            ),
+        (body, verified)
+        for body, verified in (
+            (
+                variant.body,
+                tuple(
+                    source.statement
+                    for source in variant.sources
+                    if source.citation_verified
+                ),
+            )
+            for variant in block.variants
         )
-        for variant in block.variants
+        if verified
     )
-    if not statements and not any(items for _, items in variants):
+    if not statements and not variants:
         return None
     return NarrationRequest(
         block_kind=block.block_kind,

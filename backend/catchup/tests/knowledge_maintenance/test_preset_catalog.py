@@ -48,6 +48,24 @@ def test_purpose_ids_are_namespaced_by_domain() -> None:
             assert purpose.id.startswith(f"{domain.id}.")
 
 
+def test_kind_names_are_unique_across_domains() -> None:
+    """kind 이름이 도메인을 가로질러도 겹치지 않는다.
+
+    `find_kind_by_name`은 도메인을 모른 채 저장된 kind를 되짚는 조회라
+    처음 걸린 것을 돌려준다. 이름이 겹치면 어느 도메인의 종류로 풀릴지
+    카탈로그에 적힌 차례에 달리고, 목적 문장이 조용히 뒤바뀐다.
+    """
+    names = [
+        preset_kind.kind
+        for domain in PRESET_DOMAINS
+        for preset_kind in domain.kinds
+    ]
+
+    assert len(names) == len(set(names))
+    for name in names:
+        assert find_kind_by_name(name) is not None
+
+
 def test_recommended_kind_exists_in_the_same_domain() -> None:
     """추천 kind가 같은 도메인의 kind 목록 안에 있다."""
     for domain in PRESET_DOMAINS:

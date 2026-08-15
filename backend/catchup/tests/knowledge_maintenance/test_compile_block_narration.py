@@ -12,12 +12,14 @@ from dataclasses import replace
 
 from structlog.testing import capture_logs
 
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_RELATION_SECTION
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.domain.preset_catalog import DEFAULT_PURPOSE_SENTENCE
 from catchup.knowledge_maintenance.domain.preset_catalog import (
     DEFAULT_STYLE_INSTRUCTION,
 )
+from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPendingProposal
 from catchup.knowledge_maintenance.ports.narrator import NarrationError
 from catchup.knowledge_maintenance.ports.narrator import NarrationRequest
 from catchup.knowledge_maintenance.ports.relations import StoredRelationEdge
@@ -82,6 +84,33 @@ def _uow(
             definition[1]: styles,
         }
     return uow
+
+
+def _contradiction(
+    *,
+    node_id: uuid.UUID,
+    claims: tuple[StoredClaimCandidate, ...],
+) -> StoredPendingProposal:
+    """claim들이 한 predicate에서 갈렸다는 계류 안건을 만든다."""
+    return StoredPendingProposal(
+        id=uuid.uuid4(),
+        proposal_kind="contradiction",
+        summary=f"'status' 값이 {len(claims)}종으로 갈린다",
+        resolver_metadata={
+            "subject_key": f"node:{node_id}",
+            "predicate": "status",
+            "values": [
+                {
+                    "claim_id": str(claim.id),
+                    "value": claim.value,
+                    "normalized": str(claim.value),
+                    "observed_at": claim.observed_at.isoformat(),
+                    "statement": claim.statement,
+                }
+                for claim in claims
+            ],
+        },
+    )
 
 
 def _run(uow, narrator=None):
@@ -466,3 +495,86 @@ def test_request_carries_only_verified_statements() -> None:
     _run(uow, narrator)
 
     assert narrator.requests[0].statements == (verified.statement,)
+
+
+def test_contested_candidate_without_a_verified_quote_is_dropped() -> None:
+    """검증된 인용이 없는 대조 후보는 요청에서 빠진다.
+
+    프롬프트는 후보 본문을 사실로 싣고 모든 후보를 서술하라고 시킨다.
+    근거 없는 후보를 그대로 넘기면 검증되지 않은 값이 산문에 사실로
+    나간다.
+    """
+    node_id = uuid.uuid4()
+    verified = _verified(
+        _claim(node_id=node_id, predicate="status", value="검토 중")
+    )
+    unverified = replace(
+        _claim(
+            node_id=node_id,
+            predicate="status",
+            value="배포됨",
+            minutes=5,
+        ),
+        citation_verified=False,
+    )
+    uow = _uow(
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[verified, unverified],
+    )
+    uow.mutation_proposals.pending = {
+        node_id: [
+            _contradiction(
+                node_id=node_id,
+                claims=(verified, unverified),
+            )
+        ]
+    }
+    narrator = _FakeNarrator()
+
+    _run(uow, narrator)
+
+    request = next(
+        item
+        for item in narrator.requests
+        if item.block_kind == BLOCK_KIND_CONTESTED
+    )
+    assert [items for _, items in request.variants] == [
+        (verified.statement,)
+    ]
+    assert request.variants[0][0].startswith("검토 중")
+
+
+def test_contested_block_without_any_verified_quote_is_not_narrated() -> None:
+    """후보가 모두 빠지면 그 블록은 서술하지 않고 실패도 아니다."""
+    node_id = uuid.uuid4()
+    first = replace(
+        _claim(node_id=node_id, predicate="status", value="검토 중"),
+        citation_verified=False,
+    )
+    second = replace(
+        _claim(
+            node_id=node_id,
+            predicate="status",
+            value="배포됨",
+            minutes=5,
+        ),
+        citation_verified=False,
+    )
+    uow = _uow(
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[first, second],
+    )
+    uow.mutation_proposals.pending = {
+        node_id: [_contradiction(node_id=node_id, claims=(first, second))]
+    }
+    narrator = _FakeNarrator()
+
+    result = _run(uow, narrator)
+
+    assert [block.block_kind for block in _blocks(uow)] == [
+        BLOCK_KIND_CONTESTED
+    ]
+    assert narrator.requests == []
+    assert result.nodes_failed == 0
+    assert result.blocks_narrated == 0
+    assert all(block.narrative is None for block in _blocks(uow))

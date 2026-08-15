@@ -42,7 +42,8 @@ and never infer another connection.
 {% endif -%}
 {% if variants -%}
 This block puts competing readings side by side. Present every candidate and
-do not judge which one is right.
+do not judge which one is right. The list may be partial: candidates with no
+verified quote are left out, so never say how many readings exist in total.
 
 {% for body, variant_statements in variants -%}
 ### Candidate: << body >>
@@ -54,7 +55,7 @@ do not judge which one is right.
 {% endif %}
 ## Rules
 
-1. State only what the quotes above already say.
+1. State only what the quotes and relation lines above already say.
 2. Never invent or infer a person, a team, a date or a number. If the quotes
    do not carry it, it does not exist.
 3. Write 1 to 3 sentences. No heading, no bullet list, no markdown.
