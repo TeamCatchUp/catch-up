@@ -271,25 +271,52 @@ def test_pending_narrative_wins_over_the_published_one() -> None:
 
 
 def test_case_e_rejected_block_narrative_is_not_reused() -> None:
-    """반려된 변경안의 산문은 재사용 사전에 들어가지 않는다."""
+    """반려된 변경안의 산문은 재사용 사전에 들어가지 않는다.
+
+    지문이 그대로인 블록으로 봐야 이 규칙이 걸린다. 내용까지 바뀌면
+    지문이 달라져 어차피 재사용이 빗나가므로, 반려된 산문이 새는지
+    마는지가 결과에 드러나지 않는다. 그래서 절 하나만 바꾸고 나머지
+    절의 지문은 그대로 둔 채 다시 컴파일한다. 그 절의 산문은 반려된
+    행에만 남아 있다.
+    """
     node_id = uuid.uuid4()
     uow = _uow(
         nodes=[(node_id, "요청 A", "feature_request", "active")],
-        claims=[_verified(_claim(node_id=node_id))],
+        claims=[
+            _verified(_claim(node_id=node_id, predicate="status")),
+            _verified(
+                _claim(node_id=node_id, predicate="priority", value="높음")
+            ),
+        ],
+        sections=("status", "priority"),
     )
     narrator = _FakeNarrator()
     _run(uow, narrator)
-    for row in uow.artifacts.by_key.values():
-        row["status"] = "rejected"
-        row["rejection_reason"] = "문장이 틀렸다"
+    uow.artifacts.mark_rejected(
+        proposal_id=_pending(uow)["id"],
+        reviewer="사람",
+        reason="문장이 틀렸다",
+    )
     narrator.requests.clear()
     uow.knowledge_candidates.claims.append(
-        _verified(_claim(node_id=node_id, value="배포됨", minutes=10))
+        _verified(
+            _claim(
+                node_id=node_id,
+                predicate="priority",
+                value="낮음",
+                minutes=5,
+            )
+        )
     )
 
-    _run(uow, narrator)
+    result = _run(uow, narrator)
 
-    assert narrator.requests
+    assert sorted(item.heading for item in narrator.requests) == [
+        "priority",
+        "status",
+    ]
+    assert result.blocks_narrated == 2
+    assert result.blocks_narrative_reused == 0
 
 
 def test_case_f_narration_error_fails_the_node() -> None:
