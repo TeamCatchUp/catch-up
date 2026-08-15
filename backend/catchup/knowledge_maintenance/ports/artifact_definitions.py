@@ -47,6 +47,18 @@ class ArtifactDefinitionRepository(Protocol):
     틀릴 자리가 생기기 때문이다.
     """
 
+    def find_channel_style(self, *, channel_id: uuid.UUID) -> str | None:
+        """채널에 걸린 문체 preset id를 읽는다. 없으면 None이다.
+
+        저장된 값을 그대로 돌려준다. 그 id가 카탈로그에 실존하는지, 어떤
+        지시문으로 풀리는지는 읽는 쪽이 정한다 — 저장소가 카탈로그를
+        해석하기 시작하면 상수 개정이 저장 계층까지 흔든다.
+
+        정의 읽기의 곁가지로 이 포트에 둔다. 문서의 문체는 정의가 걸린
+        채널이 정하고, 컴파일이 채널에 닿는 길은 정의뿐이다.
+        """
+        ...
+
     def list_definitions(self) -> tuple[StoredArtifactDefinition, ...]:
         """workspace의 정의를 식별자 사전순으로 모두 읽는다.
 

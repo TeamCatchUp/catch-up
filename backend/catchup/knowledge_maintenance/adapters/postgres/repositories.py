@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import aliased
 
 from catchup.db.models import ArtifactDefinition as ArtifactDefinitionRow
+from catchup.db.models import Channel as ChannelRow
 from catchup.db.models import KnowledgeArtifact as KnowledgeArtifactRow
 from catchup.db.models import (
     KnowledgeArtifactChangeProposal as KnowledgeArtifactChangeProposalRow,
@@ -83,6 +84,7 @@ from catchup.knowledge_maintenance.contracts.vocabulary_convergence import (
 )
 from catchup.knowledge_maintenance.contracts.vocabulary_convergence import RelationUsage
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
+from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.artifact import deserialize_blocks
 from catchup.knowledge_maintenance.domain.artifact import serialize_blocks
 from catchup.knowledge_maintenance.domain.artifact import validate_blocks
@@ -2634,6 +2636,56 @@ class SqlAlchemyArtifactRepository:
         )
         return hashes
 
+    def list_reusable_narratives(
+        self,
+        *,
+        artifact_id: uuid.UUID,
+    ) -> dict[str, str]:
+        """다시 쓸 수 있는 산문을 블록 지문으로 찾아 모은다.
+
+        최신 판을 고르는 기준은 `find_latest_revision_id_and_number`와
+        같은 판 번호 최대값이다. 기준이 갈리면 같은 문서를 두 코드가
+        다르게 가리킨다.
+
+        계류 변경안을 뒤에 얹는다. 같은 지문이 양쪽에 있으면 사람 앞에
+        더 가까이 놓인 쪽을 쓴다는 뜻이며, 순서를 못박아야 실행마다
+        결과가 흔들리지 않는다.
+        """
+        found: dict[str, str] = {}
+        latest_blocks = self._session.scalar(
+            select(KnowledgeArtifactRevisionRow.blocks)
+            .where(
+                KnowledgeArtifactRevisionRow.workspace_id
+                == self._workspace_id,
+                KnowledgeArtifactRevisionRow.artifact_id == artifact_id,
+            )
+            .order_by(KnowledgeArtifactRevisionRow.revision_number.desc())
+            .limit(1)
+        )
+        if latest_blocks:
+            self._collect_narratives(found, latest_blocks)
+
+        for raw in self._session.scalars(
+            select(KnowledgeArtifactChangeProposalRow.blocks).where(
+                KnowledgeArtifactChangeProposalRow.workspace_id
+                == self._workspace_id,
+                KnowledgeArtifactChangeProposalRow.artifact_id
+                == artifact_id,
+                KnowledgeArtifactChangeProposalRow.status == "pending",
+            )
+        ):
+            self._collect_narratives(found, raw)
+        return found
+
+    @staticmethod
+    def _collect_narratives(
+        found: dict[str, str], raw: Sequence[Mapping[str, Any]]
+    ) -> None:
+        """저장된 블록에서 산문을 지문에 걸어 모은다."""
+        for block in deserialize_blocks(raw):
+            if block.narrative is not None:
+                found[block_content_hash(block)] = block.narrative
+
     def abandon_pending_proposals(
         self,
         *,
@@ -2921,6 +2973,19 @@ class SqlAlchemyArtifactDefinitionRepository:
                 " 쓸 수 있다."
             )
         return self._scoped_workspace_id
+
+    def find_channel_style(self, *, channel_id: uuid.UUID) -> str | None:
+        """채널에 걸린 문체 preset id를 읽는다. 없으면 None이다.
+
+        workspace를 조건에 함께 건다. 채널 식별자만으로 찾으면 남의
+        workspace 채널의 문체가 이 workspace 문서에 실린다.
+        """
+        return self._session.scalar(
+            select(ChannelRow.style_preset).where(
+                ChannelRow.id == channel_id,
+                ChannelRow.workspace_id == self._workspace_id,
+            )
+        )
 
     def list_definitions(self) -> tuple[StoredArtifactDefinition, ...]:
         """workspace의 정의를 식별자 사전순으로 모두 읽는다.

@@ -67,8 +67,15 @@ class FakeArtifactDefinitionRepository:
     def __init__(
         self,
         rows: list[tuple[uuid.UUID, uuid.UUID, str, dict[str, Any]]],
+        channel_styles: dict[uuid.UUID, str] | None = None,
     ) -> None:
         self.rows = list(rows)
+        # 채널 문체는 저장된 id 그대로다. 카탈로그 해석은 서비스가 한다.
+        self.channel_styles = dict(channel_styles or {})
+
+    def find_channel_style(self, *, channel_id: uuid.UUID) -> str | None:
+        """채널에 걸린 문체 preset id를 돌려준다. 없으면 None이다."""
+        return self.channel_styles.get(channel_id)
 
     def list_definitions(self) -> tuple[StoredArtifactDefinition, ...]:
         return tuple(

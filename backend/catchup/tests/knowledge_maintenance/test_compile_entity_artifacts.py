@@ -30,6 +30,7 @@ from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_OPEN_QUESTI
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
+from catchup.knowledge_maintenance.domain.artifact import deserialize_blocks
 from catchup.knowledge_maintenance.domain.artifact import serialize_blocks
 from catchup.knowledge_maintenance.domain.artifact import validate_blocks
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
@@ -290,6 +291,36 @@ class FakeArtifactRepository:
             and row["status"] in ("pending", "rejected")
         )
         return hashes
+
+    def list_reusable_narratives(
+        self, *, artifact_id: uuid.UUID
+    ) -> dict[str, str]:
+        """최신 판과 계류 변경안의 산문을 블록 지문으로 모은다.
+
+        실 저장소와 같은 재료만 본다 — 발행된 최신 판 하나와 pending
+        변경안이다. 반려·접힌 행은 빼야 사람이 반려한 산문이 되살아나지
+        않는다.
+        """
+        found: dict[str, str] = {}
+        rows = [
+            row
+            for row in self.revisions
+            if row["artifact_id"] == artifact_id
+        ]
+        if rows:
+            latest = max(rows, key=lambda row: row["revision_number"])
+            for block in deserialize_blocks(latest["blocks"]):
+                if block.narrative is not None:
+                    found[block_content_hash(block)] = block.narrative
+        for row in self.by_key.values():
+            if row["artifact_id"] != artifact_id:
+                continue
+            if row["status"] != "pending":
+                continue
+            for block in row["blocks"]:
+                if block.narrative is not None:
+                    found[block_content_hash(block)] = block.narrative
+        return found
 
     def abandon_pending_proposals(
         self,
