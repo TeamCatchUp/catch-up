@@ -14,7 +14,9 @@ from sqlalchemy import ColumnElement
 from sqlalchemy import DateTime
 from sqlalchemy import Select
 from sqlalchemy import String
+from sqlalchemy import Text
 from sqlalchemy import cast
+from sqlalchemy import collate
 from sqlalchemy import func
 from sqlalchemy import nullsfirst
 from sqlalchemy import nullslast
@@ -25,7 +27,9 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import aliased
 
+from catchup.db.models import ArtifactDefinition as ArtifactDefinitionRow
 from catchup.db.models import KnowledgeArtifact as KnowledgeArtifactRow
 from catchup.db.models import (
     KnowledgeArtifactChangeProposal as KnowledgeArtifactChangeProposalRow,
@@ -81,6 +85,12 @@ from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import deserialize_blocks
 from catchup.knowledge_maintenance.domain.artifact import serialize_blocks
 from catchup.knowledge_maintenance.domain.artifact import validate_blocks
+from catchup.knowledge_maintenance.domain.artifact_definition import DIRECTION_ANY
+from catchup.knowledge_maintenance.domain.artifact_definition import DIRECTION_IN
+from catchup.knowledge_maintenance.domain.artifact_definition import DIRECTION_OUT
+from catchup.knowledge_maintenance.domain.artifact_definition import (
+    deserialize_selection_spec,
+)
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.domain.entity_resolution import anchor_excerpt
 from catchup.knowledge_maintenance.domain.evidence import Locator
@@ -116,6 +126,9 @@ from catchup.knowledge_maintenance.domain.pipeline_event import resolve_failure
 from catchup.knowledge_maintenance.domain.source_version import JsonValue
 from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
+from catchup.knowledge_maintenance.ports.artifact_definitions import (
+    StoredArtifactDefinition,
+)
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConflict
 from catchup.knowledge_maintenance.ports.artifacts import CurrentRevisionForProjection
 from catchup.knowledge_maintenance.ports.artifacts import EntityCardSource
@@ -137,6 +150,7 @@ from catchup.knowledge_maintenance.ports.mutation_proposals import StoredMergePr
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredOperation
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPendingProposal
 from catchup.knowledge_maintenance.ports.ontology import OntologySnapshotConflict
+from catchup.knowledge_maintenance.ports.relations import StoredRelationEdge
 from catchup.observability.logging import get_logger
 
 logger = get_logger(__name__)
@@ -2361,86 +2375,69 @@ class SqlAlchemyArtifactRepository:
             )
         return self._scoped_workspace_id
 
-    def find_top_entity_nodes(self, *, limit: int) -> list[EntityCardSource]:
-        """카드를 만들 대상 노드를 claim이 많은 순으로 고른다.
-
-        claim의 subject는 canonical 노드를 직접 가리키거나, 해소를 마친
-        entity 후보를 거쳐 가리킨다. 지금 파이프라인은 뒤쪽으로 저장하므로
-        두 경로를 coalesce로 합쳐 센다. 한쪽만 보면 대부분의 노드가 0건이
-        된다.
-
-        claim과 inner join하므로 claim이 없는 노드는 자연히 빠진다. 순위가
-        같을 때는 노드 식별자로 갈라 실행마다 순서가 흔들리지 않게 한다.
-        """
-        subject_node_id = func.coalesce(
-            KnowledgeClaimCandidateRow.subject_node_id,
-            KnowledgeEntityCandidateRow.resolved_node_id,
-        )
-        claim_count = func.count(KnowledgeClaimCandidateRow.id)
-        statement = (
-            select(
-                KnowledgeNodeRow.id,
-                KnowledgeNodeRow.display_name,
-                KnowledgeNodeRow.canonical_key,
-                claim_count,
-            )
-            .select_from(KnowledgeClaimCandidateRow)
-            .outerjoin(
-                KnowledgeEntityCandidateRow,
-                KnowledgeClaimCandidateRow.subject_entity_candidate_id
-                == KnowledgeEntityCandidateRow.id,
-            )
-            .join(
-                KnowledgeNodeRow,
-                KnowledgeNodeRow.id == subject_node_id,
-            )
-            .where(
-                KnowledgeClaimCandidateRow.workspace_id == self._workspace_id,
-                KnowledgeNodeRow.workspace_id == self._workspace_id,
-                KnowledgeNodeRow.node_kind == NodeKind.ENTITY.value,
-                KnowledgeNodeRow.lifecycle_state == "active",
-            )
-            .group_by(
-                KnowledgeNodeRow.id,
-                KnowledgeNodeRow.display_name,
-                KnowledgeNodeRow.canonical_key,
-            )
-            .order_by(claim_count.desc(), KnowledgeNodeRow.id)
-            .limit(limit)
-        )
-        return [
-            EntityCardSource(
-                node_id=node_id,
-                display_name=display_name or canonical_key or str(node_id),
-                claim_count=count,
-            )
-            for node_id, display_name, canonical_key, count in (
-                self._session.execute(statement).all()
-            )
-        ]
-
-    def get_or_create_artifact(
+    def find_entity_nodes_by_types(
         self,
         *,
+        entity_types: Sequence[str],
+    ) -> list[EntityCardSource]:
+        """고른 종류의 살아 있는 entity 노드를 모두 돌려준다.
+
+        claim과 join하지 않는다. claim이 아직 없는 노드도 정의가 고른
+        종류면 대상이기 때문이다.
+
+        정렬을 DB에 맡긴다. 이름은 비어 있을 수 있어 표시에 쓰는 값과
+        같은 식으로 메워 그 값으로 줄을 세우고, 이름이 같으면 식별자를
+        문자열로 캐 갈라 실행마다 같은 차례가 나오게 한다.
+
+        줄 세우기에 C 대조 규칙을 못 박는다. DB 기본 대조 규칙은 로케일
+        설정에 따라 한글의 앞뒤가 달라져, 같은 코드가 서버마다 다른
+        차례를 내고 파이썬 쪽 문자열 비교와도 어긋나기 때문이다.
+        """
+        display_name = func.coalesce(
+            KnowledgeNodeRow.display_name,
+            KnowledgeNodeRow.canonical_key,
+            cast(KnowledgeNodeRow.id, Text),
+        )
+        statement = (
+            select(KnowledgeNodeRow.id, display_name)
+            .where(
+                KnowledgeNodeRow.workspace_id == self._workspace_id,
+                KnowledgeNodeRow.entity_type.in_(list(entity_types)),
+                KnowledgeNodeRow.lifecycle_state == "active",
+            )
+            .order_by(
+                collate(display_name, "C"),
+                collate(cast(KnowledgeNodeRow.id, Text), "C"),
+            )
+        )
+        return [
+            EntityCardSource(node_id=node_id, display_name=name)
+            for node_id, name in self._session.execute(statement).all()
+        ]
+
+    def get_or_create_definition_artifact(
+        self,
+        *,
+        definition_id: uuid.UUID,
+        channel_id: uuid.UUID,
         kind: str,
         subject_node_id: uuid.UUID,
         title: str,
     ) -> uuid.UUID:
-        """대상에 붙는 문서를 만들거나 이미 있는 것을 돌려준다.
+        """정의가 대상에 만드는 문서를 찾거나 새로 만든다.
 
-        이미 있으면 제목을 덮어쓰지 않는다. 제목은 문서의 정체성이라
-        컴파일을 다시 돌 때마다 바뀌면 사람이 같은 문서인지 알 수 없다.
+        (정의, 대상)으로만 찾는다. 그 짝의 UNIQUE가 이 문서의 유일성을
+        말하는 제약이므로, 조건을 넓히면 정의가 kind나 채널을 바꾼 뒤
+        같은 짝에 문서가 둘 생기려다 제약에 막힌다.
 
-        정의 없는 문서만 찾고 만든다. (workspace, kind, 대상)이 하나임은
-        정의 이전 문서에서만 성립하므로, 정의에 매인 문서까지 후보로 보면
-        엉뚱한 문서에 판을 얹게 된다.
+        이미 있으면 제목도 채널도 덮어쓰지 않는다. 제목은 문서의 정체성
+        이고, 채널을 옮기는 일은 컴파일이 아니라 사람의 결정이다.
         """
         found = self._session.scalar(
             select(KnowledgeArtifactRow.id).where(
                 KnowledgeArtifactRow.workspace_id == self._workspace_id,
-                KnowledgeArtifactRow.kind == kind,
+                KnowledgeArtifactRow.definition_id == definition_id,
                 KnowledgeArtifactRow.subject_node_id == subject_node_id,
-                KnowledgeArtifactRow.definition_id.is_(None),
             )
         )
         if found is not None:
@@ -2451,6 +2448,8 @@ class SqlAlchemyArtifactRepository:
             KnowledgeArtifactRow(
                 id=artifact_id,
                 workspace_id=self._workspace_id,
+                definition_id=definition_id,
+                channel_id=channel_id,
                 kind=kind,
                 subject_node_id=subject_node_id,
                 title=title,
@@ -2458,6 +2457,25 @@ class SqlAlchemyArtifactRepository:
         )
         self._session.flush()
         return artifact_id
+
+    def find_definition_artifact(
+        self,
+        *,
+        definition_id: uuid.UUID,
+        subject_node_id: uuid.UUID,
+    ) -> uuid.UUID | None:
+        """정의가 대상에 만든 문서를 찾기만 한다. 없으면 None이다.
+
+        찾는 기준은 `get_or_create_definition_artifact`와 같은 (정의,
+        대상)이고, 없을 때 행을 만들지 않는 것만 다르다.
+        """
+        return self._session.scalar(
+            select(KnowledgeArtifactRow.id).where(
+                KnowledgeArtifactRow.workspace_id == self._workspace_id,
+                KnowledgeArtifactRow.definition_id == definition_id,
+                KnowledgeArtifactRow.subject_node_id == subject_node_id,
+            )
+        )
 
     def find_latest_revision_id_and_number(
         self,
@@ -2881,6 +2899,206 @@ class SqlAlchemyArtifactRepository:
         )
         self._session.flush()
         return revision_id
+
+
+class SqlAlchemyArtifactDefinitionRepository:
+    """정의 행 읽기를 PostgreSQL로 구현한다.
+
+    artifact 저장소와 같이 workspace를 생성 시점에 고정한다.
+    """
+
+    def __init__(self, session: Session, workspace_id: int | None) -> None:
+        self._session = session
+        self._scoped_workspace_id = workspace_id
+
+    @property
+    def _workspace_id(self) -> int:
+        """고정된 workspace를 돌려준다. 없으면 쓰지 못하게 막는다."""
+        if self._scoped_workspace_id is None:
+            raise RuntimeError(
+                "artifact 정의 저장소는 workspace_id를 받은 UnitOfWork에서만"
+                " 쓸 수 있다."
+            )
+        return self._scoped_workspace_id
+
+    def list_definitions(self) -> tuple[StoredArtifactDefinition, ...]:
+        """workspace의 정의를 식별자 사전순으로 모두 읽는다.
+
+        정렬을 DB에 맡긴다. 식별자를 문자열로 캐 C 대조 규칙으로 줄을
+        세우므로, 서버 로케일이 달라도 실행마다 같은 차례가 나온다.
+
+        선택 규칙 역직렬화가 던지면 그대로 올려 보낸다. 깨진 행 하나를
+        건너뛰면 그 정의의 문서만 조용히 비기 때문이다.
+
+        title_prefix는 kind와 같은 값으로 채운다. 아직 제목 앞자리를
+        따로 저장하는 칸이 없다.
+
+        Raises:
+            SelectionSpecError: 저장된 선택 규칙을 읽을 수 없을 때 던진다.
+        """
+        statement = (
+            select(
+                ArtifactDefinitionRow.id,
+                ArtifactDefinitionRow.channel_id,
+                ArtifactDefinitionRow.kind,
+                ArtifactDefinitionRow.selection_spec,
+            )
+            .where(ArtifactDefinitionRow.workspace_id == self._workspace_id)
+            .order_by(collate(cast(ArtifactDefinitionRow.id, Text), "C"))
+        )
+        return tuple(
+            StoredArtifactDefinition(
+                id=definition_id,
+                channel_id=channel_id,
+                kind=kind,
+                selection_spec=deserialize_selection_spec(selection_spec),
+                title_prefix=kind,
+            )
+            for definition_id, channel_id, kind, selection_spec in (
+                self._session.execute(statement).all()
+            )
+        )
+
+
+class SqlAlchemyRelationRepository:
+    """관계 한 걸음 읽기를 PostgreSQL로 구현한다.
+
+    artifact 저장소와 같이 workspace를 생성 시점에 고정한다.
+    """
+
+    def __init__(self, session: Session, workspace_id: int | None) -> None:
+        self._session = session
+        self._scoped_workspace_id = workspace_id
+
+    @property
+    def _workspace_id(self) -> int:
+        """고정된 workspace를 돌려준다. 없으면 쓰지 못하게 막는다."""
+        if self._scoped_workspace_id is None:
+            raise RuntimeError(
+                "관계 저장소는 workspace_id를 받은 UnitOfWork에서만 쓸 수"
+                " 있다."
+            )
+        return self._scoped_workspace_id
+
+    def find_edges(
+        self,
+        *,
+        node_ids: Sequence[uuid.UUID],
+        relation_type: str,
+        direction: str,
+        now: datetime,
+    ) -> list[StoredRelationEdge]:
+        """주어진 노드에 걸린 살아 있는 관계 간선을 읽는다.
+
+        끝점 해소는 `find_claim_candidates`의 subject 해소와 같은
+        방식이다. 노드를 직접 가리키는 끝점과, 그 노드로 해소된 entity
+        후보를 가리키는 끝점은 같은 대상을 가리키기 때문이다. 두 칸을
+        coalesce로 한 값으로 합쳐, 걸러 내기와 돌려주기 양쪽이 같은
+        표현을 본다 — 주어진 노드를 원본 칸으로만 맞추면 후보를 거쳐
+        들어온 간선이 통째로 빠져 경로가 한 걸음 앞에서 끊긴다.
+
+        해소되지 않은 끝점이 있으면 그 행은 빠진다. 어느 노드를
+        가리키는지 정해지지 않은 끝점은 순회의 다음 출발점이 될 수 없다.
+
+        생사 판정은 domain.temporal.claim_not_closed_at과 같은 술어를
+        SQL로 옮긴 것이다. valid_from은 보지 않고 닫힌 관계만 뺀다.
+
+        상태로 거르는 것은 `find_claim_candidates`와 같다 — rejected는
+        참이었던 적이 없고, superseded는 재추출이 대체한 구 배치라
+        새 배치와 함께 실리면 같은 관계가 두 번 들어간다.
+
+        정렬을 DB에 맡긴다. 식별자를 문자열로 캐 C 대조 규칙으로 줄을
+        세우므로, 서버 로케일이 달라도 같은 차례가 나온다.
+
+        해소된 끝점 노드를 한 번 더 이어 표시 이름을 함께 캔다. 순회가
+        이웃을 이름 차례로 세우므로, 이름을 걸음마다 따로 물으면 왕복이
+        곱절이 된다.
+        """
+        source_candidate = aliased(KnowledgeEntityCandidateRow)
+        target_candidate = aliased(KnowledgeEntityCandidateRow)
+        source_node = aliased(KnowledgeNodeRow)
+        target_node = aliased(KnowledgeNodeRow)
+        source_endpoint = func.coalesce(
+            KnowledgeRelationCandidateRow.source_node_id,
+            source_candidate.resolved_node_id,
+        )
+        target_endpoint = func.coalesce(
+            KnowledgeRelationCandidateRow.target_node_id,
+            target_candidate.resolved_node_id,
+        )
+        wanted = list(node_ids)
+        if direction == DIRECTION_OUT:
+            reachable = source_endpoint.in_(wanted)
+        elif direction == DIRECTION_IN:
+            reachable = target_endpoint.in_(wanted)
+        elif direction == DIRECTION_ANY:
+            reachable = or_(
+                source_endpoint.in_(wanted), target_endpoint.in_(wanted)
+            )
+        else:
+            raise ValueError(f"알 수 없는 관계 방향이다: {direction}")
+
+        statement = (
+            select(
+                KnowledgeRelationCandidateRow.id,
+                source_endpoint,
+                target_endpoint,
+                KnowledgeRelationCandidateRow.assertion_text,
+                source_node.display_name,
+                target_node.display_name,
+            )
+            .outerjoin(
+                source_candidate,
+                KnowledgeRelationCandidateRow.source_entity_candidate_id
+                == source_candidate.id,
+            )
+            .outerjoin(
+                target_candidate,
+                KnowledgeRelationCandidateRow.target_entity_candidate_id
+                == target_candidate.id,
+            )
+            .outerjoin(source_node, source_node.id == source_endpoint)
+            .outerjoin(target_node, target_node.id == target_endpoint)
+            .where(
+                KnowledgeRelationCandidateRow.workspace_id
+                == self._workspace_id,
+                KnowledgeRelationCandidateRow.relation_type == relation_type,
+                KnowledgeRelationCandidateRow.resolution_status.notin_(
+                    (
+                        AssertionResolutionStatus.REJECTED.value,
+                        AssertionResolutionStatus.SUPERSEDED.value,
+                    )
+                ),
+                or_(
+                    KnowledgeRelationCandidateRow.valid_to.is_(None),
+                    KnowledgeRelationCandidateRow.valid_to > now,
+                ),
+                source_endpoint.is_not(None),
+                target_endpoint.is_not(None),
+                reachable,
+            )
+            .order_by(
+                collate(cast(KnowledgeRelationCandidateRow.id, Text), "C")
+            )
+        )
+        return [
+            StoredRelationEdge(
+                id=relation_id,
+                source_node_id=source_node_id,
+                target_node_id=target_node_id,
+                assertion_text=assertion_text,
+                source_display_name=source_display_name,
+                target_display_name=target_display_name,
+            )
+            for (
+                relation_id,
+                source_node_id,
+                target_node_id,
+                assertion_text,
+                source_display_name,
+                target_display_name,
+            ) in self._session.execute(statement).all()
+        ]
 
 
 class SqlAlchemyBlockVerdictRepository:

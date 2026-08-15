@@ -644,6 +644,7 @@ def _to_block(
         proposal_ids=[str(item) for item in block.proposal_ids],
         ontology_version=block.ontology_version,
         block_content_hash=block_content_hash(block),
+        relation_ids=[str(item) for item in block.relation_ids],
         sources=[] if contested else _to_sources(block.sources),
         variants=(
             [
@@ -672,12 +673,15 @@ def _to_detail(
     by_index = {verdict.block_index: verdict for verdict in verdicts}
     claim_ids: dict[str, None] = {}
     proposal_ids: dict[str, None] = {}
+    relation_ids: dict[str, None] = {}
     blocks: list[BlockResponse] = []
     for index, block in enumerate(proposal.blocks):
         for claim_id in block.claim_ids:
             claim_ids.setdefault(str(claim_id), None)
         for item in block.proposal_ids:
             proposal_ids.setdefault(str(item), None)
+        for relation_id in block.relation_ids:
+            relation_ids.setdefault(str(relation_id), None)
         blocks.append(
             _to_block(
                 block,
@@ -703,6 +707,7 @@ def _to_detail(
         read_set=ReadSetResponse(
             claim_ids=list(claim_ids),
             proposal_ids=list(proposal_ids),
+            relation_ids=list(relation_ids),
         ),
         conflicts=conflicts,
     )

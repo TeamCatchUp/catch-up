@@ -190,6 +190,28 @@ def _definition(
     return _Definition(definition_id, workspace_id, channel_id, kind)
 
 
+def _definition_with_channel(
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+) -> _Definition:
+    """문서가 딛고 설 채널과 정의를 한 벌로 새로 만든다.
+
+    문서 행은 정의에 매여 있어, 문서를 다루는 시험은 무엇을 시험하든
+    정의를 먼저 세워야 한다. 채널 하나에 같은 kind의 정의는 하나뿐이라
+    부를 때마다 채널도 새로 판다.
+
+    판정자를 고르는 자리가 아니므로 만든 사람은 아무 user나 쓴다.
+    """
+    with session_factory() as session:
+        user_id = session.execute(
+            select(User.id).order_by(User.id).limit(1)
+        ).scalar()
+    if user_id is None:
+        pytest.skip("user가 없어 통합 테스트를 건너뛴다.")
+    channel_id = _channel(session_factory, workspace_id, user_id)
+    return _definition(session_factory, workspace_id, channel_id, user_id)
+
+
 def _subject_node(
     session_factory: Callable[[], Session],
     workspace_id: int,

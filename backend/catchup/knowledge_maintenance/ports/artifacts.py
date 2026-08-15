@@ -86,12 +86,10 @@ class EntityCardSource:
     Attributes:
         node_id: 대상 canonical 노드를 가리킨다.
         display_name: 문서 제목으로 쓸 이름을 담는다.
-        claim_count: 이 노드를 subject로 삼는 claim 수를 나타낸다.
     """
 
     node_id: uuid.UUID
     display_name: str
-    claim_count: int
 
 
 class ArtifactRepository(Protocol):
@@ -102,22 +100,61 @@ class ArtifactRepository(Protocol):
     자리가 생기기 때문이다.
     """
 
-    def find_top_entity_nodes(self, *, limit: int) -> list[EntityCardSource]:
-        """카드를 만들 대상 노드를 claim이 많은 순으로 고른다.
+    def find_entity_nodes_by_types(
+        self,
+        *,
+        entity_types: Sequence[str],
+    ) -> list[EntityCardSource]:
+        """고른 종류의 살아 있는(active) entity 노드를 모두 돌려준다.
 
-        살아 있는(active) canonical 노드만 본다. claim이 하나도 없는
-        노드는 쓸 내용이 없으므로 제외한다.
+        정의가 고른 종류에 해당하면 전부 대상이다. claim이 몇 건인지는
+        보지 않는다 — 정의는 조건이지 인기 순위가 아니므로, claim이 쌓이는
+        속도에 따라 어떤 노드가 문서가 되는지 달라지면 안 된다.
+
+        차례는 이름·식별자 사전순이다. 같은 지식 상태에서 두 번 물으면
+        같은 목록이 나와야 검토 큐에 오르는 순서가 흔들리지 않는다.
         """
         ...
 
-    def get_or_create_artifact(
+    def get_or_create_definition_artifact(
         self,
         *,
+        definition_id: uuid.UUID,
+        channel_id: uuid.UUID,
         kind: str,
         subject_node_id: uuid.UUID,
         title: str,
     ) -> uuid.UUID:
-        """대상에 붙는 문서를 만들거나 이미 있는 것을 돌려준다."""
+        """정의가 대상에 만드는 문서를 찾거나 새로 만든다.
+
+        찾는 기준은 (정의, 대상) 하나뿐이다. 그 짝이 유일하다는 것이
+        저장 계층의 제약이므로, kind나 채널을 조건에 더하면 정의가
+        바뀐 뒤 같은 짝의 문서를 새로 만들어 문서가 갈라진다.
+
+        이미 있으면 제목을 덮어쓰지 않는다. 제목은 문서의 정체성이라
+        컴파일을 다시 돌 때마다 바뀌면 사람이 같은 문서인지 알 수 없다.
+
+        채널과 kind는 정의에서 그대로 이어받아 새 행에만 적는다. 문서가
+        딛고 선 정의와 같은 채널·kind임을 저장 계층이 보증하기 때문이다.
+        """
+        ...
+
+    def find_definition_artifact(
+        self,
+        *,
+        definition_id: uuid.UUID,
+        subject_node_id: uuid.UUID,
+    ) -> uuid.UUID | None:
+        """정의가 대상에 만든 문서를 찾기만 한다. 없으면 None이다.
+
+        찾는 기준은 `get_or_create_definition_artifact`와 같은 (정의,
+        대상)이다. 다른 기준을 쓰면 같은 짝을 두 함수가 다르게 가리켜,
+        한쪽이 만든 문서를 다른 쪽이 못 찾는다.
+
+        만들지 않는 것이 이 함수의 존재 이유다. 문서를 세울 수 없다고
+        판정한 자리에서 예전 변경안을 거두려면 문서를 먼저 찾아야 하는데,
+        그때 없는 문서를 새로 만들면 제목만 있고 내용이 없는 카드가 선다.
+        """
         ...
 
     def find_latest_revision_id_and_number(

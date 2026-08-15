@@ -89,8 +89,9 @@ def test_compile_artifacts_counts_a_conflict_as_a_failure(
     """
     monkeypatch.setattr(
         run_bench_adjudication,
-        "compile_entity_artifacts",
-        lambda uow, *, workspace_id, vocabulary, limit: ArtifactCompileResult(
+        "compile_definition_artifacts",
+        lambda uow, *, workspace_id, vocabulary: ArtifactCompileResult(
+            definitions_considered=1,
             nodes_considered=3,
             proposals_created=1,
             proposals_revived=0,
@@ -103,10 +104,34 @@ def test_compile_artifacts_counts_a_conflict_as_a_failure(
         _FakeUow(()),
         workspace_id=910000,
         vocabulary=object(),
-        limit=100,
     )
 
     assert outcome.done == 1
+    assert outcome.failed == 1
+
+
+def test_compile_artifacts_fails_when_no_definition_exists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """정의가 하나도 없으면 그 자체를 실패로 올려 보낸다.
+
+    무엇을 문서로 만들지는 정의가 정한다. 정의가 없으면 카드가 한 장도
+    서지 않는데, 0건을 정상으로 넘기면 exit 0으로 끝나 오케스트레이터가
+    지식이 빠진 workspace를 완료로 기록한다.
+    """
+    monkeypatch.setattr(
+        run_bench_adjudication,
+        "compile_definition_artifacts",
+        lambda uow, *, workspace_id, vocabulary: ArtifactCompileResult(),
+    )
+
+    outcome = run_bench_adjudication._compile_artifacts(
+        _FakeUow(()),
+        workspace_id=910000,
+        vocabulary=object(),
+    )
+
+    assert outcome.done == 0
     assert outcome.failed == 1
 
 

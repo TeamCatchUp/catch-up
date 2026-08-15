@@ -29,6 +29,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
 from catchup.configs.config import settings
+from catchup.db.models import ArtifactDefinition
+from catchup.db.models import Channel
 from catchup.db.models import KnowledgeArtifact
 from catchup.db.models import KnowledgeArtifactChangeProposal as ProposalRow
 from catchup.db.models import KnowledgeArtifactRevision as RevisionRow
@@ -51,8 +53,10 @@ from catchup.knowledge_maintenance.services.review_artifact_proposal import (
 from catchup.knowledge_maintenance.services.review_artifact_proposal import (
     review_artifact_proposal,
 )
+from catchup.tests.knowledge_maintenance.test_artifact_definition_schema import (
+    _definition_with_channel,
+)
 
-ARTIFACT_KIND = "entity_summary"
 REVIEWER = "tester"
 
 
@@ -118,19 +122,29 @@ def committed_artifacts() -> list[uuid.UUID]:
 
 
 @pytest.fixture
-def committed_uow_factory(
-    engine: Engine,
-    workspace_id: int,
-    committed_artifacts: list[uuid.UUID],
-) -> Iterator[Callable[[], KnowledgeMaintenanceUnitOfWork]]:
-    """정말로 커밋하는 UnitOfWork를 낸다. UoW마다 다른 연결을 쓴다.
+def committed_session_factory(engine: Engine) -> Callable[[], Session]:
+    """정말로 커밋하는 세션을 낸다. 세션마다 다른 연결을 쓴다.
 
     다른 테스트가 쓰는 `session_factory`는 한 연결 위의 savepoint라 여러
     세션이 사실은 같은 transaction이다. 결정 경합은 두 transaction이 각각
-    커밋해야만 생기므로 여기서는 engine에 직접 물린다. 되감기로 지워지지
-    않으니 만든 행은 끝나고 손으로 지운다.
+    커밋해야만 생기므로 여기서는 engine에 직접 물린다.
     """
-    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    return sessionmaker(bind=engine, expire_on_commit=False)
+
+
+@pytest.fixture
+def committed_uow_factory(
+    committed_session_factory: Callable[[], Session],
+    workspace_id: int,
+    committed_artifacts: list[uuid.UUID],
+) -> Iterator[Callable[[], KnowledgeMaintenanceUnitOfWork]]:
+    """정말로 커밋하는 UnitOfWork를 낸다.
+
+    되감기로 지워지지 않으니 만든 행은 끝나고 손으로 지운다. 문서가
+    딛고 선 정의와 채널도 같이 지운다 — 남으면 다음 회차가 같은 채널에
+    같은 kind의 정의를 또 만들지 못한다.
+    """
+    session_factory = committed_session_factory
 
     yield lambda: KnowledgeMaintenanceUnitOfWork(
         session_factory, workspace_id=workspace_id
@@ -138,10 +152,15 @@ def committed_uow_factory(
 
     with session_factory() as session:
         for artifact_id in committed_artifacts:
-            node_id = session.scalar(
-                select(KnowledgeArtifact.subject_node_id).where(
-                    KnowledgeArtifact.id == artifact_id
-                )
+            found = session.execute(
+                select(
+                    KnowledgeArtifact.subject_node_id,
+                    KnowledgeArtifact.definition_id,
+                    KnowledgeArtifact.channel_id,
+                ).where(KnowledgeArtifact.id == artifact_id)
+            ).first()
+            node_id, definition_id, channel_id = (
+                found if found is not None else (None, None, None)
             )
             # 판과 변경안이 서로를 가리키므로(base_revision_id ↔
             # source_proposal_id) 참조를 먼저 끊고 지운다.
@@ -168,6 +187,16 @@ def committed_uow_factory(
             if node_id is not None:
                 session.execute(
                     delete(NodeRow).where(NodeRow.id == node_id)
+                )
+            if definition_id is not None:
+                session.execute(
+                    delete(ArtifactDefinition).where(
+                        ArtifactDefinition.id == definition_id
+                    )
+                )
+            if channel_id is not None:
+                session.execute(
+                    delete(Channel).where(Channel.id == channel_id)
                 )
         session.commit()
 
@@ -205,9 +234,12 @@ def _artifact_id(
         session.commit()
         node_id = node.id
 
+    definition = _definition_with_channel(session_factory, workspace_id)
     with uow_factory() as uow:
-        artifact_id = uow.artifacts.get_or_create_artifact(
-            kind=ARTIFACT_KIND,
+        artifact_id = uow.artifacts.get_or_create_definition_artifact(
+            definition_id=definition.id,
+            channel_id=definition.channel_id,
+            kind=definition.kind,
             subject_node_id=node_id,
             title="결제 기능",
         )
@@ -238,8 +270,10 @@ def _committed_proposal(
     uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
     workspace_id: int,
     committed_artifacts: list[uuid.UUID],
+    session_factory: Callable[[], Session],
 ) -> uuid.UUID:
     """정말로 커밋된 계류 변경안 하나를 새 문서 위에 마련한다."""
+    definition = _definition_with_channel(session_factory, workspace_id)
     with uow_factory() as uow:
         node = uow.knowledge_nodes.create_entity_node(
             workspace_id=workspace_id,
@@ -247,8 +281,10 @@ def _committed_proposal(
             canonical_key=f"test:feature:{uuid.uuid4().hex}",
             display_name="결제 기능",
         )
-        artifact_id = uow.artifacts.get_or_create_artifact(
-            kind=ARTIFACT_KIND,
+        artifact_id = uow.artifacts.get_or_create_definition_artifact(
+            definition_id=definition.id,
+            channel_id=definition.channel_id,
+            kind=definition.kind,
             subject_node_id=node.id,
             title="결제 기능",
         )
@@ -292,6 +328,7 @@ def test_reject_committed_first_beats_late_approval(
     workspace_id: int,
     committed_artifacts: list[uuid.UUID],
     committed_uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    committed_session_factory: Callable[[], Session],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """먼저 커밋된 반려를 뒤늦은 승인이 덮지 못한다.
@@ -300,7 +337,10 @@ def test_reject_committed_first_beats_late_approval(
     "반려됐는데 문서에 실렸다"는 모순이라 조용히 넘길 수 없다.
     """
     proposal_id = _committed_proposal(
-        committed_uow_factory, workspace_id, committed_artifacts
+        committed_uow_factory,
+        workspace_id,
+        committed_artifacts,
+        committed_session_factory,
     )
 
     def _rival() -> None:
@@ -340,6 +380,7 @@ def test_approve_committed_first_beats_late_rejection(
     workspace_id: int,
     committed_artifacts: list[uuid.UUID],
     committed_uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    committed_session_factory: Callable[[], Session],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """먼저 커밋된 승인을 뒤늦은 반려가 덮지 못한다.
@@ -347,7 +388,10 @@ def test_approve_committed_first_beats_late_rejection(
     덮으면 반려로 적힌 변경안이 이미 발행된 판의 출처로 남는다.
     """
     proposal_id = _committed_proposal(
-        committed_uow_factory, workspace_id, committed_artifacts
+        committed_uow_factory,
+        workspace_id,
+        committed_artifacts,
+        committed_session_factory,
     )
 
     def _rival() -> None:
@@ -553,6 +597,7 @@ def test_approved_revert_reaches_new_revision(
     workspace_id: int,
     committed_artifacts: list[uuid.UUID],
     committed_uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    committed_session_factory: Callable[[], Session],
 ) -> None:
     """승인된 옛 판 내용으로 돌아와도 새 판으로 승인될 수 있다.
 
@@ -561,7 +606,10 @@ def test_approved_revert_reaches_new_revision(
     rev3=A로 끝나야 문서가 현재 사실로 돌아올 길이 있다.
     """
     proposal_a = _committed_proposal(
-        committed_uow_factory, workspace_id, committed_artifacts
+        committed_uow_factory,
+        workspace_id,
+        committed_artifacts,
+        committed_session_factory,
     )
     artifact_id = committed_artifacts[-1]
     blocks_a = _blocks("2026-09")

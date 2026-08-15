@@ -98,9 +98,13 @@ class BlockVerdictResponse(BaseModel):
 class BlockResponse(BaseModel):
     """변경안 본문 블록 하나를 담는다.
 
-    claim_ids·proposal_ids가 블록 단위 Read Set(근거 장부)이다. 문서의
-    어느 문장이 무엇을 근거로 삼았는지는 블록에서만 알 수 있으므로,
-    상세 응답은 이것을 블록에 붙인 채로 내보낸다.
+    claim_ids·proposal_ids·relation_ids가 블록 단위 Read Set(근거
+    장부)이다. 문서의 어느 문장이 무엇을 근거로 삼았는지는 블록에서만
+    알 수 있으므로, 상세 응답은 이것을 블록에 붙인 채로 내보낸다.
+
+    relation_ids는 relation_section 블록에서만 값이 있고, 그 블록의
+    근거는 이것 하나뿐이다. 빈 목록을 기본값으로 두는 이유는 관계
+    장부가 없던 옛 블록도 그대로 읽혀야 하기 때문이다.
 
     block_index는 목록에서의 자리이며 블록 결정 요청의 경로에 그대로
     실린다. block_content_hash는 지금 본문의 지문이다.
@@ -124,6 +128,7 @@ class BlockResponse(BaseModel):
     proposal_ids: list[str]
     ontology_version: str | None
     block_content_hash: str
+    relation_ids: list[str] = []
     sources: list[BlockSourceResponse] = []
     variants: list[VariantResponse] | None = None
     verdict: BlockVerdictResponse | None = None
@@ -139,6 +144,7 @@ class ReadSetResponse(BaseModel):
 
     claim_ids: list[str]
     proposal_ids: list[str]
+    relation_ids: list[str] = []
 
 
 class ConflictValueResponse(BaseModel):

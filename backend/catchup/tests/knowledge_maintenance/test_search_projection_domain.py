@@ -7,6 +7,7 @@ from datetime import UTC
 from datetime import datetime
 
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_RELATION_SECTION
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.search_projection import (
     project_revision_blocks,
@@ -61,6 +62,50 @@ def test_projects_block_to_document() -> None:
     assert doc.metadata["claim_ids"] == [str(c) for c in _block_claim_ids()]
     assert "contextual_content" in doc.metadata
     assert doc.metadata["created_at"] == NOW.isoformat()
+
+
+def test_relation_block_carries_relation_ids() -> None:
+    """relation_section 문서는 관계 장부를 metadata에 싣는다.
+
+    이 블록의 근거는 relation_ids 하나뿐이라, 빠지면 검색 결과에서
+    근거를 되짚을 길이 없다.
+    """
+    relation_id = uuid.UUID("44444444-4444-4444-8444-444444444444")
+    docs = project_revision_blocks(
+        workspace_id=1,
+        artifact_id=ARTIFACT_ID,
+        revision_id=REVISION_ID,
+        revision_number=3,
+        title="캐치업 오픈 API",
+        blocks=[
+            ArtifactBlock(
+                block_kind=BLOCK_KIND_RELATION_SECTION,
+                heading="의존 관계",
+                body="오픈 API는 인증 서비스에 의존한다",
+                claim_ids=(),
+                proposal_ids=(),
+                ontology_version="v1",
+                relation_ids=(relation_id,),
+            )
+        ],
+        created_at=NOW,
+    )
+    assert docs[0].metadata["relation_ids"] == [str(relation_id)]
+    assert docs[0].metadata["claim_ids"] == []
+
+
+def test_claim_block_has_empty_relation_ids() -> None:
+    """claim_section 문서의 관계 장부는 빈 목록으로 나간다."""
+    docs = project_revision_blocks(
+        workspace_id=1,
+        artifact_id=ARTIFACT_ID,
+        revision_id=REVISION_ID,
+        revision_number=3,
+        title="캐치업 오픈 API",
+        blocks=[_block(heading="status", body="a")],
+        created_at=NOW,
+    )
+    assert docs[0].metadata["relation_ids"] == []
 
 
 def test_duplicate_anchor_gets_index_suffix() -> None:

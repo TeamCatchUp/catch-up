@@ -43,8 +43,9 @@ from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.artifact import artifact_idempotency_key
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConflict
-
-ARTIFACT_KIND = "entity_summary"
+from catchup.tests.knowledge_maintenance.test_artifact_definition_schema import (
+    _definition_with_channel,
+)
 
 
 @pytest.fixture(scope="module")
@@ -208,34 +209,6 @@ def _resolved_candidate(
     return candidate.id
 
 
-def _claim_via_candidate(
-    session: Session,
-    workspace_id: int,
-    run_id: uuid.UUID,
-    node_id: uuid.UUID,
-) -> uuid.UUID:
-    """해소된 entity 후보를 거쳐 노드에 붙는 claim을 하나 만든다."""
-    candidate_id = _resolved_candidate(session, workspace_id, run_id, node_id)
-    row = ClaimRow(
-        id=uuid.uuid4(),
-        workspace_id=workspace_id,
-        extraction_run_id=run_id,
-        local_key=f"c-{uuid.uuid4().hex}",
-        subject_entity_candidate_id=candidate_id,
-        predicate="owner",
-        value_type="string",
-        value="결제팀",
-        value_hash="1" * 64,
-        statement="결제팀이 맡습니다.",
-        ontology_id="test",
-        ontology_version="1",
-        extraction_method="llm",
-    )
-    session.add(row)
-    session.flush()
-    return row.id
-
-
 def _blocks(body: str) -> tuple[ArtifactBlock, ...]:
     """근거를 갖춘 블록 한 벌을 만든다."""
     return (
@@ -280,9 +253,12 @@ def _artifact_id(
         node_id = _entity_node(session, workspace_id, "결제 기능")
         session.commit()
 
+    definition = _definition_with_channel(session_factory, workspace_id)
     with uow_factory() as uow:
-        artifact_id = uow.artifacts.get_or_create_artifact(
-            kind=ARTIFACT_KIND,
+        artifact_id = uow.artifacts.get_or_create_definition_artifact(
+            definition_id=definition.id,
+            channel_id=definition.channel_id,
+            kind=definition.kind,
             subject_node_id=node_id,
             title="결제 기능",
         )
@@ -290,68 +266,45 @@ def _artifact_id(
     return artifact_id
 
 
-def test_get_or_create_artifact_is_idempotent(
+def test_get_or_create_definition_artifact_is_idempotent(
     workspace_id: int,
     session_factory: Callable[[], Session],
     uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
 ) -> None:
-    """같은 대상·같은 kind로 두 번 불러도 문서가 하나만 생긴다."""
+    """같은 정의·같은 대상으로 두 번 불러도 문서가 하나만 생긴다."""
     with session_factory() as session:
         node_id = _entity_node(session, workspace_id, "결제 기능")
         session.commit()
+    definition = _definition_with_channel(session_factory, workspace_id)
 
     with uow_factory() as uow:
-        first = uow.artifacts.get_or_create_artifact(
-            kind=ARTIFACT_KIND,
+        first = uow.artifacts.get_or_create_definition_artifact(
+            definition_id=definition.id,
+            channel_id=definition.channel_id,
+            kind=definition.kind,
             subject_node_id=node_id,
             title="결제 기능",
         )
         uow.commit()
 
     with uow_factory() as uow:
-        second = uow.artifacts.get_or_create_artifact(
-            kind=ARTIFACT_KIND,
+        second = uow.artifacts.get_or_create_definition_artifact(
+            definition_id=definition.id,
+            channel_id=definition.channel_id,
+            kind=definition.kind,
             subject_node_id=node_id,
-            title="결제 기능",
+            title="다른 제목",
         )
         uow.commit()
 
     assert first == second
-
-
-def test_find_top_entity_nodes_orders_by_claim_count(
-    workspace_id: int,
-    session_factory: Callable[[], Session],
-    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
-) -> None:
-    """claim이 많은 노드가 앞에 오고 claim 0개인 노드는 빠진다."""
     with session_factory() as session:
-        run_id = _extraction_run(session, workspace_id)
-        busy = _entity_node(session, workspace_id, "많이 언급된 기능")
-        quiet = _entity_node(session, workspace_id, "조금 언급된 기능")
-        empty = _entity_node(session, workspace_id, "언급 없는 기능")
-        for _ in range(3):
-            _claim_on_node(session, workspace_id, run_id, busy)
-        # 후보를 거쳐 해소된 claim도 그 노드의 것으로 센다.
-        _claim_via_candidate(session, workspace_id, run_id, quiet)
-        session.commit()
-
-    with uow_factory() as uow:
-        found = uow.artifacts.find_top_entity_nodes(limit=10_000)
-
-    counts = {source.node_id: source.claim_count for source in found}
-    order = [source.node_id for source in found]
-    assert counts[busy] == 3
-    assert counts[quiet] == 1
-    assert empty not in counts
-    assert order.index(busy) < order.index(quiet)
-    assert next(
-        source.display_name for source in found if source.node_id == busy
-    ) == "많이 언급된 기능"
-
-    with uow_factory() as uow:
-        limited = uow.artifacts.find_top_entity_nodes(limit=1)
-    assert len(limited) == 1
+        # 제목은 문서의 정체성이라 다시 부른다고 갈아 끼우지 않는다.
+        assert session.execute(
+            select(KnowledgeArtifact.title).where(
+                KnowledgeArtifact.id == first
+            )
+        ).scalar_one() == "결제 기능"
 
 
 def test_add_or_revive_proposal_revives_abandoned_row(
@@ -943,11 +896,16 @@ def test_find_current_revisions_stays_in_workspace(
         )
         session.commit()
 
+    stranger_definition = _definition_with_channel(
+        session_factory, stranger_workspace_id
+    )
     with KnowledgeMaintenanceUnitOfWork(
         session_factory, workspace_id=stranger_workspace_id
     ) as uow:
-        stranger_artifact = uow.artifacts.get_or_create_artifact(
-            kind=ARTIFACT_KIND,
+        stranger_artifact = uow.artifacts.get_or_create_definition_artifact(
+            definition_id=stranger_definition.id,
+            channel_id=stranger_definition.channel_id,
+            kind=stranger_definition.kind,
             subject_node_id=stranger_node_id,
             title="남의 결제 기능",
         )
