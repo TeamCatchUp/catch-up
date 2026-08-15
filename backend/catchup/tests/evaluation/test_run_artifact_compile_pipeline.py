@@ -12,12 +12,16 @@ from __future__ import annotations
 
 import sys
 import uuid
+from collections.abc import Sequence
 from typing import Any
 
 import pytest
 
+from catchup.components.llm.constants import LlmProvider
+from catchup.components.llm.constants import ModelCapacity
 from catchup.evaluation import run_artifact_compile_pipeline as runner
 from catchup.evaluation.run_artifact_compile_pipeline import only_definition
+from catchup.knowledge_maintenance.adapters.llm.block_narrator import LlmBlockNarrator
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 from catchup.knowledge_maintenance.domain.artifact_definition import SelectionSpec
@@ -147,6 +151,7 @@ def _stub_run(
     monkeypatch: pytest.MonkeyPatch,
     *,
     result: ArtifactCompileResult,
+    extra_args: Sequence[str] = (),
 ) -> _FakeEngine:
     """DB와 컴파일을 대신 세워 main을 부를 수 있게 만든다."""
     engine = _FakeEngine()
@@ -174,7 +179,16 @@ def _stub_run(
     )
     monkeypatch.setattr(runner, "_print_pending_cards", lambda uow: None)
     monkeypatch.setattr(
-        sys, "argv", ["run", "--workspace-id", "1", "--ontology-version", "1"]
+        sys,
+        "argv",
+        [
+            "run",
+            "--workspace-id",
+            "1",
+            "--ontology-version",
+            "1",
+            *extra_args,
+        ],
     )
     return engine
 
@@ -240,3 +254,97 @@ def test_zero_definitions_still_exits_zero(
 
     assert code == 0
     assert "읽은 정의가 없다" in capsys.readouterr().out
+
+
+class _FakeChatModel:
+    """구조화 출력만 흉내 내는 모델을 대신한다."""
+
+    def with_structured_output(self, *args: Any, **kwargs: Any) -> object:
+        return object()
+
+
+class _FakeLlmService:
+    """LLM 서비스를 대신한다. 모델 자리만 채운다."""
+
+    def get_llm(self) -> _FakeChatModel:
+        return _FakeChatModel()
+
+
+def test_no_narrate_builds_no_llm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """--no-narrate면 LLM 서비스를 만들지 않고 narrator도 없다."""
+    factory_calls: list[dict[str, Any]] = []
+    compile_calls: list[dict[str, Any]] = []
+
+    def _fake_factory(**kwargs: Any) -> _FakeLlmService:
+        factory_calls.append(kwargs)
+        return _FakeLlmService()
+
+    def _fake_compile(uow: Any, **kwargs: Any) -> ArtifactCompileResult:
+        compile_calls.append(kwargs)
+        return ArtifactCompileResult()
+
+    _stub_run(
+        monkeypatch,
+        result=ArtifactCompileResult(),
+        extra_args=["--no-narrate"],
+    )
+    monkeypatch.setattr(runner, "get_llm_service", _fake_factory)
+    monkeypatch.setattr(runner, "compile_definition_artifacts", _fake_compile)
+
+    assert runner.main() == 0
+    assert factory_calls == []
+    assert compile_calls[0]["narrator"] is None
+
+
+def test_capacity_reaches_the_llm_factory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """--capacity가 모델 등급으로 그대로 넘어간다."""
+    factory_calls: list[dict[str, Any]] = []
+    compile_calls: list[dict[str, Any]] = []
+
+    def _fake_factory(**kwargs: Any) -> _FakeLlmService:
+        factory_calls.append(kwargs)
+        return _FakeLlmService()
+
+    def _fake_compile(uow: Any, **kwargs: Any) -> ArtifactCompileResult:
+        compile_calls.append(kwargs)
+        return ArtifactCompileResult()
+
+    _stub_run(
+        monkeypatch,
+        result=ArtifactCompileResult(),
+        extra_args=["--capacity", "small"],
+    )
+    monkeypatch.setattr(runner, "get_llm_service", _fake_factory)
+    monkeypatch.setattr(runner, "compile_definition_artifacts", _fake_compile)
+
+    assert runner.main() == 0
+    assert factory_calls[0]["provider"] is LlmProvider.AWS_BEDROCK
+    assert factory_calls[0]["model_capacity"] is ModelCapacity.SMALL
+    assert isinstance(compile_calls[0]["narrator"], LlmBlockNarrator)
+
+
+def test_prints_narration_counts(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """서술·재사용 블록 수를 결과에 적는다."""
+    _stub_run(
+        monkeypatch,
+        result=ArtifactCompileResult(
+            definitions_considered=1,
+            nodes_considered=1,
+            proposals_created=1,
+            blocks_narrated=3,
+            blocks_narrative_reused=5,
+        ),
+        extra_args=["--no-narrate"],
+    )
+
+    assert runner.main() == 0
+    printed = capsys.readouterr().out
+    assert "산문 서술 3" in printed
+    assert "재사용 5" in printed
