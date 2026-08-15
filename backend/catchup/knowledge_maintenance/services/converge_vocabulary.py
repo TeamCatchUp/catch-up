@@ -512,28 +512,70 @@ def _reject_stale_base(
     """기준 사전이 최신 발행본이 아니면 발행을 거부한다.
 
     병합은 `current` 위에만 쌓는다. `v3`이 있는데 `v1`을 기준으로 발행하면
-    새 최신본 `v4`에서 `v2`·`v3`의 항목이 조용히 사라진다. 발행 체계 밖의
-    이름(빈 문자열, `round-4`, `2`)은 계보의 일부가 아니므로 검사하지
-    않는다.
+    새 최신본 `v4`에서 `v2`·`v3`의 항목이 조용히 사라진다.
+
+    이름이 빈 기준 사전은 "읽을 당시 발행본이 하나도 없었다"는 뜻이다.
+    그런데 지금 발행본이 보인다면 그 사이에 누군가(예: 온보딩 seed 설치)
+    가 계보를 열었다는 말이므로, 빈 사전 위에 쌓아 올리면 그 발행본의
+    항목이 새 최신본에서 통째로 빠진다. 그래서 이 경우도 거부한다.
+
+    이름이 있으면서 발행 체계 밖인 이름(`round-4`, `2`)은 계보의 일부가
+    아닌 실험용 스냅샷이므로 검사하지 않는다.
     """
-    if not PUBLISHED_VERSION_PATTERN.match(current.snapshot_id or ""):
-        return
     latest = resolve_latest_published_version(versions)
+    if not current.snapshot_id:
+        if latest is None:
+            return
+        _raise_stale_base(
+            workspace_id=workspace_id,
+            ontology_id=ontology_id,
+            base_snapshot_id=current.snapshot_id,
+            latest=latest,
+            message=(
+                f"기준 사전을 읽을 때는 발행본이 없었는데 그 뒤 {latest}이 "
+                "발행됐다. 이 상태로 발행하면 그 발행본의 항목이 새 "
+                "최신본에서 사라진다. 최신 발행본을 기준으로 다시 돌린다."
+            ),
+        )
+    if not PUBLISHED_VERSION_PATTERN.match(current.snapshot_id):
+        return
     if latest == current.snapshot_id:
         return
+    _raise_stale_base(
+        workspace_id=workspace_id,
+        ontology_id=ontology_id,
+        base_snapshot_id=current.snapshot_id,
+        latest=latest,
+        message=(
+            f"기준 사전 {current.snapshot_id}이 최신 발행본 {latest}이 "
+            "아니다. 이 상태로 발행하면 그 사이 버전의 항목이 새 "
+            "최신본에서 사라진다. 최신 발행본을 기준으로 다시 돌린다."
+        ),
+    )
+
+
+def _raise_stale_base(
+    *,
+    workspace_id: int,
+    ontology_id: str,
+    base_snapshot_id: str,
+    latest: str | None,
+    message: str,
+) -> None:
+    """낡은 기준 사전을 감사 로그에 남기고 발행을 중단시킨다.
+
+    거부 사유는 러너 stdout이 아니라 로그에 남아야 한다. 발행이 왜 안
+    됐는지는 나중에 되짚어야 하는 감사 기록이다.
+    """
     logger.error(
         "vocabulary_publish_refused",
         workspace_id=workspace_id,
         ontology_id=ontology_id,
-        base_snapshot_id=current.snapshot_id,
+        base_snapshot_id=base_snapshot_id,
         latest_published_version=latest,
         reason="stale_base",
     )
-    raise RuntimeError(
-        f"기준 사전 {current.snapshot_id}이 최신 발행본 {latest}이 아니다. "
-        "이 상태로 발행하면 그 사이 버전의 항목이 새 최신본에서 사라진다. "
-        "최신 발행본을 기준으로 다시 돌린다."
-    )
+    raise RuntimeError(message)
 
 
 def publish_converged_vocabulary(
@@ -554,8 +596,15 @@ def publish_converged_vocabulary(
     이름을 믿지 않는 것은 그것이 `round-4`처럼 발행 체계 밖의 실험용
     스냅샷일 수 있기 때문이다.
 
+    발행은 계보 잠금 안에서 한다. 버전 번호를 목록에서 세는 방식이라
+    두 트랜잭션이 같은 계보를 동시에 읽으면 같은 번호를 세고 뒤에
+    커밋하는 쪽이 버전 UNIQUE 제약에 걸린다. 목록을 읽기 전에 잠그면
+    뒤에 온 쪽은 앞의 커밋을 본 뒤에 번호를 센다.
+
     `current`가 `vN` 체계이면서 최신 발행본이 아니면 `RuntimeError`로
-    발행을 거부한다.
+    발행을 거부한다. 이름이 빈 `current`도 마찬가지다 — 기준 사전을 읽은
+    뒤 LLM 호출 동안 다른 쪽이 계보를 열었다는 뜻이라, 그대로 발행하면
+    그 발행본의 항목이 새 최신본에서 빠진다.
     """
     added_predicates = tuple(entry.name for entry in guarded.predicate_entries)
     added_relations = tuple(entry.name for entry in guarded.relation_entries)
@@ -572,6 +621,10 @@ def publish_converged_vocabulary(
         return PublishOutcome(version=None)
 
     with uow:
+        uow.ontology.lock_lineage(
+            workspace_id=workspace_id,
+            ontology_id=ontology_id,
+        )
         versions = uow.ontology.list_versions(
             workspace_id=workspace_id,
             ontology_id=ontology_id,
