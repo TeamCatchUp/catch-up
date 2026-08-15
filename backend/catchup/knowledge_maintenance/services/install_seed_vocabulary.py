@@ -95,9 +95,18 @@ def install_seed_vocabulary(
     있고 entry가 없던 항목에는 seed의 entry가 붙는다 — 정의가 없던
     이름에 정의를 더하는 것이지 기존 정의를 고치는 것이 아니다.
 
+    발행은 계보 단위로 직렬화한다. 버전 이름은 기존 목록을 읽어 다음
+    번호를 세어 정하므로, 같은 workspace에 온보딩 요청이 동시에 들어오면
+    둘 다 같은 번호를 세고 뒤에 커밋하는 쪽이 버전 UNIQUE 제약에 걸려
+    통째로 실패한다. 그래서 목록을 읽기 전에 계보 잠금을 먼저 잡는다.
+
     with 블록도 commit도 여기서 하지 않는다. 온보딩은 채널·정의 INSERT와
     같은 트랜잭션이어야 하므로 경계는 호출자가 쥔다.
     """
+    uow.ontology.lock_lineage(
+        workspace_id=workspace_id,
+        ontology_id=ontology_id,
+    )
     versions = uow.ontology.list_versions(
         workspace_id=workspace_id,
         ontology_id=ontology_id,

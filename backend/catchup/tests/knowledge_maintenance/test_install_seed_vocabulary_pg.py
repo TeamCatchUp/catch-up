@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import threading
+import time
 import uuid
 from collections.abc import Callable
 from collections.abc import Iterator
@@ -15,6 +17,7 @@ import pytest
 from sqlalchemy import Connection
 from sqlalchemy import Engine
 from sqlalchemy import create_engine
+from sqlalchemy import delete
 from sqlalchemy import inspect
 from sqlalchemy import select
 from sqlalchemy import text
@@ -25,9 +28,14 @@ from sqlalchemy.orm import sessionmaker
 from catchup.configs.config import settings
 from catchup.db.models import KnowledgeOntologySnapshot
 from catchup.db.models import Workspace
+from catchup.knowledge_maintenance.adapters.postgres.repositories import (
+    SqlAlchemyOntologyRepository,
+)
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
+from catchup.knowledge_maintenance.contracts.extraction import EntityTypeEntry
+from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.domain.preset_catalog import _VOC_SEED
 from catchup.knowledge_maintenance.services.install_seed_vocabulary import (
     install_seed_vocabulary,
@@ -181,3 +189,104 @@ def test_pg_second_workspace_starts_its_own_lineage(
         uow.commit()
 
     assert other == "v1"
+
+
+def _seed_with_entity_type(name: str) -> ExtractionVocabulary:
+    """entity 종류 하나만 담은 seed를 만든다."""
+    return ExtractionVocabulary(
+        entity_type_entries=(
+            EntityTypeEntry(
+                name=name,
+                definition=f"{name} 동시 발행 확인용 종류다.",
+                identity_scope="standalone",
+            ),
+        )
+    )
+
+
+def test_pg_concurrent_publishers_serialize_into_two_versions(
+    engine: Engine,
+    workspace_ids: tuple[int, int],
+) -> None:
+    """같은 계보에 동시에 들어온 두 발행이 v1·v2로 줄 서서 끝난다.
+
+    커밋이 실제로 겹쳐야 하는 상황이라 되감는 연결을 쓰지 못한다. 그래서
+    연결을 따로 열고 커밋한 뒤 남은 행을 직접 지운다.
+    """
+    workspace_id, _ = workspace_ids
+    ontology_id = f"catchup.test-seed-{uuid.uuid4()}"
+
+    first_holds_lock = threading.Event()
+    release_first = threading.Event()
+    versions: dict[str, str | None] = {}
+    failures: list[BaseException] = []
+
+    def publish(
+        label: str,
+        seed: ExtractionVocabulary,
+        *,
+        wait: bool,
+    ) -> None:
+        factory = sessionmaker(bind=engine, expire_on_commit=False)
+        try:
+            with KnowledgeMaintenanceUnitOfWork(factory) as uow:
+                versions[label] = install_seed_vocabulary(
+                    uow,
+                    workspace_id=workspace_id,
+                    seed=seed,
+                    ontology_id=ontology_id,
+                )
+                if wait:
+                    first_holds_lock.set()
+                    release_first.wait(timeout=10)
+                uow.commit()
+        except BaseException as error:  # noqa: BLE001
+            # 스레드 안에서 터진 것을 본문으로 날라야 원인이 드러난다.
+            failures.append(error)
+            first_holds_lock.set()
+
+    first = threading.Thread(
+        target=publish,
+        args=("first", _seed_with_entity_type("alpha_topic")),
+        kwargs={"wait": True},
+    )
+    second = threading.Thread(
+        target=publish,
+        args=("second", _seed_with_entity_type("beta_topic")),
+        kwargs={"wait": False},
+    )
+
+    try:
+        first.start()
+        assert first_holds_lock.wait(timeout=10)
+        second.start()
+        # 두 번째가 잠금 앞에서 실제로 멈출 틈을 준다. 이 틈이 없으면
+        # 첫 번째가 먼저 커밋해 버려 경합이 재현되지 않는다.
+        time.sleep(0.5)
+        release_first.set()
+        first.join(timeout=15)
+        second.join(timeout=15)
+
+        assert not first.is_alive()
+        assert not second.is_alive()
+        assert failures == []
+        assert sorted(versions.values()) == ["v1", "v2"]
+
+        with sessionmaker(bind=engine)() as session:
+            latest = SqlAlchemyOntologyRepository(session).get(
+                workspace_id=workspace_id,
+                ontology_id=ontology_id,
+                version="v2",
+            )
+        names = {entry.name for entry in latest.entity_type_entries}
+        assert names == {"alpha_topic", "beta_topic"}
+    finally:
+        release_first.set()
+        first.join(timeout=15)
+        second.join(timeout=15)
+        with engine.begin() as cleanup:
+            cleanup.execute(
+                delete(KnowledgeOntologySnapshot).where(
+                    KnowledgeOntologySnapshot.ontology_id == ontology_id
+                )
+            )

@@ -22,6 +22,24 @@ class OntologyRepository(Protocol):
     어휘가 없던 시점도 빈 목록으로 남긴다. 그 사실 자체가 기록이다.
     """
 
+    def lock_lineage(
+        self,
+        *,
+        workspace_id: int,
+        ontology_id: str,
+    ) -> None:
+        """한 `(workspace_id, ontology_id)` 계보의 발행을 직렬화한다.
+
+        버전 이름은 기존 목록을 읽어 다음 번호를 세는 방식으로 정한다.
+        두 트랜잭션이 동시에 읽으면 둘 다 같은 다음 번호를 세고, 뒤에
+        커밋하는 쪽이 버전 UNIQUE 제약에 걸려 통째로 실패한다.
+
+        잠금은 현재 트랜잭션이 끝날 때까지 유지되므로, 뒤에 온 쪽은
+        앞의 커밋을 기다렸다가 최신 버전을 보고 다음 번호를 센다.
+        발행할 뜻이 있으면 `list_versions`를 읽기 전에 먼저 부른다.
+        """
+        ...
+
     def get(
         self,
         *,

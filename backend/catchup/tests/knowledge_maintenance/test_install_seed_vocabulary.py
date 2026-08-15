@@ -31,6 +31,15 @@ class _FakeOntology:
     def __init__(self, hidden_versions: frozenset[str] = frozenset()) -> None:
         self.stored: dict[tuple[int, str], ExtractionVocabulary] = {}
         self.hidden_versions = hidden_versions
+        self.calls: list[str] = []
+
+    def lock_lineage(
+        self,
+        *,
+        workspace_id: int,
+        ontology_id: str,
+    ) -> None:
+        self.calls.append("lock_lineage")
 
     def get(
         self,
@@ -47,6 +56,7 @@ class _FakeOntology:
         workspace_id: int,
         ontology_id: str,
     ) -> tuple[str, ...]:
+        self.calls.append("list_versions")
         return tuple(
             version
             for (found_id, version) in self.stored
@@ -96,6 +106,24 @@ def test_publishes_v1_on_an_empty_workspace() -> None:
         "product_area",
         "complaint_topic",
     }
+
+
+def test_locks_the_lineage_before_reading_versions() -> None:
+    """버전 목록을 읽기 전에 계보 잠금을 먼저 잡는다.
+
+    읽은 뒤에 잠그면 이미 남을 본 뒤라 같은 다음 번호를 세는 것을 막지
+    못한다. 순서가 이 잠금의 전부다.
+    """
+    uow = _FakeUow(_FakeOntology())
+
+    install_seed_vocabulary(
+        uow,
+        workspace_id=1,
+        seed=_VOC_SEED,
+        ontology_id=ONTOLOGY_ID,
+    )
+
+    assert uow.ontology.calls[:2] == ["lock_lineage", "list_versions"]
 
 
 def test_merges_as_a_union_into_the_next_version() -> None:

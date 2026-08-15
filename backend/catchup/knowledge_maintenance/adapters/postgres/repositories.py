@@ -18,6 +18,7 @@ from sqlalchemy import Text
 from sqlalchemy import cast
 from sqlalchemy import collate
 from sqlalchemy import func
+from sqlalchemy import literal
 from sqlalchemy import nullsfirst
 from sqlalchemy import nullslast
 from sqlalchemy import or_
@@ -3348,6 +3349,33 @@ class SqlAlchemyOntologyRepository:
 
     def __init__(self, session: Session) -> None:
         self._session = session
+
+    def lock_lineage(
+        self,
+        *,
+        workspace_id: int,
+        ontology_id: str,
+    ) -> None:
+        """한 계보의 발행을 현재 트랜잭션이 끝날 때까지 직렬화한다.
+
+        버전 이름은 기존 목록을 읽어 다음 번호를 세어 정한다. 두
+        트랜잭션이 동시에 읽으면 같은 번호를 세고 뒤에 커밋하는 쪽이
+        버전 UNIQUE 제약에 걸린다. 잠금을 먼저 잡으면 뒤에 온 쪽은
+        앞의 커밋을 기다렸다가 최신 버전을 보고 번호를 센다.
+
+        잠금 키는 고정 문구와 `workspace_id:ontology_id`를 각각
+        `hashtext`로 접은 두 정수다. 같은 계보면 항상 같은 키가 나오고,
+        고정 문구가 다른 용도의 advisory lock과 키 공간을 갈라 준다.
+        트랜잭션 범위 잠금이라 커밋·롤백에서 저절로 풀린다.
+        """
+        self._session.execute(
+            select(
+                func.pg_advisory_xact_lock(
+                    func.hashtext(literal("knowledge_ontology_publish")),
+                    func.hashtext(literal(f"{workspace_id}:{ontology_id}")),
+                )
+            )
+        )
 
     def get(
         self,
