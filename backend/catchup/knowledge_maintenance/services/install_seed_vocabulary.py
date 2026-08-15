@@ -29,6 +29,7 @@ from catchup.observability.logging import get_logger
 
 logger = get_logger(__name__)
 
+
 class _NamedEntry(Protocol):
     """사전 항목이 공통으로 갖는 이름만 요구한다."""
 
@@ -69,8 +70,8 @@ def _extended_names(
 ) -> tuple[str, ...]:
     """현행 이름 목록 뒤에 새 항목 이름을 잇는다.
 
-    이미 목록에 있는 이름은 잇지 않는다. entry 없이 이름만 있던 예전
-    스냅샷과 이름이 겹치면 같은 이름이 두 번 실릴 수 있다.
+    겹치는 이름은 잇지 않는다. 그래야 entry 없이 이름만 있던 예전
+    스냅샷의 이름이 두 번 실리지 않는다.
     """
     known = set(current)
     appended = [entry.name for entry in added if entry.name not in known]
@@ -90,7 +91,9 @@ def install_seed_vocabulary(
     None을 돌려준다.
 
     이름이 겹치면 기존 항목이 이긴다. 사전은 단조 증가하며 기존 엔트리
-    개정은 재추출 계약을 바꾸는 일이라 자동으로 하지 않는다.
+    개정은 재추출 계약을 바꾸는 일이라 자동으로 하지 않는다. 다만 이름만
+    있고 entry가 없던 항목에는 seed의 entry가 붙는다 — 정의가 없던
+    이름에 정의를 더하는 것이지 기존 정의를 고치는 것이 아니다.
 
     with 블록도 commit도 여기서 하지 않는다. 온보딩은 채널·정의 INSERT와
     같은 트랜잭션이어야 하므로 경계는 호출자가 쥔다.

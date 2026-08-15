@@ -266,7 +266,8 @@ def _complaint_topic_brief_spec() -> SelectionSpec:
 
 
 def _churn_risk_watch_spec() -> SelectionSpec:
-    """이탈 위험 고객을 지켜보는 규칙을 만든다."""
+    """불만을 제기한 고객을 모아 이탈 위험 표시를 함께 보여주는 규칙을
+    만든다."""
     return SelectionSpec(
         entity_types=("customer",),
         relation_paths=(
@@ -319,8 +320,11 @@ _VOC_KINDS = (
     PresetKind(
         kind="churn_risk_watch",
         label="이탈 위험 관찰",
-        description="이탈 위험으로 표시된 고객과 그 불만을 묶어 본다.",
-        example_text="B사 — 이탈 위험 true, 불만 주제 3건.",
+        description=(
+            "불만을 제기한 고객을 모아 각 고객의 이탈 위험 표시를 함께"
+            " 보여주는 문서다."
+        ),
+        example_text="B사 — 불만 주제 3건, 이탈 위험 표시 true.",
         spec_template=_churn_risk_watch_spec,
     ),
 )
