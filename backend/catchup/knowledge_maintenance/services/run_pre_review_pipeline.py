@@ -40,7 +40,9 @@ from catchup.knowledge_maintenance.ports.observation_normalizer import Observati
 from catchup.knowledge_maintenance.ports.source_poller import SkippedItem
 from catchup.knowledge_maintenance.ports.source_poller import SourcePollResult
 from catchup.knowledge_maintenance.services.compile_entity_artifacts import ArtifactCompileResult
-from catchup.knowledge_maintenance.services.compile_entity_artifacts import compile_entity_artifacts
+from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
+    compile_definition_artifacts,
+)
 from catchup.knowledge_maintenance.services.ingest_and_normalize import SourceIntakeResult
 from catchup.knowledge_maintenance.services.ingest_and_normalize import ingest_and_normalize
 from catchup.knowledge_maintenance.services.resolve_claim_conflicts import ClaimConflictResult
@@ -122,7 +124,6 @@ async def run_pre_review_pipeline(
     judge: IdentityJudge | None,
     uow_factory: UnitOfWorkFactory,
     event_limit: int | None = None,
-    artifact_limit: int = 2,
     clock: Callable[[], datetime] | None = None,
 ) -> PreReviewPipelineResult:
     """
@@ -147,7 +148,6 @@ async def run_pre_review_pipeline(
             judge=judge,
             uow_factory=uow_factory,
             event_limit=event_limit,
-            artifact_limit=artifact_limit,
             clock=clock,
         )
     except Exception as error:
@@ -188,7 +188,6 @@ async def _execute_pre_review_pipeline(
     judge: IdentityJudge | None,
     uow_factory: UnitOfWorkFactory,
     event_limit: int | None = None,
-    artifact_limit: int = 2,
     clock: Callable[[], datetime] | None = None,
 ) -> PreReviewPipelineResult:
     """
@@ -203,7 +202,6 @@ async def _execute_pre_review_pipeline(
         workspace_id=workspace_id,
         extraction_contract_version=extraction_contract_version,
         event_limit=event_limit,
-        artifact_limit=artifact_limit,
     )
     if poll_result.list_truncated:
         raise PollWindowTruncatedError(
@@ -254,11 +252,10 @@ async def _execute_pre_review_pipeline(
         clock=clock,
     )
 
-    artifacts = compile_entity_artifacts(
+    artifacts = compile_definition_artifacts(
         artifact_uow,
         workspace_id=workspace_id,
         vocabulary=extraction_spec.vocabulary,
-        limit=artifact_limit,
         clock=clock,
     )
 
@@ -269,6 +266,7 @@ async def _execute_pre_review_pipeline(
         intake_failure=intake_failure,
         extraction=extraction,
         resolution=resolution,
+        artifacts=artifacts,
     )
     result = PreReviewPipelineResult(
         status=status,
@@ -292,7 +290,6 @@ def _validate_inputs(
     workspace_id: int,
     extraction_contract_version: str,
     event_limit: int | None,
-    artifact_limit: int,
 ) -> None:
     if workspace_id <= 0:
         raise ValueError("workspace_id must be greater than 0")
@@ -300,8 +297,6 @@ def _validate_inputs(
         raise ValueError("extraction_contract_version must not be blank")
     if event_limit is not None and event_limit <= 0:
         raise ValueError("event_limit must be greater than 0")
-    if artifact_limit <= 0:
-        raise ValueError("artifact_limit must be greater than 0")
     mismatched = [
         _item_id(envelope)
         for envelope in poll_result.envelopes
@@ -702,11 +697,14 @@ def _derive_status(
     intake_failure: PipelineItemFailure | None,
     extraction: ExtractionStageResult,
     resolution: ResolutionResult,
+    artifacts: ArtifactCompileResult,
 ) -> PreReviewPipelineStatus:
     """Scheduler가 재시도·알림에 쓸 한 회차의 상태를 계산한다.
 
     Artifact의 ``proposals_conflicted``는 이미 결정된 동일 멱등 키를 다시
     쓰지 않은 정상적인 동시성 결과이므로 부분 실패에 포함하지 않는다.
+    반면 ``nodes_failed``는 카드를 세우지 못해 비워 둔 노드 수이므로 부분
+    실패로 센다.
     """
     has_incomplete_work = any(
         (
@@ -715,6 +713,7 @@ def _derive_status(
             intake_failure is not None,
             extraction.failures,
             resolution.groups_failed,
+            artifacts.nodes_failed,
         )
     )
     return (

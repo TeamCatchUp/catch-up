@@ -242,7 +242,9 @@ async def test_pipeline_reports_partial_failures_and_propagates_clock(
         resolve_candidates,
     )
     monkeypatch.setattr(pipeline, "resolve_claim_conflicts", resolve_conflicts)
-    monkeypatch.setattr(pipeline, "compile_entity_artifacts", compile_artifacts)
+    monkeypatch.setattr(
+        pipeline, "compile_definition_artifacts", compile_artifacts
+    )
 
     result = await pipeline.run_pre_review_pipeline(
         SourcePollResult(),
@@ -266,18 +268,20 @@ async def test_pipeline_reports_partial_failures_and_propagates_clock(
 
 
 @pytest.mark.parametrize(
-    ("skipped", "held_back", "resolution_failures", "expected"),
+    ("skipped", "held_back", "resolution_failures", "nodes_failed", "expected"),
     [
-        (1, 0, 0, pipeline.PreReviewPipelineStatus.PARTIAL_FAILURE),
-        (0, 1, 0, pipeline.PreReviewPipelineStatus.PARTIAL_FAILURE),
-        (0, 0, 1, pipeline.PreReviewPipelineStatus.PARTIAL_FAILURE),
-        (0, 0, 0, pipeline.PreReviewPipelineStatus.COMPLETED),
+        (1, 0, 0, 0, pipeline.PreReviewPipelineStatus.PARTIAL_FAILURE),
+        (0, 1, 0, 0, pipeline.PreReviewPipelineStatus.PARTIAL_FAILURE),
+        (0, 0, 1, 0, pipeline.PreReviewPipelineStatus.PARTIAL_FAILURE),
+        (0, 0, 0, 1, pipeline.PreReviewPipelineStatus.PARTIAL_FAILURE),
+        (0, 0, 0, 0, pipeline.PreReviewPipelineStatus.COMPLETED),
     ],
 )
 def test_status_reports_every_incomplete_work_signal(
     skipped: int,
     held_back: int,
     resolution_failures: int,
+    nodes_failed: int,
     expected: pipeline.PreReviewPipelineStatus,
 ) -> None:
     status = pipeline._derive_status(
@@ -286,6 +290,7 @@ def test_status_reports_every_incomplete_work_signal(
         intake_failure=None,
         extraction=pipeline.ExtractionStageResult(),
         resolution=ResolutionResult(groups_failed=resolution_failures),
+        artifacts=ArtifactCompileResult(nodes_failed=nodes_failed),
     )
 
     assert status is expected

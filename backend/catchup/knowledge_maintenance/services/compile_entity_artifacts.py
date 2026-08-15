@@ -184,6 +184,7 @@ def compile_definition_artifacts(
     *,
     workspace_id: int,
     vocabulary: ExtractionVocabulary,
+    clock: Callable[[], datetime] | None = None,
 ) -> ArtifactCompileResult:
     """workspace의 정의를 돌며 정의가 고른 문서를 변경안으로 올린다.
 
@@ -199,7 +200,9 @@ def compile_definition_artifacts(
 
     시점은 실행 시작에 한 번 읽어 순회와 claim 판정이 함께 쓴다. 걸음
     마다 시계를 새로 읽으면 같은 실행 안에서도 살아 있는 것의 기준이
-    흔들린다.
+    흔들린다. 그 시계는 호출자가 넘길 수 있다. 파이프라인 한 회차를
+    이루는 단계들이 같은 시점을 공유해야 단계 사이에서 기준이 어긋나지
+    않는다.
     """
     created = 0
     revived = 0
@@ -209,7 +212,7 @@ def compile_definition_artifacts(
     suppressed = 0
     nodes_considered = 0
     nodes_failed = 0
-    now = datetime.now(timezone.utc)
+    now = (clock or _utcnow)()
     with uow:
         definitions = uow.artifact_definitions.list_definitions()
         claims = uow.knowledge_candidates.find_claim_candidates(

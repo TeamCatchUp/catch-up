@@ -1240,7 +1240,7 @@ def test_skipped_node_keeps_matching_pending_and_abandons_other_pending() -> Non
     """현재 내용의 계류안은 남기고 함께 남은 낡은 계류안만 접는다."""
     node_id = uuid.uuid4()
     claim = _claim(node_id=node_id, value=60)
-    uow = FakeUnitOfWork(sources=[_source(node_id)], claims=[claim])
+    uow = FakeUnitOfWork(nodes=[_node(node_id)], claims=[claim])
     _run(uow)
     matching = _only_pending(uow)
 
