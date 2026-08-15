@@ -2987,6 +2987,19 @@ class SqlAlchemyArtifactDefinitionRepository:
             )
         )
 
+    def find_channel_purpose(self, *, channel_id: uuid.UUID) -> str | None:
+        """채널에 걸린 목적 preset id를 읽는다. 없으면 None이다.
+
+        workspace를 조건에 함께 건다. 채널 식별자만으로 찾으면 남의
+        workspace 채널의 목적이 이 workspace 문서에 실린다.
+        """
+        return self._session.scalar(
+            select(ChannelRow.purpose_preset).where(
+                ChannelRow.id == channel_id,
+                ChannelRow.workspace_id == self._workspace_id,
+            )
+        )
+
     def list_definitions(self) -> tuple[StoredArtifactDefinition, ...]:
         """workspace의 정의를 식별자 사전순으로 모두 읽는다.
 

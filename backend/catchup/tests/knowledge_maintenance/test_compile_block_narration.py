@@ -70,11 +70,18 @@ def _verified(claim: StoredClaimCandidate) -> StoredClaimCandidate:
 
 
 def _uow(
-    *, claims, nodes, styles=None, sections=("status",)
+    *,
+    claims,
+    nodes,
+    styles=None,
+    sections=("status",),
+    kind=None,
+    purpose=None,
 ) -> FakeDefinitionUnitOfWork:
     """정의 하나·노드·claim으로 fake UnitOfWork를 세운다."""
+    row_kwargs = {} if kind is None else {"kind": kind}
     definition = _definition_row(
-        spec=_spec(predicate_sections=list(sections))
+        spec=_spec(predicate_sections=list(sections)), **row_kwargs
     )
     uow = FakeDefinitionUnitOfWork(
         definitions=[definition], nodes=nodes, claims=claims
@@ -82,6 +89,10 @@ def _uow(
     if styles:
         uow.artifact_definitions.channel_styles = {
             definition[1]: styles,
+        }
+    if purpose:
+        uow.artifact_definitions.channel_purposes = {
+            definition[1]: purpose,
         }
     return uow
 
@@ -469,6 +480,80 @@ def test_channel_style_reaches_the_request() -> None:
     _run(uow, narrator)
 
     assert "자주 묻는 질문" in narrator.requests[0].style_instruction
+
+
+def test_channel_purpose_reaches_the_request() -> None:
+    """채널이 고른 목적 이름이 kind 설명과 함께 목적 문장에 실린다."""
+    node_id = uuid.uuid4()
+    uow = _uow(
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[_verified(_claim(node_id=node_id))],
+        kind="feature_request_status",
+        purpose="voc.request_status_tracking",
+    )
+    narrator = _FakeNarrator()
+
+    _run(uow, narrator)
+
+    assert narrator.requests[0].purpose_sentence == (
+        "이 문서의 목적은 '요구 처리 현황 따라가기'이다."
+        " 이 문서는 요구 하나가 지금 어느 단계에 있는지 정리한 문서다."
+    )
+
+
+def test_same_kind_with_different_purposes_gets_different_sentences() -> None:
+    """kind가 같아도 채널이 고른 목적이 다르면 목적 문장이 갈린다."""
+    sentences = []
+    for purpose in ("voc.top_requests", "voc.churn_signals"):
+        node_id = uuid.uuid4()
+        uow = _uow(
+            nodes=[(node_id, "요청 A", "feature_request", "active")],
+            claims=[_verified(_claim(node_id=node_id))],
+            kind="feature_request_status",
+            purpose=purpose,
+        )
+        narrator = _FakeNarrator()
+        _run(uow, narrator)
+        sentences.append(narrator.requests[0].purpose_sentence)
+
+    assert sentences[0] != sentences[1]
+    assert "많이 들어온 요구 보기" in sentences[0]
+    assert "이탈 신호 살피기" in sentences[1]
+
+
+def test_purpose_off_the_recommended_kind_is_kept() -> None:
+    """추천 kind와 어긋난 목적도 사람이 고른 그대로 실린다."""
+    node_id = uuid.uuid4()
+    uow = _uow(
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[_verified(_claim(node_id=node_id))],
+        kind="feature_request_status",
+        purpose="voc.top_requests",
+    )
+    narrator = _FakeNarrator()
+
+    _run(uow, narrator)
+
+    sentence = narrator.requests[0].purpose_sentence
+    assert "많이 들어온 요구 보기" in sentence
+    assert "요구 하나가 지금 어느 단계에 있는지 정리한 문서다." in sentence
+
+
+def test_kind_only_sentence_when_the_channel_has_no_purpose() -> None:
+    """목적을 고르지 않은 채널은 kind 설명 한 줄만 쓴다."""
+    node_id = uuid.uuid4()
+    uow = _uow(
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[_verified(_claim(node_id=node_id))],
+        kind="feature_request_status",
+    )
+    narrator = _FakeNarrator()
+
+    _run(uow, narrator)
+
+    assert narrator.requests[0].purpose_sentence == (
+        "이 문서는 요구 하나가 지금 어느 단계에 있는지 정리한 문서다."
+    )
 
 
 def test_request_carries_only_verified_statements() -> None:

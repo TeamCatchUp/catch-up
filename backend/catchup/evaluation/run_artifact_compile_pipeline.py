@@ -134,6 +134,10 @@ class _SingleDefinitionRepository:
         """채널에 걸린 문체 조회는 감싼 저장소에 그대로 넘긴다."""
         return self._inner.find_channel_style(channel_id=channel_id)
 
+    def find_channel_purpose(self, *, channel_id: uuid.UUID) -> str | None:
+        """채널에 걸린 목적 조회는 감싼 저장소에 그대로 넘긴다."""
+        return self._inner.find_channel_purpose(channel_id=channel_id)
+
 
 class _SingleDefinitionUnitOfWork:
     """정의 목록만 가려 넘기는 UnitOfWork 껍데기다.

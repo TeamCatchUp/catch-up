@@ -57,6 +57,7 @@ class _FakeDefinitionRepository:
     def __init__(self, definitions: tuple[StoredArtifactDefinition, ...]):
         self.definitions = definitions
         self.style_calls: list[uuid.UUID] = []
+        self.purpose_calls: list[uuid.UUID] = []
 
     def list_definitions(self) -> tuple[StoredArtifactDefinition, ...]:
         return self.definitions
@@ -64,6 +65,10 @@ class _FakeDefinitionRepository:
     def find_channel_style(self, *, channel_id: uuid.UUID) -> str | None:
         self.style_calls.append(channel_id)
         return "style.faq"
+
+    def find_channel_purpose(self, *, channel_id: uuid.UUID) -> str | None:
+        self.purpose_calls.append(channel_id)
+        return "voc.top_requests"
 
 
 class _FakeUnitOfWork:
@@ -149,6 +154,25 @@ def test_channel_style_lookup_passes_through() -> None:
         assert inner.artifact_definitions.style_calls == [channel_id]
 
     assert found == "style.faq"
+
+
+def test_channel_purpose_lookup_passes_through() -> None:
+    """목적 조회도 가림막을 지나 감싼 저장소에 그대로 닿는다.
+
+    목적 문장은 채널이 고른 목적에서 나온다. 가림막이 이 조회를 넘기지
+    않으면 --definition-id로 돌린 실행만 목적 없는 문장을 쓴다.
+    """
+    inner = _FakeUnitOfWork((_definition(FIRST_ID),))
+    wrapped = only_definition(inner, FIRST_ID)
+    channel_id = uuid.uuid4()
+
+    with wrapped:
+        found = wrapped.artifact_definitions.find_channel_purpose(
+            channel_id=channel_id
+        )
+        assert inner.artifact_definitions.purpose_calls == [channel_id]
+
+    assert found == "voc.top_requests"
 
 
 class _FakeEngine:

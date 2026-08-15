@@ -1370,6 +1370,93 @@ def test_pg_find_channel_style_ignores_other_workspaces(
     assert found is None
 
 
+def test_pg_find_channel_purpose_reads_the_stored_preset(
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+    user_id: int,
+    uow_factory,
+) -> None:
+    """채널에 저장된 목적 id를 정의 저장소가 그대로 읽는다."""
+    session = session_factory()
+    channel_id = uuid.uuid4()
+    session.add(
+        Channel(
+            id=channel_id,
+            workspace_id=workspace_id,
+            name=f"목적-{uuid.uuid4().hex[:8]}",
+            purpose_preset="voc.top_requests",
+            created_by=user_id,
+        )
+    )
+    session.commit()
+    session.close()
+
+    with uow_factory() as uow:
+        found = uow.artifact_definitions.find_channel_purpose(
+            channel_id=channel_id
+        )
+
+    assert found == "voc.top_requests"
+
+
+def test_pg_find_channel_purpose_is_none_without_a_preset(
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+    user_id: int,
+    uow_factory,
+) -> None:
+    """목적을 고르지 않은 채널은 없음으로 답한다."""
+    session = session_factory()
+    channel_id = uuid.uuid4()
+    session.add(
+        Channel(
+            id=channel_id,
+            workspace_id=workspace_id,
+            name=f"무목적-{uuid.uuid4().hex[:8]}",
+            created_by=user_id,
+        )
+    )
+    session.commit()
+    session.close()
+
+    with uow_factory() as uow:
+        found = uow.artifact_definitions.find_channel_purpose(
+            channel_id=channel_id
+        )
+
+    assert found is None
+
+
+def test_pg_find_channel_purpose_ignores_other_workspaces(
+    session_factory: Callable[[], Session],
+    seed_workspace_id: int,
+    workspace_id: int,
+    user_id: int,
+    uow_factory,
+) -> None:
+    """다른 workspace의 채널 목적은 읽지 않는다."""
+    session = session_factory()
+    channel_id = uuid.uuid4()
+    session.add(
+        Channel(
+            id=channel_id,
+            workspace_id=seed_workspace_id,
+            name=f"남의목적-{uuid.uuid4().hex[:8]}",
+            purpose_preset="voc.churn_signals",
+            created_by=user_id,
+        )
+    )
+    session.commit()
+    session.close()
+
+    with uow_factory() as uow:
+        found = uow.artifact_definitions.find_channel_purpose(
+            channel_id=channel_id
+        )
+
+    assert found is None
+
+
 def test_pg_reusable_narratives_come_from_revision_and_pending(
     session_factory: Callable[[], Session],
     workspace_id: int,

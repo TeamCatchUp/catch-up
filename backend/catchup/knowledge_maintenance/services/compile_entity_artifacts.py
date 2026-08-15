@@ -69,6 +69,7 @@ from catchup.knowledge_maintenance.domain.preset_catalog import (
     DEFAULT_STYLE_INSTRUCTION,
 )
 from catchup.knowledge_maintenance.domain.preset_catalog import find_kind_by_name
+from catchup.knowledge_maintenance.domain.preset_catalog import find_purpose
 from catchup.knowledge_maintenance.domain.preset_catalog import find_style
 from catchup.knowledge_maintenance.domain.temporal import claim_not_closed_at
 from catchup.knowledge_maintenance.ports.artifact_definitions import (
@@ -263,7 +264,7 @@ def compile_definition_artifacts(
                 continue
 
             style_instruction = _style_instruction(uow, definition, narrator)
-            purpose_sentence = _purpose_sentence(definition)
+            purpose_sentence = _purpose_sentence(uow, definition)
 
             sources = uow.artifacts.find_entity_nodes_by_types(
                 entity_types=definition.selection_spec.entity_types,
@@ -466,19 +467,38 @@ def _style_instruction(
     return style.instruction
 
 
-def _purpose_sentence(definition: StoredArtifactDefinition) -> str:
-    """정의 kind로 이 문서가 무엇에 쓰이는지 한 줄을 만든다.
+def _purpose_sentence(
+    uow: DefinitionCompileUnitOfWork,
+    definition: StoredArtifactDefinition,
+) -> str:
+    """채널이 고른 목적과 정의 kind로 문서의 쓰임 한 줄을 만든다.
 
-    카탈로그는 코드 상수라 포트를 거치지 않고 직접 읽는다. 카탈로그 밖
-    kind는 기본 한 줄로 떨어진다 — 손으로 넣은 정의도 컴파일돼야 한다.
+    사람이 온보딩에서 고른 목적을 먼저 적고 kind 설명을 잇는다. kind는
+    목적을 이루는 수단으로 추천된 값일 뿐이라, kind 설명만 실으면 왜 이
+    문서를 만들었는지가 프롬프트에서 사라진다. 추천과 다른 kind를 고른
+    채널에서는 둘이 어긋나 보이지만, 어긋난 채로 알려야 서술이 사람의
+    선택을 따른다.
 
-    설명 자체가 이미 끝맺은 한 문장이라 뒤에 용도를 덧붙이지 않는다.
+    카탈로그는 코드 상수라 포트를 거치지 않고 직접 읽는다. 목적을 고르지
+    않았거나 카탈로그 밖 id면 kind 한 줄만, 카탈로그 밖 kind면 기본 한
+    줄만 남는다 — 상수 개정도 손으로 넣은 정의도 컴파일을 멈추지 않는다.
+
+    kind 설명은 그 자체로 끝맺은 한 문장이라 뒤에 용도를 덧붙이지 않는다.
     덧붙이면 한 줄 안에 문장이 둘 겹쳐 읽힌다.
     """
+    purpose_id = uow.artifact_definitions.find_channel_purpose(
+        channel_id=definition.channel_id,
+    )
+    found = None if purpose_id is None else find_purpose(purpose_id)
     preset_kind = find_kind_by_name(definition.kind)
     if preset_kind is None:
-        return DEFAULT_PURPOSE_SENTENCE
-    return f"이 문서는 {preset_kind.description}"
+        kind_sentence = DEFAULT_PURPOSE_SENTENCE
+    else:
+        kind_sentence = f"이 문서는 {preset_kind.description}"
+    if found is None:
+        return kind_sentence
+    _, purpose = found
+    return f"이 문서의 목적은 '{purpose.label}'이다. {kind_sentence}"
 
 
 def _relation_blocks(
