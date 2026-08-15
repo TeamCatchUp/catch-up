@@ -44,25 +44,14 @@ class LlmBlockNarrator:
 
         무엇을 근거로 무엇을 물었는지만 로그에 남긴다. 인용 원문과 산문은
         싣지 않는다 — 원문은 상담·대화 조각이고 감사 로그는 오래 남기
-        때문이다.
+        때문이다. 실패도 마찬가지라 예외 종류만 남기고 예외 메시지와
+        역추적은 남기지 않는다. 파싱 예외 메시지에는 모델이 돌려준 산문이
+        통째로 실려 있고, 역추적에는 프롬프트가 실릴 수 있기 때문이다.
 
         Raises:
-            NarrationError: 호출이 터졌거나 계약을 어겼거나 빈 문장을
-                받았을 때 던진다.
+            NarrationError: 프롬프트를 만들지 못했거나 호출이 터졌거나
+                계약을 어겼거나 빈 문장을 받았을 때 던진다.
         """
-        rendered = prompt_loader.get_prompt(
-            TEMPLATE_PATH,
-            block_kind=request.block_kind,
-            heading=request.heading,
-            topic_hint=request.topic_hint,
-            statements=list(request.statements),
-            edges=list(request.edges),
-            variants=[
-                (body, list(items)) for body, items in request.variants
-            ],
-            style_instruction=request.style_instruction,
-            purpose_sentence=request.purpose_sentence,
-        )
         call_context = {
             "prompt_version": PROMPT_VERSION,
             "block_kind": request.block_kind,
@@ -71,11 +60,34 @@ class LlmBlockNarrator:
         }
         logger.info("block_narration_started", **call_context)
 
+        try:
+            rendered = prompt_loader.get_prompt(
+                TEMPLATE_PATH,
+                block_kind=request.block_kind,
+                heading=request.heading,
+                topic_hint=request.topic_hint,
+                statements=list(request.statements),
+                edges=list(request.edges),
+                variants=[
+                    (body, list(items)) for body, items in request.variants
+                ],
+                style_instruction=request.style_instruction,
+                purpose_sentence=request.purpose_sentence,
+            )
+        except Exception as error:
+            logger.warning(
+                "block_narration_failed",
+                reason="prompt_render_error",
+                error_type=type(error).__name__,
+                **call_context,
+            )
+            raise NarrationError("블록 산문 프롬프트를 만들지 못했다.") from error
+
         started = time.perf_counter()
         try:
             response = self._structured.invoke(rendered)
         except Exception as error:
-            logger.exception(
+            logger.warning(
                 "block_narration_failed",
                 reason="llm_call_error",
                 error_type=type(error).__name__,
@@ -91,7 +103,7 @@ class LlmBlockNarrator:
             logger.warning(
                 "block_narration_failed",
                 reason="contract_violation",
-                detail=str(error) if error is not None else "unknown",
+                error_type=type(error).__name__ if error is not None else "unknown",
                 elapsed=elapsed,
                 **call_context,
             )

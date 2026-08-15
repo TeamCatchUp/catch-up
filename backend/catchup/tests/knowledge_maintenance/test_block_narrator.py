@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 from structlog.testing import capture_logs
 
+from catchup.knowledge_maintenance.adapters.llm import block_narrator
 from catchup.knowledge_maintenance.adapters.llm.block_narrator import PROMPT_VERSION
 from catchup.knowledge_maintenance.adapters.llm.block_narrator import LlmBlockNarrator
 from catchup.knowledge_maintenance.contracts.block_narration import NarrativeContract
@@ -99,6 +100,9 @@ def test_prompt_carries_style_purpose_and_statements() -> None:
     assert "상태는 검토 중이다" in rendered
     assert "담당은 아직 정해지지 않았다" in rendered
     assert "request_status" in rendered
+    assert "Write 1 to 3 sentences" in rendered
+    assert "No heading, no bullet list, no markdown." in rendered
+    assert "Write in Korean." in rendered
 
 
 def test_prompt_marks_the_topic_hint_as_a_hint() -> None:
@@ -161,6 +165,7 @@ def test_prompt_lists_relation_edges() -> None:
     assert "A사가 이 기능을 요청했다" in rendered
     assert "일부만 따라감" in rendered
     assert "never infer another connection" in rendered
+    assert "(no direct quotes for this block)" in rendered
 
 
 def test_empty_narrative_is_an_error() -> None:
@@ -179,9 +184,60 @@ def test_contract_violation_is_an_error() -> None:
         LlmBlockNarrator(llm).narrate(_request())
 
 
+def test_contract_violation_logs_no_narrative() -> None:
+    """파싱 예외 메시지에 실린 산문이 로그로 새지 않는다."""
+    parsing_error = ValueError("이 요구는 아직 검토 중이다. 를 파싱하지 못했다")
+    llm = _FakeLlm({"parsed": None, "parsing_error": parsing_error})
+
+    with capture_logs() as logs:
+        with pytest.raises(NarrationError):
+            LlmBlockNarrator(llm).narrate(_request())
+
+    dumped = str(logs)
+    assert "이 요구는 아직 검토 중이다." not in dumped
+    assert "파싱하지 못했다" not in dumped
+    failed = next(
+        entry for entry in logs if entry["event"] == "block_narration_failed"
+    )
+    assert failed["error_type"] == "ValueError"
+
+
 def test_call_error_is_an_error() -> None:
     """호출 자체가 터져도 같은 예외로 감싼다."""
     llm = _FakeLlm(error=RuntimeError("연결 실패"))
+
+    with pytest.raises(NarrationError):
+        LlmBlockNarrator(llm).narrate(_request())
+
+
+def test_call_error_logs_no_statement_text() -> None:
+    """호출 실패 로그에 예외 메시지와 인용 원문이 남지 않는다."""
+    llm = _FakeLlm(error=RuntimeError("요청 거절: 상태는 검토 중이다"))
+
+    with capture_logs() as logs:
+        with pytest.raises(NarrationError):
+            LlmBlockNarrator(llm).narrate(_request())
+
+    dumped = str(logs)
+    assert "상태는 검토 중이다" not in dumped
+    assert "요청 거절" not in dumped
+    failed = next(
+        entry for entry in logs if entry["event"] == "block_narration_failed"
+    )
+    assert failed["error_type"] == "RuntimeError"
+    assert failed["reason"] == "llm_call_error"
+
+
+def test_prompt_render_error_is_a_narration_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """프롬프트 렌더링이 터져도 같은 예외로 감싼다."""
+
+    def _boom(*args: Any, **kwargs: Any) -> str:
+        raise RuntimeError("렌더링 실패")
+
+    monkeypatch.setattr(block_narrator.prompt_loader, "get_prompt", _boom)
+    llm = _FakeLlm(_parsed("문장이다."))
 
     with pytest.raises(NarrationError):
         LlmBlockNarrator(llm).narrate(_request())
