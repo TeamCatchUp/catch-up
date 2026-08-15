@@ -37,6 +37,7 @@ from structlog.testing import capture_logs
 
 from catchup.configs.config import settings
 from catchup.db.models import ArtifactDefinition
+from catchup.db.models import Channel
 from catchup.db.models import KnowledgeClaimCandidate as ClaimRow
 from catchup.db.models import KnowledgeExtractionRun as RunRow
 from catchup.db.models import KnowledgeNode as NodeRow
@@ -55,6 +56,9 @@ from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 from catchup.knowledge_maintenance.contracts.extraction import RelationTypeEntry
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_RELATION_SECTION
+from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
+from catchup.knowledge_maintenance.domain.artifact import BlockSource
+from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.artifact import validate_blocks
 from catchup.knowledge_maintenance.domain.artifact_definition import MAX_NODES_PER_STEP
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
@@ -1253,3 +1257,320 @@ def test_truncation_failure_abandons_pending_in_postgres(
             {"workspace": workspace_id},
         ).scalars().all()
     assert statuses == ["abandoned"]
+
+
+def _narrated_block(
+    node_id: uuid.UUID, narrative: str, heading: str
+) -> ArtifactBlock:
+    """산문이 붙은 claim 절 블록 하나를 만든다."""
+    claim_id = uuid.uuid4()
+    return ArtifactBlock(
+        block_kind=BLOCK_KIND_CLAIM_SECTION,
+        heading=heading,
+        body=f"{heading} 값이다",
+        claim_ids=(claim_id,),
+        proposal_ids=(),
+        ontology_version="7",
+        sources=(
+            BlockSource(
+                claim_id=claim_id,
+                statement=f"{heading}는 값이다",
+                observed_at=PG_OBSERVED_AT,
+                citation_verified=True,
+            ),
+        ),
+        narrative=narrative,
+    )
+
+
+def test_pg_find_channel_style_reads_the_stored_preset(
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+    user_id: int,
+    uow_factory,
+) -> None:
+    """채널에 저장된 문체 id를 정의 저장소가 그대로 읽는다."""
+    session = session_factory()
+    channel_id = uuid.uuid4()
+    session.add(
+        Channel(
+            id=channel_id,
+            workspace_id=workspace_id,
+            name=f"문체-{uuid.uuid4().hex[:8]}",
+            style_preset="style.report_summary",
+            created_by=user_id,
+        )
+    )
+    session.commit()
+    session.close()
+
+    with uow_factory() as uow:
+        found = uow.artifact_definitions.find_channel_style(
+            channel_id=channel_id
+        )
+
+    assert found == "style.report_summary"
+
+
+def test_pg_find_channel_style_is_none_without_a_preset(
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+    user_id: int,
+    uow_factory,
+) -> None:
+    """문체를 고르지 않은 채널은 없음으로 답한다."""
+    session = session_factory()
+    channel_id = uuid.uuid4()
+    session.add(
+        Channel(
+            id=channel_id,
+            workspace_id=workspace_id,
+            name=f"무문체-{uuid.uuid4().hex[:8]}",
+            created_by=user_id,
+        )
+    )
+    session.commit()
+    session.close()
+
+    with uow_factory() as uow:
+        found = uow.artifact_definitions.find_channel_style(
+            channel_id=channel_id
+        )
+
+    assert found is None
+
+
+def test_pg_find_channel_style_ignores_other_workspaces(
+    session_factory: Callable[[], Session],
+    seed_workspace_id: int,
+    workspace_id: int,
+    user_id: int,
+    uow_factory,
+) -> None:
+    """다른 workspace의 채널 문체는 읽지 않는다."""
+    session = session_factory()
+    channel_id = uuid.uuid4()
+    session.add(
+        Channel(
+            id=channel_id,
+            workspace_id=seed_workspace_id,
+            name=f"남의채널-{uuid.uuid4().hex[:8]}",
+            style_preset="style.faq",
+            created_by=user_id,
+        )
+    )
+    session.commit()
+    session.close()
+
+    with uow_factory() as uow:
+        found = uow.artifact_definitions.find_channel_style(
+            channel_id=channel_id
+        )
+
+    assert found is None
+
+
+def test_pg_find_channel_purpose_reads_the_stored_preset(
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+    user_id: int,
+    uow_factory,
+) -> None:
+    """채널에 저장된 목적 id를 정의 저장소가 그대로 읽는다."""
+    session = session_factory()
+    channel_id = uuid.uuid4()
+    session.add(
+        Channel(
+            id=channel_id,
+            workspace_id=workspace_id,
+            name=f"목적-{uuid.uuid4().hex[:8]}",
+            purpose_preset="voc.top_requests",
+            created_by=user_id,
+        )
+    )
+    session.commit()
+    session.close()
+
+    with uow_factory() as uow:
+        found = uow.artifact_definitions.find_channel_purpose(
+            channel_id=channel_id
+        )
+
+    assert found == "voc.top_requests"
+
+
+def test_pg_find_channel_purpose_is_none_without_a_preset(
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+    user_id: int,
+    uow_factory,
+) -> None:
+    """목적을 고르지 않은 채널은 없음으로 답한다."""
+    session = session_factory()
+    channel_id = uuid.uuid4()
+    session.add(
+        Channel(
+            id=channel_id,
+            workspace_id=workspace_id,
+            name=f"무목적-{uuid.uuid4().hex[:8]}",
+            created_by=user_id,
+        )
+    )
+    session.commit()
+    session.close()
+
+    with uow_factory() as uow:
+        found = uow.artifact_definitions.find_channel_purpose(
+            channel_id=channel_id
+        )
+
+    assert found is None
+
+
+def test_pg_find_channel_purpose_ignores_other_workspaces(
+    session_factory: Callable[[], Session],
+    seed_workspace_id: int,
+    workspace_id: int,
+    user_id: int,
+    uow_factory,
+) -> None:
+    """다른 workspace의 채널 목적은 읽지 않는다."""
+    session = session_factory()
+    channel_id = uuid.uuid4()
+    session.add(
+        Channel(
+            id=channel_id,
+            workspace_id=seed_workspace_id,
+            name=f"남의목적-{uuid.uuid4().hex[:8]}",
+            purpose_preset="voc.churn_signals",
+            created_by=user_id,
+        )
+    )
+    session.commit()
+    session.close()
+
+    with uow_factory() as uow:
+        found = uow.artifact_definitions.find_channel_purpose(
+            channel_id=channel_id
+        )
+
+    assert found is None
+
+
+def test_pg_reusable_narratives_come_from_revision_and_pending(
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+    user_id: int,
+    uow_factory,
+) -> None:
+    """최신 판과 계류 변경안의 산문만 재사용 사전에 실린다."""
+    channel_id = _channel(session_factory, workspace_id, user_id)
+    session = session_factory()
+    session.add(
+        ArtifactDefinition(
+            id=FIRST_DEFINITION_ID,
+            workspace_id=workspace_id,
+            channel_id=channel_id,
+            kind=DEFINITION_KIND,
+            selection_spec=_spec(),
+            created_by=user_id,
+        )
+    )
+    node_id = _pg_node(session, workspace_id, "요청 A", "feature_request")
+    session.commit()
+    session.close()
+
+    with uow_factory() as uow:
+        artifact_id = uow.artifacts.get_or_create_definition_artifact(
+            definition_id=FIRST_DEFINITION_ID,
+            channel_id=channel_id,
+            kind=DEFINITION_KIND,
+            subject_node_id=node_id,
+            title="요청 A",
+        )
+        published = _narrated_block(node_id, "발행된 산문이다.", "status")
+        proposal_id = uow.artifacts.add_or_revive_proposal(
+            artifact_id=artifact_id,
+            blocks=[published],
+            content_hash="hash-published",
+            idempotency_key=f"key-published-{uuid.uuid4()}",
+            base_revision_id=None,
+        )
+        uow.artifacts.mark_approved(
+            proposal_id=proposal_id, reviewer="test"
+        )
+        uow.artifacts.add_revision(
+            artifact_id=artifact_id,
+            revision_number=1,
+            blocks=[published],
+            source_proposal_id=proposal_id,
+        )
+        pending = _narrated_block(node_id, "계류 산문이다.", "priority")
+        uow.artifacts.add_or_revive_proposal(
+            artifact_id=artifact_id,
+            blocks=[pending],
+            content_hash="hash-pending",
+            idempotency_key=f"key-pending-{uuid.uuid4()}",
+            base_revision_id=None,
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        found = uow.artifacts.list_reusable_narratives(
+            artifact_id=artifact_id
+        )
+
+    assert found[block_content_hash(published)] == "발행된 산문이다."
+    assert found[block_content_hash(pending)] == "계류 산문이다."
+
+
+def test_pg_reusable_narratives_skip_rejected_proposals(
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+    user_id: int,
+    uow_factory,
+) -> None:
+    """반려된 변경안의 산문은 재사용 대상이 아니다."""
+    channel_id = _channel(session_factory, workspace_id, user_id)
+    session = session_factory()
+    session.add(
+        ArtifactDefinition(
+            id=FIRST_DEFINITION_ID,
+            workspace_id=workspace_id,
+            channel_id=channel_id,
+            kind=DEFINITION_KIND,
+            selection_spec=_spec(),
+            created_by=user_id,
+        )
+    )
+    node_id = _pg_node(session, workspace_id, "요청 B", "feature_request")
+    session.commit()
+    session.close()
+
+    with uow_factory() as uow:
+        artifact_id = uow.artifacts.get_or_create_definition_artifact(
+            definition_id=FIRST_DEFINITION_ID,
+            channel_id=channel_id,
+            kind=DEFINITION_KIND,
+            subject_node_id=node_id,
+            title="요청 B",
+        )
+        block = _narrated_block(node_id, "반려된 산문이다.", "status")
+        proposal_id = uow.artifacts.add_or_revive_proposal(
+            artifact_id=artifact_id,
+            blocks=[block],
+            content_hash="hash-rejected",
+            idempotency_key=f"key-rejected-{uuid.uuid4()}",
+            base_revision_id=None,
+        )
+        uow.artifacts.mark_rejected(
+            proposal_id=proposal_id, reviewer="test", reason="문장이 틀렸다"
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        found = uow.artifacts.list_reusable_narratives(
+            artifact_id=artifact_id
+        )
+
+    assert found == {}

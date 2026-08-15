@@ -118,6 +118,11 @@ class BlockResponse(BaseModel):
     variants는 다툼 블록에서만 값이 있고 그 밖에서는 없음이다. 빈 목록으로
     두지 않는 이유는 "후보가 없는 블록"과 "후보를 다투는 블록인데 후보가
     비었다"를 소비자가 구별할 수 있어야 하기 때문이다.
+
+    narrative는 블록을 읽는 사람을 위해 쓴 산문이다. 근거가 아니라 표현이라
+    없을 수 있고(근거 인용이 없는 블록), 산문이 없던 옛 변경안도 그대로
+    읽혀야 하므로 기본값을 없음으로 둔다. 검수자는 이 문장과 sources의
+    인용 원문을 나란히 놓고 대조한다.
     """
 
     block_index: int
@@ -128,6 +133,7 @@ class BlockResponse(BaseModel):
     proposal_ids: list[str]
     ontology_version: str | None
     block_content_hash: str
+    narrative: str | None = None
     relation_ids: list[str] = []
     sources: list[BlockSourceResponse] = []
     variants: list[VariantResponse] | None = None

@@ -85,6 +85,10 @@ class ArtifactBlock:
         relation_ids: relation_section 블록의 근거가 된 관계들을
             가리킨다. relation_section이 아닌 블록에서는 비어 있어야
             한다.
+        narrative: 이 블록을 읽는 사람을 위해 쓴 산문을 보존한다. 근거가
+            아니라 표현이므로 내용 지문 계산에서 빠진다. 도메인은 이 값을
+            나르기만 하고, 어떤 블록이 산문을 받을지는 컴파일 서비스가
+            정한다. 산문이 없는 블록은 없음이다.
     """
 
     block_kind: str
@@ -96,6 +100,7 @@ class ArtifactBlock:
     sources: tuple[BlockSource, ...] = ()
     variants: tuple[ContestedVariant, ...] = ()
     relation_ids: tuple[uuid.UUID, ...] = ()
+    narrative: str | None = None
 
 
 def validate_blocks(blocks: Sequence[ArtifactBlock]) -> None:
@@ -208,6 +213,10 @@ def serialize_blocks(
     variants와 relation_ids는 값이 있을 때만 키로 적는다. 후보나 관계가
     없는 기존 블록의 저장 형태를 그대로 두어야 내용 지문이 흔들리지 않기
     때문이다.
+
+    narrative도 값이 있을 때만 키로 적는다. 산문이 없는 블록의 저장 형태를
+    지금과 바이트 그대로 두어야 이미 저장된 판과 변경안을 다시 읽어도 모양이
+    흔들리지 않기 때문이다.
     """
     items: list[dict[str, Any]] = []
     for block in blocks:
@@ -235,6 +244,8 @@ def serialize_blocks(
             item["relation_ids"] = [
                 str(relation_id) for relation_id in block.relation_ids
             ]
+        if block.narrative is not None:
+            item["narrative"] = block.narrative
         items.append(item)
     return items
 
@@ -294,6 +305,11 @@ def deserialize_blocks(
                 variants=_parse_variants(item.get("variants"), index),
                 relation_ids=_parse_ids(
                     item.get("relation_ids"), index, "relation_ids"
+                ),
+                narrative=(
+                    None
+                    if item.get("narrative") is None
+                    else str(item["narrative"])
                 ),
             )
         )
@@ -376,15 +392,29 @@ def _parse_ids(values: Any, index: int, field: str) -> tuple[uuid.UUID, ...]:
         ) from error
 
 
+def _without_narrative(item: Mapping[str, Any]) -> dict[str, Any]:
+    """지문 계산용으로 산문 칸을 뺀 사전을 만든다.
+
+    산문은 블록의 표현이지 내용이 아니다. 지문에 넣으면 문장만 다듬어도
+    문서 전체가 새 검토 사건이 되고, 그러면 검수자가 진짜 변화를 찾지
+    못한다. 저장 직렬화를 그대로 쓰고 여기서 한 칸만 걷어내, 저장 형태와
+    지문 형태가 갈라지지 않게 한다.
+    """
+    return {key: value for key, value in item.items() if key != "narrative"}
+
+
 def blocks_content_hash(blocks: Sequence[ArtifactBlock]) -> str:
     """본문 내용의 sha256 지문을 만든다.
 
     블록 순서는 문서의 의미이므로 정렬하지 않는다. 반면 각 블록 안의 키
     순서는 의미가 없으므로 정렬해, 직렬화 구현이 바뀌어도 같은 내용이면
     같은 지문이 나오게 한다.
+
+    산문(narrative)은 빼고 센다 — 표현이 바뀌었다고 내용이 바뀐 것은
+    아니다.
     """
     payload = json.dumps(
-        serialize_blocks(blocks),
+        [_without_narrative(item) for item in serialize_blocks(blocks)],
         sort_keys=True,
         ensure_ascii=False,
         separators=(",", ":"),
@@ -398,9 +428,12 @@ def block_content_hash(block: ArtifactBlock) -> str:
     blocks_content_hash와 같은 canonical 규약(키 정렬·비ASCII 보존·공백
     없음)을 쓴다. 블록 단위 판정이 어떤 내용에 대한 판정이었는지 못박아,
     본문이 바뀐 뒤에도 옛 판정이 되살아나는 것을 막는 열쇠다.
+
+    산문(narrative)은 빼고 센다 — 표현이 바뀌었다고 내용이 바뀐 것은
+    아니다.
     """
     payload = json.dumps(
-        serialize_blocks([block])[0],
+        _without_narrative(serialize_blocks([block])[0]),
         sort_keys=True,
         ensure_ascii=False,
         separators=(",", ":"),

@@ -12,12 +12,16 @@ from __future__ import annotations
 
 import sys
 import uuid
+from collections.abc import Sequence
 from typing import Any
 
 import pytest
 
+from catchup.components.llm.constants import LlmProvider
+from catchup.components.llm.constants import ModelCapacity
 from catchup.evaluation import run_artifact_compile_pipeline as runner
 from catchup.evaluation.run_artifact_compile_pipeline import only_definition
+from catchup.knowledge_maintenance.adapters.llm.block_narrator import LlmBlockNarrator
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 from catchup.knowledge_maintenance.domain.artifact_definition import SelectionSpec
@@ -52,9 +56,19 @@ class _FakeDefinitionRepository:
 
     def __init__(self, definitions: tuple[StoredArtifactDefinition, ...]):
         self.definitions = definitions
+        self.style_calls: list[uuid.UUID] = []
+        self.purpose_calls: list[uuid.UUID] = []
 
     def list_definitions(self) -> tuple[StoredArtifactDefinition, ...]:
         return self.definitions
+
+    def find_channel_style(self, *, channel_id: uuid.UUID) -> str | None:
+        self.style_calls.append(channel_id)
+        return "style.faq"
+
+    def find_channel_purpose(self, *, channel_id: uuid.UUID) -> str | None:
+        self.purpose_calls.append(channel_id)
+        return "voc.top_requests"
 
 
 class _FakeUnitOfWork:
@@ -123,6 +137,44 @@ def test_other_repositories_and_boundary_pass_through() -> None:
     assert inner.committed == 1
 
 
+def test_channel_style_lookup_passes_through() -> None:
+    """문체 조회는 가림막을 지나 감싼 저장소에 그대로 닿는다.
+
+    산문을 쓰려면 채널 문체를 읽어야 한다. 가림막이 그 조회를 넘기지
+    않으면 --definition-id로 돌린 실행만 서술 자리에서 터진다.
+    """
+    inner = _FakeUnitOfWork((_definition(FIRST_ID),))
+    wrapped = only_definition(inner, FIRST_ID)
+    channel_id = uuid.uuid4()
+
+    with wrapped:
+        found = wrapped.artifact_definitions.find_channel_style(
+            channel_id=channel_id
+        )
+        assert inner.artifact_definitions.style_calls == [channel_id]
+
+    assert found == "style.faq"
+
+
+def test_channel_purpose_lookup_passes_through() -> None:
+    """목적 조회도 가림막을 지나 감싼 저장소에 그대로 닿는다.
+
+    목적 문장은 채널이 고른 목적에서 나온다. 가림막이 이 조회를 넘기지
+    않으면 --definition-id로 돌린 실행만 목적 없는 문장을 쓴다.
+    """
+    inner = _FakeUnitOfWork((_definition(FIRST_ID),))
+    wrapped = only_definition(inner, FIRST_ID)
+    channel_id = uuid.uuid4()
+
+    with wrapped:
+        found = wrapped.artifact_definitions.find_channel_purpose(
+            channel_id=channel_id
+        )
+        assert inner.artifact_definitions.purpose_calls == [channel_id]
+
+    assert found == "voc.top_requests"
+
+
 class _FakeEngine:
     """engine을 대신한다. 닫혔는지만 기억한다."""
 
@@ -147,6 +199,7 @@ def _stub_run(
     monkeypatch: pytest.MonkeyPatch,
     *,
     result: ArtifactCompileResult,
+    extra_args: Sequence[str] = (),
 ) -> _FakeEngine:
     """DB와 컴파일을 대신 세워 main을 부를 수 있게 만든다."""
     engine = _FakeEngine()
@@ -174,7 +227,16 @@ def _stub_run(
     )
     monkeypatch.setattr(runner, "_print_pending_cards", lambda uow: None)
     monkeypatch.setattr(
-        sys, "argv", ["run", "--workspace-id", "1", "--ontology-version", "1"]
+        sys,
+        "argv",
+        [
+            "run",
+            "--workspace-id",
+            "1",
+            "--ontology-version",
+            "1",
+            *extra_args,
+        ],
     )
     return engine
 
@@ -240,3 +302,128 @@ def test_zero_definitions_still_exits_zero(
 
     assert code == 0
     assert "읽은 정의가 없다" in capsys.readouterr().out
+
+
+class _FakeChatModel:
+    """구조화 출력만 흉내 내는 모델을 대신한다."""
+
+    def with_structured_output(self, *args: Any, **kwargs: Any) -> object:
+        return object()
+
+
+class _FakeLlmService:
+    """LLM 서비스를 대신한다. 모델 자리만 채운다."""
+
+    def get_llm(self) -> _FakeChatModel:
+        return _FakeChatModel()
+
+
+def test_no_narrate_builds_no_llm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """--no-narrate면 LLM 서비스를 만들지 않고 narrator도 없다."""
+    factory_calls: list[dict[str, Any]] = []
+    compile_calls: list[dict[str, Any]] = []
+
+    def _fake_factory(**kwargs: Any) -> _FakeLlmService:
+        factory_calls.append(kwargs)
+        return _FakeLlmService()
+
+    def _fake_compile(uow: Any, **kwargs: Any) -> ArtifactCompileResult:
+        compile_calls.append(kwargs)
+        return ArtifactCompileResult()
+
+    _stub_run(
+        monkeypatch,
+        result=ArtifactCompileResult(),
+        extra_args=["--no-narrate"],
+    )
+    monkeypatch.setattr(runner, "get_llm_service", _fake_factory)
+    monkeypatch.setattr(runner, "compile_definition_artifacts", _fake_compile)
+
+    assert runner.main() == 0
+    assert factory_calls == []
+    assert compile_calls[0]["narrator"] is None
+
+
+def test_capacity_reaches_the_llm_factory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """--capacity가 모델 등급으로 그대로 넘어간다."""
+    factory_calls: list[dict[str, Any]] = []
+    compile_calls: list[dict[str, Any]] = []
+
+    def _fake_factory(**kwargs: Any) -> _FakeLlmService:
+        factory_calls.append(kwargs)
+        return _FakeLlmService()
+
+    def _fake_compile(uow: Any, **kwargs: Any) -> ArtifactCompileResult:
+        compile_calls.append(kwargs)
+        return ArtifactCompileResult()
+
+    _stub_run(
+        monkeypatch,
+        result=ArtifactCompileResult(),
+        extra_args=["--capacity", "small"],
+    )
+    monkeypatch.setattr(runner, "get_llm_service", _fake_factory)
+    monkeypatch.setattr(runner, "compile_definition_artifacts", _fake_compile)
+
+    assert runner.main() == 0
+    assert factory_calls[0]["provider"] is LlmProvider.AWS_BEDROCK
+    assert factory_calls[0]["model_capacity"] is ModelCapacity.SMALL
+    assert isinstance(compile_calls[0]["narrator"], LlmBlockNarrator)
+
+
+def test_prints_narration_counts(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """서술·재사용 블록 수를 결과에 적는다."""
+    _stub_run(
+        monkeypatch,
+        result=ArtifactCompileResult(
+            definitions_considered=1,
+            nodes_considered=1,
+            proposals_created=1,
+            blocks_narrated=3,
+            blocks_narrative_reused=5,
+        ),
+        extra_args=["--no-narrate"],
+    )
+
+    assert runner.main() == 0
+    printed = capsys.readouterr().out
+    assert "산문 서술 3" in printed
+    assert "재사용 5" in printed
+
+
+def test_capacity_with_no_narrate_is_reported_as_ignored(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--no-narrate와 함께 준 --capacity는 무시한다고 알린다."""
+    _stub_run(
+        monkeypatch,
+        result=ArtifactCompileResult(),
+        extra_args=["--no-narrate", "--capacity", "small"],
+    )
+
+    assert runner.main() == 0
+    printed = capsys.readouterr().out
+    assert "--capacity small는 무시한다" in printed
+
+
+def test_capacity_is_not_reported_without_no_narrate(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--no-narrate만 주면 무시 안내를 적지 않는다."""
+    _stub_run(
+        monkeypatch,
+        result=ArtifactCompileResult(),
+        extra_args=["--no-narrate"],
+    )
+
+    assert runner.main() == 0
+    assert "무시한다" not in capsys.readouterr().out

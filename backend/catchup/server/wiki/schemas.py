@@ -222,3 +222,50 @@ class DefinitionPresetsResponse(BaseModel):
 
     domains: list[PresetDomainResponse]
     styles: list[PresetStyleResponse]
+
+
+class ArtifactBlockSourceResponse(BaseModel):
+    """블록 한 칸이 근거로 삼은 claim의 원문 인용을 담는다.
+
+    산문과 함께 실어야 읽는 쪽이 문장을 근거와 대조할 수 있다. 근거 지위는
+    statement에만 있고 산문에는 없다.
+    """
+
+    claim_id: str
+    statement: str
+    observed_at: datetime
+    citation_verified: bool | None
+
+
+class ArtifactDocumentBlockResponse(BaseModel):
+    """발행된 문서의 블록 하나를 담는다.
+
+    narrative는 표현이라 없을 수 있다. 산문이 없던 옛 판도 그대로 읽혀야
+    하므로 없음을 허용한다.
+    """
+
+    block_index: int
+    block_kind: str
+    heading: str
+    narrative: str | None
+    body: str
+    claim_ids: list[str]
+    relation_ids: list[str]
+    sources: list[ArtifactBlockSourceResponse]
+
+
+class ArtifactDocumentResponse(BaseModel):
+    """지금 발행된 판 하나를 문서 정보와 함께 담는다.
+
+    published_at은 그 판이 만들어진 시각이다. 판은 덮어쓰지 않고 쌓으므로
+    이 값이 곧 그 문장이 발행된 시점이다.
+    """
+
+    artifact_id: str
+    channel_id: str | None
+    definition_id: str | None
+    kind: str
+    title: str
+    revision_id: str
+    published_at: datetime
+    blocks: list[ArtifactDocumentBlockResponse]

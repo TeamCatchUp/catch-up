@@ -9,9 +9,13 @@
 정의가 실행마다 다른 문서 묶음을 낳는다. 정의 하나만 시험하고 싶으면
 `--definition-id`로 정의 목록 쪽을 좁힌다.
 
-LLM을 부르지 않는다. 카드 본문은 이미 저장된 것을 정해진 순서로 옮긴
-것뿐이므로, 같은 입력이면 같은 본문이 나온다. 그래서 여러 번 돌려도
-안전하다. 내용 지문이 그대로면 아무것도 쓰지 않고 넘긴다.
+블록의 구성에는 LLM을 부르지 않는다. 카드 본문은 이미 저장된 것을 정해진
+순서로 옮긴 것뿐이므로, 같은 입력이면 같은 블록이 나온다. 그래서 여러 번
+돌려도 안전하다. 내용 지문이 그대로면 아무것도 쓰지 않고 넘긴다.
+
+블록에 얹는 산문만 LLM이 쓴다. 내용 지문이 그대로인 문서는 산문도 부르지
+않으므로 재실행 비용은 종전과 같다. `--no-narrate`를 주면 산문 없이
+종전대로 컴파일한다.
 
 어휘 사전은 여기서 읽어 넘긴다. 어느 판본으로 카드를 만들었는지가
 블록에 남아야 하고, 그 판본을 고르는 일은 실행을 시작하는 쪽의
@@ -76,8 +80,12 @@ from typing import Any
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from catchup.components.llm.constants import LlmProvider
+from catchup.components.llm.constants import ModelCapacity
+from catchup.components.llm.factory import get_llm_service
 from catchup.configs.config import settings
 from catchup.evaluation.review_artifact_proposals import render_proposal_card
+from catchup.knowledge_maintenance.adapters.llm.block_narrator import LlmBlockNarrator
 from catchup.knowledge_maintenance.adapters.llm.structured_extractor import CONTRACT_ID
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
@@ -98,7 +106,13 @@ from catchup.knowledge_maintenance.services.converge_vocabulary import (
 
 
 class _SingleDefinitionRepository:
-    """정의 하나만 보이도록 가린 정의 저장소다."""
+    """정의 하나만 보이도록 가린 정의 저장소다.
+
+    가리는 것은 정의 목록뿐이고, 포트의 나머지 조회는 그대로 감싼
+    저장소에 넘긴다. 넘기는 자리를 메서드로 적어 둔다 — `__getattr__`로
+    받아 넘기면 이 껍데기가 어떤 포트를 채우고 있는지 코드에서 보이지
+    않아, 포트에 조회가 늘 때 러너만 조용히 깨진다.
+    """
 
     def __init__(
         self,
@@ -115,6 +129,14 @@ class _SingleDefinitionRepository:
             for definition in self._inner.list_definitions()
             if definition.id == self._definition_id
         )
+
+    def find_channel_style(self, *, channel_id: uuid.UUID) -> str | None:
+        """채널에 걸린 문체 조회는 감싼 저장소에 그대로 넘긴다."""
+        return self._inner.find_channel_style(channel_id=channel_id)
+
+    def find_channel_purpose(self, *, channel_id: uuid.UUID) -> str | None:
+        """채널에 걸린 목적 조회는 감싼 저장소에 그대로 넘긴다."""
+        return self._inner.find_channel_purpose(channel_id=channel_id)
 
 
 class _SingleDefinitionUnitOfWork:
@@ -226,6 +248,22 @@ def main() -> int:
             "고른다."
         ),
     )
+    parser.add_argument(
+        "--capacity",
+        choices=[capacity.value for capacity in ModelCapacity],
+        default=None,
+        help=(
+            "산문을 쓸 모델 등급이다. 기본은 large다. --no-narrate와 "
+            "함께 주면 부를 모델이 없으므로 무시한다."
+        ),
+    )
+    parser.add_argument(
+        "--no-narrate",
+        action="store_true",
+        help=(
+            "산문 없이 컴파일한다. 블록 구성만 확인하고 싶을 때 쓴다."
+        ),
+    )
     args = parser.parse_args()
 
     engine = create_engine(settings.sqlalchemy_database_url)
@@ -277,12 +315,31 @@ def main() -> int:
             f"{len(vocabulary.predicate_entries)}종 주입"
         )
 
+    capacity = args.capacity or ModelCapacity.LARGE.value
+    narrator = None
+    if args.no_narrate:
+        if args.capacity is not None:
+            print(
+                "--no-narrate라 산문을 쓰지 않는다. "
+                f"--capacity {args.capacity}는 무시한다."
+            )
+    else:
+        service = get_llm_service(
+            provider=LlmProvider.AWS_BEDROCK,
+            model_capacity=ModelCapacity(capacity),
+            streaming=False,
+            read_timeout=120,
+        )
+        narrator = LlmBlockNarrator(service.get_llm())
+        print(f"산문 모델 등급 {capacity} 주입")
+
     result = compile_definition_artifacts(
         uow
         if args.definition_id is None
         else only_definition(uow, args.definition_id),
         workspace_id=args.workspace_id,
         vocabulary=vocabulary,
+        narrator=narrator,
     )
 
     print("=== 정의 기반 문서 컴파일 결과 ===")
@@ -308,6 +365,12 @@ def main() -> int:
     # 반려된 내용과 지문이 같아 카드에서 빠진 블록 수다. 조용히 사라지면
     # 카드가 왜 짧아졌는지 알 길이 없으므로 함께 적는다.
     print(f"  반려 재등장 차단 블록 {result.blocks_suppressed}")
+    # 산문을 새로 받은 블록과 지난 문장을 그대로 다시 쓴 블록 수다.
+    # 재사용이 큰 실행일수록 검수자가 볼 산문 diff가 작다.
+    print(
+        f"  산문 서술 {result.blocks_narrated}"
+        f" · 재사용 {result.blocks_narrative_reused}"
+    )
     # 문서를 세울 수 없어 컴파일을 접은 노드 수다. 그만큼 카드가 비므로
     # 실행 전체를 실패로 끝낸다.
     print(f"  실패 노드 {result.nodes_failed}")

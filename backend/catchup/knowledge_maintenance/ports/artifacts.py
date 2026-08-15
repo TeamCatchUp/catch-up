@@ -183,6 +183,23 @@ class ArtifactRepository(Protocol):
         """
         ...
 
+    def list_reusable_narratives(
+        self,
+        *,
+        artifact_id: uuid.UUID,
+    ) -> dict[str, str]:
+        """다시 쓸 수 있는 산문을 블록 지문으로 찾아 모은다.
+
+        재료는 최신 발행 판과 계류 중인 변경안뿐이다. 반려된 변경안의
+        산문은 사람이 그 문장을 물린 것이므로 넣지 않고, 접힌 변경안은
+        이미 대체된 내용이라 넣지 않는다.
+
+        키가 블록 지문인 것이 요점이다. 지문은 산문을 빼고 계산하므로,
+        내용이 그대로인 블록은 지난번 문장을 바이트 그대로 다시 쓴다.
+        그래야 한 블록의 변화가 문서 전체의 산문을 흔들지 않는다.
+        """
+        ...
+
     def find_latest_content_hashes(
         self,
         *,

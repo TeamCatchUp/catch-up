@@ -67,10 +67,14 @@ class PresetStyle:
     Attributes:
         id: 채널의 style_preset 값으로 그대로 실린다. 64자 안이다.
         label: 사용자에게 보여줄 짧은 이름을 나타낸다.
+        instruction: 산문을 쓰는 쪽에 그대로 넘길 지시 한 문단이다.
+            라벨과 따로 두는 이유는 라벨이 화면 문구라 언제든 바뀌지만
+            지시문은 산출물의 모양을 정하는 계약이기 때문이다.
     """
 
     id: str
     label: str
+    instruction: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -406,11 +410,62 @@ PRESET_DOMAINS: tuple[PresetDomain, ...] = (
 
 
 PRESET_STYLES: tuple[PresetStyle, ...] = (
-    PresetStyle(id="style.report_summary", label="보고서 요약체"),
-    PresetStyle(id="style.conversational_brief", label="대화체 브리핑"),
-    PresetStyle(id="style.decision_log", label="결정 기록체"),
-    PresetStyle(id="style.faq", label="FAQ 문답체"),
-    PresetStyle(id="style.custom", label="직접 지정"),
+    PresetStyle(
+        id="style.report_summary",
+        label="보고서 요약체",
+        instruction=(
+            "사내 보고서의 요약 문단처럼 쓴다. 사실을 앞에 놓고 평서형"
+            " 종결(~이다·~한다)로 끝맺으며, 감탄과 권유를 쓰지 않는다."
+            " 수식어보다 값과 상태를 먼저 적는다."
+        ),
+    ),
+    PresetStyle(
+        id="style.conversational_brief",
+        label="대화체 브리핑",
+        instruction=(
+            "동료에게 구두로 브리핑하듯 쓴다. 경어체(~습니다)를 쓰고"
+            " 문장을 짧게 끊으며, 어려운 말 대신 쉬운 말을 고른다."
+            " 다만 친근함을 위해 없는 내용을 덧붙이지 않는다."
+        ),
+    ),
+    PresetStyle(
+        id="style.decision_log",
+        label="결정 기록체",
+        instruction=(
+            "결정 기록장에 남기듯 쓴다. 무엇이 정해졌고 무엇이 아직"
+            " 열려 있는지를 시간 순서대로 평서형으로 적는다. 근거에"
+            " 없는 결정 이유를 지어내지 않는다."
+        ),
+    ),
+    PresetStyle(
+        id="style.faq",
+        label="FAQ 문답체",
+        instruction=(
+            "자주 묻는 질문의 답변처럼 쓴다. 읽는 사람이 궁금해할 것을"
+            " 먼저 답으로 내놓고 경어체(~습니다)로 끝맺는다. 질문"
+            " 문장을 따로 만들지 않고 답변 문단만 쓴다."
+        ),
+    ),
+    PresetStyle(
+        id="style.custom",
+        label="직접 지정",
+        instruction=(
+            "특별한 문체 지정이 없다. 평서형 종결(~이다·~한다)로 담백하게"
+            " 쓰고, 근거에 있는 사실만 순서대로 적는다."
+        ),
+    ),
+)
+
+
+# 채널에 문체가 걸려 있지 않거나 카탈로그 밖 id일 때 쓰는 지시문이다.
+DEFAULT_STYLE_INSTRUCTION = (
+    "평서형 종결(~이다·~한다)로 담백하게 쓴다. 근거에 있는 사실만"
+    " 순서대로 적고, 꾸미는 말을 더하지 않는다."
+)
+
+# 카탈로그 밖 kind로 만들어진 문서에 쓰는 목적 문장이다.
+DEFAULT_PURPOSE_SENTENCE = (
+    "이 문서는 이 대상에 대해 지금까지 확인된 사실을 모아 두는 데 쓴다."
 )
 
 
@@ -436,6 +491,21 @@ def find_kind(domain: PresetDomain, kind: str) -> PresetKind | None:
     for preset_kind in domain.kinds:
         if preset_kind.kind == kind:
             return preset_kind
+    return None
+
+
+def find_kind_by_name(kind: str) -> PresetKind | None:
+    """도메인을 모른 채 문서 종류를 찾는다.
+
+    `find_kind`와 뜻이 다르다. 저쪽은 "이 도메인에서 고를 수 있는가"를
+    묻는 온보딩의 관문이고, 이쪽은 이미 저장된 정의의 kind가 카탈로그의
+    어느 종류였는지를 되짚는 조회다. 같은 이름이 두 도메인에 걸리지
+    않도록 카탈로그가 kind 전역 유일을 지킨다.
+    """
+    for domain in PRESET_DOMAINS:
+        for preset_kind in domain.kinds:
+            if preset_kind.kind == kind:
+                return preset_kind
     return None
 
 

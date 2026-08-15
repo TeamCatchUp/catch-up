@@ -644,6 +644,7 @@ def _to_block(
         proposal_ids=[str(item) for item in block.proposal_ids],
         ontology_version=block.ontology_version,
         block_content_hash=block_content_hash(block),
+        narrative=block.narrative,
         relation_ids=[str(item) for item in block.relation_ids],
         sources=[] if contested else _to_sources(block.sources),
         variants=(

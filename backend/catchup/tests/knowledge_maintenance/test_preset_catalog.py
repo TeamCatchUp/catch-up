@@ -3,9 +3,14 @@
 from catchup.knowledge_maintenance.domain.artifact_definition import (
     validate_selection_spec,
 )
+from catchup.knowledge_maintenance.domain.preset_catalog import DEFAULT_PURPOSE_SENTENCE
+from catchup.knowledge_maintenance.domain.preset_catalog import (
+    DEFAULT_STYLE_INSTRUCTION,
+)
 from catchup.knowledge_maintenance.domain.preset_catalog import PRESET_DOMAINS
 from catchup.knowledge_maintenance.domain.preset_catalog import PRESET_STYLES
 from catchup.knowledge_maintenance.domain.preset_catalog import find_kind
+from catchup.knowledge_maintenance.domain.preset_catalog import find_kind_by_name
 from catchup.knowledge_maintenance.domain.preset_catalog import find_purpose
 from catchup.knowledge_maintenance.domain.preset_catalog import find_style
 
@@ -41,6 +46,24 @@ def test_purpose_ids_are_namespaced_by_domain() -> None:
     for domain in PRESET_DOMAINS:
         for purpose in domain.purposes:
             assert purpose.id.startswith(f"{domain.id}.")
+
+
+def test_kind_names_are_unique_across_domains() -> None:
+    """kind 이름이 도메인을 가로질러도 겹치지 않는다.
+
+    `find_kind_by_name`은 도메인을 모른 채 저장된 kind를 되짚는 조회라
+    처음 걸린 것을 돌려준다. 이름이 겹치면 어느 도메인의 종류로 풀릴지
+    카탈로그에 적힌 차례에 달리고, 목적 문장이 조용히 뒤바뀐다.
+    """
+    names = [
+        preset_kind.kind
+        for domain in PRESET_DOMAINS
+        for preset_kind in domain.kinds
+    ]
+
+    assert len(names) == len(set(names))
+    for name in names:
+        assert find_kind_by_name(name) is not None
 
 
 def test_recommended_kind_exists_in_the_same_domain() -> None:
@@ -143,3 +166,33 @@ def test_seed_vocabulary_has_no_version_pinned_yet() -> None:
     """seed 어휘는 발행 시점에 버전이 붙으므로 비어 있다."""
     for domain in PRESET_DOMAINS:
         assert domain.seed_vocabulary.snapshot_id == ""
+
+
+def test_every_style_carries_an_instruction() -> None:
+    """등재된 문체는 전부 비어 있지 않은 지시문을 갖는다."""
+    for style in PRESET_STYLES:
+        assert style.instruction.strip()
+
+
+def test_style_instructions_are_distinct() -> None:
+    """문체마다 지시문이 달라야 고른 값이 결과를 바꾼다."""
+    instructions = [style.instruction for style in PRESET_STYLES]
+    assert len(instructions) == len(set(instructions))
+
+
+def test_default_constants_are_not_empty() -> None:
+    """문체·목적을 모를 때 쓸 기본 문장이 준비돼 있다."""
+    assert DEFAULT_STYLE_INSTRUCTION.strip()
+    assert DEFAULT_PURPOSE_SENTENCE.strip()
+
+
+def test_find_kind_by_name_reaches_every_registered_kind() -> None:
+    """도메인을 몰라도 등재된 kind를 전부 찾는다."""
+    for domain in PRESET_DOMAINS:
+        for preset_kind in domain.kinds:
+            assert find_kind_by_name(preset_kind.kind) is preset_kind
+
+
+def test_find_kind_by_name_returns_none_for_unknown() -> None:
+    """카탈로그 밖 kind는 없음으로 답한다."""
+    assert find_kind_by_name("entity_summary") is None
