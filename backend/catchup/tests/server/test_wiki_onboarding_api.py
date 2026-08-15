@@ -4,9 +4,10 @@
 쓸 수 있는 상태가 된다. 하나라도 따로 커밋되면 관리자가 없는 채널이나
 정의 없는 채널이 남으므로, 실 PostgreSQL로 경계를 함께 본다.
 
-어휘 버전 번호는 이 workspace가 전에 무엇을 발행했느냐에 달려 있어
-"v1"으로 못박지 않는다. 새 버전이 하나 늘었는지, 그리고 그 이름이
-발행 버전 모양인지만 본다.
+workspace는 테스트 안에서 새로 만든다. 개발 DB의 기존 workspace를 빌리면
+거기 이미 발행된 어휘가 seed와 겹쳐 첫 온보딩이 발행을 건너뛰고, 어휘
+계보가 공유 상태에 따라 달라진다. 계보가 빈 자리에서 시작하므로 첫
+발행은 항상 "v1"이다.
 """
 
 from __future__ import annotations
@@ -75,20 +76,16 @@ def engine() -> Iterator[Engine]:
 
 
 @pytest.fixture(scope="module")
-def workspace_ids(engine: Engine) -> tuple[int, int]:
-    """실 DB에 있는 workspace 두 개를 빌린다."""
+def company_id(engine: Engine) -> int:
+    """실 DB에 있는 회사 하나의 id를 빌린다."""
     with engine.connect() as connection:
-        found = (
-            connection.execute(
-                select(Workspace.id).order_by(Workspace.id).limit(2)
-            )
-            .scalars()
-            .all()
-        )
+        found = connection.execute(
+            select(Workspace.company_id).order_by(Workspace.id).limit(1)
+        ).scalar()
 
-    if len(found) < 2:
-        pytest.skip("workspace가 둘 이상 없어 통합 테스트를 건너뛴다.")
-    return found[0], found[1]
+    if found is None:
+        pytest.skip("workspace가 없어 통합 테스트를 건너뛴다.")
+    return found
 
 
 @pytest.fixture
@@ -121,6 +118,23 @@ def db(session_factory: Callable[[], Session]) -> Iterator[Session]:
     yield session
 
     session.close()
+
+
+@pytest.fixture
+def workspace_id(db: Session, company_id: int) -> int:
+    """이 테스트만 쓰는 새 workspace를 만든다.
+
+    개발 DB의 기존 workspace를 빌리면 그 workspace에 이미 발행된 어휘가
+    seed와 겹쳐 첫 온보딩이 발행을 건너뛴다. 어휘 계보가 비어 있는 자리를
+    새로 만들어 공유 상태에 기대지 않는다.
+    """
+    workspace = Workspace(
+        name=f"온보딩-{uuid.uuid4().hex[:8]}",
+        company_id=company_id,
+    )
+    db.add(workspace)
+    db.flush()
+    return workspace.id
 
 
 def _make_user(db: Session, *, email: str) -> User:
@@ -184,11 +198,10 @@ def as_user(app: FastAPI, db: Session) -> Callable[[User], None]:
 @pytest.fixture
 def member(
     db: Session,
-    workspace_ids: tuple[int, int],
+    workspace_id: int,
     as_user: Callable[[User], None],
 ) -> User:
-    """역할이 하나도 없는 구성원 한 명을 세운다."""
-    workspace_id, _ = workspace_ids
+    """새 workspace에만 속한 구성원 한 명을 세운다."""
     user = _make_user(db, email=f"member-{uuid.uuid4().hex[:8]}@example.com")
     _join(db, user=user, workspace_id=workspace_id)
     as_user(user)
@@ -198,7 +211,6 @@ def member(
 @pytest.fixture
 def outsider(
     db: Session,
-    workspace_ids: tuple[int, int],
     as_user: Callable[[User], None],
 ) -> User:
     """어느 workspace에도 속하지 않은 사용자 한 명을 세운다."""
@@ -214,11 +226,10 @@ def test_creates_channel_admin_definition_and_vocabulary(
     client: TestClient,
     member: User,
     db: Session,
-    workspace_ids: tuple[int, int],
+    workspace_id: int,
 ) -> None:
     """네 가지가 한 번에 만들어진다."""
-    workspace_id, _ = workspace_ids
-    before = _published_versions(db, workspace_id)
+    assert _published_versions(db, workspace_id) == []
 
     response = client.post(
         _ONBOARDING_PATH,
@@ -248,7 +259,8 @@ def test_creates_channel_admin_definition_and_vocabulary(
 
     version = body["vocabulary_version"]
     assert _PUBLISHED_VERSION.match(version)
-    assert _published_versions(db, workspace_id) == [*before, version]
+    assert version == "v1"
+    assert _published_versions(db, workspace_id) == ["v1"]
 
 
 def test_name_over_twenty_characters_is_rejected(
@@ -322,11 +334,11 @@ def test_duplicate_channel_name_is_four_hundred_nine(
     client: TestClient,
     member: User,
     db: Session,
-    workspace_ids: tuple[int, int],
+    workspace_id: int,
 ) -> None:
     """같은 workspace에 같은 이름이 있으면 409다."""
     payload = {
-        "name": f"중복 {uuid.uuid4().hex[:6]}",
+        "name": "중복 이름",
         "purpose_preset": "voc.top_requests",
         "style_preset": "style.report_summary",
         "kind": "request_priority_board",
@@ -342,10 +354,10 @@ def test_definition_failure_rolls_back_the_channel(
     client: TestClient,
     member: User,
     db: Session,
-    workspace_ids: tuple[int, int],
+    workspace_id: int,
 ) -> None:
     """정의 INSERT가 실패하면 채널도 남지 않는다."""
-    before = len(wiki_queries.list_channels(db, workspace_ids[0]))
+    before = len(wiki_queries.list_channels(db, workspace_id))
     with patch(
         "catchup.server.wiki.api.wiki_queries.add_artifact_definition",
         side_effect=IntegrityError("boom", None, Exception()),
@@ -361,7 +373,7 @@ def test_definition_failure_rolls_back_the_channel(
                 },
             )
     db.rollback()
-    assert len(wiki_queries.list_channels(db, workspace_ids[0])) == before
+    assert len(wiki_queries.list_channels(db, workspace_id)) == before
 
 
 def test_second_onboarding_in_the_same_domain_reuses_vocabulary(
@@ -386,7 +398,7 @@ def test_second_onboarding_in_the_same_domain_reuses_vocabulary(
             "kind": "complaint_topic_brief",
         },
     )
-    assert _PUBLISHED_VERSION.match(first.json()["vocabulary_version"])
+    assert first.json()["vocabulary_version"] == "v1"
     assert second.json()["vocabulary_version"] is None
 
 
