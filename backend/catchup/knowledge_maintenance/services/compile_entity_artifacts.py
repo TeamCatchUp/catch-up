@@ -1,9 +1,13 @@
 """canonical entity의 요약 카드를 결정론으로 컴파일한다.
 
-LLM을 부르지 않는다. 카드는 이미 저장된 claim과 계류 중인 안건을 정해진
-순서로 늘어놓은 것뿐이고, 같은 입력이면 같은 본문이 나와야 한다. 본문이
-실행마다 흔들리면 내용 지문이 매번 달라져 사람이 이미 본 카드가 검토
-큐에 다시 쌓인다.
+블록의 구성은 LLM을 부르지 않는다. 어떤 블록이 어떤 근거로 서는지는 이미
+저장된 claim과 계류 안건을 정해진 순서로 늘어놓은 것뿐이고, 같은 입력이면
+같은 블록이 나와야 한다. 본문이 실행마다 흔들리면 내용 지문이 매번 달라져
+사람이 이미 본 카드가 검토 큐에 다시 쌓인다.
+
+블록 위에 얹는 산문만 밖에서 받는다. 산문은 근거가 아니라 표현이라 내용
+지문에서 빠지고, 내용이 그대로인 블록은 지난 문장을 그대로 다시 쓴다.
+narrator를 주지 않으면 산문 없이 종전대로 컴파일한다.
 
 값을 고르지 않는다. 한 predicate에 값이 여럿이면 전부 나열하고, 어느
 값이 맞는지 묻는 일은 열린 질문 블록이 맡는다. 값을 고르는 것도 빼는
@@ -36,6 +40,7 @@ from collections.abc import Iterable
 from collections.abc import Mapping
 from collections.abc import Sequence
 from dataclasses import dataclass
+from dataclasses import replace
 from datetime import datetime
 from datetime import timezone
 from types import TracebackType
@@ -46,6 +51,7 @@ from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabul
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_OPEN_QUESTION
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_RELATION_SECTION
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.artifact import ContestedVariant
@@ -58,6 +64,12 @@ from catchup.knowledge_maintenance.domain.artifact_definition import (
     validate_selection_spec,
 )
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
+from catchup.knowledge_maintenance.domain.preset_catalog import DEFAULT_PURPOSE_SENTENCE
+from catchup.knowledge_maintenance.domain.preset_catalog import (
+    DEFAULT_STYLE_INSTRUCTION,
+)
+from catchup.knowledge_maintenance.domain.preset_catalog import find_kind_by_name
+from catchup.knowledge_maintenance.domain.preset_catalog import find_style
 from catchup.knowledge_maintenance.domain.temporal import claim_not_closed_at
 from catchup.knowledge_maintenance.ports.artifact_definitions import (
     ArtifactDefinitionRepository,
@@ -76,6 +88,9 @@ from catchup.knowledge_maintenance.ports.mutation_proposals import (
     MutationProposalRepository,
 )
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPendingProposal
+from catchup.knowledge_maintenance.ports.narrator import BlockNarrator
+from catchup.knowledge_maintenance.ports.narrator import NarrationError
+from catchup.knowledge_maintenance.ports.narrator import NarrationRequest
 from catchup.knowledge_maintenance.ports.relations import RelationRepository
 from catchup.knowledge_maintenance.services.traverse_relations import (
     relation_section_block,
@@ -166,6 +181,10 @@ class ArtifactCompileResult:
         nodes_failed: 문서를 세울 수 없어 컴파일을 접은 노드 수를
             나타낸다. 접은 문서만큼 카드가 비므로 호출자가 이 수를 보고
             실행을 실패로 다룰 수 있어야 한다.
+        blocks_narrated: 이번 실행이 새로 산문을 받은 블록 수를
+            나타낸다. LLM 호출 수와 같다.
+        blocks_narrative_reused: 지난 산문을 그대로 다시 쓴 블록 수를
+            나타낸다. 이 수가 클수록 검수자가 볼 산문 diff가 작다.
     """
 
     definitions_considered: int = 0
@@ -177,6 +196,8 @@ class ArtifactCompileResult:
     proposals_conflicted: int = 0
     blocks_suppressed: int = 0
     nodes_failed: int = 0
+    blocks_narrated: int = 0
+    blocks_narrative_reused: int = 0
 
 
 def compile_definition_artifacts(
@@ -184,6 +205,7 @@ def compile_definition_artifacts(
     *,
     workspace_id: int,
     vocabulary: ExtractionVocabulary,
+    narrator: BlockNarrator | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> ArtifactCompileResult:
     """workspace의 정의를 돌며 정의가 고른 문서를 변경안으로 올린다.
@@ -203,6 +225,10 @@ def compile_definition_artifacts(
     흔들린다. 그 시계는 호출자가 넘길 수 있다. 파이프라인 한 회차를
     이루는 단계들이 같은 시점을 공유해야 단계 사이에서 기준이 어긋나지
     않는다.
+
+    narrator를 주지 않으면 산문 없이 컴파일한다. 산문은 블록 위에 얹는
+    표현이라 없어도 문서가 성립하고, 벤치처럼 사람이 읽지 않는 실행은
+    부를 이유가 없다.
     """
     created = 0
     revived = 0
@@ -212,6 +238,8 @@ def compile_definition_artifacts(
     suppressed = 0
     nodes_considered = 0
     nodes_failed = 0
+    narrated = 0
+    reused = 0
     now = (clock or _utcnow)()
     with uow:
         definitions = uow.artifact_definitions.list_definitions()
@@ -232,6 +260,9 @@ def compile_definition_artifacts(
                     reason=str(error),
                 )
                 continue
+
+            style_instruction = _style_instruction(uow, definition, narrator)
+            purpose_sentence = _purpose_sentence(definition)
 
             sources = uow.artifacts.find_entity_nodes_by_types(
                 entity_types=definition.selection_spec.entity_types,
@@ -318,21 +349,48 @@ def compile_definition_artifacts(
                         title=_definition_title(definition, source),
                     )
                 )
-                outcome = _propose_node_blocks(
-                    uow,
-                    workspace_id=workspace_id,
-                    node_id=source.node_id,
-                    artifact_id=artifact_id,
-                    blocks=blocks,
-                    pending=pending,
-                    ontology_version=vocabulary.snapshot_id or None,
-                )
+                try:
+                    outcome = _propose_node_blocks(
+                        uow,
+                        workspace_id=workspace_id,
+                        node_id=source.node_id,
+                        artifact_id=artifact_id,
+                        blocks=blocks,
+                        pending=pending,
+                        ontology_version=vocabulary.snapshot_id or None,
+                        narrator=narrator,
+                        style_instruction=style_instruction,
+                        purpose_sentence=purpose_sentence,
+                    )
+                except NarrationError as error:
+                    # 잘림 실패와 같은 격리다. 산문이 반쪽인 문서를
+                    # 검수자에게 올리지 않으므로 이 문서만 접고, 앞선
+                    # 실행이 남긴 계류도 함께 거둔다. 그 계류를 두면
+                    # 방금 세울 수 없다고 판정한 자리가 자동 승인 경로로
+                    # 발행된다.
+                    dropped = uow.artifacts.abandon_pending_proposals(
+                        artifact_id=artifact_id,
+                    )
+                    abandoned += dropped
+                    logger.warning(
+                        "artifact_compile_node_failed_narration",
+                        workspace_id=workspace_id,
+                        definition_id=str(definition.id),
+                        node_id=str(source.node_id),
+                        artifact_id=str(artifact_id),
+                        reason=str(error),
+                        proposals_abandoned=dropped,
+                    )
+                    nodes_failed += 1
+                    continue
                 created += outcome.created
                 revived += outcome.revived
                 abandoned += outcome.abandoned
                 skipped += outcome.skipped
                 conflicted += outcome.conflicted
                 suppressed += outcome.suppressed
+                narrated += outcome.narrated
+                reused += outcome.reused
 
         uow.commit()
 
@@ -346,6 +404,8 @@ def compile_definition_artifacts(
         proposals_conflicted=conflicted,
         blocks_suppressed=suppressed,
         nodes_failed=nodes_failed,
+        blocks_narrated=narrated,
+        blocks_narrative_reused=reused,
     )
     logger.info(
         "artifact_compile_completed",
@@ -359,6 +419,8 @@ def compile_definition_artifacts(
         proposals_conflicted=result.proposals_conflicted,
         blocks_suppressed=result.blocks_suppressed,
         nodes_failed=result.nodes_failed,
+        blocks_narrated=result.blocks_narrated,
+        blocks_narrative_reused=result.blocks_narrative_reused,
     )
     return result
 
@@ -374,6 +436,45 @@ def _definition_title(
     가릴 수 없기 때문이다.
     """
     return f"{definition.title_prefix}: {source.display_name}"
+
+
+def _style_instruction(
+    uow: DefinitionCompileUnitOfWork,
+    definition: StoredArtifactDefinition,
+    narrator: BlockNarrator | None,
+) -> str:
+    """정의가 걸린 채널의 문체를 지시문 한 문단으로 푼다.
+
+    narrator가 없으면 읽지 않는다. 쓰지 않을 값을 위해 정의마다 채널을
+    한 번씩 더 조회할 이유가 없다.
+
+    카탈로그에 없는 id는 기본 지시문으로 떨어진다. 문체 상수는 개정되는
+    목록이라, 지난 선택이 목록에서 빠졌다고 그 채널의 컴파일이 멈추면
+    상수 개정이 파이프라인을 세운다.
+    """
+    if narrator is None:
+        return DEFAULT_STYLE_INSTRUCTION
+    style_id = uow.artifact_definitions.find_channel_style(
+        channel_id=definition.channel_id,
+    )
+    if style_id is None:
+        return DEFAULT_STYLE_INSTRUCTION
+    style = find_style(style_id)
+    if style is None:
+        return DEFAULT_STYLE_INSTRUCTION
+    return style.instruction
+
+
+def _purpose_sentence(definition: StoredArtifactDefinition) -> str:
+    """정의 kind로 이 문서가 무엇에 쓰이는지 한 줄을 만든다.
+
+    카탈로그는 코드 상수라 포트를 거치지 않고 직접 읽는다. 카탈로그 밖
+    kind는 기본 한 줄로 떨어진다 — 손으로 넣은 정의도 컴파일돼야 한다.
+    """
+    preset_kind = find_kind_by_name(definition.kind)
+    if preset_kind is None:
+        return DEFAULT_PURPOSE_SENTENCE
+    return f"이 문서는 {preset_kind.description} 그 용도로 쓴다."
 
 
 def _relation_blocks(
@@ -440,6 +541,8 @@ class _NodeOutcome:
         skipped: 지문이 그대로라 아무것도 쓰지 않았는지 나타낸다.
         conflicted: 멱등 키가 결정된 행과 부딪혀 건너뛰었는지 나타낸다.
         suppressed: 반려 장부에 걸려 카드에서 뺀 블록 수를 나타낸다.
+        narrated: 새로 산문을 받은 블록 수를 나타낸다.
+        reused: 지난 산문을 그대로 다시 쓴 블록 수를 나타낸다.
     """
 
     created: int = 0
@@ -448,6 +551,8 @@ class _NodeOutcome:
     skipped: int = 0
     conflicted: int = 0
     suppressed: int = 0
+    narrated: int = 0
+    reused: int = 0
 
 
 def _propose_node_blocks(
@@ -459,12 +564,19 @@ def _propose_node_blocks(
     blocks: tuple[ArtifactBlock, ...],
     pending: Sequence[StoredPendingProposal],
     ontology_version: str | None,
+    narrator: BlockNarrator | None = None,
+    style_instruction: str = DEFAULT_STYLE_INSTRUCTION,
+    purpose_sentence: str = DEFAULT_PURPOSE_SENTENCE,
 ) -> _NodeOutcome:
     """만들어 둔 블록을 반려 장부와 지문을 거쳐 변경안으로 올린다.
 
     무엇을 싣느냐는 입구가 정하고, 그것을 사람 앞에 어떻게 올리느냐는
     여기가 정한다. 두 입구가 이 자리를 나눠 쓰므로 반려 억제와 지문
     비교와 멱등 키 규칙이 입구마다 갈리지 않는다.
+
+    Raises:
+        NarrationError: 블록 산문을 받아 오지 못했을 때 그대로 올라간다.
+            부르는 쪽이 이 문서 하나만 접는다.
     """
     rejected = uow.block_verdicts.find_rejected_hashes(
         artifact_id=artifact_id,
@@ -524,6 +636,37 @@ def _propose_node_blocks(
             suppressed=suppressed,
         )
 
+    # 지문 비교를 지나 "이번에 새로 올린다"가 정해진 뒤에만 서술한다.
+    # 앞에 두면 무변경 재컴파일에서도 LLM이 돈다. 산문이 붙어도 위에서
+    # 구한 content_hash는 그대로다 — 지문 계산이 산문을 빼고 세므로 다시
+    # 계산하지 않는다.
+    narrated = 0
+    reused = 0
+    if narrator is not None:
+        reusable = uow.artifacts.list_reusable_narratives(
+            artifact_id=artifact_id,
+        )
+        narrated_blocks: list[ArtifactBlock] = []
+        for block in blocks:
+            found = reusable.get(block_content_hash(block))
+            if found is not None:
+                narrated_blocks.append(replace(block, narrative=found))
+                reused += 1
+                continue
+            request = _narration_request(
+                block,
+                style_instruction=style_instruction,
+                purpose_sentence=purpose_sentence,
+            )
+            if request is None:
+                narrated_blocks.append(block)
+                continue
+            narrated_blocks.append(
+                replace(block, narrative=narrator.narrate(request))
+            )
+            narrated += 1
+        blocks = tuple(narrated_blocks)
+
     replaced = uow.artifacts.abandon_pending_proposals(
         artifact_id=artifact_id,
     )
@@ -556,7 +699,11 @@ def _propose_node_blocks(
             content_hash=content_hash,
         )
         return _NodeOutcome(
-            abandoned=replaced, conflicted=1, suppressed=suppressed
+            abandoned=replaced,
+            conflicted=1,
+            suppressed=suppressed,
+            narrated=narrated,
+            reused=reused,
         )
 
     logger.info(
@@ -573,6 +720,77 @@ def _propose_node_blocks(
         revived=1 if replaced else 0,
         abandoned=replaced,
         suppressed=suppressed,
+        narrated=narrated,
+        reused=reused,
+    )
+
+
+def _narration_request(
+    block: ArtifactBlock,
+    *,
+    style_instruction: str,
+    purpose_sentence: str,
+) -> NarrationRequest | None:
+    """블록 하나를 서술 요청으로 옮긴다. 근거가 없으면 None이다.
+
+    관계 절은 사실 입력이 다르다. 그 블록은 인용을 갖지 않고 근거를
+    관계 장부로 남기며, 본문 줄이 곧 관계에 붙은 원문 유래 문장과 잘린
+    걸음 안내다. 그래서 관계 절만 본문 줄을 사실 입력으로 넘기고, 검증된
+    인용을 요구하는 규칙은 나머지 블록에만 건다.
+
+    claim 절·열린 질문·대조 블록의 사실 입력은 검증된 인용뿐이다. 블록
+    본문과 제목은 색인용 라벨에서 온 문장이라 근거가 아니라 주제 힌트로만
+    넘긴다.
+
+    대조 블록은 자기 sources를 비우고 근거를 후보마다 나눠 갖는다. 후보를
+    합치면 어느 인용이 어느 값의 근거인지 사라지므로 갈라서 넘긴다.
+
+    검증된 인용이 하나도 없으면 서술하지 않는다. 근거 없는 문장을 만들지
+    않는 것이지 오류가 아니므로 예외가 아니라 None으로 알린다.
+    """
+    if block.block_kind == BLOCK_KIND_RELATION_SECTION:
+        lines = tuple(
+            line for line in block.body.split("\n") if line.strip()
+        )
+        if not lines:
+            return None
+        return NarrationRequest(
+            block_kind=block.block_kind,
+            heading=block.heading,
+            topic_hint=block.heading,
+            statements=(),
+            edges=lines,
+            variants=(),
+            style_instruction=style_instruction,
+            purpose_sentence=purpose_sentence,
+        )
+    statements = tuple(
+        source.statement
+        for source in block.sources
+        if source.citation_verified
+    )
+    variants = tuple(
+        (
+            variant.body,
+            tuple(
+                source.statement
+                for source in variant.sources
+                if source.citation_verified
+            ),
+        )
+        for variant in block.variants
+    )
+    if not statements and not any(items for _, items in variants):
+        return None
+    return NarrationRequest(
+        block_kind=block.block_kind,
+        heading=block.heading,
+        topic_hint=block.body,
+        statements=statements,
+        edges=(),
+        variants=variants,
+        style_instruction=style_instruction,
+        purpose_sentence=purpose_sentence,
     )
 
 
