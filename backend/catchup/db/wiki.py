@@ -24,6 +24,7 @@ from catchup.db.models import Channel
 from catchup.db.models import ChannelAdmin
 from catchup.db.models import ChannelFolder
 from catchup.db.models import KnowledgeArtifact
+from catchup.db.models import KnowledgeArtifactRevision
 from catchup.db.models import User
 from catchup.db.models import UserRole
 from catchup.db.models import UserWorkspace
@@ -241,6 +242,26 @@ def get_artifact(
             KnowledgeArtifact.id == artifact_id,
             KnowledgeArtifact.workspace_id == workspace_id,
         )
+    )
+
+
+def get_latest_revision(
+    db: Session, *, artifact_id: uuid.UUID, workspace_id: int
+) -> KnowledgeArtifactRevision | None:
+    """이 workspace 문서의 가장 최근 발행 판을 읽는다.
+
+    지금 발행된 판은 컬럼이 아니라 판 번호의 최대값이다. 문서는 덮어쓰지
+    않고 판을 쌓으므로, 다른 기준을 쓰면 같은 문서를 두 코드가 다르게
+    가리킨다.
+    """
+    return db.scalar(
+        select(KnowledgeArtifactRevision)
+        .where(
+            KnowledgeArtifactRevision.artifact_id == artifact_id,
+            KnowledgeArtifactRevision.workspace_id == workspace_id,
+        )
+        .order_by(KnowledgeArtifactRevision.revision_number.desc())
+        .limit(1)
     )
 
 

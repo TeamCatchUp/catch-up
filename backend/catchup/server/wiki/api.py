@@ -53,6 +53,7 @@ from catchup.knowledge_maintenance.adapters.llm.structured_extractor import CONT
 from catchup.knowledge_maintenance.adapters.postgres.session_bound import (
     SessionBoundOntologyUnitOfWork,
 )
+from catchup.knowledge_maintenance.domain.artifact import deserialize_blocks
 from catchup.knowledge_maintenance.domain.artifact_definition import (
     serialize_selection_spec,
 )
@@ -71,6 +72,9 @@ from catchup.server.wiki.dependencies import resolve_member_workspace
 from catchup.server.wiki.dependencies import review_error
 from catchup.server.wiki.roles import can_manage_owners
 from catchup.server.wiki.roles import load_wiki_roles
+from catchup.server.wiki.schemas import ArtifactBlockSourceResponse
+from catchup.server.wiki.schemas import ArtifactDocumentBlockResponse
+from catchup.server.wiki.schemas import ArtifactDocumentResponse
 from catchup.server.wiki.schemas import ArtifactOwnerResponse
 from catchup.server.wiki.schemas import ChannelAdminResponse
 from catchup.server.wiki.schemas import ChannelCreateRequest
@@ -750,6 +754,76 @@ def delete_folder(
         raise
 
     return Response(status_code=204)
+
+
+@router.get(
+    path="/artifacts/{artifact_id}",
+    response_model=ArtifactDocumentResponse,
+    description="발행된 문서의 최신 판을 산문·근거와 함께 조회한다.",
+)
+def get_artifact_document(
+    artifact_id: uuid.UUID,
+    context: MemberContext = Depends(resolve_member_workspace),
+    db: Session = Depends(get_db),
+) -> ArtifactDocumentResponse:
+    """지금 발행된 판의 블록을 산문·근거 인용과 함께 돌려준다.
+
+    산문만 내보내지 않는다. 산문은 표현이고 근거 지위는 인용 원문에만
+    있으므로, 둘을 갈라 내보내면 읽는 쪽이 문장을 근거와 대조할 길이
+    없어진다.
+
+    아직 발행된 판이 없으면 없는 것으로 답한다. 계류 중인 변경안은 사람이
+    승인하지 않은 내용이라 읽기 표면에 실릴 자리가 아니고, 그것을 여기서
+    보여 주면 검수 게이트를 우회하는 길이 된다.
+    """
+    artifact = _load_artifact(
+        db, artifact_id=artifact_id, workspace_id=context.workspace_id
+    )
+    revision = wiki_queries.get_latest_revision(
+        db, artifact_id=artifact_id, workspace_id=context.workspace_id
+    )
+    if revision is None:
+        raise review_error(
+            404,
+            code="ARTIFACT_NOT_PUBLISHED",
+            message="아직 발행된 판이 없습니다.",
+        )
+    return ArtifactDocumentResponse(
+        artifact_id=str(artifact.id),
+        channel_id=(
+            None if artifact.channel_id is None else str(artifact.channel_id)
+        ),
+        definition_id=(
+            None
+            if artifact.definition_id is None
+            else str(artifact.definition_id)
+        ),
+        kind=artifact.kind,
+        title=artifact.title,
+        revision_id=str(revision.id),
+        published_at=revision.created_at,
+        blocks=[
+            ArtifactDocumentBlockResponse(
+                block_index=index,
+                block_kind=block.block_kind,
+                heading=block.heading,
+                narrative=block.narrative,
+                body=block.body,
+                claim_ids=[str(item) for item in block.claim_ids],
+                relation_ids=[str(item) for item in block.relation_ids],
+                sources=[
+                    ArtifactBlockSourceResponse(
+                        claim_id=str(source.claim_id),
+                        statement=source.statement,
+                        observed_at=source.observed_at,
+                        citation_verified=source.citation_verified,
+                    )
+                    for source in block.sources
+                ],
+            )
+            for index, block in enumerate(deserialize_blocks(revision.blocks))
+        ],
+    )
 
 
 @router.put(

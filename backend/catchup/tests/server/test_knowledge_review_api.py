@@ -94,6 +94,7 @@ from catchup.knowledge_maintenance.services.review_artifact_proposal import (
     ProposalReviewError,
 )
 from catchup.knowledge_maintenance.services.review_artifact_proposal import ReviewResult
+from catchup.server.knowledge_review.api import _to_block
 from catchup.server.knowledge_review.api import router
 from catchup.server.knowledge_review.dependencies import ReviewerContext
 from catchup.server.knowledge_review.dependencies import get_review_uow_factory
@@ -2835,3 +2836,49 @@ def test_publish_hides_other_workspace_proposal(
     ) as uow:
         untouched = uow.artifacts.get_proposal(proposal_id=proposal_id)
     assert untouched.status == "pending"
+
+
+def test_block_response_carries_the_narrative() -> None:
+    """검수 응답이 블록 산문을 그대로 싣는다.
+
+    검수자는 산문과 인용 원문을 한 화면에서 대조한다. 산문이 응답에서
+    빠지면 그 대조가 불가능해진다.
+    """
+    claim_id = uuid.uuid4()
+    block = ArtifactBlock(
+        block_kind=BLOCK_KIND_CLAIM_SECTION,
+        heading="request_status",
+        body="검토 중 (2026-08-15 관찰)",
+        claim_ids=(claim_id,),
+        proposal_ids=(),
+        ontology_version="v3",
+        sources=(
+            BlockSource(
+                claim_id=claim_id,
+                statement="상태는 검토 중이다",
+                observed_at=datetime(2026, 8, 15, tzinfo=timezone.utc),
+                citation_verified=True,
+            ),
+        ),
+        narrative="이 요구는 아직 검토 중이다.",
+    )
+
+    response = _to_block(block, block_index=0, verdict=None)
+
+    assert response.narrative == "이 요구는 아직 검토 중이다."
+    assert response.sources[0].statement == "상태는 검토 중이다"
+
+
+def test_block_response_without_narrative_is_none() -> None:
+    """산문이 없던 옛 블록도 그대로 읽힌다."""
+    claim_id = uuid.uuid4()
+    block = ArtifactBlock(
+        block_kind=BLOCK_KIND_CLAIM_SECTION,
+        heading="request_status",
+        body="검토 중 (2026-08-15 관찰)",
+        claim_ids=(claim_id,),
+        proposal_ids=(),
+        ontology_version="v3",
+    )
+
+    assert _to_block(block, block_index=0, verdict=None).narrative is None
