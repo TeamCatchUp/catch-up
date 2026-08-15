@@ -2348,7 +2348,7 @@ class TestPublishConvergedVocabulary:
         session_factory: Callable[[], Session],
         uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
     ) -> None:
-        """빈 이름·`vN` 아닌 이름은 계보의 일부가 아니라 그냥 발행한다."""
+        """`vN` 아닌 이름은 계보의 일부가 아니라 그냥 발행한다."""
         published = ExtractionVocabulary(
             snapshot_id="v1",
             predicates=("release_month",),
@@ -2361,7 +2361,10 @@ class TestPublishConvergedVocabulary:
             )
             uow.commit()
 
-        legacy = ExtractionVocabulary(predicates=("legacy_p",))
+        legacy = ExtractionVocabulary(
+            snapshot_id="round-4",
+            predicates=("legacy_p",),
+        )
         outcome = publish_converged_vocabulary(
             self._guarded(
                 predicate_entries=(
@@ -2379,3 +2382,50 @@ class TestPublishConvergedVocabulary:
         )
 
         assert outcome.version == "v2"
+
+    def test_빈_기준은_그_사이_발행본이_생겼으면_거부한다(
+        self,
+        workspace_id: int,
+        session_factory: Callable[[], Session],
+        uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    ) -> None:
+        """이름이 빈 기준 사전은 "읽을 때 발행본이 없었다"는 뜻이다.
+
+        그 사이 누가 v1을 발행했다면 빈 사전 위에 쌓는 순간 v1의 항목이
+        새 최신본에서 통째로 빠진다.
+        """
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as uow:
+            uow.ontology.ensure(
+                workspace_id=workspace_id,
+                ontology_id=STALE_BASE_ONTOLOGY_ID,
+                vocabulary=ExtractionVocabulary(
+                    snapshot_id="v1",
+                    predicates=("release_month",),
+                ),
+            )
+            uow.commit()
+
+        with pytest.raises(RuntimeError, match="발행본이 없었는데"):
+            publish_converged_vocabulary(
+                self._guarded(
+                    predicate_entries=(
+                        PredicateEntry(
+                            name="release_channel",
+                            definition="배포 채널을 담는다.",
+                            value_type="text",
+                        ),
+                    ),
+                ),
+                workspace_id=workspace_id,
+                ontology_id=STALE_BASE_ONTOLOGY_ID,
+                current=ExtractionVocabulary(),
+                uow=uow_factory(),
+            )
+
+        with KnowledgeMaintenanceUnitOfWork(session_factory) as reader:
+            versions = reader.ontology.list_versions(
+                workspace_id=workspace_id,
+                ontology_id=STALE_BASE_ONTOLOGY_ID,
+            )
+
+        assert "v2" not in versions

@@ -60,6 +60,22 @@ class ChannelCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
 
 
+class ChannelOnboardingRequest(BaseModel):
+    """온보딩 위자드 1단계의 선택 결과를 담는다.
+
+    고르는 것은 preset id뿐이다. 선택 규칙을 직접 실어 보낼 자리는 두지
+    않는다 — raw spec 입구가 열리면 카탈로그가 규칙의 유일한 출처라는
+    약속이 깨진다.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=20)
+    purpose_preset: str
+    style_preset: str
+    kind: str
+
+
 class ChannelRenameRequest(BaseModel):
     """채널 이름 변경 요청을 담는다."""
 
@@ -93,6 +109,21 @@ class ChannelResponse(BaseModel):
     id: str
     name: str
     workspace_id: int
+
+
+class ChannelOnboardingResponse(BaseModel):
+    """만들어진 채널·정의와 어휘 발행 결과를 담는다.
+
+    vocabulary_version이 None이면 더할 어휘가 없어 발행을 건너뛴 것이다.
+    같은 도메인으로 두 번째 채널을 만든 자리가 그렇다.
+    """
+
+    channel: ChannelResponse
+    definition_id: str
+    kind: str
+    purpose_preset: str
+    style_preset: str
+    vocabulary_version: str | None
 
 
 class FolderResponse(BaseModel):
@@ -142,3 +173,52 @@ class ChannelAdminResponse(BaseModel):
 
     channel_id: str
     user_ids: list[int]
+
+
+class PresetKindResponse(BaseModel):
+    """온보딩이 고를 문서 종류 하나를 담는다.
+
+    선택 규칙(spec_template)은 싣지 않는다. 규칙이 응답에 나가면
+    소비자가 그것을 손봐 되돌려 보낼 입구가 생기고, 정의를 만드는 길이
+    카탈로그 밖으로 하나 더 열린다.
+    """
+
+    kind: str
+    label: str
+    description: str
+    example_text: str
+
+
+class PresetPurposeResponse(BaseModel):
+    """채널을 왜 만드는지에 해당하는 목적 하나를 담는다."""
+
+    id: str
+    label: str
+    recommended_kind: str
+
+
+class PresetDomainResponse(BaseModel):
+    """한 업무 영역의 preset 묶음을 담는다.
+
+    seed 어휘는 싣지 않는다. 온보딩 화면이 쓰지 않는 값이라, 내보내면
+    소비자가 기대할 계약만 늘어난다.
+    """
+
+    id: str
+    label: str
+    purposes: list[PresetPurposeResponse]
+    kinds: list[PresetKindResponse]
+
+
+class PresetStyleResponse(BaseModel):
+    """문서를 어떤 문체로 쓸지 고르는 preset 하나를 담는다."""
+
+    id: str
+    label: str
+
+
+class DefinitionPresetsResponse(BaseModel):
+    """온보딩이 고를 preset 카탈로그 전체를 담는다."""
+
+    domains: list[PresetDomainResponse]
+    styles: list[PresetStyleResponse]

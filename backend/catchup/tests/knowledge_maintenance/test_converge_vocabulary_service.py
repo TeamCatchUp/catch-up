@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from structlog.testing import capture_logs
 
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
@@ -22,6 +23,9 @@ from catchup.knowledge_maintenance.contracts.vocabulary_convergence import (
 from catchup.knowledge_maintenance.contracts.vocabulary_convergence import (
     VocabularyConvergenceProposal,
 )
+from catchup.knowledge_maintenance.services.converge_vocabulary import (
+    ConvergenceGuardResult,
+)
 from catchup.knowledge_maintenance.services.converge_vocabulary import guard_convergence
 from catchup.knowledge_maintenance.services.converge_vocabulary import merge_vocabulary
 from catchup.knowledge_maintenance.services.converge_vocabulary import (
@@ -29,6 +33,9 @@ from catchup.knowledge_maintenance.services.converge_vocabulary import (
 )
 from catchup.knowledge_maintenance.services.converge_vocabulary import (
     normalize_vocabulary_name,
+)
+from catchup.knowledge_maintenance.services.converge_vocabulary import (
+    publish_converged_vocabulary,
 )
 from catchup.knowledge_maintenance.services.converge_vocabulary import (
     resolve_latest_published_version,
@@ -437,3 +444,119 @@ def test_이름_온리_현행_사전과도_병합된다():
     merged = merge_vocabulary(current, guarded, version="v2")
     assert merged.predicates == ("legacy_p", "release_date")
     assert [e.name for e in merged.predicate_entries] == ["release_date"]
+
+
+class _FakeOntology:
+    """버전 목록과 저장만 흉내 내는 대역이다. 호출 순서를 기록한다."""
+
+    def __init__(self, versions: tuple[str, ...] = ()) -> None:
+        self.versions = versions
+        self.calls: list[str] = []
+        self.published: list[ExtractionVocabulary] = []
+
+    def lock_lineage(self, *, workspace_id: int, ontology_id: str) -> None:
+        self.calls.append("lock_lineage")
+
+    def list_versions(
+        self,
+        *,
+        workspace_id: int,
+        ontology_id: str,
+    ) -> tuple[str, ...]:
+        self.calls.append("list_versions")
+        return self.versions
+
+    def ensure(
+        self,
+        *,
+        workspace_id: int,
+        ontology_id: str,
+        vocabulary: ExtractionVocabulary,
+    ) -> ExtractionVocabulary:
+        self.calls.append("ensure")
+        self.published.append(vocabulary)
+        return vocabulary
+
+
+class _FakeUow:
+    """`with` 블록과 commit만 세는 최소 UoW 대역이다."""
+
+    def __init__(self, ontology: _FakeOntology) -> None:
+        self.ontology = ontology
+        self.commits = 0
+
+    def __enter__(self) -> _FakeUow:
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        return None
+
+    def commit(self) -> None:
+        self.commits += 1
+
+
+def _publish_guard() -> ConvergenceGuardResult:
+    """predicate 하나를 통과시킨 가드 결과를 만든다."""
+    return ConvergenceGuardResult(
+        predicate_entries=(
+            PredicateEntry(
+                name="release_channel",
+                definition="배포 채널을 담는다.",
+                value_type="text",
+            ),
+        ),
+        relation_entries=(),
+        absorptions=(),
+        rejections=(),
+        covered_names=("release_channel",),
+    )
+
+
+def test_빈_기준은_그_사이_발행본이_생겼으면_거부한다():
+    # 기준을 읽을 땐 발행본이 없었는데 지금 v1이 보인다면, 그 사이 다른
+    # 쪽이 계보를 열었다는 뜻이다. 그대로 쌓으면 v1의 항목이 사라진다.
+    uow = _FakeUow(_FakeOntology(versions=("v1",)))
+
+    with pytest.raises(RuntimeError, match="발행본이 없었는데"):
+        publish_converged_vocabulary(
+            _publish_guard(),
+            workspace_id=1,
+            ontology_id="catchup.test",
+            current=ExtractionVocabulary(),
+            uow=uow,
+        )
+
+    assert uow.ontology.published == []
+    assert uow.commits == 0
+
+
+def test_빈_기준은_발행본이_없으면_v1을_발행한다():
+    uow = _FakeUow(_FakeOntology())
+
+    outcome = publish_converged_vocabulary(
+        _publish_guard(),
+        workspace_id=1,
+        ontology_id="catchup.test",
+        current=ExtractionVocabulary(),
+        uow=uow,
+    )
+
+    assert outcome.version == "v1"
+    assert uow.ontology.published[0].predicates == ("release_channel",)
+    assert uow.commits == 1
+
+
+def test_버전_목록을_읽기_전에_계보를_잠근다():
+    # 읽은 뒤에 잠그면 이미 남을 본 뒤라 같은 다음 번호를 세는 것을 막지
+    # 못한다. 순서가 이 잠금의 전부다.
+    uow = _FakeUow(_FakeOntology())
+
+    publish_converged_vocabulary(
+        _publish_guard(),
+        workspace_id=1,
+        ontology_id="catchup.test",
+        current=ExtractionVocabulary(),
+        uow=uow,
+    )
+
+    assert uow.ontology.calls[:2] == ["lock_lineage", "list_versions"]

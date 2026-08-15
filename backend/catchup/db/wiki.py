@@ -12,11 +12,13 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from catchup.db.models import ArtifactDefinition
 from catchup.db.models import ArtifactOwner
 from catchup.db.models import Channel
 from catchup.db.models import ChannelAdmin
@@ -118,21 +120,74 @@ def list_channels(db: Session, workspace_id: int) -> list[Channel]:
 
 
 def add_channel(
-    db: Session, *, workspace_id: int, name: str, created_by: int
+    db: Session,
+    *,
+    workspace_id: int,
+    name: str,
+    created_by: int,
+    purpose_preset: str | None = None,
+    style_preset: str | None = None,
 ) -> Channel:
     """채널 한 개를 세션에 넣는다.
 
     flush 전이라 id는 아직 비어 있을 수 있다. 채널과 관리자 INSERT를 한
     트랜잭션으로 묶는 쪽이 호출자이므로 flush 시점도 호출자가 정한다.
+
+    preset id는 저장만 한다. 그 값이 카탈로그에 실존하는지는 서버 계층이
+    미리 본다 — 쿼리 모듈은 무엇을 넣는지만 안다.
     """
     channel = Channel(
         workspace_id=workspace_id,
         name=name,
         created_by=created_by,
+        purpose_preset=purpose_preset,
+        style_preset=style_preset,
     )
     db.add(channel)
 
     return channel
+
+
+def add_artifact_definition(
+    db: Session,
+    *,
+    workspace_id: int,
+    channel_id: uuid.UUID,
+    kind: str,
+    selection_spec: dict[str, Any],
+    created_by: int,
+) -> ArtifactDefinition:
+    """아티팩트 정의 한 행을 세션에 넣는다.
+
+    selection_spec은 이미 직렬화된 dict을 받는다 — 도메인 dataclass를 db
+    모듈이 알 필요가 없다.
+
+    flush·commit은 하지 않는다. 채널·관리자·정의가 한 트랜잭션이어야
+    하므로 경계는 호출자가 쥔다.
+    """
+    definition = ArtifactDefinition(
+        workspace_id=workspace_id,
+        channel_id=channel_id,
+        kind=kind,
+        selection_spec=selection_spec,
+        created_by=created_by,
+    )
+    db.add(definition)
+
+    return definition
+
+
+def list_definitions_by_channel(
+    db: Session, *, channel_id: uuid.UUID
+) -> list[ArtifactDefinition]:
+    """그 채널에 달린 정의를 kind 사전순으로 읽는다."""
+    return list(
+        db.scalars(
+            select(ArtifactDefinition)
+            .where(ArtifactDefinition.channel_id == channel_id)
+            .order_by(ArtifactDefinition.kind)
+        ).all()
+    )
 
 
 def get_folder(
