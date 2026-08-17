@@ -134,6 +134,17 @@ def test_participants_become_metadata_entities(normalizer) -> None:
     assert manager.attributes["is_assignee"] is True
 
 
+def test_customer_metadata_carries_unified_id(normalizer) -> None:
+    """채널톡이 세션을 묶는 통합 id는 동일성 키 후보라 metadata에 남긴다."""
+    observation = normalizer.normalize(_source_version(BOT_AND_BUTTON))
+    customer = next(
+        entity
+        for entity in observation.metadata_entities
+        if entity.entity_type == "channel_talk_user"
+    )
+    assert customer.attributes["unified_id"] == "unified-008"
+
+
 def test_bot_is_not_a_metadata_entity(normalizer) -> None:
     """봇은 지식의 주체가 아니므로 Entity로 올리지 않는다."""
     observation = normalizer.normalize(_source_version(BOT_AND_BUTTON))
