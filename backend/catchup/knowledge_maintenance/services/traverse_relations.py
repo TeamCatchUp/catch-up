@@ -19,6 +19,12 @@ frontier 노드를 한 번에 넘기면 노드 수만큼 왕복이 늘어나는 
 완주한 경로 위라면 같은 노드로 가는 간선이 둘이어도 둘 다 남긴다. 둘 다
 그 노드가 문서에 실린 이유이기 때문이다.
 
+관계의 사실 입력은 양끝 이름을 명시한 줄이다. 관계에 붙은 원문 문장만
+싣던 때에는 그 인용문의 화자를 읽는 쪽이 상대 노드로 오해할 자리가 있었다.
+그래서 "A → relation_type → B" 한 줄을 사실로 두고, 원문 문장은 그 아래
+힌트 줄로만 남긴다. 본문 모양이 바뀌므로 관계 블록의 hash가 한 번 바뀐다 —
+정의된 동작이고, 다음 컴파일에서 한 번 새 판이 난 뒤로는 다시 안정된다.
+
 순회 결과를 문서 블록으로 옮기는 일도 이 모듈이 맡는다. 무엇을 모았는지와
 그것을 어떻게 적는지는 함께 바뀌기 때문이다 — 상한에 걸려 잘랐다는 사실이
 본문 마지막 줄이 되는 것이 그 예다.
@@ -33,6 +39,7 @@ frontier 노드를 한 번에 넘기면 노드 수만큼 왕복이 늘어나는 
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -46,6 +53,25 @@ from catchup.knowledge_maintenance.domain.artifact_definition import RelationPat
 from catchup.knowledge_maintenance.ports.relations import RelationRepository
 from catchup.knowledge_maintenance.ports.relations import StoredRelationEdge
 
+# 블록 body 안에서 힌트 줄을 그 위 간선 줄과 구분하는 들여쓰기 접두다.
+RELATION_HINT_PREFIX = "  ↳ "
+
+# 간선 하나를 본문 한 줄로 옮기는 서식이다. 노출 수준을 적용하는 쪽이
+# 이 자리를 갈아 끼우므로 순회는 서식을 알지 않는다.
+EdgeFormatter = Callable[[StoredRelationEdge, str], str]
+
+
+def default_edge_line(edge: StoredRelationEdge, relation_type: str) -> str:
+    """간선을 "A → relation_type → B" 한 줄로 적는다.
+
+    이름이 없는 노드는 식별자를 그대로 쓴다. 줄에서 한쪽 끝이 통째로
+    사라지면 남은 이름이 어느 쪽인지 읽는 쪽이 알 수 없다.
+    """
+    source = edge.source_display_name or str(edge.source_node_id)
+    target = edge.target_display_name or str(edge.target_node_id)
+    return f"{source} → {relation_type} → {target}"
+
+
 
 @dataclass(frozen=True, slots=True)
 class PathTraversal:
@@ -55,14 +81,17 @@ class PathTraversal:
         reached: 마지막 step까지 도달한 노드 id들. 경로 순→id순 정렬,
             중복 제거 완료.
         relation_ids: 경로상 거쳐간 모든 관계 id (중간 step 포함).
-        assertion_lines: 도달에 쓰인 관계들의 assertion_text.
-            None인 관계는 줄을 만들지 않는다(장부에는 남는다).
+        edge_lines: 도달에 쓰인 간선을 양끝 이름으로 적은 줄들.
+        hint_lines: 같은 차례의 간선에 붙은 원문 문장. edge_lines와
+            길이가 같고, 문장이 없는 간선은 빈 문자열이다 — 길이가
+            어긋나면 힌트가 옆 간선 밑으로 밀려 붙는다.
         truncated_steps: 상한에 걸려 잘린 step 번호들(0-base).
     """
 
     reached: tuple[uuid.UUID, ...]
     relation_ids: tuple[uuid.UUID, ...]
-    assertion_lines: tuple[str, ...]
+    edge_lines: tuple[str, ...]
+    hint_lines: tuple[str, ...]
     truncated_steps: tuple[int, ...]
 
 
@@ -78,11 +107,14 @@ class _Arrival:
         edge: 이 도달을 만든 관계 간선을 담는다.
         from_node_id: 이 걸음의 frontier 쪽 끝점을 담는다.
         to_node_id: 이 걸음이 새로 닿은 이웃을 담는다.
+        relation_type: 이 걸음이 따라간 관계 종류를 담는다. 간선 자신은
+            종류를 들고 있지 않은데, 본문 줄에는 그 이름이 들어간다.
     """
 
     edge: StoredRelationEdge
     from_node_id: uuid.UUID
     to_node_id: uuid.UUID
+    relation_type: str
 
 
 def traverse_relation_path(
@@ -91,6 +123,7 @@ def traverse_relation_path(
     start_node_id: uuid.UUID,
     path: RelationPath,
     now: datetime,
+    edge_line: EdgeFormatter = default_edge_line,
 ) -> PathTraversal:
     """시작 노드에서 경로를 따라가 도달 노드와 근거를 모은다.
 
@@ -113,6 +146,9 @@ def traverse_relation_path(
     완주한 간선만 장부에 남으므로 잘림만 있고 완주가 없으면 블록이
     없다. 그때 그 문서의 컴파일은 실패한다 — 불완전할 수 있는 문서를
     소비 표면에 올리지 않는다.
+
+    본문 줄은 주입받은 서식이 만든다. 어느 이름을 어느 수준까지 적을지는
+    소비처가 정하는 일이고, 순회는 어떤 간선이 남았는지만 안다.
 
     남은 간선은 걸음 차례로, 걸음 안에서는 간선 id 사전순으로 담는다.
     같은 간선이 두 걸음에 걸쳐 다시 나오면 한 번만 담는다 — 근거
@@ -152,7 +188,12 @@ def traverse_relation_path(
                 continue
             names.setdefault(neighbor, neighbor_name or "")
             arrivals.append(
-                _Arrival(edge=edge, from_node_id=origin, to_node_id=neighbor)
+                _Arrival(
+                    edge=edge,
+                    from_node_id=origin,
+                    to_node_id=neighbor,
+                    relation_type=step.relation_type,
+                )
             )
 
         ordered = sorted(
@@ -171,14 +212,15 @@ def traverse_relation_path(
         visited |= kept
         frontier = tuple(node_id for node_id, _ in ordered)
 
-    relation_ids, assertion_lines = _ledger_of_completed_paths(
-        layers, reached=frontier
+    relation_ids, edge_lines, hint_lines = _ledger_of_completed_paths(
+        layers, reached=frontier, edge_line=edge_line
     )
 
     return PathTraversal(
         reached=frontier,
         relation_ids=tuple(relation_ids),
-        assertion_lines=tuple(assertion_lines),
+        edge_lines=tuple(edge_lines),
+        hint_lines=tuple(hint_lines),
         truncated_steps=tuple(truncated_steps),
     )
 
@@ -187,7 +229,8 @@ def _ledger_of_completed_paths(
     layers: list[tuple[_Arrival, ...]],
     *,
     reached: tuple[uuid.UUID, ...],
-) -> tuple[list[uuid.UUID], list[str]]:
+    edge_line: EdgeFormatter,
+) -> tuple[list[uuid.UUID], list[str], list[str]]:
     """완주한 경로 위의 간선만 골라 근거 장부와 본문 줄을 만든다.
 
     마지막 도달 노드에서 거꾸로 올라간다. 마지막 층에서는 도달 노드에
@@ -200,6 +243,9 @@ def _ledger_of_completed_paths(
 
     담는 차례는 걸음 차례가 먼저고 걸음 안에서는 간선 id 사전순이다.
     같은 간선이 두 번 나오면 처음 한 번만 담는다.
+
+    본문 줄과 힌트 줄은 간선마다 하나씩 짝으로 담는다. 문장이 없는
+    간선도 빈 힌트를 채워, 두 목록의 자리가 끝까지 맞물린다.
     """
     surviving = set(reached)
     kept_layers: list[tuple[_Arrival, ...]] = []
@@ -212,7 +258,8 @@ def _ledger_of_completed_paths(
     kept_layers.reverse()
 
     relation_ids: list[uuid.UUID] = []
-    assertion_lines: list[str] = []
+    edge_lines: list[str] = []
+    hint_lines: list[str] = []
     recorded: set[uuid.UUID] = set()
     for arrivals in kept_layers:
         for arrival in sorted(arrivals, key=lambda a: str(a.edge.id)):
@@ -220,9 +267,9 @@ def _ledger_of_completed_paths(
                 continue
             recorded.add(arrival.edge.id)
             relation_ids.append(arrival.edge.id)
-            if arrival.edge.assertion_text is not None:
-                assertion_lines.append(arrival.edge.assertion_text)
-    return relation_ids, assertion_lines
+            edge_lines.append(edge_line(arrival.edge, arrival.relation_type))
+            hint_lines.append(arrival.edge.assertion_text or "")
+    return relation_ids, edge_lines, hint_lines
 
 
 def relation_section_block(
@@ -237,7 +284,10 @@ def relation_section_block(
     같은 정의로 만든 문서는 지식이 달라도 같은 자리에 같은 제목의
     섹션을 갖고, 판 사이의 비교가 제목에서 흔들리지 않는다.
 
-    본문은 근거 문장을 순회가 정한 차례 그대로 줄로 늘어놓는다. 잘린
+    본문은 간선마다 양끝 이름을 명시한 줄을 순회가 정한 차례 그대로
+    늘어놓고, 그 간선에 원문 문장이 있으면 바로 아래 들여쓴 힌트 줄을
+    하나 붙인다. 인용문만 싣던 때에는 그 말을 누가 했는지가 상대
+    노드로 오해되었다. 잘린
     걸음이 있으면 걸음마다 한 줄씩 오름차순으로 덧붙여, 문서가 자신이
     완전하지 않음을 스스로 말하게 한다. 조용한 누락은 읽는 사람이
     "이게 전부"라고 믿게 만들기 때문이다.
@@ -256,7 +306,13 @@ def relation_section_block(
     if not traversal.relation_ids:
         return None
 
-    lines = list(traversal.assertion_lines)
+    lines: list[str] = []
+    for line, hint in zip(
+        traversal.edge_lines, traversal.hint_lines, strict=True
+    ):
+        lines.append(line)
+        if hint:
+            lines.append(f"{RELATION_HINT_PREFIX}{hint}")
     for step_index in sorted(traversal.truncated_steps):
         lines.append(
             f"(step {step_index}에서 이웃 {MAX_NODES_PER_STEP}개"

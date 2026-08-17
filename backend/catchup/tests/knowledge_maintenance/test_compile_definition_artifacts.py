@@ -694,7 +694,9 @@ def test_relation_blocks_included_with_ledger() -> None:
     ]
     relation_block = blocks[1]
     assert relation_block.heading == "owned_by(out)"
-    assert relation_block.body == "요청 A는 결제팀이 맡는다"
+    assert relation_block.body == (
+        "요청 A → owned_by → 결제팀\n  ↳ 요청 A는 결제팀이 맡는다"
+    )
     assert relation_block.relation_ids == (relation_id,)
     validate_blocks(blocks)
     # 순회는 컴파일 시점 하나만 쓴다. 걸음마다 시계를 새로 읽으면 같은

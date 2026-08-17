@@ -440,7 +440,10 @@ def test_case_g_relation_section_is_narrated_from_body_lines() -> None:
         if item.block_kind == BLOCK_KIND_RELATION_SECTION
     )
     assert relation_request.statements == ()
-    assert relation_request.edges == ("요청 A는 결제팀이 맡는다",)
+    assert relation_request.edges == (
+        "요청 A → owned_by → 결제팀",
+        "  ↳ 요청 A는 결제팀이 맡는다",
+    )
     assert result.blocks_narrated == 2
     relation_block = next(
         block
