@@ -1,3 +1,4 @@
+import IconOpenInNew from '@/public/icons/icon/open_in_new_24.svg';
 import { Button } from '@/shared/components/ui/button';
 
 import type { BlockDiffEntry } from '../../../types/llmWikiDiff';
@@ -5,8 +6,8 @@ import BlockDiffCard from './BlockDiffCard';
 
 export interface BlockDiffSectionProps {
   entries: readonly BlockDiffEntry[];
-  /** 헤더 우상단 "직접 수정". 동작이 미정이라 콜백만 뚫어 둔다 */
-  onEditDocument: () => void;
+  /** 헤더 우상단 "미리보기". 동작이 미정이라 콜백만 뚫어 둔다 */
+  onPreview: () => void;
   onApprove: (id: string) => void;
   /** 제안 기각 */
   onReject: (id: string) => void;
@@ -18,7 +19,7 @@ export interface BlockDiffSectionProps {
  */
 export default function BlockDiffSection({
   entries,
-  onEditDocument,
+  onPreview,
   onApprove,
   onReject,
 }: BlockDiffSectionProps) {
@@ -34,8 +35,9 @@ export default function BlockDiffSection({
           </div>
           <p className="text-body-small text-text-normal-assistive">작성자가 변경한 내용입니다.</p>
         </div>
-        <Button variant="box-outline-gray" size="md" onClick={onEditDocument}>
-          직접 수정
+        <Button variant="box-outline-gray" size="md" onClick={onPreview}>
+          미리보기
+          <IconOpenInNew aria-hidden className="size-5" />
         </Button>
       </header>
 

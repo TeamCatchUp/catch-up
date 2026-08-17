@@ -12,7 +12,7 @@ const meta = {
   title: 'Compositions/LLM Wiki/ReviewQueue/BlockDiffSection',
   component: BlockDiffSection,
   tags: ['autodocs'],
-  args: { onEditDocument: fn(), onApprove: fn(), onReject: fn() },
+  args: { onPreview: fn(), onApprove: fn(), onReject: fn() },
   parameters: {
     ...catchupParameters({
       level: 'composition',
@@ -31,7 +31,7 @@ const meta = {
       dataNotes: [
         '건수 배지는 entries.length다 — 시안의 "12"는 목업 값이고 계약이 아니다.',
         '변경 0건 빈 상태 스토리는 만들지 않는다(MISSING — 감사 계약). 검토 큐 상세 레이아웃 조립은 다음 단계다.',
-        '직접 수정 버튼의 실제 동작은 미정 — 콜백만 뚫려 있다. 편집 대상은 제안본(blocks[])으로 확정됐고(8/10) 진입에는 proposalId가 필수다(documentId만으로는 제안본을 못 가져온다). 개별 블록 수정은 MVP 제외라 카드에는 진입점이 없다.',
+        '미리보기 버튼(8/13 시안 — 구 "직접 수정" 자리)의 실제 동작은 미정 — 콜백만 뚫려 있다. 제안본 접근에는 proposalId가 필수다(documentId만으로는 제안본을 못 가져온다). 개별 블록 수정은 MVP 제외라 카드에는 진입점이 없다.',
       ],
       layoutNotes: ['시안 폭 654는 상세 패널 것이라 px를 박지 않는다 — 스토리 뷰포트 700이 슬롯 역할.'],
     }),
@@ -55,9 +55,9 @@ export const Default: Story = {
     await expect(canvas.getByText('PG 점검 시간 예외')).toBeInTheDocument();
     await expect(canvas.getByText('수동 재시도 안내')).toBeInTheDocument();
 
-    // 편집 진입점은 섹션 헤더의 "직접 수정" 하나뿐이다 — 개별 블록 수정은 범위 밖이라 카드에 없다.
-    await userEvent.click(canvas.getByRole('button', { name: '직접 수정' }));
-    await expect(args.onEditDocument).toHaveBeenCalled();
+    // 헤더 전역 버튼은 미리보기 하나뿐이다 — 개별 블록 수정은 범위 밖이라 카드에 없다.
+    await userEvent.click(canvas.getByRole('button', { name: /미리보기/ }));
+    await expect(args.onPreview).toHaveBeenCalled();
     await expect(canvas.queryByRole('button', { name: '이 블록 수정' })).toBeNull();
   },
 };

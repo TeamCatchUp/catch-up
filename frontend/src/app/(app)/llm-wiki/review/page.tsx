@@ -43,7 +43,7 @@ import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
 import { Avatar } from '@/shared/components/ui/avatar';
 import { Button } from '@/shared/components/ui/button';
 
-/** 검토 대상 문서 mock — "문서 직접 수정" 라우팅과 breadcrumb·문서 위치의 원천이다 */
+/** 검토 대상 문서 mock — 미리보기 라우팅과 breadcrumb·문서 위치의 원천이다 */
 const REVIEW_TARGET_DOCUMENT = WIKI_DOCUMENT_FIXTURES[0];
 
 interface ProposalDetailMock {
@@ -138,7 +138,8 @@ export default function Page() {
     setVerdicts((prev) => ({ ...prev, [entryId]: verdict }));
   };
 
-  const handleEditDocument = () => {
+  // 미리보기 대상은 제안본이라 proposalId를 동봉한다 — 열람 전용 제안 뷰는 아직 없어 에디터 라우트가 대신한다
+  const handlePreview = () => {
     router.push(`/llm-wiki/${REVIEW_TARGET_DOCUMENT.id}?proposalId=${REVIEW_TARGET_DOCUMENT.proposalId}`);
   };
 
@@ -258,7 +259,7 @@ export default function Page() {
 
             <BlockDiffSection
               entries={displayedEntries}
-              onEditDocument={handleEditDocument}
+              onPreview={handlePreview}
               onApprove={(id) => submitBlockVerdict(id, 'approved')}
               onReject={(id) => submitBlockVerdict(id, 'rejected')}
             />
