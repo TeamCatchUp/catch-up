@@ -18,17 +18,24 @@ export function SnbSectionAction({
   label,
   Icon,
   onClick,
+  active = false,
 }: {
   label: string;
   Icon: ComponentType<SVGProps<SVGSVGElement>>;
   onClick: (trigger: HTMLElement) => void;
+  /** 이 버튼이 연 메뉴가 떠 있는가 */
+  active?: boolean;
 }) {
   return (
     <button
       type="button"
       aria-label={label}
+      aria-expanded={active || undefined}
       onClick={(event) => onClick(event.currentTarget)}
-      className="text-icon-normal-neutral hover:bg-fill-normal-interaction-hover flex size-5.5 shrink-0 cursor-pointer items-center justify-center rounded-full"
+      className={cn(
+        'text-icon-normal-neutral hover:bg-fill-normal-interaction-hover flex size-5.5 shrink-0 cursor-pointer items-center justify-center rounded-full',
+        active && 'bg-fill-normal-interaction-pressed',
+      )}
     >
       <Icon aria-hidden className="size-4.5" />
     </button>
@@ -45,6 +52,8 @@ export interface SnbSectionHeaderProps {
   expanded?: boolean;
   /** 우측 액션 슬롯. 무엇을 하는 버튼인지는 소비처가 안다 */
   actions?: React.ReactNode;
+  /** 액션이 연 메뉴가 떠 있는가. 그 동안은 hover 없이도 액션이 유지된다 */
+  actionsOpen?: boolean;
   /** 전달 시에만 라벨이 버튼이 된다. 접기와 함께 오면 접기는 셰브런이 맡는다 */
   onClick?: () => void;
   className?: string;
@@ -57,6 +66,7 @@ export default function SnbSectionHeader({
   onToggleCollapse,
   expanded = true,
   actions,
+  actionsOpen = false,
   onClick,
   className,
 }: SnbSectionHeaderProps) {
@@ -65,8 +75,14 @@ export default function SnbSectionHeader({
   const chevronIsButton = collapsible && onClick !== undefined;
   const ChevronIcon = expanded ? IconArrowDown : IconArrowRight2;
   const gapClass = badge ? 'gap-1.5' : 'gap-0.5';
-  // 셰브런·액션은 hover·focus에서만 나타난다. 평소에는 라벨만 남는다
-  const revealClass = 'hidden group-focus-within/header:flex group-hover/header:flex';
+  /*
+   * 셰브런·액션은 hover·focus에서만 나타난다. 평소에는 라벨만 남는다.
+   * 메뉴가 열린 동안 숨기면 앵커가 0×0이 되어 팝오버가 좌상단으로 튄다.
+   */
+  const revealClass = cn(
+    'group-focus-within/header:flex group-hover/header:flex',
+    actionsOpen ? 'flex' : 'hidden',
+  );
 
   const labelContent = (
     <>

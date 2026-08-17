@@ -62,7 +62,7 @@ const meta = {
         nodeId: '17578:127214',
       },
       viewport: { width: 280, height: 360 },
-      states: ['interactive', 'active', 'static-location', 'long-label-narrow', 'row-actions'],
+      states: ['interactive', 'active', 'static-location', 'long-label-narrow', 'row-actions', 'row-actions-menu-open'],
       reuseNotes: [
         'SNB 프로젝트 섹션(탐색형, 17578:127214 > Projects Section 17884:15677)과 검토 큐 "문서 위치"(표시형, 17564:127054)가 같은 트리를 쓴다.',
         '행 상태 스펙 시트는 17895:46178(NavTree상세) — Default/hover/Pressed/Selected/Selected_hover 5종.',
@@ -247,6 +247,35 @@ export const LongLabelNarrow: Story = {
     await expect(rowOf(file).getBoundingClientRect().right).toBeLessThanOrEqual(
       canvasElement.getBoundingClientRect().right,
     );
+  },
+};
+
+export const RowActionsMenuOpen: Story = {
+  args: {
+    defaultExpandedIds: ['channel-1', 'folder-2'],
+    onNodeClick: fn(),
+    onNodeMore: fn(),
+    onNodeAdd: fn(),
+    openActionMenu: { nodeId: 'channel-1', kind: 'more' },
+  },
+  render: (args) => (
+    <Frame>
+      <NavTree {...args} />
+    </Frame>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    /*
+     * 열린 행의 액션은 hover·포커스 없이도 살아 있어야 한다. 숨으면 앵커가 0×0이 되어
+     * 소비처의 팝오버가 좌상단으로 튄다.
+     */
+    const more = canvas.getByRole('button', { name: '채널명 text text text text 1 더보기' });
+    await expect(Math.round(more.getBoundingClientRect().width)).toBe(22);
+    await expect(more).toHaveAttribute('aria-expanded', 'true');
+
+    // 다른 행은 그대로 숨어 있다
+    await expect(canvas.queryByRole('button', { name: '폴더명 text text text t 2 더보기' })).toBeNull();
   },
 };
 

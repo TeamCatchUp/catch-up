@@ -133,6 +133,11 @@ describe('WikiSideNav 펼침', () => {
     expect(screen.getByRole('button', { name: '이름 바꾸기' })).toBeInTheDocument();
     // 최종 편집자·시각은 API 계약이 없어 넣지 않는다
     expect(screen.queryByText(/최종 편집/)).toBeNull();
+
+    // 팝오버 기본 클래스의 overflow-hidden이 남으면 메뉴 그림자가 잘린다
+    const popover = screen.getByTestId('snb-dropdown-menu').parentElement!;
+    expect(popover).toHaveClass('overflow-visible');
+    expect(popover).not.toHaveClass('overflow-hidden');
   });
 
   it('트리 행의 하위 추가를 누르면 파일·폴더 메뉴가 열린다', async () => {
@@ -166,6 +171,25 @@ describe('WikiSideNav 펼침', () => {
     expect(treeRows()).toHaveLength(3);
     await user.click(screen.getByRole('button', { name: '위키' }));
     expect(treeRows()).toHaveLength(0);
+  });
+
+  it('메뉴가 열린 동안 그 행의 액션이 유지된다', async () => {
+    const user = userEvent.setup();
+    render(<WikiSideNav />);
+
+    /*
+     * 액션이 사라지면 앵커 버튼이 display:none이 되고 getBoundingClientRect가 0×0을
+     * 돌려줘 팝오버가 좌상단으로 튄다. jsdom은 Tailwind가 없어 클래스로 검사한다.
+     */
+    const channelLabel = '채널명 text text text text text text text text';
+    const more = screen.getAllByRole('button', { name: `${channelLabel} 더보기` })[0];
+    await user.click(more);
+
+    expect(more.parentElement).toHaveClass('flex');
+    expect(more.parentElement).not.toHaveClass('hidden');
+    // 누른 버튼과 그 행은 메뉴가 떠 있는 동안 강조를 유지한다
+    expect(more).toHaveAttribute('aria-expanded', 'true');
+    expect(more.closest('[data-slot="nav-tree-row"]')).toHaveClass('bg-fill-normal-interaction-hover');
   });
 
   it('위키 머리글의 + 는 채널 추가 메뉴를 연다', async () => {

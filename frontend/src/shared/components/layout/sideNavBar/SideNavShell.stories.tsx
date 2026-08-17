@@ -237,5 +237,9 @@ export const EmptySectionsNoInventedEmptyState: Story = {
 
     // 빈 목록을 받아도 어떤 문구도 만들지 않는다 — 빈 상태 카피는 승인된 시안이 없다
     await expect(navArea.textContent?.replace('홈', '').trim()).toBe('');
+
+    // 넘칠 것이 없는데도 스크롤바 자리는 비어 있다 — 목록이 길어져도 행 폭이 그대로다
+    await expect(navArea.scrollHeight).toBeLessThanOrEqual(navArea.clientHeight);
+    await expect(navArea.offsetWidth - navArea.clientWidth).toBe(8);
   },
 };

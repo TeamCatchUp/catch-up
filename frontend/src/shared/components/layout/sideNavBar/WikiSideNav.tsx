@@ -79,6 +79,12 @@ export default function WikiSideNav() {
 
   const treeNodeKind = (id: string) => (id.startsWith('channel-') ? '채널' : id.startsWith('folder-') ? '폴더' : '파일');
 
+  // 메뉴가 열린 동안 액션이 사라지면 앵커가 0×0이 되므로 어느 행이 열렸는지 트리에 알린다
+  const openRowMenu =
+    menu && menu.nodeId && menu.kind !== 'section-add'
+      ? { nodeId: menu.nodeId, kind: menu.kind === 'row-more' ? ('more' as const) : ('add' as const) }
+      : undefined;
+
   /*
    * 메뉴 항목의 목적지가 아직 없다. 시안의 하단 메타(최종 편집자·시각)도 백엔드
    * 계약에 대응 필드가 없어 넣지 않는다 — 지어내면 승인된 값처럼 굳는다.
@@ -225,10 +231,12 @@ export default function WikiSideNav() {
           label="위키"
           expanded={wikiOpen}
           onToggleCollapse={() => setWikiOpen((open) => !open)}
+          actionsOpen={menu?.kind === 'section-add'}
           actions={
             <SnbSectionAction
               label="채널 추가"
               Icon={IconAdd}
+              active={menu?.kind === 'section-add'}
               onClick={(anchor) => setMenu({ kind: 'section-add', anchor })}
             />
           }
@@ -238,6 +246,7 @@ export default function WikiSideNav() {
             nodes={PROJECT_TREE_NODES}
             activeId={activeTreeId}
             defaultExpandedIds={['channel-1', 'folder-1']}
+            openActionMenu={openRowMenu}
             onNodeClick={(id) => router.push(projectTreeHref(id))}
             onNodeMore={(nodeId, anchor) => setMenu({ kind: 'row-more', nodeId, anchor })}
             onNodeAdd={(nodeId, anchor) => setMenu({ kind: 'row-add', nodeId, anchor })}
@@ -249,10 +258,11 @@ export default function WikiSideNav() {
       {menu && (
         <Popover open onOpenChange={(open) => !open && closeMenu()}>
           <PopoverAnchor virtualRef={{ current: menu.anchor }} />
+          {/* 껍데기는 메뉴가 직접 그린다. overflow-visible이 없으면 메뉴 그림자가 잘린다 */}
           <PopoverContent
             align="start"
             side="right"
-            className="border-0 bg-transparent p-0 shadow-none"
+            className="overflow-visible border-0 bg-transparent p-0 shadow-none"
             onCloseAutoFocus={(event) => event.preventDefault()}
           >
             <SnbDropdownMenu {...menuProps()} />

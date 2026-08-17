@@ -54,9 +54,10 @@ export default function SideNavShell({
           </button>
         </div>
 
+        {/* 스크롤바 자리를 늘 비워 둔다 — 목록이 넘칠 때마다 행 폭이 8px 흔들리지 않게 */}
         <div
           data-testid="side-nav-shell-nav-area"
-          className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-2"
+          className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-2 [scrollbar-gutter:stable]"
         >
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-1.5">{spaceSwitcher}</div>

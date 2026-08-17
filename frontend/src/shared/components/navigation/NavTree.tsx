@@ -30,6 +30,8 @@ interface NavTreeProps {
   onNodeMore?: (id: string, trigger: HTMLElement) => void;
   /** 전달 시 canAddChild 행에만 하위 추가(+). 인자 규칙은 위와 같다 */
   onNodeAdd?: (id: string, trigger: HTMLElement) => void;
+  /** 메뉴가 열려 있는 행. 그 동안 액션이 hover 없이도 보이고 누른 버튼이 강조된다 */
+  openActionMenu?: { nodeId: string; kind: 'more' | 'add' };
   className?: string;
 }
 
@@ -44,17 +46,23 @@ function RowActionButton({
   label,
   Icon,
   onClick,
+  active = false,
 }: {
   label: string;
   Icon: ComponentType<SVGProps<SVGSVGElement>>;
   onClick: (trigger: HTMLElement) => void;
+  active?: boolean;
 }) {
   return (
     <button
       type="button"
       aria-label={label}
+      aria-expanded={active || undefined}
       onClick={(event) => onClick(event.currentTarget)}
-      className="text-icon-normal-neutral hover:bg-fill-normal-interaction-hover flex size-5.5 shrink-0 cursor-pointer items-center justify-center rounded-full"
+      className={cn(
+        'text-icon-normal-neutral hover:bg-fill-normal-interaction-hover flex size-5.5 shrink-0 cursor-pointer items-center justify-center rounded-full',
+        active && 'bg-fill-normal-interaction-pressed',
+      )}
     >
       <Icon aria-hidden className="size-4.5" />
     </button>
@@ -72,6 +80,7 @@ export default function NavTree({
   onNodeClick,
   onNodeMore,
   onNodeAdd,
+  openActionMenu,
   className,
 }: NavTreeProps) {
   const isStatic = onNodeClick === undefined;
@@ -88,6 +97,7 @@ export default function NavTree({
   const renderRow = (node: NavTreeNode, depth: number, hasChildren: boolean, expanded: boolean) => {
     // 표시형은 선택 개념이 없다 — 경로 조각을 보여주는 것이 전부다
     const isActive = !isStatic && node.id === activeId;
+    const menuOpen = openActionMenu?.nodeId === node.id;
 
     const label = (
       <span
@@ -124,6 +134,8 @@ export default function NavTree({
             'group flex h-9 items-center gap-3 rounded-lg px-2.5 py-1.5 transition-colors',
             // 행이 버튼이 아니라서 pressed는 내부 버튼의 :active를 has()로 받는다.
             'hover:bg-fill-normal-interaction-hover has-[button:active]:bg-fill-normal-interaction-pressed',
+            // 메뉴가 열려 있는 동안은 마우스가 떠나도 hover 상태를 유지한다.
+            menuOpen && 'bg-fill-normal-interaction-hover',
             // 선택 상태에서는 중립 hover 대신 primary hover_assistive가 덮는다.
             isActive && 'bg-fill-primary-normal-neutral hover:bg-fill-primary-normal-interaction-hover-assistive',
           )}
@@ -171,13 +183,22 @@ export default function NavTree({
             {label}
           </button>
 
-          {/* 액션은 오버레이가 아니라 in-flow다. hover만 걸면 키보드로 도달할 수 없어 focus-within을 함께 본다 */}
+          {/*
+           * 액션은 오버레이가 아니라 in-flow다. hover만 걸면 키보드로 도달할 수 없어 focus-within을
+           * 함께 본다. 메뉴가 열린 동안 숨기면 앵커가 0×0이 되어 팝오버가 좌상단으로 튄다.
+           */}
           {(onNodeMore || (onNodeAdd && node.canAddChild)) && (
-            <div className="hidden shrink-0 items-center gap-0.5 group-focus-within:flex group-hover:flex">
+            <div
+              className={cn(
+                'shrink-0 items-center gap-0.5 group-focus-within:flex group-hover:flex',
+                menuOpen ? 'flex' : 'hidden',
+              )}
+            >
               {onNodeMore && (
                 <RowActionButton
                   label={`${node.label} 더보기`}
                   Icon={IconMore}
+                  active={menuOpen && openActionMenu?.kind === 'more'}
                   onClick={(trigger) => onNodeMore(node.id, trigger)}
                 />
               )}
@@ -185,6 +206,7 @@ export default function NavTree({
                 <RowActionButton
                   label={`${node.label} 하위 추가`}
                   Icon={IconAdd}
+                  active={menuOpen && openActionMenu?.kind === 'add'}
                   onClick={(trigger) => onNodeAdd(node.id, trigger)}
                 />
               )}
