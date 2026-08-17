@@ -1,5 +1,4 @@
 import IconAddSmall from '@/public/icons/icon/add_small.svg';
-import IconError from '@/public/icons/icon/error.svg';
 import { Avatar } from '@/shared/components/ui/avatar';
 import { cn } from '@/shared/utils/cn';
 
@@ -17,11 +16,11 @@ interface ReviewQueueRowProps {
 }
 
 /**
- * 검토 큐 좌측 목록의 행.
+ * 검토 큐 좌측 목록의 행. 충돌(모순) 아이콘은 MVP 제외라 렌더하지 않는다.
  * 신뢰도·유형·hover 채움은 시안 근거가 없어 렌더하지 않는다 — props로 받지도 않는다.
  */
 export default function ReviewQueueRow({ item, selected = false, onSelect, secondaryTitle }: ReviewQueueRowProps) {
-  const { id, title, authorName, authorProfileImageUrl, waitingLabel, hasConflictIcon } = item;
+  const { id, title, authorName, authorProfileImageUrl, waitingLabel } = item;
 
   // 행 높이는 결과값이다 — h-*로 못박지 않는다.
   return (
@@ -35,7 +34,6 @@ export default function ReviewQueueRow({ item, selected = false, onSelect, secon
       )}
     >
       <span className="flex w-full min-w-0 items-center gap-3">
-        {hasConflictIcon && <IconError aria-hidden className="text-accent-red-default size-6 shrink-0" />}
         <span className="text-heading-small text-text-normal-normal min-w-0 flex-1 truncate">{title}</span>
       </span>
 

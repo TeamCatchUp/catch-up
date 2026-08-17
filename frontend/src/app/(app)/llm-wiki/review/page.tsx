@@ -19,7 +19,6 @@ import ReviewQueueListHeader from '@/features/llm-wiki/components/review-queue/R
 import ReviewQueueRow from '@/features/llm-wiki/components/review-queue/ReviewQueueRow';
 import {
   BASE_WIKI_BLOCKS,
-  CONTESTED_PROPOSED_BLOCKS,
   JUDGED_PROPOSED_BLOCKS,
   LONG_BASE_WIKI_BLOCKS,
   LONG_PROPOSED_WIKI_BLOCKS,
@@ -53,7 +52,6 @@ interface ProposalDetailMock {
 
 /** 제안별 base/proposed 쌍 mock. base revision blocks API가 없어 fixture 쌍이 diff의 유일한 원천이다 */
 const PROPOSAL_BLOCKS_MOCK: Record<string, ProposalDetailMock> = {
-  'proposal-sso-contradiction': { baseBlocks: [BASE_WIKI_BLOCKS[0]], proposedBlocks: CONTESTED_PROPOSED_BLOCKS },
   'proposal-payment-retry-v3': { baseBlocks: BASE_WIKI_BLOCKS, proposedBlocks: PROPOSED_WIKI_BLOCKS },
   'proposal-merge-refund': { baseBlocks: LONG_BASE_WIKI_BLOCKS, proposedBlocks: LONG_PROPOSED_WIKI_BLOCKS },
   'proposal-rejected-example': { baseBlocks: [BASE_WIKI_BLOCKS[0]], proposedBlocks: JUDGED_PROPOSED_BLOCKS },

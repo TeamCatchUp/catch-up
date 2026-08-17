@@ -198,14 +198,8 @@ export const createReviewQueueItem = (overrides?: Partial<ReviewQueueItemData>):
   ...overrides,
 });
 
+// 모순(contradiction) 행 표본은 두지 않는다 — MVP 제외 결정, 유형·필드 계약은 보존
 export const REVIEW_QUEUE_ITEM_FIXTURES: readonly ReviewQueueItemData[] = [
-  createReviewQueueItem({
-    id: 'proposal-sso-contradiction',
-    type: 'contradiction',
-    title: 'SSO 세션 만료 시간 상충',
-    confidence: 0.31,
-    hasConflictIcon: true,
-  }),
   createReviewQueueItem(),
   createReviewQueueItem({
     id: 'proposal-merge-refund',

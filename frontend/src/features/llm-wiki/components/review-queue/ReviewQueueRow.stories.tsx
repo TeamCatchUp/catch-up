@@ -24,14 +24,15 @@ const meta = {
         nodeId: '17849:106767',
       },
       viewport: { width: 300, height: 120 },
-      states: ['default', 'selected', 'with-error-icon', 'merge-second-line(meaning-tbd)'],
+      states: ['default', 'selected', 'merge-second-line(meaning-tbd)'],
       reuseNotes: [
-        '검토 큐 좌측 목록(17564:126942, 폭 300)의 행이다. 목록 13행 중 12행이 기본형(17849:106767), 최상단 1행만 에러 아이콘 + 선택 채움(17564:126946)이다.',
-        'error.svg(마스크 id mask0_389_1866 = Figma icon/error 389:1866)·add_small.svg(mask0_46_1623 = icon/add_small 46:1623)는 리포에 이미 있는 에셋과 컴포넌트 id가 정확히 일치한다 — 신규 export 없음.',
+        '검토 큐 좌측 목록(17564:126942, 폭 300)의 행이다. 기본형은 17849:106767. 충돌(모순) 아이콘 행(17564:126946)은 MVP 제외 결정으로 렌더·스토리를 제거했다 — 재도입 시 error.svg(icon/error 389:1866)가 리포에 이미 있다.',
+        'add_small.svg(mask0_46_1623 = icon/add_small 46:1623)는 리포에 이미 있는 에셋과 컴포넌트 id가 정확히 일치한다 — 신규 export 없음.',
         '아바타는 공용 `shared/components/ui/avatar`의 size=small(25px)이다 — 폴백·isSafeUrl 가드가 컴포넌트 안에 있어 행에서 되풀이하지 않는다.',
       ],
       dataNotes: [
-        '행에 신뢰도를 표시하지 않는다 — 감사 판정 MISSING(필터에만 존재). fixture의 confidence는 계약 보존용이라 이 컴포넌트는 props로 받지도 않는다. Default·WithErrorIcon play가 미노출을 가드한다.',
+        '행에 신뢰도를 표시하지 않는다 — 감사 판정 MISSING(필터에만 존재). fixture의 confidence는 계약 보존용이라 이 컴포넌트는 props로 받지도 않는다. Default play가 미노출을 가드한다.',
+        '충돌(모순) 아이콘 행은 MVP 제외 — hasConflictIcon 필드는 [BE] contains_conflict 대응이라 계약만 보존하고 렌더하지 않는다.',
         '유형 배지도 만들지 않는다 — 백엔드 3종↔명세 6유형 불일치로 체계 미정. 8/6 재확인에서도 행에는 유형 표기가 없었다. 대신 상세 패널 헤더에 "유형 / 상태 태그"(17845:105886) 자리표시 텍스트가 새로 생겼다 — 배지가 붙는다면 행이 아니라 상세다.',
         '빈 큐·로딩·에러·처리 피드백(pending/성공/실패)·stale 거부 스토리는 만들지 않는다(감사 §7 금지 목록).',
         '목록 헤더 건수는 "1"인데 행은 13개다(Figma 목업 불일치) — 건수는 이 컴포넌트의 관심사가 아니라 목록 셸의 것이다.',
@@ -41,7 +42,7 @@ const meta = {
         '작성자명도 #33363D(text-text-normal-normal), 대기 기간만 #B1B8BE = text-text-normal-assistive. 둘 다 body(md)/xsmall = text-body-xsmall.',
         '행 하단 구분선 #EAEBEC = Line/Normal/Neutral = border-line-normal-neutral, 1px 하단만.',
         '선택 채움 #F7F7F8 = Fill/Normal/Strong = bg-fill-normal-strong. 비선택 행은 fills=[] — 투명이다.',
-        '에러 아이콘 #FF6363 = Accent/Red/Default = text-accent-red-default. add_small 칩은 #F7F7F8 배경(bg-fill-normal-strong) + radius/rounded 1000(rounded-full) + 아이콘 #6D7882 = text-icon-normal-neutral.',
+        'add_small 칩은 #F7F7F8 배경(bg-fill-normal-strong) + radius/rounded 1000(rounded-full) + 아이콘 #6D7882 = text-icon-normal-neutral.',
         '아바타 radius/xl 12 = rounded-xl, 테두리 #F4F4F5 = Line/Normal/Assistive = border-line-normal-assistive. 공용 Avatar 기본값(radius 1000 + Fill/Normal/Strong #F7F7F8)과 다르다 — 디자인 시스템 원본 imagebox/profile(582:2674)이 아니라 이 목록의 인스턴스 13개가 전부 덮어쓴 값이라 className으로 되덮었다. 어느 쪽이 의도인지는 디자이너 확인 대상.',
       ],
       layoutNotes: [
@@ -112,24 +113,6 @@ export const Selected: Story = {
 
     await expect(row).toHaveAttribute('aria-current', 'true');
     await expect(window.getComputedStyle(row).backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
-  },
-};
-
-/** 에러(충돌) 아이콘 행. 행 순서에는 관여하지 않고 아이콘 유무만 받는다. */
-export const WithErrorIcon: Story = {
-  args: { item: createReviewQueueItem({ hasConflictIcon: true, type: 'contradiction' }) },
-  decorators: [listSlot],
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const row = canvas.getByRole('button');
-
-    // viewBox로 에셋 교체를 잡는다.
-    const icons = [...row.querySelectorAll('svg')];
-    await expect(icons.some((icon) => icon.getAttribute('viewBox') === '0 0 24 24')).toBe(true);
-
-    // 충돌 행이라고 신뢰도·유형이 새어나오면 안 된다.
-    await expect(canvas.queryByText(/0\.62|62%/)).toBeNull();
-    await expect(canvas.queryByText(/contradiction|모순/)).toBeNull();
   },
 };
 
