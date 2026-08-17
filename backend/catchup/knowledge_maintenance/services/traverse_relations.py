@@ -66,11 +66,19 @@ def default_edge_line(edge: StoredRelationEdge, relation_type: str) -> str:
 
     이름이 없는 노드는 식별자를 그대로 쓴다. 줄에서 한쪽 끝이 통째로
     사라지면 남은 이름이 어느 쪽인지 읽는 쪽이 알 수 없다.
+
+    표시 이름은 사람이 적은 자유 문장이라 줄바꿈이 섞일 수 있다. 공백을
+    한 칸으로 접어 한 줄로 만든다 — 한 간선은 본문 한 줄이라는 규약이
+    깨지면 소비처의 줄 단위 해석이 어긋난다.
     """
-    source = edge.source_display_name or str(edge.source_node_id)
-    target = edge.target_display_name or str(edge.target_node_id)
+    source = _one_line(edge.source_display_name) or str(edge.source_node_id)
+    target = _one_line(edge.target_display_name) or str(edge.target_node_id)
     return f"{source} → {relation_type} → {target}"
 
+
+def _one_line(text: str | None) -> str:
+    """연속 공백과 줄바꿈을 한 칸으로 접어 한 줄로 만든다."""
+    return " ".join(text.split()) if text else ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -287,7 +295,9 @@ def relation_section_block(
     본문은 간선마다 양끝 이름을 명시한 줄을 순회가 정한 차례 그대로
     늘어놓고, 그 간선에 원문 문장이 있으면 바로 아래 들여쓴 힌트 줄을
     하나 붙인다. 인용문만 싣던 때에는 그 말을 누가 했는지가 상대
-    노드로 오해되었다. 잘린
+    노드로 오해되었다. 힌트는 공백을 접어 한 줄로 적는다 — 들여쓰기
+    접두가 붙는 것은 첫 줄뿐이라, 원문의 줄바꿈을 그대로 두면 둘째
+    줄부터가 접두 없는 줄이 되어 소비처에서 간선 줄로 읽힌다. 잘린
     걸음이 있으면 걸음마다 한 줄씩 오름차순으로 덧붙여, 문서가 자신이
     완전하지 않음을 스스로 말하게 한다. 조용한 누락은 읽는 사람이
     "이게 전부"라고 믿게 만들기 때문이다.
@@ -311,8 +321,9 @@ def relation_section_block(
         traversal.edge_lines, traversal.hint_lines, strict=True
     ):
         lines.append(line)
-        if hint:
-            lines.append(f"{RELATION_HINT_PREFIX}{hint}")
+        one_line_hint = _one_line(hint)
+        if one_line_hint:
+            lines.append(f"{RELATION_HINT_PREFIX}{one_line_hint}")
     for step_index in sorted(traversal.truncated_steps):
         lines.append(
             f"(step {step_index}에서 이웃 {MAX_NODES_PER_STEP}개"

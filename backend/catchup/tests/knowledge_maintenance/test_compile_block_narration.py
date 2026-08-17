@@ -687,14 +687,17 @@ ACTOR_VOCABULARY = VOCABULARY.model_copy(
 
 
 def _actor_edge(
-    *, source_node_id: uuid.UUID, target_node_id: uuid.UUID
+    *,
+    source_node_id: uuid.UUID,
+    target_node_id: uuid.UUID,
+    assertion_text: str = "커넥터 있어?",
 ) -> StoredRelationEdge:
     """행위자 노드로 이어지는 간선 하나를 만든다."""
     return StoredRelationEdge(
         id=uuid.uuid4(),
         source_node_id=source_node_id,
         target_node_id=target_node_id,
-        assertion_text="커넥터 있어?",
+        assertion_text=assertion_text,
         source_display_name="기능 요청 A",
         target_display_name="팀원A",
         source_attributes={},
@@ -708,7 +711,9 @@ def _actor_edge(
     )
 
 
-def _actor_uow(*, purpose: str | None) -> FakeDefinitionUnitOfWork:
+def _actor_uow(
+    *, purpose: str | None, assertion_text: str = "커넥터 있어?"
+) -> FakeDefinitionUnitOfWork:
     """행위자 간선 하나를 갖는 정의 컴파일용 fake를 세운다."""
     node_id = uuid.uuid4()
     definition = _definition_row(
@@ -730,6 +735,7 @@ def _actor_uow(*, purpose: str | None) -> FakeDefinitionUnitOfWork:
                     _actor_edge(
                         source_node_id=node_id,
                         target_node_id=uuid.uuid4(),
+                        assertion_text=assertion_text,
                     ),
                 )
             ]
@@ -774,6 +780,27 @@ def test_relation_narration_gets_named_edges_and_hints_with_exposure() -> None:
     assert request.edges == ("기능 요청 A → requested_by → 팀원A (neo@x.com)",)
     assert request.hints == ("커넥터 있어?",)
     assert request.statements == ()
+
+
+def test_multiline_assertion_stays_a_single_hint() -> None:
+    """여러 줄 원문도 힌트 하나로 접혀 사실 입력을 늘리지 않는다."""
+    uow = _actor_uow(
+        purpose="voc.request_status_tracking",
+        assertion_text="첫 줄\n둘째 줄",
+    )
+    narrator = _FakeNarrator()
+
+    _run_with_actor_vocabulary(uow, narrator)
+
+    request = next(
+        item
+        for item in narrator.requests
+        if item.block_kind == BLOCK_KIND_RELATION_SECTION
+    )
+    assert request.edges == (
+        "기능 요청 A → requested_by → 팀원A (neo@x.com)",
+    )
+    assert request.hints == ("첫 줄 둘째 줄",)
 
 
 def test_anonymous_exposure_hides_actor_name() -> None:

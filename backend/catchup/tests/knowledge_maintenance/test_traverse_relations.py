@@ -30,7 +30,11 @@ from catchup.knowledge_maintenance.domain.artifact_definition import MAX_NODES_P
 from catchup.knowledge_maintenance.domain.artifact_definition import RelationPath
 from catchup.knowledge_maintenance.domain.artifact_definition import RelationStep
 from catchup.knowledge_maintenance.ports.relations import StoredRelationEdge
+from catchup.knowledge_maintenance.services.traverse_relations import (
+    RELATION_HINT_PREFIX,
+)
 from catchup.knowledge_maintenance.services.traverse_relations import PathTraversal
+from catchup.knowledge_maintenance.services.traverse_relations import default_edge_line
 from catchup.knowledge_maintenance.services.traverse_relations import (
     relation_section_block,
 )
@@ -712,6 +716,47 @@ def test_relation_block_body_puts_hint_under_its_edge() -> None:
 
     assert block is not None
     assert block.body == "기능 요청 A → requested_by → 팀원A\n  ↳ 커넥터 있어?"
+
+
+def test_relation_block_collapses_multiline_hint_into_one_line() -> None:
+    """여러 줄짜리 원문도 힌트 줄 하나로 접는다.
+
+    접두가 붙는 것은 첫 줄뿐이라, 줄바꿈을 그대로 두면 둘째 줄부터가
+    접두 없는 줄이 되어 소비처에서 사실 줄로 읽힌다.
+    """
+    result = traverse_relation_path(
+        _requested_by_repository("첫 줄\n둘째 줄"),
+        start_node_id=node(1),
+        path=PATH_REQUESTED_BY,
+        now=NOW,
+    )
+
+    block = relation_section_block(
+        path=PATH_REQUESTED_BY, traversal=result, ontology_version="v1"
+    )
+
+    assert block is not None
+    body_lines = block.body.split("\n")
+    assert [
+        line for line in body_lines if line.startswith(RELATION_HINT_PREFIX)
+    ] == ["  ↳ 첫 줄 둘째 줄"]
+    assert len(body_lines) == 2
+
+
+def test_edge_line_collapses_newline_in_display_name() -> None:
+    """표시 이름에 줄바꿈이 있어도 간선은 한 줄로 적는다."""
+    edge = StoredRelationEdge(
+        id=relation(1),
+        source_node_id=node(1),
+        target_node_id=node(2),
+        assertion_text=None,
+        source_display_name="기능\n요청 A",
+        target_display_name="팀원A  님",
+    )
+
+    line = default_edge_line(edge, "requested_by")
+
+    assert line == "기능 요청 A → requested_by → 팀원A 님"
 
 
 def test_relation_block_omits_hint_line_when_assertion_missing() -> None:
