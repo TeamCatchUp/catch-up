@@ -192,8 +192,8 @@ def test_lists_all_six_domains_including_the_empty_ones(
     domains = response.json()["domains"]
     assert len(domains) == 6
     voc = next(d for d in domains if d["id"] == "voc")
-    assert len(voc["purposes"]) == 5
-    assert len(voc["kinds"]) == 6
+    assert len(voc["purposes"]) == 6
+    assert len(voc["kinds"]) == 5
     others = [d for d in domains if d["id"] != "voc"]
     assert all(d["purposes"] == [] and d["kinds"] == [] for d in others)
 

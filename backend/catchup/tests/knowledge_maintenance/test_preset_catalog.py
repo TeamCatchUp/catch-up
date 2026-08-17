@@ -99,8 +99,8 @@ def test_voc_domain_is_fully_populated() -> None:
     found = find_purpose("voc.top_requests")
     assert found is not None
     voc = found[0]
-    assert len(voc.purposes) == 5
-    assert len(voc.kinds) == 6
+    assert len(voc.purposes) == 6
+    assert len(voc.kinds) == 5
 
 
 def test_empty_domains_are_listed_with_no_choices() -> None:
@@ -124,11 +124,11 @@ def test_domain_and_purpose_and_kind_ids_are_unique() -> None:
 
 def test_find_purpose_returns_its_owning_domain() -> None:
     """목적을 찾으면 그 목적이 속한 도메인이 함께 나온다."""
-    found = find_purpose("voc.churn_signals")
+    found = find_purpose("voc.complaint_patterns")
     assert found is not None
     domain, purpose = found
     assert domain.id == "voc"
-    assert purpose.recommended_kind == "churn_risk_watch"
+    assert purpose.recommended_kind == "complaint_topic_brief"
     assert purpose in domain.purposes
 
 
@@ -142,18 +142,18 @@ def test_find_kind_looks_inside_the_given_domain_only() -> None:
     found = find_purpose("voc.top_requests")
     assert found is not None
     voc = found[0]
-    preset_kind = find_kind(voc, "request_priority_board")
+    preset_kind = find_kind(voc, "faq_answer")
     assert preset_kind is not None
-    assert preset_kind.kind == "request_priority_board"
+    assert preset_kind.kind == "faq_answer"
     other = next(d for d in PRESET_DOMAINS if d.id == "product")
-    assert find_kind(other, "request_priority_board") is None
+    assert find_kind(other, "faq_answer") is None
 
 
 def test_find_style_matches_the_catalog() -> None:
     """문체 조회는 카탈로그에 있는 id에만 응답한다."""
-    style = find_style("style.faq")
+    style = find_style("style.support_guide")
     assert style is not None
-    assert style.id == "style.faq"
+    assert style.id == "style.support_guide"
     assert find_style("style.unknown") is None
 
 
@@ -276,3 +276,62 @@ def test_enum_predicates_name_their_korean_labels() -> None:
         assert entry is not None
         assert entry.value_type == "enum" and entry.enum_values
         assert any(v in entry.definition for v in entry.enum_values)
+
+
+def test_voc_kinds_match_the_planning_templates() -> None:
+    """VOC 문서 종류가 양식 5종으로만 등재돼 있다."""
+    voc = next(d for d in PRESET_DOMAINS if d.id == "voc")
+    assert [k.kind for k in voc.kinds] == [
+        "feature_request_status",
+        "complaint_topic_brief",
+        "faq_answer",
+        "customer_voice_profile",
+        "customer_history",
+    ]
+    assert find_kind_by_name("request_priority_board") is None
+    assert find_kind_by_name("churn_risk_watch") is None
+
+
+def test_feature_request_kind_selects_template_sections() -> None:
+    """기능 요청 문서가 양식이 요구하는 칸을 차례대로 고른다."""
+    voc = next(d for d in PRESET_DOMAINS if d.id == "voc")
+    preset_kind = find_kind(voc, "feature_request_status")
+    assert preset_kind is not None
+    spec = preset_kind.spec_template()
+    assert spec.predicate_sections == (
+        "request_status",
+        "first_reported_at",
+        "last_reported_at",
+        "usage_context",
+        "requester_role",
+        "frequency",
+        "support_status",
+        "workaround",
+    )
+
+
+def test_styles_are_the_three_presets_plus_custom() -> None:
+    """문체는 preset 3종과 직접 지정 하나로 고정된다."""
+    assert [s.id for s in PRESET_STYLES] == [
+        "style.wiki_standard",
+        "style.support_guide",
+        "style.report_summary",
+        "style.custom",
+    ]
+    assert find_style("style.faq") is None
+    assert DEFAULT_STYLE_INSTRUCTION == PRESET_STYLES[0].instruction
+
+
+def test_voc_purposes_map_to_surviving_kinds() -> None:
+    """목적 6종이 전부 살아 있는 문서 종류를 가리킨다."""
+    voc = next(d for d in PRESET_DOMAINS if d.id == "voc")
+    mapping = {p.id: p.recommended_kind for p in voc.purposes}
+    assert mapping == {
+        "voc.request_status_tracking": "feature_request_status",
+        "voc.top_requests": "feature_request_status",
+        "voc.complaint_patterns": "complaint_topic_brief",
+        "voc.customer_understanding": "customer_history",
+        "voc.faq_consistency": "faq_answer",
+        "voc.account_requests": "customer_voice_profile",
+    }
+    assert find_purpose("voc.churn_signals") is None

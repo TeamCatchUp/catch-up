@@ -105,6 +105,7 @@ def test_publishes_v1_on_an_empty_workspace() -> None:
         "customer",
         "product_area",
         "complaint_topic",
+        "faq_question",
     }
 
 

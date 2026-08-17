@@ -8,6 +8,10 @@
 지금은 VOC(고객 소리) 도메인만 콘텐츠가 채워져 있고, 나머지 도메인은
 구조만 등재해 둔다. 목록에 없는 도메인을 나중에 끼워 넣는 것보다,
 빈 채로 자리를 잡아 두는 편이 화면과 저장 값의 모양을 미리 고정한다.
+
+VOC 도메인의 kind는 양식 5종이며 정책과 예외사항은 채널톡 소스 밖이라
+두지 않는다. 소스에 없는 것을 양식이 요구하면 채울 근거가 없는 칸이
+남고, 그 빈칸은 읽는 사람에게 지식이 없다는 뜻으로 잘못 읽힌다.
 """
 
 from __future__ import annotations
@@ -388,7 +392,7 @@ _VOC_SEED = ExtractionVocabulary(
 
 
 def _feature_request_status_spec() -> SelectionSpec:
-    """기능 요구 하나를 현황 문서 한 편으로 잡는 규칙을 만든다."""
+    """기능 요청 하나를 문서 한 편으로 잡는 규칙을 만든다."""
     return SelectionSpec(
         entity_types=("feature_request",),
         relation_paths=(
@@ -399,25 +403,60 @@ def _feature_request_status_spec() -> SelectionSpec:
         ),
         predicate_sections=(
             "request_status",
-            "request_priority",
             "first_reported_at",
+            "last_reported_at",
+            "usage_context",
+            "requester_role",
+            "frequency",
+            "support_status",
+            "workaround",
         ),
     )
 
 
-def _request_priority_board_spec() -> SelectionSpec:
-    """기능 요구를 우선순위 관점으로 모으는 규칙을 만든다."""
+def _complaint_topic_brief_spec() -> SelectionSpec:
+    """불편 주제 하나를 재현 가능한 문서로 잡는 규칙을 만든다."""
     return SelectionSpec(
-        entity_types=("feature_request",),
+        entity_types=("complaint_topic",),
         relation_paths=(
-            RelationPath(steps=(RelationStep("requested_by", DIRECTION_OUT),)),
+            RelationPath(
+                steps=(RelationStep("complains_about", DIRECTION_IN),)
+            ),
         ),
-        predicate_sections=("request_priority", "request_count"),
+        predicate_sections=(
+            "complaint_status",
+            "first_reported_at",
+            "pain_description",
+            "expected_behavior",
+            "reproduction_steps",
+            "impact",
+            "guidance",
+        ),
+    )
+
+
+def _faq_answer_spec() -> SelectionSpec:
+    """반복 질문 하나와 그 기준 답변을 한 편으로 잡는 규칙을 만든다."""
+    return SelectionSpec(
+        entity_types=("faq_question",),
+        relation_paths=(
+            RelationPath(
+                steps=(RelationStep("related_question", DIRECTION_OUT),)
+            ),
+        ),
+        predicate_sections=(
+            "faq_status",
+            "faq_category",
+            "current_answer",
+            "workaround",
+            "internal_notes",
+            "last_confirmed_at",
+        ),
     )
 
 
 def _customer_voice_profile_spec() -> SelectionSpec:
-    """고객 한 곳이 낸 목소리를 한 편으로 모으는 규칙을 만든다."""
+    """고객 한 곳이 낸 요청 조건을 한 편으로 모으는 규칙을 만든다."""
     return SelectionSpec(
         entity_types=("customer",),
         relation_paths=(
@@ -426,130 +465,131 @@ def _customer_voice_profile_spec() -> SelectionSpec:
                 steps=(RelationStep("complains_about", DIRECTION_OUT),)
             ),
         ),
-        predicate_sections=("churn_risk",),
+        predicate_sections=("account_request_status", "support_status"),
     )
 
 
-def _product_area_digest_spec() -> SelectionSpec:
-    """제품 영역별로 요구를 묶어 보는 규칙을 만든다.
+def _customer_history_spec() -> SelectionSpec:
+    """고객 한 곳과 오간 기록을 한 편으로 모으는 규칙을 만든다.
 
-    섹션을 고르지 않는다(None) — 영역 문서는 claim을 추려 담기보다
-    어떤 요구가 이 영역에 붙어 있는지를 보여 주는 쪽이다.
+    고른 칸은 고객사 자체의 배경이다. 오간 요청과 불편은 관계 경로로
+    딸려 오므로 여기서 값을 다시 고르지 않는다.
     """
-    return SelectionSpec(
-        entity_types=("product_area",),
-        relation_paths=(
-            RelationPath(
-                steps=(RelationStep("belongs_to_area", DIRECTION_IN),)
-            ),
-        ),
-        predicate_sections=None,
-    )
-
-
-def _complaint_topic_brief_spec() -> SelectionSpec:
-    """불만 주제 하나를 짧은 브리프로 잡는 규칙을 만든다."""
-    return SelectionSpec(
-        entity_types=("complaint_topic",),
-        relation_paths=(
-            RelationPath(
-                steps=(RelationStep("complains_about", DIRECTION_IN),)
-            ),
-        ),
-        predicate_sections=("first_reported_at", "pain_description"),
-    )
-
-
-def _churn_risk_watch_spec() -> SelectionSpec:
-    """불만을 제기한 고객을 모아 이탈 위험 표시를 함께 보여주는 규칙을
-    만든다."""
     return SelectionSpec(
         entity_types=("customer",),
         relation_paths=(
+            RelationPath(steps=(RelationStep("requested_by", DIRECTION_IN),)),
             RelationPath(
                 steps=(RelationStep("complains_about", DIRECTION_OUT),)
             ),
         ),
-        predicate_sections=("churn_risk",),
+        predicate_sections=(
+            "industry",
+            "company_size",
+            "adopted_at",
+            "usage_pattern",
+        ),
     )
 
 
 _VOC_KINDS = (
     PresetKind(
         kind="feature_request_status",
-        label="기능 요구 현황",
-        description="요구 하나가 지금 어느 단계에 있는지 정리한 문서다.",
+        label="기능 요청 문서",
+        description=(
+            "고객이 원하는 기능과 그 이유, 사용 상황을 하나의 문서로"
+            " 모은다. 제목은 기능 명칭이 아니라 원하는 결과 중심이다."
+        ),
         example_text=(
-            "다크 모드 지원 — 상태 in_progress, 우선도 high, 최초 접수 2026-01-12."
+            "상담 데이터를 엑셀로 내려받고 싶어요 — 상태 검토중,"
+            " 최초 접수 2026-06-02."
         ),
         spec_template=_feature_request_status_spec,
     ),
     PresetKind(
-        kind="request_priority_board",
-        label="요구 우선순위 보드",
-        description="어떤 요구를 먼저 볼지 우선도와 접수 횟수로 늘어놓는다.",
-        example_text="CSV 내보내기 — 우선도 urgent, 접수 17건.",
-        spec_template=_request_priority_board_spec,
-    ),
-    PresetKind(
-        kind="customer_voice_profile",
-        label="고객 목소리 프로필",
-        description="고객 한 곳이 낸 요구와 불만을 한 편에 모은 문서다.",
-        example_text="A사 — 요구 4건(다크 모드 외), 불만 주제 2건, 이탈 위험 표시.",
-        spec_template=_customer_voice_profile_spec,
-    ),
-    PresetKind(
-        kind="product_area_digest",
-        label="제품 영역 요약",
-        description="한 기능 영역에 붙은 요구들을 모아 보여 주는 문서다.",
-        example_text="내보내기 영역 — 관련 요구 9건.",
-        spec_template=_product_area_digest_spec,
-    ),
-    PresetKind(
         kind="complaint_topic_brief",
-        label="불만 주제 브리프",
-        description="반복되는 불만 하나를 짧게 요약한 문서다.",
-        example_text="로그인 지연 — 최초 접수 2025-11-03, 대기 시간이 길다는 불편.",
+        label="고객 불편사항 문서",
+        description=(
+            "고객이 어떤 상황에서 불편을 겪는지 재현 가능한 형태로"
+            " 모은다. 원인을 단정하지 않는다."
+        ),
+        example_text=(
+            "상담 검색에서 원하는 기록을 찾기 어려워요 — 상태 확인됨,"
+            " 최초 보고 2026-05-20."
+        ),
         spec_template=_complaint_topic_brief_spec,
     ),
     PresetKind(
-        kind="churn_risk_watch",
-        label="이탈 위험 관찰",
+        kind="faq_answer",
+        label="자주 묻는 질문 문서",
         description=(
-            "불만을 제기한 고객을 모아 각 고객의 이탈 위험 표시를 함께"
-            " 보여주는 문서다."
+            "반복되는 질문과 현재 기준 답변을 모아 누가 답해도 같은 답이"
+            " 나오게 한다."
         ),
-        example_text="B사 — 불만 주제 3건, 이탈 위험 표시 true.",
-        spec_template=_churn_risk_watch_spec,
+        example_text=(
+            "상담 데이터를 엑셀로 받을 수 있나요? — 답변 확정,"
+            " 카테고리 데이터."
+        ),
+        spec_template=_faq_answer_spec,
+    ),
+    PresetKind(
+        kind="customer_voice_profile",
+        label="고객사별 요청사항 문서",
+        description=(
+            "특정 고객이 요청한 기능과 조건을 그 고객의 맥락과 함께"
+            " 모은다. 공통 내용은 전사 문서에, 고유 조건만 여기에 남긴다."
+        ),
+        example_text=(
+            "A사 — 상담 데이터를 주 단위로 자동 전달받고 싶어요,"
+            " 상태 검토중."
+        ),
+        spec_template=_customer_voice_profile_spec,
+    ),
+    PresetKind(
+        kind="customer_history",
+        label="고객사 히스토리 문서",
+        description=(
+            "고객과 오간 문의·요청·결정을 시간순으로 한 문서에 모은다."
+            " 고객당 1문서다."
+        ),
+        example_text=(
+            "A사 — 업종 SaaS, 도입 2026-03, 요청 4건·불편 2건."
+        ),
+        spec_template=_customer_history_spec,
     ),
 )
 
 
 _VOC_PURPOSES = (
     PresetPurpose(
-        id="voc.top_requests",
-        label="많이 들어온 요구 보기",
-        recommended_kind="request_priority_board",
-    ),
-    PresetPurpose(
         id="voc.request_status_tracking",
         label="요구 처리 현황 따라가기",
         recommended_kind="feature_request_status",
     ),
     PresetPurpose(
-        id="voc.customer_understanding",
-        label="고객을 더 알기",
-        recommended_kind="customer_voice_profile",
+        id="voc.top_requests",
+        label="많이 들어온 요구 보기",
+        recommended_kind="feature_request_status",
     ),
     PresetPurpose(
         id="voc.complaint_patterns",
-        label="반복되는 불만 찾기",
+        label="반복되는 불편 찾기",
         recommended_kind="complaint_topic_brief",
     ),
     PresetPurpose(
-        id="voc.churn_signals",
-        label="이탈 신호 살피기",
-        recommended_kind="churn_risk_watch",
+        id="voc.customer_understanding",
+        label="고객을 더 알기",
+        recommended_kind="customer_history",
+    ),
+    PresetPurpose(
+        id="voc.faq_consistency",
+        label="누가 답해도 같은 답 하기",
+        recommended_kind="faq_answer",
+    ),
+    PresetPurpose(
+        id="voc.account_requests",
+        label="고객사별 요청 조건 모으기",
+        recommended_kind="customer_voice_profile",
     ),
 )
 
@@ -601,41 +641,38 @@ PRESET_DOMAINS: tuple[PresetDomain, ...] = (
 )
 
 
+# 문체를 고르지 않은 문서가 떨어질 자리다. 위키 표준체와 같은 문자열을
+# 쓰는 이유는, 고르지 않은 문서와 표준체를 고른 문서가 같은 모양으로
+# 나와야 나중에 문체를 지정해도 산출물이 흔들리지 않기 때문이다.
+_WIKI_STANDARD_INSTRUCTION = (
+    "중립 서술체로 쓴다. 사실·근거·시점을 앞에 놓고 평서형"
+    " 종결(~이다·~한다)로 건조하게 기록한다. 감탄·권유·수식어를"
+    " 쓰지 않는다."
+)
+
+
 PRESET_STYLES: tuple[PresetStyle, ...] = (
     PresetStyle(
+        id="style.wiki_standard",
+        label="위키 표준체",
+        instruction=_WIKI_STANDARD_INSTRUCTION,
+    ),
+    PresetStyle(
+        id="style.support_guide",
+        label="응대 가이드체",
+        instruction=(
+            "고객에게 그대로 전달할 수 있는 표현으로 쓴다. 해요체로"
+            " 끝맺고, 지금 안내할 수 있는 답과 주의점을 앞에 둔다."
+            " 내부 용어와 일정 약속은 넣지 않는다."
+        ),
+    ),
+    PresetStyle(
         id="style.report_summary",
-        label="보고서 요약체",
+        label="보고 요약체",
         instruction=(
-            "사내 보고서의 요약 문단처럼 쓴다. 사실을 앞에 놓고 평서형"
-            " 종결(~이다·~한다)로 끝맺으며, 감탄과 권유를 쓰지 않는다."
-            " 수식어보다 값과 상태를 먼저 적는다."
-        ),
-    ),
-    PresetStyle(
-        id="style.conversational_brief",
-        label="대화체 브리핑",
-        instruction=(
-            "동료에게 구두로 브리핑하듯 쓴다. 경어체(~습니다)를 쓰고"
-            " 문장을 짧게 끊으며, 어려운 말 대신 쉬운 말을 고른다."
-            " 다만 친근함을 위해 없는 내용을 덧붙이지 않는다."
-        ),
-    ),
-    PresetStyle(
-        id="style.decision_log",
-        label="결정 기록체",
-        instruction=(
-            "결정 기록장에 남기듯 쓴다. 무엇이 정해졌고 무엇이 아직"
-            " 열려 있는지를 시간 순서대로 평서형으로 적는다. 근거에"
-            " 없는 결정 이유를 지어내지 않는다."
-        ),
-    ),
-    PresetStyle(
-        id="style.faq",
-        label="FAQ 문답체",
-        instruction=(
-            "자주 묻는 질문의 답변처럼 쓴다. 읽는 사람이 궁금해할 것을"
-            " 먼저 답으로 내놓고 경어체(~습니다)로 끝맺는다. 질문"
-            " 문장을 따로 만들지 않고 답변 문단만 쓴다."
+            "두괄식 요약으로 쓴다. 판단에 필요한 규모와 추이를 앞에 놓고"
+            " 수치와 상태를 먼저 적으며 평서형 종결(~이다·~한다)로"
+            " 끝맺는다. 근거에 없는 수치를 만들지 않는다."
         ),
     ),
     PresetStyle(
@@ -650,10 +687,7 @@ PRESET_STYLES: tuple[PresetStyle, ...] = (
 
 
 # 채널에 문체가 걸려 있지 않거나 카탈로그 밖 id일 때 쓰는 지시문이다.
-DEFAULT_STYLE_INSTRUCTION = (
-    "평서형 종결(~이다·~한다)로 담백하게 쓴다. 근거에 있는 사실만"
-    " 순서대로 적고, 꾸미는 말을 더하지 않는다."
-)
+DEFAULT_STYLE_INSTRUCTION = _WIKI_STANDARD_INSTRUCTION
 
 # 목적이 없거나 카탈로그 밖 목적일 때 쓰는 행위자 노출 수준이다.
 DEFAULT_ACTOR_EXPOSURE = EXPOSURE_NAME

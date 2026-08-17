@@ -1357,7 +1357,7 @@ def test_pg_find_channel_style_ignores_other_workspaces(
             id=channel_id,
             workspace_id=seed_workspace_id,
             name=f"남의채널-{uuid.uuid4().hex[:8]}",
-            style_preset="style.faq",
+            style_preset="style.support_guide",
             created_by=user_id,
         )
     )
@@ -1444,7 +1444,7 @@ def test_pg_find_channel_purpose_ignores_other_workspaces(
             id=channel_id,
             workspace_id=seed_workspace_id,
             name=f"남의목적-{uuid.uuid4().hex[:8]}",
-            purpose_preset="voc.churn_signals",
+            purpose_preset="voc.complaint_patterns",
             created_by=user_id,
         )
     )

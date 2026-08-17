@@ -64,7 +64,7 @@ class _FakeDefinitionRepository:
 
     def find_channel_style(self, *, channel_id: uuid.UUID) -> str | None:
         self.style_calls.append(channel_id)
-        return "style.faq"
+        return "style.support_guide"
 
     def find_channel_purpose(self, *, channel_id: uuid.UUID) -> str | None:
         self.purpose_calls.append(channel_id)
@@ -153,7 +153,7 @@ def test_channel_style_lookup_passes_through() -> None:
         )
         assert inner.artifact_definitions.style_calls == [channel_id]
 
-    assert found == "style.faq"
+    assert found == "style.support_guide"
 
 
 def test_channel_purpose_lookup_passes_through() -> None:
