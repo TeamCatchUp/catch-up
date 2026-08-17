@@ -100,6 +100,7 @@ from catchup.knowledge_maintenance.services.traverse_relations import (
     RELATION_HINT_PREFIX,
 )
 from catchup.knowledge_maintenance.services.traverse_relations import EdgeFormatter
+from catchup.knowledge_maintenance.services.traverse_relations import format_edge_line
 from catchup.knowledge_maintenance.services.traverse_relations import (
     relation_section_block,
 )
@@ -536,16 +537,23 @@ def _actor_edge_line(exposure: str) -> EdgeFormatter:
 
     노출은 문서를 읽는 자리에서만 정해지는 값이라 순회가 알 필요가 없다.
     행위자가 아닌 노드는 어느 수준에서도 이름이 그대로다.
+
+    노출을 적용한 이름은 공유 서식에 넘겨 줄을 만든다. 한 줄로 접기와
+    빈 이름의 노드 식별자 대체가 노출을 거친 뒤에도 그대로 걸려야 하기
+    때문이다.
     """
 
     def _line(edge: StoredRelationEdge, relation_type: str) -> str:
-        source = actor_display(
-            edge.source_display_name, edge.source_attributes, exposure
+        return format_edge_line(
+            edge,
+            relation_type,
+            source_name=actor_display(
+                edge.source_display_name, edge.source_attributes, exposure
+            ),
+            target_name=actor_display(
+                edge.target_display_name, edge.target_attributes, exposure
+            ),
         )
-        target = actor_display(
-            edge.target_display_name, edge.target_attributes, exposure
-        )
-        return f"{source} → {relation_type} → {target}"
 
     return _line
 

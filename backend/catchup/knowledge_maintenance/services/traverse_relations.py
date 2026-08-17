@@ -61,19 +61,38 @@ RELATION_HINT_PREFIX = "  ↳ "
 EdgeFormatter = Callable[[StoredRelationEdge, str], str]
 
 
-def default_edge_line(edge: StoredRelationEdge, relation_type: str) -> str:
+def format_edge_line(
+    edge: StoredRelationEdge,
+    relation_type: str,
+    *,
+    source_name: str | None = None,
+    target_name: str | None = None,
+) -> str:
     """간선을 "A → relation_type → B" 한 줄로 적는다.
-
-    이름이 없는 노드는 식별자를 그대로 쓴다. 줄에서 한쪽 끝이 통째로
-    사라지면 남은 이름이 어느 쪽인지 읽는 쪽이 알 수 없다.
 
     표시 이름은 사람이 적은 자유 문장이라 줄바꿈이 섞일 수 있다. 공백을
     한 칸으로 접어 한 줄로 만든다 — 한 간선은 본문 한 줄이라는 규약이
-    깨지면 소비처의 줄 단위 해석이 어긋난다.
+    깨지면 소비처의 줄 단위 해석이 어긋난다. 접고 나서도 이름이 비면
+    노드 식별자를 대신 쓴다. 줄에서 한쪽 끝이 통째로 사라지면 남은
+    이름이 어느 쪽인지 읽는 쪽이 알 수 없다.
+
+    source_name·target_name을 넘기면 간선의 표시 이름 대신 그 이름을
+    쓴다. 노출 수준처럼 이름을 갈아 끼우는 쪽도 이 두 방어를 함께
+    받으라고 열어 둔 자리다 — 갈아 끼운 이름을 따로 조립하면 접기와
+    대체가 빠진 줄이 본문에 실린다. 넘기지 않으면 간선의 이름을 쓴다.
     """
-    source = _one_line(edge.source_display_name) or str(edge.source_node_id)
-    target = _one_line(edge.target_display_name) or str(edge.target_node_id)
+    source = _one_line(
+        edge.source_display_name if source_name is None else source_name
+    ) or str(edge.source_node_id)
+    target = _one_line(
+        edge.target_display_name if target_name is None else target_name
+    ) or str(edge.target_node_id)
     return f"{source} → {relation_type} → {target}"
+
+
+def default_edge_line(edge: StoredRelationEdge, relation_type: str) -> str:
+    """간선의 표시 이름을 그대로 써서 본문 한 줄을 만든다."""
+    return format_edge_line(edge, relation_type)
 
 
 def _one_line(text: str | None) -> str:

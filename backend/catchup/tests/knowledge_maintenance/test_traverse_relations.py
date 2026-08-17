@@ -35,6 +35,7 @@ from catchup.knowledge_maintenance.services.traverse_relations import (
 )
 from catchup.knowledge_maintenance.services.traverse_relations import PathTraversal
 from catchup.knowledge_maintenance.services.traverse_relations import default_edge_line
+from catchup.knowledge_maintenance.services.traverse_relations import format_edge_line
 from catchup.knowledge_maintenance.services.traverse_relations import (
     relation_section_block,
 )
@@ -774,3 +775,74 @@ def test_relation_block_omits_hint_line_when_assertion_missing() -> None:
 
     assert block is not None
     assert block.body == "기능 요청 A → requested_by → 팀원A"
+
+
+def test_format_edge_line_collapses_multiline_names() -> None:
+    """양끝 이름에 줄바꿈이 있어도 한 줄로 접는다."""
+    edge = StoredRelationEdge(
+        id=relation(1),
+        source_node_id=node(1),
+        target_node_id=node(2),
+        assertion_text=None,
+        source_display_name="기능\n요청 A",
+        target_display_name="제품\n관리",
+    )
+
+    line = format_edge_line(edge, "requested_by")
+
+    assert line == "기능 요청 A → requested_by → 제품 관리"
+
+
+def test_format_edge_line_falls_back_to_node_ids_when_names_are_empty() -> None:
+    """이름이 없거나 공백뿐이면 노드 식별자로 대신한다."""
+    edge = StoredRelationEdge(
+        id=relation(1),
+        source_node_id=node(1),
+        target_node_id=node(2),
+        assertion_text=None,
+        source_display_name=None,
+        target_display_name="   ",
+    )
+
+    line = format_edge_line(edge, "requested_by")
+
+    assert line == f"{node(1)} → requested_by → {node(2)}"
+
+
+def test_format_edge_line_prefers_the_given_names() -> None:
+    """넘긴 이름이 간선의 표시 이름을 밀어내고, 그 이름도 한 줄로 접힌다."""
+    edge = StoredRelationEdge(
+        id=relation(1),
+        source_node_id=node(1),
+        target_node_id=node(2),
+        assertion_text=None,
+        source_display_name="기능 요청 A",
+        target_display_name="팀원A",
+    )
+
+    line = format_edge_line(
+        edge,
+        "requested_by",
+        source_name="고객\n문의 A",
+        target_name="팀원A (neo@x.com)",
+    )
+
+    assert line == "고객 문의 A → requested_by → 팀원A (neo@x.com)"
+
+
+def test_format_edge_line_falls_back_when_the_given_name_is_empty() -> None:
+    """넘긴 이름이 비어 있어도 노드 식별자 대체가 그대로 걸린다."""
+    edge = StoredRelationEdge(
+        id=relation(1),
+        source_node_id=node(1),
+        target_node_id=node(2),
+        assertion_text=None,
+        source_display_name="기능 요청 A",
+        target_display_name="팀원A",
+    )
+
+    line = format_edge_line(
+        edge, "requested_by", source_name="", target_name=None
+    )
+
+    assert line == f"{node(1)} → requested_by → 팀원A"

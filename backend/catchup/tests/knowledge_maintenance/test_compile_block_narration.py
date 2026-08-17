@@ -10,6 +10,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import replace
 
+import pytest
 from structlog.testing import capture_logs
 
 from catchup.knowledge_maintenance.contracts.extraction import RelationTypeEntry
@@ -686,33 +687,49 @@ ACTOR_VOCABULARY = VOCABULARY.model_copy(
 )
 
 
+ACTOR_ATTRIBUTES = {
+    "external_key": "chat-1",
+    "actor": {
+        "source_entity_type": "channel_talk_user",
+        "emails": ["neo@x.com"],
+    },
+}
+
+
 def _actor_edge(
     *,
     source_node_id: uuid.UUID,
     target_node_id: uuid.UUID,
     assertion_text: str = "커넥터 있어?",
+    target_display_name: str | None = "팀원A",
+    target_attributes: dict | None = None,
 ) -> StoredRelationEdge:
-    """행위자 노드로 이어지는 간선 하나를 만든다."""
+    """행위자 노드로 이어지는 간선 하나를 만든다.
+
+    도착 쪽 이름과 attributes를 갈아 끼울 수 있게 열어 둔다. 행위자가
+    아닌 노드나 이름이 비어 있는 노드도 같은 서식을 거치기 때문이다.
+    """
     return StoredRelationEdge(
         id=uuid.uuid4(),
         source_node_id=source_node_id,
         target_node_id=target_node_id,
         assertion_text=assertion_text,
         source_display_name="기능 요청 A",
-        target_display_name="팀원A",
+        target_display_name=target_display_name,
         source_attributes={},
-        target_attributes={
-            "external_key": "chat-1",
-            "actor": {
-                "source_entity_type": "channel_talk_user",
-                "emails": ["neo@x.com"],
-            },
-        },
+        target_attributes=(
+            ACTOR_ATTRIBUTES if target_attributes is None else target_attributes
+        ),
     )
 
 
 def _actor_uow(
-    *, purpose: str | None, assertion_text: str = "커넥터 있어?"
+    *,
+    purpose: str | None,
+    assertion_text: str = "커넥터 있어?",
+    target_node_id: uuid.UUID | None = None,
+    target_display_name: str | None = "팀원A",
+    target_attributes: dict | None = None,
 ) -> FakeDefinitionUnitOfWork:
     """행위자 간선 하나를 갖는 정의 컴파일용 fake를 세운다."""
     node_id = uuid.uuid4()
@@ -734,8 +751,14 @@ def _actor_uow(
                     "requested_by",
                     _actor_edge(
                         source_node_id=node_id,
-                        target_node_id=uuid.uuid4(),
+                        target_node_id=(
+                            uuid.uuid4()
+                            if target_node_id is None
+                            else target_node_id
+                        ),
                         assertion_text=assertion_text,
+                        target_display_name=target_display_name,
+                        target_attributes=target_attributes,
                     ),
                 )
             ]
@@ -829,4 +852,69 @@ def test_relation_block_hash_differs_by_exposure() -> None:
     assert "팀원A (neo@x.com)" not in _relation_block(named).body
     assert block_content_hash(_relation_block(named)) != block_content_hash(
         _relation_block(with_email)
+    )
+
+
+def _relation_request(narrator):
+    """서술 요청 가운데 관계 절 것 하나를 꺼낸다."""
+    return next(
+        item
+        for item in narrator.requests
+        if item.block_kind == BLOCK_KIND_RELATION_SECTION
+    )
+
+
+@pytest.mark.parametrize(
+    "target_attributes",
+    [None, {}],
+    ids=["actor", "non_actor"],
+)
+def test_multiline_target_name_stays_one_edge_line(
+    target_attributes: dict | None,
+) -> None:
+    """도착 쪽 이름에 줄바꿈이 있어도 간선 줄은 하나로 남는다.
+
+    본문은 줄 단위로 다시 갈리므로, 이름의 줄바꿈이 남으면 없는 간선
+    줄이 하나 생기고 진짜 도착 노드가 사라진다.
+    """
+    uow = _actor_uow(
+        purpose=None,
+        target_display_name="제품\n관리",
+        target_attributes=target_attributes,
+    )
+    narrator = _FakeNarrator()
+
+    _run_with_actor_vocabulary(uow, narrator)
+
+    assert _relation_request(narrator).edges == (
+        "기능 요청 A → requested_by → 제품 관리",
+    )
+    assert _relation_block(uow).body.split("\n") == [
+        "기능 요청 A → requested_by → 제품 관리",
+        "  ↳ 커넥터 있어?",
+    ]
+
+
+@pytest.mark.parametrize(
+    "target_attributes",
+    [None, {}],
+    ids=["actor", "non_actor"],
+)
+def test_empty_target_name_falls_back_to_the_node_id(
+    target_attributes: dict | None,
+) -> None:
+    """도착 쪽 이름이 없으면 노드 식별자로 대신한다."""
+    target_node_id = uuid.uuid4()
+    uow = _actor_uow(
+        purpose=None,
+        target_node_id=target_node_id,
+        target_display_name=None,
+        target_attributes=target_attributes,
+    )
+    narrator = _FakeNarrator()
+
+    _run_with_actor_vocabulary(uow, narrator)
+
+    assert _relation_request(narrator).edges == (
+        f"기능 요청 A → requested_by → {target_node_id}",
     )
