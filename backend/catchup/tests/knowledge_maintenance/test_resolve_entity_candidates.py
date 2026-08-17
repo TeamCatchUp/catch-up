@@ -137,15 +137,21 @@ class FakeNodeRepository:
     def find_entity_by_actor_key(
         self, *, workspace_id, entity_type, key_kind, value
     ):
-        del workspace_id
         matched = [
             node
             for node in self.nodes.values()
-            if node.entity_type == entity_type
+            if node.workspace_id == workspace_id
+            and node.entity_type == entity_type
             and node.lifecycle_state is NodeLifecycleState.ACTIVE
             and value in (node.attributes.get("actor") or {}).get(key_kind, [])
         ]
-        return min(matched, key=lambda node: node.id) if matched else None
+        # 실 조회는 created_at·id 순 첫 번째를 준다. fake가 만든 노드는
+        # created_at이 비어 있으므로 같은 값으로 놓고 id 순으로 가른다.
+        return (
+            min(matched, key=lambda node: (node.created_at or NOW, node.id))
+            if matched
+            else None
+        )
 
     def set_entity_attributes(self, *, workspace_id, node_id, attributes):
         del workspace_id
@@ -963,6 +969,38 @@ def test_email_seen_later_attaches_to_external_key_node() -> None:
 
     (node,) = _actor_nodes(uow)
     assert node.attributes["actor"]["emails"] == ["late@x.com"]
+
+
+def test_actor_falls_back_to_canonical_key_before_creating() -> None:
+    """행위자 키가 빗나가도 canonical_key가 같으면 새로 만들지 않는다.
+
+    행위자 키 조회는 active 노드만 보지만 canonical_key 유일 index는
+    lifecycle을 가리지 않는다. 그 틈으로 create를 부르면 index 위반으로
+    해소 전체가 깨진다.
+    """
+    uow = FakeUnitOfWork(
+        [_actor_candidate(external_key="ext-1", email="neo@x.com")]
+    )
+    existing = uow.knowledge_nodes.create_entity_node(
+        workspace_id=WORKSPACE,
+        entity_type="customer",
+        canonical_key="channel_talk:customer:email:neo@x.com",
+        display_name="팀원A",
+        attributes={},
+    )
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE,
+        judge=None,
+        uow=uow,
+    )
+
+    assert list(uow.knowledge_nodes.nodes) == [existing.id]
+    assert result.nodes_created == 0
+    assert result.candidates_merged == 1
+    node = uow.knowledge_nodes.nodes[existing.id]
+    assert node.attributes["actor"]["emails"] == ["neo@x.com"]
+    assert node.attributes["actor"]["external_keys"] == ["ext-1"]
 
 
 def test_actor_resolution_never_calls_judge() -> None:

@@ -542,3 +542,15 @@ def test_actor_key_lookup_and_attribute_update(
             value="ext-2",
         )
         assert rebound is not None and rebound.id == node.id
+
+        # 같은 키라도 다른 workspace에서는 보이지 않아야 한다. 행위자
+        # 키는 workspace마다 다른 사람을 가리킬 수 있다.
+        assert (
+            repo.find_entity_by_actor_key(
+                workspace_id=workspace_id + 100_000,
+                entity_type="customer",
+                key_kind="emails",
+                value="neo@x.com",
+            )
+            is None
+        )

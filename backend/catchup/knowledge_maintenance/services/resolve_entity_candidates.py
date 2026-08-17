@@ -328,13 +328,21 @@ def _resolve_actor_candidate(
     """행위자 후보를 노드에 결합한다. LLM 판정은 거치지 않는다.
 
     행위자가 누구인지는 source metadata에 이미 적혀 있는 확정 사실이라
-    추론할 것이 없다. 순서는 이메일 → external_key → 신규다. 이메일을
-    먼저 보는 이유는 이메일이 사람 단위 식별자라, 세션마다 갈리는
-    external_key보다 같은 사람을 넓게 묶기 때문이다.
+    추론할 것이 없다. 순서는 이메일 → external_key → canonical_key →
+    신규다. 이메일을 먼저 보는 이유는 이메일이 사람 단위 식별자라,
+    세션마다 갈리는 external_key보다 같은 사람을 넓게 묶기 때문이다.
+
+    canonical_key를 마지막에 한 번 더 보는 이유는 앞의 두 조회가 active
+    노드만 보는 반면 (workspace_id, entity_type, canonical_key) 유일
+    index는 lifecycle을 가리지 않기 때문이다. 그 틈을 두면 병합·퇴역한
+    노드와 같은 키로 create를 불러 index 위반으로 해소가 통째로 깨진다.
 
     찾은 노드는 attributes를 지우지 않고 이번 identity를 얹어 다시 쓴다.
     노드가 지금까지 본 이메일·external_key를 모두 들고 있어야 다음 후보가
     어느 키로 오든 같은 노드에 닿는다.
+
+    남기는 로그의 matched_by는 email·external_key·canonical_key·new 중
+    하나다.
     """
     node = None
     matched_by = "new"
@@ -357,11 +365,20 @@ def _resolve_actor_candidate(
         if node is not None:
             matched_by = "external_key"
 
+    canonical_key = actor_canonical_key(candidate.source_type, identity)
+    if node is None:
+        node = uow.knowledge_nodes.get_entity_by_canonical_key(
+            workspace_id=workspace_id,
+            canonical_key=canonical_key,
+        )
+        if node is not None:
+            matched_by = "canonical_key"
+
     if node is None:
         node = uow.knowledge_nodes.create_entity_node(
             workspace_id=workspace_id,
             entity_type=ACTOR_ENTITY_TYPE,
-            canonical_key=actor_canonical_key(candidate.source_type, identity),
+            canonical_key=canonical_key,
             display_name=identity.display_name,
             attributes=actor_node_attributes(identity, None),
         )
