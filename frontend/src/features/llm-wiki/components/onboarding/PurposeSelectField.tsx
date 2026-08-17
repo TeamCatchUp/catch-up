@@ -91,7 +91,7 @@ export default function PurposeSelectField({
 
           <div className="flex min-w-0 flex-1 flex-col gap-3">
             <div className="flex items-center gap-2">
-              <IconAddCircleFilled className="text-icon-primary-normal size-5 shrink-0" />
+              <IconAddCircleFilled className="text-icon-normal-neutral size-5 shrink-0" />
               <OnboardingFieldLabel label={purposeLabel} required size="body" />
             </div>
 
@@ -108,7 +108,10 @@ export default function PurposeSelectField({
                     onClick={() => onSelectPurpose?.(option.id)}
                     className="border-line-normal-neutral hover:bg-fill-normal-interaction-hover flex min-w-0 cursor-pointer items-start gap-6 rounded-xl border p-4 text-left transition-colors"
                   >
-                    <span className="text-body-small text-text-normal-neutral min-w-0 flex-1">{option.label}</span>
+                    {/* 줄바꿈은 띄어쓰기 단위로만 — 한글은 기본값이면 단어 중간에서도 끊긴다 */}
+                    <span className="text-body-small text-text-normal-neutral min-w-0 flex-1 break-keep">
+                      {option.label}
+                    </span>
                     {checked ? (
                       <IconCheckCircleFilled className="text-icon-primary-normal size-6 shrink-0" />
                     ) : (

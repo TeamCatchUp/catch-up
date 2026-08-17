@@ -73,7 +73,8 @@ export default function DocKindSelectField({
                     <Icon className="text-icon-primary-normal size-5 shrink-0" />
                     <span className="text-heading-small text-text-normal-normal truncate">{preset.label}</span>
                   </span>
-                  <span className="text-body-small text-text-normal-alternative">{preset.description}</span>
+                  {/* 줄바꿈은 띄어쓰기 단위로만 — 한글은 기본값이면 단어 중간에서도 끊긴다 */}
+                  <span className="text-body-small text-text-normal-alternative break-keep">{preset.description}</span>
                 </span>
                 {checked ? (
                   <IconCheckCircleFilled className="text-icon-primary-normal size-6 shrink-0" />

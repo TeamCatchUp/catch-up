@@ -149,7 +149,7 @@ export default function WikiOnboardingSourceStep({
       className="border-line-normal-neutral bg-fill-normal-normal hover:bg-fill-normal-interaction-hover data-[state=open]:bg-fill-normal-interaction-pressed flex h-11.5 w-full cursor-pointer items-center gap-2 rounded-xl border px-3 transition-colors"
     >
       <span className="bg-fill-normal-strong flex size-7.5 shrink-0 items-center justify-center rounded-full">
-        <IconAddSmall className="text-icon-normal-normal size-5.5" />
+        <IconAddSmall className="text-icon-primary-normal size-5.5" />
       </span>
       <span className="text-body-small text-text-normal-assistive min-w-0 flex-1 truncate text-left">
         {channelPickerPlaceholder}
