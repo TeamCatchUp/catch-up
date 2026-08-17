@@ -106,8 +106,11 @@ def main() -> None:
                 .on_conflict_do_nothing(
                     index_elements=["event_type", "aggregate_type", "aggregate_id"],
                 )
+                # 드라이버가 INSERT ... SELECT ... ON CONFLICT의 rowcount로 -1을
+                # 돌려주므로, 실제로 들어간 행을 RETURNING으로 받아서 센다.
+                .returning(KnowledgePipelineOutbox.id)
             )
-            inserted = session.execute(statement).rowcount
+            inserted = len(session.execute(statement).scalars().all())
             session.commit()
 
         logger.info(
