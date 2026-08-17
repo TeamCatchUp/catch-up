@@ -1,16 +1,16 @@
 import IconCheck from '@/public/icons/icon/check.svg';
 
-import type { OnboardingStepInfo, OnboardingSummarySection } from '../../types/llmWikiOnboarding';
+import type { OnboardingStepInfo } from '../../types/llmWikiOnboarding';
 import OnboardingActionBar from './OnboardingActionBar';
 import { ONBOARDING_COMPLETE_BACKGROUND } from './onboardingBackground';
 import OnboardingStepper from './OnboardingStepper';
-import OnboardingSummaryCard from './OnboardingSummaryCard';
+import OnboardingSummaryCard, { type SummarySectionView } from './OnboardingSummaryCard';
 import OnboardingTopBar from './OnboardingTopBar';
 
 interface WikiOnboardingCompleteStepProps {
   steps: readonly OnboardingStepInfo[];
   heading: string;
-  summarySections: readonly OnboardingSummarySection[];
+  summarySections: readonly SummarySectionView[];
   nextStepsTitle: string;
   /** 명세의 완료 화면 3요소(시간 약속 2 + 검수 안내 1). 별도 철학 문단은 시안에 없다 */
   nextSteps: readonly string[];

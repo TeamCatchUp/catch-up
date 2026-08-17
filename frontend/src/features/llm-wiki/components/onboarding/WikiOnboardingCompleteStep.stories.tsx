@@ -77,14 +77,17 @@ export const Default: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('heading', { level: 1, name: ONBOARDING_COMPLETE_HEADING })).toBeInTheDocument();
 
-    // 요약 2구역 + 행 9개(위키 목적 5 + 수집 설정 4)
+    // 요약 2구역 + 행 8개(위키 목적 5 + 수집 설정 3 — 채널은 행이 아니라 표다)
     await expect(canvas.getByRole('heading', { level: 3, name: '위키 목적' })).toBeInTheDocument();
     await expect(canvas.getByRole('heading', { level: 3, name: '수집 설정' })).toBeInTheDocument();
-    await expect(canvas.getAllByRole('term')).toHaveLength(9);
+    await expect(canvas.getAllByRole('term')).toHaveLength(8);
 
-    // 문서 종류 행은 값 3개가 한 줄에 나란히 놓인다
+    // 문서 종류 값 3개는 배지로 놓인다 — 다른 행은 평문이라 배경이 없다
     const docKindValues = canvas.getByText('문서 종류').nextElementSibling!;
     await expect(docKindValues.children).toHaveLength(3);
+    const [badge] = Array.from(docKindValues.children);
+    const [plain] = Array.from(canvas.getByText('문체').nextElementSibling!.children);
+    await expect(getComputedStyle(badge).backgroundColor).not.toBe(getComputedStyle(plain).backgroundColor);
 
     // 명세 3요소가 전부 있고, 넷째 줄을 발명하지 않았다
     // 스테퍼도 li를 쓰므로 목록을 이름으로 좁힌다

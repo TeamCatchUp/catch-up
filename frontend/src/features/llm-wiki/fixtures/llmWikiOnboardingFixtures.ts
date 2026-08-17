@@ -26,7 +26,7 @@ export const ONBOARDING_DOC_SETTING_TITLE = '문서 설정';
 
 export const WIKI_NAME_FIELD = {
   label: '이름',
-  placeholder: 'CS 응답 위키, 제품 용어 사전',
+  placeholder: 'CS 응답, 제품 용어 사전',
   maxLength: 20,
 } as const;
 
@@ -186,20 +186,22 @@ export const ONBOARDING_SUMMARY_SECTIONS: readonly OnboardingSummarySection[] = 
       { label: '정리할 정보', values: ['고객 문의 (VOC)'] },
       { label: '목적', values: ['어떤 기능을 가장 많이 요청하는지 모아보고 싶어요'] },
       // 시안 요약은 1단계 프리셋 라벨의 축약형("기능 요청 정리"→"기능 요청")이다 — 시안 그대로 둔다
-      { label: '문서 종류', values: ['기능 요청', '자주 묻는 질문', '고객사별 요청'] },
+      { label: '문서 종류', values: ['기능 요청', '자주 묻는 질문', '고객사별 요청'], variant: 'badge' },
       { label: '문체', values: ['위키 표준체'] },
     ],
   },
   {
     title: '수집 설정',
     rows: [
-      { label: '채널', values: ['문의 채널', '기술 지원'] },
       { label: '갱신 주기', values: ['매일'] },
       { label: '언제부터', values: ['지금부터'] },
       { label: '실행시간', values: ['자정'] },
     ],
   },
 ];
+
+/** 요약의 채널은 행이 아니라 2단계와 같은 표로 놓인다 */
+export const ONBOARDING_SUMMARY_CHANNEL_LABEL = '연결한 채널톡 채널';
 
 export const ONBOARDING_NEXT_STEPS_TITLE = '위키를 만들면';
 

@@ -86,10 +86,12 @@ export interface ScheduleFieldData {
   options?: readonly ScheduleOption[];
 }
 
-/** [SPEC] 완료 화면 요약 행. 문서 종류·채널처럼 값이 여러 개인 행이 있어 배열이다 */
+/** [SPEC] 완료 화면 요약 행. 문서 종류처럼 값이 여러 개인 행이 있어 배열이다 */
 export interface OnboardingSummaryRow {
   label: string;
   values: readonly string[];
+  /** 문서 종류는 값을 배지로 나열한다 */
+  variant?: 'text' | 'badge';
 }
 
 /** [SPEC] 완료 화면 요약 구역(위키 목적 / 수집 설정) */

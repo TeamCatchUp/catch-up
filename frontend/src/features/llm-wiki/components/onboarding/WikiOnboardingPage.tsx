@@ -25,6 +25,7 @@ import {
   ONBOARDING_PURPOSE_HEADING,
   ONBOARDING_SOURCE_HEADING,
   ONBOARDING_STEPS,
+  ONBOARDING_SUMMARY_CHANNEL_LABEL,
   ONBOARDING_SUMMARY_SECTIONS,
   PURPOSE_FIELD_LABEL,
   SCHEDULE_FIELDS,
@@ -37,8 +38,9 @@ import {
   WIKI_NAME_FIELD,
   WIKI_TONE_STYLE_OPTIONS,
 } from '../../fixtures/llmWikiOnboardingFixtures';
-import type { OnboardingSummarySection } from '../../types/llmWikiOnboarding';
 import type { OnboardingStepNumber } from '../../utils/onboarding/resolveOnboardingStep';
+import OnboardingChannelTable from './OnboardingChannelTable';
+import type { SummarySectionView } from './OnboardingSummaryCard';
 import WikiOnboardingCompleteStep from './WikiOnboardingCompleteStep';
 import WikiOnboardingPurposeStep from './WikiOnboardingPurposeStep';
 import WikiOnboardingSourceStep from './WikiOnboardingSourceStep';
@@ -171,7 +173,7 @@ interface SummaryInput {
 }
 
 /** 1단계 선택분만 실제 입력으로 채운다 — 2단계는 선택 UI가 시안에 없어 픽스처 값을 유지한다 */
-function buildSummarySections(input: SummaryInput): readonly OnboardingSummarySection[] {
+function buildSummarySections(input: SummaryInput): readonly SummarySectionView[] {
   const category = WIKI_INFO_CATEGORIES.find((item) => item.id === input.categoryId);
   const purpose = category?.purposeOptions.find((item) => item.id === input.purposeId);
   const docKind = WIKI_DOC_KIND_PRESETS.find((item) => item.id === input.docKindId);
@@ -191,6 +193,13 @@ function buildSummarySections(input: SummaryInput): readonly OnboardingSummarySe
       ...purposeSection,
       rows: purposeSection.rows.map((row) => ({ ...row, values: overrides[row.label] ?? row.values })),
     },
-    collectionSection,
+    {
+      ...collectionSection,
+      // 채널은 행이 아니라 2단계와 같은 표로 놓인다
+      lead: {
+        label: ONBOARDING_SUMMARY_CHANNEL_LABEL,
+        content: <OnboardingChannelTable headers={CHANNEL_TABLE_HEADERS} rows={ONBOARDING_CHANNEL_ROWS} />,
+      },
+    },
   ];
 }

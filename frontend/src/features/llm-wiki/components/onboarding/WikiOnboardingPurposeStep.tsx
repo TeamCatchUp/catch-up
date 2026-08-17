@@ -2,6 +2,8 @@
 
 import type { ComponentProps } from 'react';
 
+import { Input } from '@/shared/components/ui/input';
+
 import type { OnboardingStepInfo } from '../../types/llmWikiOnboarding';
 import DocKindSelectField from './DocKindSelectField';
 import OnboardingActionBar from './OnboardingActionBar';
@@ -61,17 +63,18 @@ export default function WikiOnboardingPurposeStep({
 
             <div className="flex items-center">
               <OnboardingFieldLabel label={nameLabel} required className="w-[157px] shrink-0" />
-              <div className="border-line-normal-neutral bg-fill-normal-normal flex h-11.5 min-w-0 flex-1 items-center gap-3 rounded-xl border px-4">
-                <input
+              {/* 카운터는 Textfield 컴포넌트 몫이라 공용 Input 위에 겹쳐 놓는다 */}
+              <div className="relative min-w-0 flex-1">
+                <Input
                   type="text"
                   value={nameValue}
                   maxLength={nameMaxLength}
                   placeholder={namePlaceholder}
                   aria-label={nameLabel}
                   onChange={(event) => onNameChange?.(event.target.value)}
-                  className="text-body-small text-text-normal-normal placeholder:text-text-normal-assistive min-w-0 flex-1 bg-transparent outline-none"
+                  className="pr-16"
                 />
-                <span className="text-body-small text-text-normal-assistive shrink-0">
+                <span className="text-body-small text-text-normal-alternative absolute top-1/2 right-3 -translate-y-1/2">
                   {nameValue.length}/{nameMaxLength}
                 </span>
               </div>
