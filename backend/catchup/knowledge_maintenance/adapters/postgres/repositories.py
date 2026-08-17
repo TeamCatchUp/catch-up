@@ -83,6 +83,7 @@ from catchup.knowledge_maintenance.contracts.vocabulary_convergence import (
     PredicateUsage,
 )
 from catchup.knowledge_maintenance.contracts.vocabulary_convergence import RelationUsage
+from catchup.knowledge_maintenance.domain.actor_identity import ACTOR_ATTRIBUTE
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.artifact import deserialize_blocks
@@ -643,6 +644,7 @@ class SqlAlchemyKnowledgeNodeRepository:
         entity_type: str,
         canonical_key: str | None,
         display_name: str,
+        attributes: Mapping[str, JsonValue] | None = None,
     ) -> KnowledgeNode:
         """canonical entity 노드를 발급한다."""
         row = knowledge_node_to_row(
@@ -653,9 +655,71 @@ class SqlAlchemyKnowledgeNodeRepository:
                 entity_type=entity_type,
                 canonical_key=canonical_key,
                 display_name=display_name,
+                attributes=dict(attributes or {}),
             )
         )
         self._session.add(row)
+        self._session.flush()
+        return knowledge_node_to_domain(row)
+
+    def find_entity_by_actor_key(
+        self,
+        *,
+        workspace_id: int,
+        entity_type: str,
+        key_kind: str,
+        value: str,
+    ) -> KnowledgeNode | None:
+        """행위자 키로 active entity 노드를 찾는다.
+
+        한 사람이 소스 세션마다 다른 external_key를 받으므로 canonical_key
+        하나로는 동일성을 못 잡는다. 노드가 지금까지 본 키를
+        attributes[ACTOR_ATTRIBUTE][key_kind] 목록에 쌓아 두고, 여기서는
+        그 목록에 값이 들어 있는지를 JSONB 포함(@>)으로 본다. 포함 연산을
+        쓰는 이유는 그 형태만 jsonb GIN index를 탈 수 있기 때문이다.
+
+        둘 이상이 걸리면 created_at·id 순 첫 번째만 준다.
+        """
+        containment = cast(
+            {ACTOR_ATTRIBUTE: {key_kind: [value]}},
+            JSONB,
+        )
+        row = self._session.scalar(
+            select(KnowledgeNodeRow)
+            .where(
+                KnowledgeNodeRow.workspace_id == workspace_id,
+                KnowledgeNodeRow.node_kind == NodeKind.ENTITY.value,
+                KnowledgeNodeRow.entity_type == entity_type,
+                KnowledgeNodeRow.lifecycle_state
+                == NodeLifecycleState.ACTIVE.value,
+                KnowledgeNodeRow.attributes.op("@>")(containment),
+            )
+            .order_by(KnowledgeNodeRow.created_at, KnowledgeNodeRow.id)
+            .limit(1)
+        )
+        return knowledge_node_to_domain(row) if row is not None else None
+
+    def set_entity_attributes(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+        attributes: Mapping[str, JsonValue],
+    ) -> KnowledgeNode:
+        """노드의 attributes를 통째로 바꾼다.
+
+        키 단위로 합치지 않는다. 무엇을 남기고 무엇을 덮을지는 도메인
+        규칙이라 호출자가 합친 결과를 그대로 적는다.
+        """
+        row = self._session.scalar(
+            select(KnowledgeNodeRow).where(
+                KnowledgeNodeRow.workspace_id == workspace_id,
+                KnowledgeNodeRow.id == node_id,
+            )
+        )
+        if row is None:
+            raise ValueError(f"unknown knowledge node: {node_id}")
+        row.attributes = dict(attributes)
         self._session.flush()
         return knowledge_node_to_domain(row)
 

@@ -114,7 +114,13 @@ class FakeNodeRepository:
         return min(matched, key=lambda node: node.id) if matched else None
 
     def create_entity_node(
-        self, *, workspace_id, entity_type, canonical_key, display_name
+        self,
+        *,
+        workspace_id,
+        entity_type,
+        canonical_key,
+        display_name,
+        attributes=None,
     ):
         node = KnowledgeNode(
             id=uuid.uuid4(),
@@ -123,8 +129,28 @@ class FakeNodeRepository:
             entity_type=entity_type,
             canonical_key=canonical_key,
             display_name=display_name,
+            attributes=dict(attributes or {}),
         )
         self.nodes[node.id] = node
+        return node
+
+    def find_entity_by_actor_key(
+        self, *, workspace_id, entity_type, key_kind, value
+    ):
+        del workspace_id
+        matched = [
+            node
+            for node in self.nodes.values()
+            if node.entity_type == entity_type
+            and node.lifecycle_state is NodeLifecycleState.ACTIVE
+            and value in (node.attributes.get("actor") or {}).get(key_kind, [])
+        ]
+        return min(matched, key=lambda node: node.id) if matched else None
+
+    def set_entity_attributes(self, *, workspace_id, node_id, attributes):
+        del workspace_id
+        node = replace(self.nodes[node_id], attributes=dict(attributes))
+        self.nodes[node_id] = node
         return node
 
     def replace_node(self, node: KnowledgeNode) -> None:

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from typing import Protocol
 
 from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
+from catchup.knowledge_maintenance.domain.source_version import JsonValue
 
 
 class KnowledgeNodeRepository(Protocol):
@@ -92,11 +94,56 @@ class KnowledgeNodeRepository(Protocol):
         entity_type: str,
         canonical_key: str | None,
         display_name: str,
+        attributes: Mapping[str, JsonValue] | None = None,
     ) -> KnowledgeNode:
         """canonical entity 노드를 발급한다.
 
         외부 ID가 있는 결정론 경로는 canonical_key를 채우고, 사람이
         승인한 병합처럼 외부 키가 없는 entity는 None으로 만든다.
+
+        attributes는 노드가 만들어지는 순간부터 들고 있어야 하는 부가
+        정보다. 발급 후 따로 갱신하지 않고 여기서 함께 넣는 이유는,
+        attributes로 노드를 찾는 조회가 있어 빈 채로 남은 짧은 순간에도
+        같은 대상이 다른 노드로 한 번 더 발급될 수 있기 때문이다.
+        """
+        ...
+
+    def find_entity_by_actor_key(
+        self,
+        *,
+        workspace_id: int,
+        entity_type: str,
+        key_kind: str,
+        value: str,
+    ) -> KnowledgeNode | None:
+        """행위자 키로 active entity 노드를 찾는다.
+
+        canonical_key 하나로는 같은 사람을 못 묶는다. 외부 소스는 한
+        사람에게 세션마다 다른 external_key를 주므로, 나중에 온 후보의
+        canonical_key가 이미 만들어진 노드의 것과 달라지기 때문이다.
+        그래서 노드는 지금까지 본 이메일·external_key를
+        attributes[ACTOR_ATTRIBUTE] 아래 목록으로 쌓아 두고, 조회는 그
+        목록에 값이 들어 있는지를 본다.
+
+        key_kind는 "emails" 또는 "external_keys"다. 흡수·퇴역한 노드는
+        후보가 아니다. 둘 이상이 걸리면 created_at·id 순 첫 번째
+        하나만 준다 — 같은 질의가 같은 답을 주어야 하기 때문이다.
+        못 찾으면 None이다.
+        """
+        ...
+
+    def set_entity_attributes(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+        attributes: Mapping[str, JsonValue],
+    ) -> KnowledgeNode:
+        """노드의 attributes를 통째로 바꾸고 갱신된 노드를 돌려준다.
+
+        키 단위로 합치지 않는다. 무엇을 남기고 무엇을 덮을지는 도메인
+        규칙이라 호출자가 이미 합친 결과를 넘기고, 저장소는 그 결과를
+        그대로 적는다.
         """
         ...
 

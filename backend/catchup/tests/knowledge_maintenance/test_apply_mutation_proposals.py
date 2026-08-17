@@ -7,6 +7,7 @@ Applier는 결정 저널(approved)을 소비하는 결정론 실행기다. propo
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from dataclasses import field
 from types import TracebackType
@@ -200,6 +201,7 @@ class FakeNodeRepo:
         entity_type: str,
         canonical_key: str | None,
         display_name: str,
+        attributes: Mapping[str, object] | None = None,
     ) -> KnowledgeNode:
         node = KnowledgeNode(
             id=uuid.uuid4(),
@@ -208,6 +210,7 @@ class FakeNodeRepo:
             entity_type=entity_type,
             canonical_key=canonical_key,
             display_name=display_name,
+            attributes=dict(attributes or {}),
         )
         self.state.nodes.append(node)
         return node
