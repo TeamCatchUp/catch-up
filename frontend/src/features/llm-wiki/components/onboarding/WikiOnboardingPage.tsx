@@ -39,6 +39,7 @@ import {
   WIKI_PURPOSE_OPTIONS,
   WIKI_TONE_STYLE_OPTIONS,
 } from '../../fixtures/llmWikiOnboardingFixtures';
+import { WIKI_DOC_TEMPLATE_SAMPLES } from '../../fixtures/llmWikiTemplateSamples';
 import type { OnboardingChannelRow } from '../../types/llmWikiOnboarding';
 import type { OnboardingStepNumber } from '../../utils/onboarding/resolveOnboardingStep';
 import OnboardingChannelTable from './OnboardingChannelTable';
@@ -161,7 +162,8 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
         onSelect: setDocKindId,
         sampleTitle: DOC_KIND_SAMPLE_TITLE,
         sampleCaption: DOC_KIND_SAMPLE_CAPTION,
-        sampleText: TEMPLATE_SAMPLE_TEXT_TBD,
+        // 양식이 없는 종류는 아직 없지만, 종류가 열린 타입이라 필러를 폴백으로 둔다
+        sampleText: WIKI_DOC_TEMPLATE_SAMPLES[docKindId ?? ''] ?? TEMPLATE_SAMPLE_TEXT_TBD,
       }}
       tone={{
         label: TONE_STYLE_FIELD_LABEL,
