@@ -25,6 +25,7 @@ from sqlalchemy import literal
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.sql.elements import ColumnElement
 
 from catchup.configs.config import settings
 from catchup.db.models import KnowledgePipelineOutbox
@@ -36,7 +37,7 @@ from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEventTyp
 logger = structlog.get_logger(__name__)
 
 
-def _not_queued():
+def _not_queued() -> ColumnElement[bool]:
     """outbox에 자기 행이 아직 없다는 조건이다."""
     already_queued = select(KnowledgePipelineOutbox.id).where(
         KnowledgePipelineOutbox.event_type == PipelineEventType.OBSERVATION_READY.value,
@@ -60,60 +61,63 @@ def main() -> None:
     engine = create_engine(settings.sqlalchemy_database_url)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 
-    with session_factory() as session:
-        if args.dry_run:
-            count = session.execute(
-                select(func.count())
-                .select_from(Observation)
+    # 어느 갈래로 빠져나가든 연결 풀을 닫는다. 중간에 예외가 나면
+    # 프로세스가 열린 연결을 쥔 채로 끝난다.
+    try:
+        with session_factory() as session:
+            if args.dry_run:
+                count = session.execute(
+                    select(func.count())
+                    .select_from(Observation)
+                    .where(Observation.workspace_id == args.workspace_id)
+                    .where(_not_queued())
+                ).scalar_one()
+                logger.info(
+                    "reseed_outbox_dry_run",
+                    workspace_id=args.workspace_id,
+                    missing=count,
+                )
+                print(f"reseed_outbox_dry_run missing={count}")
+                return
+
+            source = (
+                select(
+                    Observation.workspace_id,
+                    literal(PipelineEventType.OBSERVATION_READY.value),
+                    literal(PipelineAggregateType.OBSERVATION.value),
+                    Observation.id,
+                    literal(PipelineEventStatus.PENDING.value),
+                )
                 .where(Observation.workspace_id == args.workspace_id)
                 .where(_not_queued())
-            ).scalar_one()
-            logger.info(
-                "reseed_outbox_dry_run",
-                workspace_id=args.workspace_id,
-                missing=count,
             )
-            print(f"reseed_outbox_dry_run missing={count}")
-            engine.dispose()
-            return
+            statement = (
+                pg_insert(KnowledgePipelineOutbox)
+                .from_select(
+                    [
+                        "workspace_id",
+                        "event_type",
+                        "aggregate_type",
+                        "aggregate_id",
+                        "status",
+                    ],
+                    source,
+                )
+                .on_conflict_do_nothing(
+                    index_elements=["event_type", "aggregate_type", "aggregate_id"],
+                )
+            )
+            inserted = session.execute(statement).rowcount
+            session.commit()
 
-        source = (
-            select(
-                Observation.workspace_id,
-                literal(PipelineEventType.OBSERVATION_READY.value),
-                literal(PipelineAggregateType.OBSERVATION.value),
-                Observation.id,
-                literal(PipelineEventStatus.PENDING.value),
-            )
-            .where(Observation.workspace_id == args.workspace_id)
-            .where(_not_queued())
+        logger.info(
+            "reseed_outbox_done",
+            workspace_id=args.workspace_id,
+            inserted=inserted,
         )
-        statement = (
-            pg_insert(KnowledgePipelineOutbox)
-            .from_select(
-                [
-                    "workspace_id",
-                    "event_type",
-                    "aggregate_type",
-                    "aggregate_id",
-                    "status",
-                ],
-                source,
-            )
-            .on_conflict_do_nothing(
-                index_elements=["event_type", "aggregate_type", "aggregate_id"],
-            )
-        )
-        inserted = session.execute(statement).rowcount
-        session.commit()
-
-    logger.info(
-        "reseed_outbox_done",
-        workspace_id=args.workspace_id,
-        inserted=inserted,
-    )
-    print(f"reseed_outbox_done inserted={inserted}")
-    engine.dispose()
+        print(f"reseed_outbox_done inserted={inserted}")
+    finally:
+        engine.dispose()
 
 
 if __name__ == "__main__":
