@@ -39,8 +39,8 @@ describe('llmWikiFixtures 정합성', () => {
     expect(row.status).toBe('reviewed');
   });
 
-  it('스탯 카드 fixture는 새 대시보드 확정 3종이다', () => {
-    expect(REVIEW_STAT_CARD_FIXTURES).toHaveLength(3);
+  it('스탯 카드 fixture는 8/14 시안 확정 4종이다', () => {
+    expect(REVIEW_STAT_CARD_FIXTURES).toHaveLength(4);
   });
 
   // breadcrumbs는 대시보드 행만의 요건이다

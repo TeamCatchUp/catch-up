@@ -1,3 +1,4 @@
+import IconStatAllWiki from '@/public/icons/icon/stat_all_wiki.svg';
 import IconStatMyAssigned from '@/public/icons/icon/stat_my_assigned.svg';
 import IconStatPendingReview from '@/public/icons/icon/stat_pending_review.svg';
 import IconStatUnassigned from '@/public/icons/icon/stat_unassigned.svg';
@@ -18,6 +19,7 @@ const ILLUSTRATION_BY_STAT_ID: Record<string, typeof IconStatPendingReview> = {
   'stat-pending-review': IconStatPendingReview,
   'stat-my-assigned': IconStatMyAssigned,
   'stat-unassigned': IconStatUnassigned,
+  'stat-all-wiki': IconStatAllWiki,
 };
 
 export default function ReviewStatCard({ stat, onClick }: ReviewStatCardProps) {

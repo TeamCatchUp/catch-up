@@ -13,7 +13,7 @@ export interface DashboardActiveFilter {
 /** 상태 드롭다운 옵션. 시안이 검토 대기·검토 완료 2종만 두고 "하나만 선택"으로 못박았다. */
 export const DASHBOARD_STATUS_OPTIONS: readonly KnownDocumentStatus[] = ['pending_review', 'reviewed'];
 
-/** 지표 카드 → 필터. 시안 3종만 매핑하고 모르는 id는 필터를 만들지 않는다(카드가 클릭 불가로 렌더된다). */
+/** 지표 카드 → 필터. 시안에 있는 것만 매핑하고 모르는 id는 필터를 만들지 않는다(카드가 클릭 불가로 렌더된다). */
 const STAT_FILTERS: Readonly<Record<string, DashboardActiveFilter>> = {
   'stat-pending-review': {
     axis: 'status',
@@ -33,8 +33,18 @@ const STAT_FILTERS: Readonly<Record<string, DashboardActiveFilter>> = {
   },
 };
 
-export function findStatFilter(statId: string): DashboardActiveFilter | undefined {
-  return STAT_FILTERS[statId];
+/** 필터가 아니라 해제인 지표. "전체 위키"를 누르면 표가 원래대로 돌아온다. */
+const CLEAR_FILTER_STAT_ID = 'stat-all-wiki';
+
+/**
+ * 지표 카드를 눌렀을 때 걸 필터.
+ * `undefined`는 누를 수 없는 카드고, `{ filter: null }`은 해제다 — 둘을 구분해야 죽은 카드가 생기지 않는다.
+ */
+export function resolveStatFilter(statId: string): { filter: DashboardActiveFilter | null } | undefined {
+  if (statId === CLEAR_FILTER_STAT_ID) return { filter: null };
+
+  const filter = STAT_FILTERS[statId];
+  return filter ? { filter } : undefined;
 }
 
 /** 상태 드롭다운 선택 → 필터. 라벨은 배지와 같은 공급원을 쓴다. */

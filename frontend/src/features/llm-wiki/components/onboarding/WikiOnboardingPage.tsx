@@ -38,6 +38,7 @@ import {
   WIKI_NAME_FIELD,
   WIKI_TONE_STYLE_OPTIONS,
 } from '../../fixtures/llmWikiOnboardingFixtures';
+import type { OnboardingChannelRow } from '../../types/llmWikiOnboarding';
 import type { OnboardingStepNumber } from '../../utils/onboarding/resolveOnboardingStep';
 import OnboardingChannelTable from './OnboardingChannelTable';
 import type { SummarySectionView } from './OnboardingSummaryCard';
@@ -65,6 +66,12 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
   const [toneId, setToneId] = useState<string | null>(WIKI_TONE_STYLE_OPTIONS[0].id);
   // 선택지가 있는 일정 필드만 값이 바뀐다 — 나머지는 픽스처 기본값을 유지한다
   const [scheduleSelection, setScheduleSelection] = useState<Record<string, string>>({});
+  // 표는 고른 채널의 목록이다 — 드롭다운에서 고르면 여기 쌓인다
+  const [selectedChannelIds, setSelectedChannelIds] = useState<readonly string[]>([]);
+
+  const selectedChannelRows = selectedChannelIds
+    .map((id) => ONBOARDING_CHANNEL_ROWS.find((row) => row.channel.id === id))
+    .filter((row) => row !== undefined);
 
   const scheduleFields = SCHEDULE_FIELDS.map((field) => {
     const picked = field.options?.find((option) => option.id === scheduleSelection[field.id]);
@@ -79,7 +86,14 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
       <WikiOnboardingCompleteStep
         steps={ONBOARDING_STEPS}
         heading={ONBOARDING_COMPLETE_HEADING}
-        summarySections={buildSummarySections({ name, categoryId, purposeId, docKindId, toneId })}
+        summarySections={buildSummarySections({
+          name,
+          categoryId,
+          purposeId,
+          docKindId,
+          toneId,
+          channelRows: selectedChannelRows,
+        })}
         nextStepsTitle={ONBOARDING_NEXT_STEPS_TITLE}
         nextSteps={ONBOARDING_NEXT_STEPS}
         backLabel={ONBOARDING_BACK_LABEL}
@@ -100,7 +114,9 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
         channelCaption={CHANNEL_FIELD_CAPTION}
         channelPickerPlaceholder={CHANNEL_PICKER_PLACEHOLDER}
         channelTableHeaders={CHANNEL_TABLE_HEADERS}
-        channelRows={ONBOARDING_CHANNEL_ROWS}
+        availableChannels={ONBOARDING_CHANNEL_ROWS}
+        onSelectChannel={(channelId) => setSelectedChannelIds((current) => [...current, channelId])}
+        channelRows={selectedChannelRows}
         scheduleFields={scheduleFields}
         onSelectScheduleOption={(fieldId, optionId) =>
           setScheduleSelection((current) => ({ ...current, [fieldId]: optionId }))
@@ -170,6 +186,7 @@ interface SummaryInput {
   purposeId: string | null;
   docKindId: string | null;
   toneId: string | null;
+  channelRows: readonly OnboardingChannelRow[];
 }
 
 /** 1단계 선택분만 실제 입력으로 채운다 — 2단계는 선택 UI가 시안에 없어 픽스처 값을 유지한다 */
@@ -198,7 +215,7 @@ function buildSummarySections(input: SummaryInput): readonly SummarySectionView[
       // 채널은 행이 아니라 2단계와 같은 표로 놓인다
       lead: {
         label: ONBOARDING_SUMMARY_CHANNEL_LABEL,
-        content: <OnboardingChannelTable headers={CHANNEL_TABLE_HEADERS} rows={ONBOARDING_CHANNEL_ROWS} />,
+        content: <OnboardingChannelTable headers={CHANNEL_TABLE_HEADERS} rows={input.channelRows} />,
       },
     },
   ];

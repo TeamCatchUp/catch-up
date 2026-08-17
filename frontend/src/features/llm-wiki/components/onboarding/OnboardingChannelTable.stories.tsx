@@ -86,12 +86,12 @@ export const Loading: Story = {
   },
 };
 
-/** 신규 workspace가 계약상 반드시 만나는 상태 — GET /wiki/channels가 빈 배열을 준다 */
+/** 아직 고른 채널이 없는 상태. 8/14에 표가 "선택 결과"임이 확정돼 문구가 바뀌었다 */
 export const Empty: Story = {
   args: { headers: CHANNEL_TABLE_HEADERS, rows: [], status: 'ready' },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText('선택할 수 있는 채널이 없습니다')).toBeInTheDocument();
+    await expect(canvas.getByText('아직 선택한 채널이 없습니다')).toBeInTheDocument();
     await expect(canvas.queryByRole('table')).not.toBeInTheDocument();
 
     // 연동·생성 유도 문구는 넣지 않았다 — 그 동선은 아직 제품 결정이 아니다

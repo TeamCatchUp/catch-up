@@ -29,8 +29,8 @@ const meta = {
       states: ['default', 'all-metrics', 'unknown-id'],
       dataNotes: [
         '수치 로딩·집계 실패 상태 스토리는 만들지 않는다 — 디자인 MISSING.',
-        '2026-08-13 재실측: 지표가 4종(검토 대기·미해결 충돌·태그 미분류·장기 미변경)에서 3종(검토 대기·내 담당·담당자 미지정)으로 교체됐다.',
-        '시트에는 "검토 대기" 카드가 2장 있고 일러스트만 다르다 — 지표 3종으로 판정하고 좌측(최신 노드, 보라 강조)을 채택했다. 디자이너 질문 등록.',
+        '2026-08-14 확정: 지표 4종(검토 대기·내 담당·담당자 미지정·전체 위키). 8/13 시점의 중복 "검토 대기" 카드가 사라지고 "전체 위키"가 들어오면서 지표 수 질문(#26)이 해소됐다. 구 4종(미해결 충돌·태그 미분류·장기 미변경)은 8/13에 이미 소멸.',
+        '"전체 위키"는 필터가 아니라 해제다 — 누르면 표가 원래대로 돌아온다(dashboardFilters가 그 계약을 갖고 unit이 지킨다).',
         '미지 stat id는 일러스트를 발명하지 않고 회색 패널만 남긴다 — UnknownId 스토리가 가드.',
       ],
       tokenNotes: [
@@ -41,11 +41,11 @@ const meta = {
       layoutNotes: [
         '텍스트 열 px-5 py-4, 라벨→수치 순서(구 시안의 반대), 사이 gap 2 = gap-0.5. 높이 89는 결과값(16+23+2+32+16)이라 h-* 금지.',
         '우측 패널 폭 100 = w-25 고정(일러스트 원본 100×89, 컨트롤 아닌 장식이지만 시안이 fixed) + self-stretch.',
-        '카드 폭 무고정 — 1040 행 = 248×4 + 16×3. 시트가 4슬롯이라 스토리 그리드도 4열이고, 지표가 3종이라 마지막 슬롯이 빈다(지표 수 미확정 질문과 연동).',
+        '카드 폭 무고정 — 1040 행 = 245×4 + 20×3(8/14 실측, 구 248/16에서 갱신). 슬롯이 폭을 준다.',
         '라벨·수치 truncate는 좁은 슬롯의 안전 기본값이다(시안은 nowrap만 정의) — 디자이너 제안 사항.',
       ],
       reuseNotes: [
-        '일러스트 3종은 시안 프레임을 SVG 그대로 내려 커밋했다(stat_pending_review·stat_my_assigned·stat_unassigned) — 임의 제작 아님.',
+        '일러스트 4종은 시안 프레임(100×89)을 SVG 그대로 내려 커밋했다 — 임의 제작 아님. 8/14에 my_assigned·unassigned가 교체되고 all_wiki가 신설됐다.',
       ],
     }),
   },
@@ -84,7 +84,7 @@ export const Default: Story = {
 export const AllMetrics: Story = {
   args: { stat: REVIEW_STAT_CARD_FIXTURES[0] },
   render: () => (
-    <div className="grid w-260 grid-cols-4 gap-4">
+    <div className="grid w-260 grid-cols-4 gap-5">
       {REVIEW_STAT_CARD_FIXTURES.map((stat) => (
         <ReviewStatCard key={stat.id} stat={stat} />
       ))}
@@ -94,16 +94,16 @@ export const AllMetrics: Story = {
     const canvas = within(canvasElement);
 
     const cards = REVIEW_STAT_CARD_FIXTURES.map((stat) => cardOf(canvas.getByText(stat.label)));
-    await expect(cards).toHaveLength(3);
+    await expect(cards).toHaveLength(4);
 
     // 지표 매핑이 무너지면 일러스트가 조용히 빠진다 — 카드마다 정확히 1개씩 실리는지 센다.
     for (const card of cards) {
       await expect(card.querySelectorAll('svg')).toHaveLength(1);
     }
 
-    // 일러스트는 지표마다 다른 에셋이다 — 마스크 id가 전부 달라야 한다.
-    const maskIds = cards.map((card) => card.querySelector('mask')?.id);
-    await expect(new Set(maskIds).size).toBe(3);
+    // 일러스트는 지표마다 다른 에셋이다 — 같은 그림이 두 번 실리면 매핑이 어긋난 것이다.
+    const drawings = cards.map((card) => card.querySelector('svg')?.innerHTML);
+    await expect(new Set(drawings).size).toBe(4);
   },
 };
 

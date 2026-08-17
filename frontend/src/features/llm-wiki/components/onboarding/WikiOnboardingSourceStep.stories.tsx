@@ -103,6 +103,49 @@ export const Default: Story = {
   },
 };
 
+/** 채널 피커에서 고르면 아래 표에 등록된다 — 8/14에 확정된 입력창↔표 관계 */
+export const ChannelPickerAddsRow: Story = {
+  args: {
+    ...baseArgs,
+    channelRows: [],
+    availableChannels: ONBOARDING_CHANNEL_ROWS,
+    onSelectChannel: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+
+    // 아직 고른 채널이 없으니 표 자리에는 안내만 있다
+    await expect(canvas.getByText('아직 선택한 채널이 없습니다')).toBeInTheDocument();
+
+    await userEvent.click(canvas.getByRole('button', { name: new RegExp(CHANNEL_PICKER_PLACEHOLDER) }));
+
+    // 메뉴는 포털로 body에 붙는다
+    const menu = await within(document.body).findByRole('menu');
+    const items = within(menu).getAllByRole('menuitem');
+    await expect(items).toHaveLength(ONBOARDING_CHANNEL_ROWS.length);
+
+    await userEvent.click(items[0]);
+    await expect(args.onSelectChannel).toHaveBeenCalledWith(ONBOARDING_CHANNEL_ROWS[0].channel.id);
+  },
+};
+
+/** 이미 고른 채널은 다시 고를 수 없다 — 표에 중복으로 쌓이지 않게 하는 안전장치 */
+export const ChannelPickerHidesPicked: Story = {
+  args: {
+    ...baseArgs,
+    channelRows: [ONBOARDING_CHANNEL_ROWS[0]],
+    availableChannels: ONBOARDING_CHANNEL_ROWS,
+    onSelectChannel: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: new RegExp(CHANNEL_PICKER_PLACEHOLDER) }));
+
+    const menu = await within(document.body).findByRole('menu');
+    await expect(within(menu).getAllByRole('menuitem')).toHaveLength(ONBOARDING_CHANNEL_ROWS.length - 1);
+  },
+};
+
 /** 채널 목록만 로딩이고 나머지 폼은 그대로 — 로딩이 화면 전체를 덮지 않는다 */
 export const ChannelListLoading: Story = {
   args: { ...baseArgs, channelRows: [], channelListStatus: 'loading' },

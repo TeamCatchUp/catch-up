@@ -157,6 +157,7 @@ export const SCHEDULE_FIELDS: readonly ScheduleFieldData[] = [
     id: 'polling-interval',
     label: '얼마나 자주 갱신할까요?',
     valueLabel: '매일',
+    icon: 'calendar-clock',
     options: [
       { id: '6h', label: '6시간마다' },
       { id: '12h', label: '12시간마다' },
@@ -164,10 +165,28 @@ export const SCHEDULE_FIELDS: readonly ScheduleFieldData[] = [
       { id: 'weekly', label: '주 1회' },
     ],
   },
-  // 백필은 "지금부터"만 지원하고 나머지는 추후다. 선택지 라벨이 기획에 확정돼 있지 않아 목록을 두지 않는다
-  { id: 'backfill-range', label: '언제부터의 상담을 가져올까요?', valueLabel: '지금부터' },
-  // 실행 시각은 기획이 "시각 선택, 기본 자정"까지만 정했다 — 목록·표기 규칙 미정
-  { id: 'run-time', label: '실행 시간', valueLabel: '자정' },
+  {
+    id: 'backfill-range',
+    label: '언제부터의 상담을 가져올까요?',
+    valueLabel: '지금부터',
+    // 앞 둘은 추후 지원이라 고를 수 없이 노출된다(기획 §3.2, 시안 disabled)
+    options: [
+      { id: 'all', label: '전체 이력', disabled: true },
+      { id: 'recent-months', label: '최근 N개월', disabled: true },
+      { id: 'from-now', label: '지금부터' },
+    ],
+  },
+  {
+    id: 'run-time',
+    label: '몇 시에 실행할까요?',
+    valueLabel: '자정',
+    options: [
+      { id: 'midnight', label: '자정' },
+      { id: '6am', label: '오전 6시' },
+      { id: 'noon', label: '정오' },
+      { id: '6pm', label: '오후 6시' },
+    ],
+  },
 ];
 
 export const SCHEDULE_RESULT_TEXT = '매일 자정에 새 상담을 확인하고 문서 초안을 만들어요.';

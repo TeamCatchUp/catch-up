@@ -17,7 +17,7 @@ import {
   createStatusFilter,
   type DashboardActiveFilter,
   filterDocuments,
-  findStatFilter,
+  resolveStatFilter,
 } from './dashboardFilters';
 import ReviewStatCard from './ReviewStatCard';
 
@@ -105,16 +105,16 @@ export default function WikiDashboardPage({
         </div>
 
         <div className="flex flex-col gap-6">
-          {/* 4슬롯 그리드에 지표는 3종이다 — 마지막 슬롯이 비는 것이 현재 시안 상태다(디자이너 확인 대기) */}
-          <div className="grid grid-cols-4 gap-4">
+          {/* 지표 4종이 행을 나눠 갖는다 — 1040 = 245×4 + 20×3 */}
+          <div className="grid grid-cols-4 gap-5">
             {stats.map((stat) => {
-              const statFilter = findStatFilter(stat.id);
+              const action = resolveStatFilter(stat.id);
 
               return (
                 <ReviewStatCard
                   key={stat.id}
                   stat={stat}
-                  onClick={statFilter ? () => applyFilter(statFilter) : undefined}
+                  onClick={action ? () => applyFilter(action.filter) : undefined}
                 />
               );
             })}

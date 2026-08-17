@@ -61,7 +61,7 @@ const meta = {
       layoutNotes: [
         '본문 px-20(80)은 헤더 px-16(64)과 다른 값이다 — 시안이 갈라 뒀고 헤더 컴포넌트가 자기 패딩을 가진다.',
         '세로 리듬 실측: 제목 블록 pt-9(36) → 섹션 gap-10(40) → 섹션 사이 gap-6(24) → 표↔푸터 gap-8(32) → 행 사이 gap-1(4). 페이지 하단 pb-9(36).',
-        '스탯은 grid-cols-4 gap-4(1040 = 248×4 + 16×3)인데 지표가 3종이라 마지막 슬롯이 빈다 — 카드 폭을 늘려 채우지 않았다. 시안이 미확정인 지점을 그대로 드러낸 것이고 디자이너 질문 #26과 연동된다.',
+        '스탯은 grid-cols-4 gap-5다 — 1040 = 245×4 + 20×3. 8/14 시안에서 지표가 4종으로 확정되며 빈 슬롯 문제가 사라졌다(#26 해소).',
         '폭 흡수는 층마다 하나다 — 필터 행에서는 칩 묶음(min-w-0 flex-1), 표 행에서는 문서 열. 초기화 버튼·푸터 컨트롤은 shrink-0.',
       ],
     }),
@@ -85,8 +85,8 @@ export const Default: Story = {
     for (const stat of REVIEW_STAT_CARD_FIXTURES) {
       await expect(stats.getByText(stat.label)).toBeInTheDocument();
     }
-    // 4슬롯 그리드에 카드는 3장이다 — 채워 넣지 않았다는 계약(디자이너 질문 #26).
-    await expect(statsGrid.children).toHaveLength(3);
+    // 4슬롯 그리드가 지표 4종으로 정확히 채워진다.
+    await expect(statsGrid.children).toHaveLength(4);
 
     await expect(canvas.getByText('결제 승인 실패 시 재시도 정책')).toBeInTheDocument();
     await expect(canvas.getByText('계정 삭제 요청과 보관 기간')).toBeInTheDocument();

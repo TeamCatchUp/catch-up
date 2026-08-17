@@ -196,11 +196,12 @@ export const REVIEW_QUEUE_ITEM_FIXTURES: readonly ReviewQueueItemData[] = [
   }),
 ];
 
-// 시안의 지표 3종. 시트에는 "검토 대기" 카드가 2장(일러스트 상이) 있으나 지표로는 1종이다
+// 시안의 지표 4종. 8/14 갱신에서 중복 "검토 대기"가 사라지고 "전체 위키"가 들어왔다
 export const REVIEW_STAT_CARD_FIXTURES: readonly ReviewStatCardData[] = [
   { id: 'stat-pending-review', label: '검토 대기', count: 7 },
   { id: 'stat-my-assigned', label: '내 담당', count: 150 },
-  { id: 'stat-unassigned', label: '담당자 미지정', count: 7 },
+  { id: 'stat-unassigned', label: '담당자 미지정', count: 150 },
+  { id: 'stat-all-wiki', label: '전체 위키', count: 200 },
 ];
 
 /**

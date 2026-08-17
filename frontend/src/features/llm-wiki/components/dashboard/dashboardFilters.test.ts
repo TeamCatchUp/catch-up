@@ -6,24 +6,32 @@ import {
   createStatusFilter,
   DASHBOARD_STATUS_OPTIONS,
   filterDocuments,
-  findStatFilter,
+  resolveStatFilter,
 } from './dashboardFilters';
 
 const CURRENT_USER = '팀원F';
 
+/** 카드를 누를 수 있는 지표만 필터를 갖는다 — 없으면 테스트가 죽은 카드를 잡는다. */
+const filterOf = (statId: string) => resolveStatFilter(statId)!.filter!;
+
 describe('dashboardFilters', () => {
-  it('시안의 지표 3종에 전부 필터가 걸린다 — 하나라도 빠지면 그 카드가 죽은 카드가 된다', () => {
+  it('시안의 지표 4종은 전부 누를 수 있다 — 하나라도 빠지면 그 카드가 죽은 카드가 된다', () => {
+    expect(REVIEW_STAT_CARD_FIXTURES).toHaveLength(4);
     for (const stat of REVIEW_STAT_CARD_FIXTURES) {
-      expect(findStatFilter(stat.id), stat.id).toBeDefined();
+      expect(resolveStatFilter(stat.id), stat.id).toBeDefined();
     }
   });
 
+  it('전체 위키는 필터가 아니라 해제다 — 누르면 표가 원래대로 돌아온다', () => {
+    expect(resolveStatFilter('stat-all-wiki')).toEqual({ filter: null });
+  });
+
   it('모르는 지표는 필터가 없다 — 새 동작을 발명하지 않는다', () => {
-    expect(findStatFilter('stat-not-yet-known')).toBeUndefined();
+    expect(resolveStatFilter('stat-not-yet-known')).toBeUndefined();
   });
 
   it('검토 대기 카드는 상태 축을 켜고 pending_review만 남긴다', () => {
-    const filter = findStatFilter('stat-pending-review')!;
+    const filter = filterOf('stat-pending-review');
     expect(filter.axis).toBe('status');
 
     const result = filterDocuments(DOCUMENT_ROW_FIXTURES, filter, CURRENT_USER);
@@ -33,7 +41,7 @@ describe('dashboardFilters', () => {
   });
 
   it('내 담당 카드는 담당자 축을 켜고 현재 사용자 행만 남긴다', () => {
-    const filter = findStatFilter('stat-my-assigned')!;
+    const filter = filterOf('stat-my-assigned');
     expect(filter.axis).toBe('assignee');
 
     const result = filterDocuments(DOCUMENT_ROW_FIXTURES, filter, CURRENT_USER);
@@ -42,7 +50,7 @@ describe('dashboardFilters', () => {
   });
 
   it('담당자 미지정은 ownerName이 null인 행만 남긴다 — 빈 문자열 담당자와 섞이지 않는다', () => {
-    const filter = findStatFilter('stat-unassigned')!;
+    const filter = filterOf('stat-unassigned');
     // 칩이 "담당자: 담당자 미지정"으로 겹쳐 적히지 않게 값 라벨은 축 이름을 뺀다.
     expect(filter.label).toBe('미지정');
     const documents = [...DOCUMENT_ROW_FIXTURES, createDocumentRow({ id: 'doc-blank-owner', ownerName: '' })];

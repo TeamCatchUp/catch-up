@@ -83,6 +83,8 @@ export interface ScheduleFieldData {
   label: string;
   /** 트리거에 표시되는 현재 값 문자열 */
   valueLabel: string;
+  /** 갱신 주기만 calendar_clock을 쓴다 */
+  icon?: 'clock' | 'calendar-clock';
   options?: readonly ScheduleOption[];
 }
 
