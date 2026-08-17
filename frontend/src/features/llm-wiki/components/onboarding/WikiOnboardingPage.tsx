@@ -36,6 +36,7 @@ import {
   WIKI_DOC_KIND_PRESETS,
   WIKI_INFO_CATEGORIES,
   WIKI_NAME_FIELD,
+  WIKI_PURPOSE_OPTIONS,
   WIKI_TONE_STYLE_OPTIONS,
 } from '../../fixtures/llmWikiOnboardingFixtures';
 import type { OnboardingChannelRow } from '../../types/llmWikiOnboarding';
@@ -61,7 +62,7 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
 
   const [name, setName] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(WIKI_INFO_CATEGORIES[0].id);
-  const [purposeId, setPurposeId] = useState<string | null>(WIKI_INFO_CATEGORIES[0].purposeOptions[0]?.id ?? null);
+  const [purposeId, setPurposeId] = useState<string | null>(WIKI_PURPOSE_OPTIONS[0].id);
   const [docKindId, setDocKindId] = useState<string | null>(WIKI_DOC_KIND_PRESETS[0].id);
   const [toneId, setToneId] = useState<string | null>(WIKI_TONE_STYLE_OPTIONS[0].id);
   // 선택지가 있는 일정 필드만 값이 바뀐다 — 나머지는 픽스처 기본값을 유지한다
@@ -146,13 +147,9 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
         categoryLabel: INFO_CATEGORY_FIELD_LABEL,
         categories: WIKI_INFO_CATEGORIES,
         selectedCategoryId: categoryId,
-        onSelectCategory: (id) => {
-          setCategoryId(id);
-          // 카테고리가 바뀌면 목적 선택지도 바뀐다 — 이전 선택을 남기면 없는 항목을 가리킨다
-          const next = WIKI_INFO_CATEGORIES.find((category) => category.id === id);
-          setPurposeId(next?.purposeOptions[0]?.id ?? null);
-        },
+        onSelectCategory: setCategoryId,
         purposeLabel: PURPOSE_FIELD_LABEL,
+        purposeOptions: WIKI_PURPOSE_OPTIONS,
         selectedPurposeId: purposeId,
         onSelectPurpose: setPurposeId,
       }}
@@ -192,7 +189,7 @@ interface SummaryInput {
 /** 1단계 선택분만 실제 입력으로 채운다 — 2단계는 선택 UI가 시안에 없어 픽스처 값을 유지한다 */
 function buildSummarySections(input: SummaryInput): readonly SummarySectionView[] {
   const category = WIKI_INFO_CATEGORIES.find((item) => item.id === input.categoryId);
-  const purpose = category?.purposeOptions.find((item) => item.id === input.purposeId);
+  const purpose = WIKI_PURPOSE_OPTIONS.find((item) => item.id === input.purposeId);
   const docKind = WIKI_DOC_KIND_PRESETS.find((item) => item.id === input.docKindId);
   const tone = WIKI_TONE_STYLE_OPTIONS.find((item) => item.id === input.toneId);
 

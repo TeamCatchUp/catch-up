@@ -29,7 +29,7 @@ export default function ReviewQueueRow({ item, selected = false, onSelect, secon
       aria-current={selected ? 'true' : undefined}
       onClick={() => onSelect?.(id)}
       className={cn(
-        'border-line-normal-neutral flex w-full cursor-pointer flex-col gap-3 border-b px-4 py-3 text-left',
+        'border-line-normal-neutral hover:bg-fill-normal-interaction-hover flex w-full cursor-pointer flex-col gap-3 border-b px-4 py-3 text-left transition-colors',
         selected && 'bg-fill-normal-strong',
       )}
     >

@@ -9,6 +9,7 @@ import type {
   ScheduleFieldData,
   WikiDocKindPreset,
   WikiInfoCategory,
+  WikiPurposeOption,
   WikiToneStyleOption,
 } from '../types/llmWikiOnboarding';
 
@@ -33,25 +34,25 @@ export const WIKI_NAME_FIELD = {
 export const INFO_CATEGORY_FIELD_LABEL = '어떤 정보를 정리하고 싶으세요?';
 export const PURPOSE_FIELD_LABEL = '이 위키를 어떻게 쓰실 건가요?';
 
-// 목적 목록은 시안이 VOC 카테고리만 펼쳐 그렸다. 나머지 5종은 미도시라 비워 둔다
 export const WIKI_INFO_CATEGORIES: readonly WikiInfoCategory[] = [
-  {
-    id: 'voc',
-    label: '고객 문의 (VOC)',
-    icon: 'support-agent',
-    purposeOptions: [
-      { id: 'feature-demand', label: '어떤 기능을 가장 많이 요청하는지 모아보고 싶어요' },
-      { id: 'faq', label: '자주 들어오는 질문과 답변을 정리해두고 싶어요' },
-      { id: 'pain-point', label: '고객이 어디서 자주 불편해하는지 모아보고 싶어요' },
-      { id: 'client-request', label: '고객사별로 지금까지 나온 요청과 맥락을 보고 싶어요' },
-      { id: 'customer-needs', label: '상담에서 반복해서 보이는 고객 니즈를 모으고 싶어요' },
-    ],
-  },
-  { id: 'product', label: '제품과 기획', icon: 'lightbulb', purposeOptions: [] },
-  { id: 'ops', label: '운영과 정책', icon: 'shield', purposeOptions: [] },
-  { id: 'sales', label: '세일즈와 고객', icon: 'client', purposeOptions: [] },
-  { id: 'dev', label: '개발과 기술', icon: 'database', purposeOptions: [] },
-  { id: 'team-guide', label: '팀 가이드 및 온보딩', icon: 'group', purposeOptions: [] },
+  { id: 'voc', label: '고객 문의 (VOC)', icon: 'support-agent' },
+  { id: 'product', label: '제품과 기획', icon: 'lightbulb' },
+  { id: 'ops', label: '운영과 정책', icon: 'shield' },
+  { id: 'sales', label: '세일즈와 고객', icon: 'client' },
+  { id: 'dev', label: '개발과 기술', icon: 'database' },
+  { id: 'team-guide', label: '팀 가이드 및 온보딩', icon: 'group' },
+];
+
+/**
+ * 목적 선택지. 시안은 VOC를 고른 상태만 그렸지만 카테고리별로 갈린다는 근거가 없어
+ * 어느 칩을 골라도 같은 목록이 이어진다(8/14 사용자 확정).
+ */
+export const WIKI_PURPOSE_OPTIONS: readonly WikiPurposeOption[] = [
+  { id: 'feature-demand', label: '어떤 기능을 가장 많이 요청하는지 모아보고 싶어요' },
+  { id: 'faq', label: '자주 들어오는 질문과 답변을 정리해두고 싶어요' },
+  { id: 'pain-point', label: '고객이 어디서 자주 불편해하는지 모아보고 싶어요' },
+  { id: 'client-request', label: '고객사별로 지금까지 나온 요청과 맥락을 보고 싶어요' },
+  { id: 'customer-needs', label: '상담에서 반복해서 보이는 고객 니즈를 모으고 싶어요' },
 ];
 
 export const DOC_KIND_FIELD_LABEL = '어떤 종류의 문서를 만들까요?';

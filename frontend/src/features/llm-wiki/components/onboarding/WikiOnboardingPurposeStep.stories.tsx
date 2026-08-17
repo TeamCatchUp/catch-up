@@ -19,6 +19,7 @@ import {
   WIKI_DOC_KIND_PRESETS,
   WIKI_INFO_CATEGORIES,
   WIKI_NAME_FIELD,
+  WIKI_PURPOSE_OPTIONS,
   WIKI_TONE_STYLE_OPTIONS,
 } from '../../fixtures/llmWikiOnboardingFixtures';
 import WikiOnboardingPurposeStep from './WikiOnboardingPurposeStep';
@@ -40,7 +41,8 @@ const baseArgs = {
     selectedCategoryId: WIKI_INFO_CATEGORIES[0].id,
     onSelectCategory: fn(),
     purposeLabel: PURPOSE_FIELD_LABEL,
-    selectedPurposeId: WIKI_INFO_CATEGORIES[0].purposeOptions[0].id,
+    purposeOptions: WIKI_PURPOSE_OPTIONS,
+    selectedPurposeId: WIKI_PURPOSE_OPTIONS[0].id,
     onSelectPurpose: fn(),
   },
   docSettingTitle: ONBOARDING_DOC_SETTING_TITLE,

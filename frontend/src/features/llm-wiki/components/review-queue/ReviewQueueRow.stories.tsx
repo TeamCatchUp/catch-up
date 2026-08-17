@@ -53,7 +53,7 @@ const meta = {
         '고정 치수는 아이콘 24 · add_small 22 · 아바타 25 세 개뿐이고 전부 컨트롤 크기다.',
       ],
       interactionNotes: [
-        'hover 채움을 넣지 않았다 — Figma 행 노드에 hover 정의가 없다(비선택 행 fills=[]). 목록에서 hover가 필요하면 디자이너 확인이 선행되어야 한다.',
+        'hover 채움은 fill-normal-interaction-hover다 — Figma 행 노드에 hover 정의가 없어 사용자 결정으로 중립 interaction 토큰을 채택했다. 선택 행 위에서는 알파가 strong 채움 위에 합성된다.',
       ],
     }),
   },

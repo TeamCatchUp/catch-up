@@ -14,7 +14,7 @@ import IconSupportAgent from '@/public/icons/icon/support_agent.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
 import { cn } from '@/shared/utils/cn';
 
-import type { KnownInfoCategoryIcon, WikiInfoCategory } from '../../types/llmWikiOnboarding';
+import type { KnownInfoCategoryIcon, WikiInfoCategory, WikiPurposeOption } from '../../types/llmWikiOnboarding';
 import OnboardingFieldLabel from './OnboardingFieldLabel';
 
 const CATEGORY_ICONS: Record<KnownInfoCategoryIcon, FC<SVGProps<SVGSVGElement>>> = {
@@ -32,23 +32,23 @@ interface PurposeSelectFieldProps {
   selectedCategoryId: string | null;
   onSelectCategory?: (id: string) => void;
   purposeLabel: string;
+  /** 카테고리와 무관하게 같은 목록이다 — 칩을 바꿔도 구역이 사라지지 않는다 */
+  purposeOptions: readonly WikiPurposeOption[];
   selectedPurposeId: string | null;
   onSelectPurpose?: (id: string) => void;
 }
 
-// 정보 카테고리 칩 + 선택한 카테고리의 목적 선택. 목적이 없는 카테고리는 분기 구역을 접는다
+// 정보 카테고리 칩 + 목적 선택
 export default function PurposeSelectField({
   categoryLabel,
   categories,
   selectedCategoryId,
   onSelectCategory,
   purposeLabel,
+  purposeOptions,
   selectedPurposeId,
   onSelectPurpose,
 }: PurposeSelectFieldProps) {
-  const selectedCategory = categories.find((category) => category.id === selectedCategoryId) ?? null;
-  const purposeOptions = selectedCategory?.purposeOptions ?? [];
-
   return (
     <div className="flex w-full flex-col gap-6">
       <div className="flex flex-col gap-5">
@@ -82,8 +82,7 @@ export default function PurposeSelectField({
         </div>
       </div>
 
-      {purposeOptions.length > 0 && (
-        <div className="flex gap-4">
+      <div className="flex gap-4">
           {/* 들여쓰기 가이드 — 폭 32의 중앙에 2px 점선이 세로로 지난다 */}
           <div className="flex w-8 shrink-0 justify-center">
             <span className="border-line-normal-normal h-full border-l-2 border-dashed" />
@@ -121,9 +120,8 @@ export default function PurposeSelectField({
                 );
               })}
             </div>
-          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

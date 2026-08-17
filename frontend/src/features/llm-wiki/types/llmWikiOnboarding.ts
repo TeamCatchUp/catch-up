@@ -23,14 +23,12 @@ export type InfoCategoryIcon = KnownInfoCategoryIcon | (string & {});
 
 /**
  * [SPEC] 1단계 정보 카테고리 칩.
- * 시안은 "고객 문의 (VOC)"를 고른 상태만 그려 나머지 카테고리의 목적 목록은 미정이다 —
- * 빈 배열이면 목적 구역을 렌더하지 않는다.
+ * 목적 선택지는 카테고리에 종속되지 않는다 — 어느 칩을 골라도 같은 목록이 이어진다.
  */
 export interface WikiInfoCategory {
   id: string;
   label: string;
   icon: InfoCategoryIcon;
-  purposeOptions: readonly WikiPurposeOption[];
 }
 
 // 문서 종류 아이콘. 시안 6종만 알려져 있고 나머지는 열어둔다 — 미지 아이콘은 file로 렌더
