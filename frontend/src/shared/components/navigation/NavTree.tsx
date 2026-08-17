@@ -26,10 +26,10 @@ interface NavTreeProps {
   defaultExpandedIds?: readonly string[];
   /** 미전달 시 정적 표시 모드: 전체 펼침 고정, 토글·클릭 불가 (문서 위치 표시형) */
   onNodeClick?: (id: string) => void;
-  /** 전달 시 모든 행에 더보기(⋯). 정적 표시 모드에서는 무시된다 */
-  onNodeMore?: (id: string) => void;
-  /** 전달 시 canAddChild 행에만 하위 추가(+). 정적 표시 모드에서는 무시된다 */
-  onNodeAdd?: (id: string) => void;
+  /** 전달 시 모든 행에 더보기(⋯). 두 번째 인자는 눌린 버튼이라 소비처가 메뉴를 붙일 수 있다 */
+  onNodeMore?: (id: string, trigger: HTMLElement) => void;
+  /** 전달 시 canAddChild 행에만 하위 추가(+). 인자 규칙은 위와 같다 */
+  onNodeAdd?: (id: string, trigger: HTMLElement) => void;
   className?: string;
 }
 
@@ -47,13 +47,13 @@ function RowActionButton({
 }: {
   label: string;
   Icon: ComponentType<SVGProps<SVGSVGElement>>;
-  onClick: () => void;
+  onClick: (trigger: HTMLElement) => void;
 }) {
   return (
     <button
       type="button"
       aria-label={label}
-      onClick={onClick}
+      onClick={(event) => onClick(event.currentTarget)}
       className="text-icon-normal-neutral hover:bg-fill-normal-interaction-hover flex size-5.5 shrink-0 cursor-pointer items-center justify-center rounded-full"
     >
       <Icon aria-hidden className="size-4.5" />
@@ -175,13 +175,17 @@ export default function NavTree({
           {(onNodeMore || (onNodeAdd && node.canAddChild)) && (
             <div className="hidden shrink-0 items-center gap-0.5 group-focus-within:flex group-hover:flex">
               {onNodeMore && (
-                <RowActionButton label={`${node.label} 더보기`} Icon={IconMore} onClick={() => onNodeMore(node.id)} />
+                <RowActionButton
+                  label={`${node.label} 더보기`}
+                  Icon={IconMore}
+                  onClick={(trigger) => onNodeMore(node.id, trigger)}
+                />
               )}
               {onNodeAdd && node.canAddChild && (
                 <RowActionButton
                   label={`${node.label} 하위 추가`}
                   Icon={IconAdd}
-                  onClick={() => onNodeAdd(node.id)}
+                  onClick={(trigger) => onNodeAdd(node.id, trigger)}
                 />
               )}
             </div>

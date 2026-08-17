@@ -39,7 +39,6 @@ vi.mock('./SnbRecentQuestionList', () => ({ default: () => null }));
 vi.mock('@/shared/components/layout/sideNavBar/modal/UserModal', () => ({ UserMenuContent: () => null }));
 
 import HomeSideNav from './HomeSideNav';
-import { HOME_FAVORITE_ITEMS } from './snbNavFixtures';
 
 beforeEach(() => {
   mockSidebarState.activePanel = null;
@@ -52,12 +51,19 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+/*
+ * 섹션 머리글 액션이 주 메뉴 행과 같은 이름을 갖는다(새 채팅). 실제 브라우저에서는
+ * 머리글 쪽이 hover 전까지 숨지만 jsdom에는 Tailwind가 없어 둘 다 잡힌다.
+ */
+const menuRow = (name: string) =>
+  screen.getAllByRole('button', { name }).find((el) => !el.closest('[data-slot="snb-section-header"]'))!;
+
 describe('HomeSideNav 펼침', () => {
   it('구 사이드바와 같은 목적지로 이동한다', async () => {
     const user = userEvent.setup();
     render(<HomeSideNav />);
 
-    await user.click(screen.getByRole('button', { name: '새 채팅' }));
+    await user.click(menuRow('새 채팅'));
     expect(mockPush).toHaveBeenCalledWith('/');
 
     await user.click(screen.getByRole('button', { name: '검색' }));
@@ -74,13 +80,37 @@ describe('HomeSideNav 펼침', () => {
     expect(mockPush).toHaveBeenCalledWith('/mypage/profile');
   });
 
-  it('최근 질문 머리글이 질문 히스토리 패널을 연다', async () => {
+  it('최근 채팅 목록 끝의 더 보기가 질문 히스토리 패널을 연다', async () => {
     const user = userEvent.setup();
     render(<HomeSideNav />);
 
-    await user.click(screen.getByRole('button', { name: '최근 질문' }));
+    await user.click(screen.getByRole('button', { name: '더 보기' }));
 
     expect(mockSidebarState.togglePanel).toHaveBeenCalledWith('questionsHistory');
+  });
+
+  it('최근 채팅 머리글의 접기와 액션이 배선돼 있다', async () => {
+    const user = userEvent.setup();
+    render(<HomeSideNav />);
+
+    // 전체 보기는 더 보기 행과 같은 목적지다
+    await user.click(screen.getByRole('button', { name: '전체 보기' }));
+    expect(mockSidebarState.togglePanel).toHaveBeenCalledWith('questionsHistory');
+
+    const header = screen.getByRole('button', { name: '최근 채팅' });
+    expect(header).toHaveAttribute('aria-expanded', 'true');
+
+    await user.click(header);
+    expect(screen.getByRole('button', { name: '최근 채팅' })).toHaveAttribute('aria-expanded', 'false');
+    // 접으면 목록 끝의 더 보기까지 함께 사라진다
+    expect(screen.queryByRole('button', { name: '더 보기' })).toBeNull();
+  });
+
+  it('시안에 없는 정렬 메뉴를 만들지 않는다', () => {
+    // 시안의 정렬 항목 세 개가 전부 같은 placeholder라 지어낼 수 없다
+    render(<HomeSideNav />);
+
+    expect(screen.queryByRole('button', { name: /정렬|보기 변경/ })).toBeNull();
   });
 
   it('요청됨과 모드 스위처가 위키 쪽으로 이동한다', async () => {
@@ -95,13 +125,13 @@ describe('HomeSideNav 펼침', () => {
     expect(mockPush).toHaveBeenCalledWith('/llm-wiki');
   });
 
-  it('즐겨찾기는 갈 곳이 없어 비활성이다', () => {
+  it('시안에 없는 즐겨찾기·프로젝트 섹션을 만들지 않는다', () => {
     render(<HomeSideNav />);
 
-    // 트리 채널 행도 "채널명"으로 시작하므로 라벨 전체를 맞춰 고른다
-    const favorites = screen.getAllByRole('button', { name: HOME_FAVORITE_ITEMS[0].label });
-    expect(favorites).toHaveLength(HOME_FAVORITE_ITEMS.length);
-    favorites.forEach((button) => expect(button).toBeDisabled());
+    expect(screen.queryByText('즐겨찾기')).toBeNull();
+    expect(screen.queryByText('프로젝트')).toBeNull();
+    // 트리가 없으므로 채널 행도 없다
+    expect(screen.queryByRole('button', { name: /^채널명/ })).toBeNull();
   });
 
   it('현재 경로에 따라 활성 메뉴가 갈린다', () => {
@@ -109,14 +139,14 @@ describe('HomeSideNav 펼침', () => {
     render(<HomeSideNav />);
 
     expect(screen.getByRole('button', { name: '검색' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('button', { name: '새 채팅' })).not.toHaveAttribute('aria-current');
+    expect(menuRow('새 채팅')).not.toHaveAttribute('aria-current');
   });
 
   it('문서 탐색 모드에서는 새 채팅이 활성이 아니다', () => {
     mockSearchParams.set('mode', 'docs');
     render(<HomeSideNav />);
 
-    expect(screen.getByRole('button', { name: '새 채팅' })).not.toHaveAttribute('aria-current');
+    expect(menuRow('새 채팅')).not.toHaveAttribute('aria-current');
   });
 
   // 페이지네이션 "불러오는 중..."은 구 사이드바 동작이라 이 금지 목록에서 뺀다
@@ -132,25 +162,38 @@ describe('HomeSideNav 닫힘', () => {
     mockSidebarState.isSidebarOpen = false;
   });
 
-  it('Rail 4항목이 구 사이드바 동선을 잇는다', async () => {
+  it('Rail 5항목이 시안 순서대로 배치된다', () => {
+    render(<HomeSideNav />);
+
+    const labels = ['새 채팅', '검색', '요청됨', '문의 대응', '최근 채팅'];
+    labels.forEach((label) => expect(screen.getByRole('button', { name: label })).toBeInTheDocument());
+    // 문서 탐색은 닫힘 시안에서 빠졌다 — 펼침에만 남는다
+    expect(screen.queryByRole('button', { name: '문서 탐색' })).toBeNull();
+  });
+
+  it('Rail 항목이 펼침과 같은 목적지로 이동한다', async () => {
     const user = userEvent.setup();
     render(<HomeSideNav />);
 
-    await user.click(screen.getByRole('button', { name: '문서 탐색' }));
-    expect(mockPush).toHaveBeenCalledWith('/?mode=docs');
+    await user.click(screen.getByRole('button', { name: '검색' }));
+    expect(mockPush).toHaveBeenCalledWith('/search');
+
+    await user.click(screen.getByRole('button', { name: '요청됨' }));
+    expect(mockPush).toHaveBeenCalledWith('/llm-wiki/review');
 
     await user.click(screen.getByRole('button', { name: '문의 대응' }));
     expect(mockPush).toHaveBeenCalledWith('/agent-studio');
 
-    // 히스토리는 라우팅이 아니라 질문 히스토리 패널 토글이다
-    await user.click(screen.getByRole('button', { name: '히스토리' }));
+    // 최근 채팅은 라우팅이 아니라 질문 히스토리 패널 토글이다
+    await user.click(screen.getByRole('button', { name: '최근 채팅' }));
     expect(mockSidebarState.togglePanel).toHaveBeenCalledWith('questionsHistory');
   });
 
-  it('닫힘에는 트리와 섹션이 없다', () => {
+  it('닫힘에는 트리와 섹션 머리글이 없다', () => {
     render(<HomeSideNav />);
 
     expect(screen.queryByText('프로젝트')).toBeNull();
-    expect(screen.queryByText('최근 질문')).toBeNull();
+    expect(screen.queryByText('에이전트')).toBeNull();
+    expect(screen.queryByRole('button', { name: '더 보기' })).toBeNull();
   });
 });

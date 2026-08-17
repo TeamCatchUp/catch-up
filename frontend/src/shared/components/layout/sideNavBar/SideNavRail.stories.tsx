@@ -62,10 +62,13 @@ export const HomeCollapsedMenuCompositionTBD: Story = {
   play: async ({ args, canvasElement, step, userEvent }) => {
     const canvas = within(canvasElement);
 
-    await expect(canvas.getByRole('button', { name: '문서 탐색' })).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: '히스토리' })).toBeInTheDocument();
-    // 닫힘에는 프로젝트 트리가 없다
-    await expect(canvas.queryByText('프로젝트')).toBeNull();
+    // 컴포넌트 세트 585:7097 기준 5항목. 문서 탐색은 빠졌고 히스토리는 최근 채팅이 됐다
+    for (const label of ['새 채팅', '검색', '요청됨', '문의 대응', '최근 채팅']) {
+      await expect(canvas.getByRole('button', { name: label })).toBeInTheDocument();
+    }
+    await expect(canvas.queryByRole('button', { name: '문서 탐색' })).toBeNull();
+    // 닫힘에는 트리가 없다
+    await expect(canvas.queryByText('위키')).toBeNull();
 
     await step('Divider 위아래 간격이 다르다 — 눈으로는 놓치기 쉬워 값으로 고정한다', async () => {
       const nav = canvasElement.querySelector('nav')!;
@@ -79,6 +82,17 @@ export const HomeCollapsedMenuCompositionTBD: Story = {
       await expect(Math.round(box(itemList).top - box(divider).bottom)).toBe(12);
       await expect(Math.round(box(divider).width)).toBe(20);
       await expect(Math.round(box(itemList.children[0]).height)).toBe(57);
+    });
+
+    await step('스위처는 한 통에 담기고 아래에 단색 띠가 깔린다', async () => {
+      const switcherBox = canvasElement.querySelector('[data-slot="side-nav-rail-space-switcher"]')!;
+      const style = getComputedStyle(switcherBox);
+
+      // 40 = 2 + 36 + 2, 80 = 2 + 36 + 4 + 36 + 2
+      await expect(Math.round(switcherBox.getBoundingClientRect().width)).toBe(40);
+      await expect(Math.round(switcherBox.getBoundingClientRect().height)).toBe(80);
+      // 블러 0의 단색 오프셋 — 값이 아니라 형태가 계약이다
+      await expect(style.boxShadow).toMatch(/0px 4px 0px 0px/);
     });
 
     await userEvent.click(canvas.getByRole('button', { name: '사이드바 펼치기' }));

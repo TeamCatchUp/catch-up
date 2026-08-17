@@ -119,6 +119,67 @@ describe('WikiSideNav 펼침', () => {
     expect(screen.getByRole('button', { name: '위키 대시보드' })).not.toHaveAttribute('aria-current');
   });
 
+  it('트리 행의 더보기를 누르면 행 종류에 맞는 메뉴가 열린다', async () => {
+    const user = userEvent.setup();
+    render(<WikiSideNav />);
+
+    // 액션은 hover·포커스에서만 나온다. jsdom엔 Tailwind가 없어 항상 트리에 있지만
+    // 접근 이름으로 좁혀야 캐럿이 아니라 더보기가 잡힌다
+    const channelLabel = '채널명 text text text text text text text text';
+    await user.click(screen.getAllByRole('button', { name: `${channelLabel} 더보기` })[0]);
+
+    expect(screen.getByText('채널')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '링크 복사' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '이름 바꾸기' })).toBeInTheDocument();
+    // 최종 편집자·시각은 API 계약이 없어 넣지 않는다
+    expect(screen.queryByText(/최종 편집/)).toBeNull();
+  });
+
+  it('트리 행의 하위 추가를 누르면 파일·폴더 메뉴가 열린다', async () => {
+    const user = userEvent.setup();
+    render(<WikiSideNav />);
+
+    const channelLabel = '채널명 text text text text text text text text';
+    await user.click(screen.getAllByRole('button', { name: `${channelLabel} 하위 추가` })[0]);
+
+    expect(screen.getByText('하위 페이지 추가')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '파일' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '폴더' })).toBeInTheDocument();
+  });
+
+  it('섹션 머리글로 즐겨찾기·위키를 접을 수 있다', async () => {
+    const user = userEvent.setup();
+    render(<WikiSideNav />);
+
+    const favoriteRows = () => screen.queryAllByRole('button', { name: /^채널명 text text text text text text$/ });
+    expect(favoriteRows()).toHaveLength(5);
+
+    const favorites = screen.getByRole('button', { name: '즐겨찾기' });
+    expect(favorites).toHaveAttribute('aria-expanded', 'true');
+
+    await user.click(favorites);
+    expect(screen.getByRole('button', { name: '즐겨찾기' })).toHaveAttribute('aria-expanded', 'false');
+    expect(favoriteRows()).toHaveLength(0);
+
+    // 트리는 자기 머리글만 따른다 — 즐겨찾기를 접어도 남는다
+    const treeRows = () => screen.queryAllByRole('button', { name: /^채널명 text text text text text text text text$/ });
+    expect(treeRows()).toHaveLength(3);
+    await user.click(screen.getByRole('button', { name: '위키' }));
+    expect(treeRows()).toHaveLength(0);
+  });
+
+  it('위키 머리글의 + 는 채널 추가 메뉴를 연다', async () => {
+    const user = userEvent.setup();
+    render(<WikiSideNav />);
+
+    await user.click(screen.getByRole('button', { name: '채널 추가' }));
+
+    expect(screen.getByText('하위 페이지 추가')).toBeInTheDocument();
+    // 섹션에서는 채널만 만든다 — 파일·폴더는 채널 아래에서만 생긴다
+    expect(screen.getByRole('button', { name: '채널' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '파일' })).toBeNull();
+  });
+
   it('로딩·빈 목록·에러 문구를 만들지 않는다', () => {
     // 시안이 없는 상태라 발명 금지 대상이다 (docs/state-audit/전역-snb.md §7)
     const { container } = render(<WikiSideNav />);

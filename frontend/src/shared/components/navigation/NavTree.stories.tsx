@@ -297,15 +297,18 @@ export const RowActions: Story = {
     await expect(canvas.getByRole('button', { name: '파일명texttexttext 1 더보기' })).toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: '파일명texttexttext 1 하위 추가' })).toBeNull();
 
-    // 액션 클릭은 이동도 토글도 건드리지 않는다
-    await userEvent.click(canvas.getByRole('button', { name: '파일명texttexttext 1 더보기' }));
-    await expect(args.onNodeMore).toHaveBeenCalledWith('file-1');
+    // 액션 클릭은 이동도 토글도 건드리지 않는다.
+    // 두 번째 인자는 눌린 버튼 자신이다 — 소비처가 메뉴를 이 위치에 붙인다
+    const moreButton = canvas.getByRole('button', { name: '파일명texttexttext 1 더보기' });
+    await userEvent.click(moreButton);
+    await expect(args.onNodeMore).toHaveBeenCalledWith('file-1', moreButton);
     await expect(args.onNodeClick).not.toHaveBeenCalled();
 
     // 하위 추가는 canAddChild 행에서만 불린다
     const folder = canvas.getByRole('button', { name: '폴더명 text text text t 2' });
     folder.focus();
-    await userEvent.click(canvas.getByRole('button', { name: '폴더명 text text text t 2 하위 추가' }));
-    await expect(args.onNodeAdd).toHaveBeenCalledWith('folder-2');
+    const addButton = canvas.getByRole('button', { name: '폴더명 text text text t 2 하위 추가' });
+    await userEvent.click(addButton);
+    await expect(args.onNodeAdd).toHaveBeenCalledWith('folder-2', addButton);
   },
 };

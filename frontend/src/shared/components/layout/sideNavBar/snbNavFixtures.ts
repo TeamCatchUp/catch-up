@@ -35,7 +35,7 @@ export const TEAMSPACE_ICON = IconTeamspace;
 /** 요청됨 배지 건수. 집계 API 계약이 없어 시안 값을 그대로 쓴다 */
 export const REQUESTED_COUNT = 1;
 
-// 문서 탐색은 시안 펼침에 없지만 구 사이드바가 양쪽에 두던 메뉴라 홈 구성에 남긴다
+// 문서 탐색은 시안에 없지만 구 사이드바 진입점이라 홈 펼침에만 남긴다
 export const HOME_PRIMARY_ITEMS: readonly SnbNavFixtureItem[] = [
   { id: 'new-chat', label: '새 채팅', Icon: IconAdd },
   { id: 'search', label: '검색', Icon: IconSearch300 },
@@ -47,22 +47,28 @@ export const HOME_AGENT_ITEMS: readonly SnbNavFixtureItem[] = [
   { id: 'inquiry', label: '문의 대응', Icon: IconAgent },
 ];
 
+/** 조립 스토리 전용 데이터. 홈 펼침 시안에는 즐겨찾기 섹션이 없다 */
 export const HOME_FAVORITE_ITEMS: readonly SnbNavFixtureItem[] = [
   { id: 'fav-1', label: '채널명 text text text text text text', Icon: IconFile },
   { id: 'fav-2', label: '채널명 text text text text text text', Icon: IconFile },
 ];
 
+/** 홈 펼침의 최근 채팅 섹션. 시안은 5행이고 그 아래에 더 보기 행이 붙는다 */
 export const HOME_RECENT_TITLES: readonly string[] = [
+  '연동 테스트 중단 리스크연동 테스트 중단 리스크',
+  '연동 테스트 중단 리스크연동 테스트 중단 리스크',
   '연동 테스트 중단 리스크연동 테스트 중단 리스크',
   '연동 테스트 중단 리스크연동 테스트 중단 리스크',
   '연동 테스트 중단 리스크연동 테스트 중단 리스크',
 ];
 
+/** 홈 닫힘 레일. 시안에는 문서 탐색이 없고 히스토리 자리가 최근 채팅이다 */
 export const HOME_RAIL_ITEMS: readonly SnbNavFixtureItem[] = [
   { id: 'new-chat', label: '새 채팅', Icon: IconAdd },
-  { id: 'doc-search', label: '문서 탐색', Icon: IconDocumentSearch },
+  { id: 'search', label: '검색', Icon: IconSearch300 },
+  { id: 'requested', label: '요청됨', Icon: IconUpdate },
   { id: 'inquiry', label: '문의 대응', Icon: IconAgent },
-  { id: 'history', label: '히스토리', Icon: IconHistory },
+  { id: 'recent-chat', label: '최근 채팅', Icon: IconHistory },
 ];
 
 export const WIKI_PRIMARY_ITEMS: readonly SnbNavFixtureItem[] = [

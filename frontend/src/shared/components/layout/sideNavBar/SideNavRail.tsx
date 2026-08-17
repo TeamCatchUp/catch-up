@@ -32,10 +32,13 @@ export default function SideNavRail({ spaceSwitcher, children, footer, onExpand,
         <CatchupLogo aria-hidden className="h-7.5 w-7" />
       </button>
 
-      {/* 두 모드가 한 통 안에 담긴 세그먼트다 — 선택 칸만 흰 카드로 떠 보인다 */}
+      {/*
+       * 두 모드가 한 통 안에 담긴 세그먼트다. 아래 4px 띠는 블러 없는 단색 그림자라
+       * 통이 한 겹 얹힌 것처럼 보이게 한다.
+       */}
       <div
         data-slot="side-nav-rail-space-switcher"
-        className="bg-fill-normal-strong mt-3 flex flex-col items-center gap-1 rounded-xl p-0.5"
+        className="bg-fill-normal-strong mt-3 flex flex-col items-center gap-1 rounded-xl p-0.5 shadow-[0_4px_0_0_var(--color-accent-light-blue-lighten)]"
       >
         {spaceSwitcher}
       </div>
