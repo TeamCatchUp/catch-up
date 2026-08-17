@@ -862,3 +862,126 @@ def test_promoted_candidate_is_not_promoted_again() -> None:
     assert second.singletons_promoted == 0
     assert len(uow.knowledge_nodes.nodes) == 1
     assert len(uow.knowledge_nodes.aliases) == 1
+
+
+def _actor_candidate(
+    *,
+    external_key: str,
+    email: str | None,
+    name: str = "팀원A",
+    minutes: int = 0,
+) -> StoredEntityCandidate:
+    """행위자 후보 하나를 만든다. 저장 단계가 쓰는 attributes 모양이다."""
+    attributes: dict[str, object] = {
+        "external_key": external_key,
+        "actor": {
+            "source_entity_type": "channel_talk_user",
+            "user_type": "member",
+        },
+    }
+    if email is not None:
+        attributes["email"] = email
+    return StoredEntityCandidate(
+        id=uuid.uuid4(),
+        run_id=uuid.uuid4(),
+        local_key="m1",
+        proposed_type="customer",
+        proposed_name=name,
+        extraction_method=ExtractionMethod.DETERMINISTIC,
+        raw_payload={"attributes": attributes},
+        source_type="channel_talk",
+        created_at=NOW + timedelta(minutes=minutes),
+    )
+
+
+def _actor_nodes(uow: FakeUnitOfWork) -> list[KnowledgeNode]:
+    return [
+        node
+        for node in uow.knowledge_nodes.nodes.values()
+        if node.entity_type == "customer"
+    ]
+
+
+def test_actor_candidates_with_same_email_share_one_node() -> None:
+    """external_key가 달라도 이메일이 같으면 노드 하나로 모인다."""
+    uow = FakeUnitOfWork(
+        [
+            _actor_candidate(external_key="ext-1", email="neo@x.com"),
+            _actor_candidate(external_key="ext-2", email="neo@x.com", minutes=1),
+        ]
+    )
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE,
+        judge=None,
+        uow=uow,
+    )
+
+    assert result.nodes_created == 1
+    (node,) = _actor_nodes(uow)
+    assert node.canonical_key == "channel_talk:customer:email:neo@x.com"
+    assert node.attributes["actor"]["external_keys"] == ["ext-1", "ext-2"]
+    assert result.candidates_accepted == 1
+    assert result.candidates_merged == 1
+
+
+def test_actor_without_email_falls_back_to_external_key() -> None:
+    """이메일이 없으면 external_key가 동일성 키다."""
+    uow = FakeUnitOfWork(
+        [
+            _actor_candidate(external_key="ext-7", email=None, name="엘리 708"),
+            _actor_candidate(
+                external_key="ext-7",
+                email=None,
+                name="엘리 708",
+                minutes=1,
+            ),
+        ]
+    )
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE,
+        judge=None,
+        uow=uow,
+    )
+
+    assert result.nodes_created == 1
+    (node,) = _actor_nodes(uow)
+    assert node.canonical_key == "channel_talk:customer:external:ext-7"
+
+
+def test_email_seen_later_attaches_to_external_key_node() -> None:
+    """뒤늦게 이메일이 보이면 external_key로 만든 노드에 붙는다."""
+    uow = FakeUnitOfWork(
+        [
+            _actor_candidate(external_key="ext-7", email=None),
+            _actor_candidate(external_key="ext-7", email="late@x.com", minutes=1),
+        ]
+    )
+
+    resolve_entity_candidates(workspace_id=WORKSPACE, judge=None, uow=uow)
+
+    (node,) = _actor_nodes(uow)
+    assert node.attributes["actor"]["emails"] == ["late@x.com"]
+
+
+def test_actor_resolution_never_calls_judge() -> None:
+    """행위자 후보는 LLM 판정에 절대 올라가지 않는다."""
+    judge = FakeJudge(
+        IdentityVerdict(
+            same=True,
+            reason="쓰이면 안 된다",
+            proposed_type="customer",
+            proposed_name="팀원A",
+        )
+    )
+    uow = FakeUnitOfWork(
+        [
+            _actor_candidate(external_key="a", email="a@x.com"),
+            _actor_candidate(external_key="b", email="a@x.com", minutes=1),
+        ]
+    )
+
+    resolve_entity_candidates(workspace_id=WORKSPACE, judge=judge, uow=uow)
+
+    assert judge.calls == []
