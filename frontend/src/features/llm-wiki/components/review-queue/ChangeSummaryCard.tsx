@@ -2,8 +2,8 @@ import IconAiFilled from '@/public/icons/icon/ai_filled.svg';
 
 /** 시안의 AI 오버레이 그라데이션 2겹. 코드 토큰이 없어 컴포넌트 로컬로 둔다 */
 const AI_GRADIENT =
-  'radial-gradient(circle at 1% 8%, rgba(223, 228, 255, 0.8) 0%, rgba(255, 255, 255, 0) 100%), ' +
-  'radial-gradient(circle at 47% 50%, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0) 51%, rgba(218, 243, 255, 0.8) 90%)';
+  'radial-gradient(5.08% 137.64% at 0.69% 7.96%, rgba(223, 228, 255, 0.8) 0%, rgba(255, 255, 255, 0) 100%), ' +
+  'radial-gradient(90.98% 94.18% at 47.32% 50.44%, #fff 0%, rgba(255, 255, 255, 0) 51.01%, rgba(218, 243, 255, 0.8) 90.17%)';
 
 interface ChangeSummaryCardProps {
   changeCount: number;
