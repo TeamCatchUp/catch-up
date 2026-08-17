@@ -200,6 +200,39 @@ def test_prompt_lists_relation_edges() -> None:
     )
 
 
+def test_prompt_separates_wording_hints_from_facts() -> None:
+    """원문 유래 문장은 사실이 아니라 표현 힌트 절에 실린다."""
+    llm = _FakeLlm(_parsed("문장이다."))
+    request = NarrationRequest(
+        block_kind="relation_section",
+        heading="requested_by(out)",
+        topic_hint="requested_by(out)",
+        statements=(),
+        edges=("기능 요청 A → requested_by → 팀원A",),
+        variants=(),
+        style_instruction="담백하게 쓴다.",
+        purpose_sentence="이 문서는 현황을 보는 데 쓴다.",
+        hints=("커넥터 있어?",),
+    )
+
+    LlmBlockNarrator(llm).narrate(request)
+
+    rendered = llm.structured.prompts[0]
+    assert "## Wording hints (not facts)" in rendered
+    assert "커넥터 있어?" in rendered
+    assert "never add a party, a date or a number from them" in rendered
+    assert "wording hints add no facts" in rendered
+
+
+def test_prompt_omits_the_hint_section_without_hints() -> None:
+    """힌트가 없으면 그 절 자체가 프롬프트에 서지 않는다."""
+    llm = _FakeLlm(_parsed("문장이다."))
+
+    LlmBlockNarrator(llm).narrate(_request())
+
+    assert "## Wording hints (not facts)" not in llm.structured.prompts[0]
+
+
 def test_empty_narrative_is_an_error() -> None:
     """빈 산문은 성공이 아니라 실패다."""
     llm = _FakeLlm(_parsed("   "))

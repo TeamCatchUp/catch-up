@@ -48,6 +48,7 @@ from typing import Protocol
 from typing import Self
 
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
+from catchup.knowledge_maintenance.domain.actor_identity import actor_display
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_OPEN_QUESTION
@@ -68,6 +69,7 @@ from catchup.knowledge_maintenance.domain.preset_catalog import DEFAULT_PURPOSE_
 from catchup.knowledge_maintenance.domain.preset_catalog import (
     DEFAULT_STYLE_INSTRUCTION,
 )
+from catchup.knowledge_maintenance.domain.preset_catalog import find_actor_exposure
 from catchup.knowledge_maintenance.domain.preset_catalog import find_kind_by_name
 from catchup.knowledge_maintenance.domain.preset_catalog import find_purpose
 from catchup.knowledge_maintenance.domain.preset_catalog import find_style
@@ -93,6 +95,11 @@ from catchup.knowledge_maintenance.ports.narrator import BlockNarrator
 from catchup.knowledge_maintenance.ports.narrator import NarrationError
 from catchup.knowledge_maintenance.ports.narrator import NarrationRequest
 from catchup.knowledge_maintenance.ports.relations import RelationRepository
+from catchup.knowledge_maintenance.ports.relations import StoredRelationEdge
+from catchup.knowledge_maintenance.services.traverse_relations import (
+    RELATION_HINT_PREFIX,
+)
+from catchup.knowledge_maintenance.services.traverse_relations import EdgeFormatter
 from catchup.knowledge_maintenance.services.traverse_relations import (
     relation_section_block,
 )
@@ -265,6 +272,7 @@ def compile_definition_artifacts(
 
             style_instruction = _style_instruction(uow, definition, narrator)
             purpose_sentence = _purpose_sentence(uow, definition)
+            exposure = _actor_exposure(uow, definition)
 
             sources = uow.artifacts.find_entity_nodes_by_types(
                 entity_types=definition.selection_spec.entity_types,
@@ -284,6 +292,7 @@ def compile_definition_artifacts(
                         source=source,
                         ontology_version=vocabulary.snapshot_id or None,
                         now=now,
+                        exposure=exposure,
                     )
                 except RelationPathTruncatedError as error:
                     # 이 문서만 접는다. 정의 하나가 어긋났을 때와 같은
@@ -501,6 +510,46 @@ def _purpose_sentence(
     return f"이 문서의 목적은 '{purpose.label}'이다. {kind_sentence}"
 
 
+def _actor_exposure(
+    uow: DefinitionCompileUnitOfWork,
+    definition: StoredArtifactDefinition,
+) -> str:
+    """정의가 걸린 채널의 목적으로 행위자 노출 수준을 정한다.
+
+    노출은 도메인이 정하고 목적은 그 도메인을 가리키는 손잡이라, 채널이
+    고른 목적 하나만 읽으면 된다. 목적이 없거나 카탈로그 밖 id면 기본
+    수준으로 떨어진다 — 모르는 목적에 더 넓은 수준을 주면 이메일이 조용히
+    문서로 새어 나간다.
+
+    narrator 유무와 무관하게 읽는다. 노출은 산문이 아니라 블록 본문 자체를
+    바꾸므로, 서술을 붙이지 않는 컴파일에서도 같은 값이 필요하다.
+    """
+    return find_actor_exposure(
+        uow.artifact_definitions.find_channel_purpose(
+            channel_id=definition.channel_id,
+        )
+    )
+
+
+def _actor_edge_line(exposure: str) -> EdgeFormatter:
+    """노출 수준을 박아 둔 간선 서식을 만든다.
+
+    노출은 문서를 읽는 자리에서만 정해지는 값이라 순회가 알 필요가 없다.
+    행위자가 아닌 노드는 어느 수준에서도 이름이 그대로다.
+    """
+
+    def _line(edge: StoredRelationEdge, relation_type: str) -> str:
+        source = actor_display(
+            edge.source_display_name, edge.source_attributes, exposure
+        )
+        target = actor_display(
+            edge.target_display_name, edge.target_attributes, exposure
+        )
+        return f"{source} → {relation_type} → {target}"
+
+    return _line
+
+
 def _relation_blocks(
     uow: DefinitionCompileUnitOfWork,
     *,
@@ -508,6 +557,7 @@ def _relation_blocks(
     source: EntityCardSource,
     ontology_version: str | None,
     now: datetime,
+    exposure: str,
 ) -> tuple[ArtifactBlock, ...]:
     """정의가 고른 경로마다 관계 절을 하나씩 만든다.
 
@@ -517,6 +567,9 @@ def _relation_blocks(
 
     이을 것도 잘린 걸음도 없는 경로는 블록을 만들지 않는다. 잘라 낸
     것이 없으면 감춘 것도 없으므로 그 문서는 나머지 절로 그대로 선다.
+
+    본문 줄의 이름은 exposure가 정한 수준으로 적는다. 노출은 블록 본문을
+    바꾸므로 산문을 붙이지 않는 컴파일에서도 같이 걸린다.
 
     잘림만 있고 완주가 없으면 그 문서의 컴파일은 실패한다 — 불완전할
     수 있는 문서를 소비 표면에 올리지 않는다. 근거 장부에는 완주한
@@ -537,6 +590,7 @@ def _relation_blocks(
             start_node_id=source.node_id,
             path=path,
             now=now,
+            edge_line=_actor_edge_line(exposure),
         )
         block = relation_section_block(
             path=path,
@@ -758,9 +812,13 @@ def _narration_request(
     """블록 하나를 서술 요청으로 옮긴다. 근거가 없으면 None이다.
 
     관계 절은 사실 입력이 다르다. 그 블록은 인용을 갖지 않고 근거를
-    관계 장부로 남기며, 본문 줄이 곧 관계에 붙은 원문 유래 문장과 잘린
-    걸음 안내다. 그래서 관계 절만 본문 줄을 사실 입력으로 넘기고, 검증된
-    인용을 요구하는 규칙은 나머지 블록에만 건다.
+    관계 장부로 남기며, 본문 줄이 곧 사실 입력이다. 그래서 관계 절만 본문
+    줄을 넘기고, 검증된 인용을 요구하는 규칙은 나머지 블록에만 건다.
+
+    다만 본문 줄을 통째로 사실로 넘기지는 않는다. 들여쓴 힌트 줄은 관계에
+    붙은 원문 문장이라 그 말을 한 사람이 관계의 상대 노드로 읽힐 자리가
+    있다. 그래서 접두로 갈라 간선 줄만 사실로 넘기고 원문 문장은 표현
+    힌트로 넘긴다. 잘린 걸음을 알리는 줄은 사실이므로 간선 쪽에 남는다.
 
     claim 절·열린 질문·대조 블록의 사실 입력은 검증된 인용뿐이다. 블록
     본문과 제목은 색인용 라벨에서 온 문장이라 근거가 아니라 주제 힌트로만
@@ -781,15 +839,26 @@ def _narration_request(
         )
         if not lines:
             return None
+        edges = tuple(
+            line
+            for line in lines
+            if not line.startswith(RELATION_HINT_PREFIX)
+        )
+        hints = tuple(
+            line[len(RELATION_HINT_PREFIX) :]
+            for line in lines
+            if line.startswith(RELATION_HINT_PREFIX)
+        )
         return NarrationRequest(
             block_kind=block.block_kind,
             heading=block.heading,
             topic_hint=block.heading,
             statements=(),
-            edges=lines,
+            edges=edges,
             variants=(),
             style_instruction=style_instruction,
             purpose_sentence=purpose_sentence,
+            hints=hints,
         )
     statements = tuple(
         source.statement

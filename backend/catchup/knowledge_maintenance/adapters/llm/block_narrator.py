@@ -68,6 +68,7 @@ class LlmBlockNarrator:
                 topic_hint=request.topic_hint,
                 statements=list(request.statements),
                 edges=list(request.edges),
+                hints=list(request.hints),
                 variants=[
                     (body, list(items)) for body, items in request.variants
                 ],
