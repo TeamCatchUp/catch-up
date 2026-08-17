@@ -1,6 +1,7 @@
 'use client';
 
 import type { ComponentProps, ComponentType, ReactNode, SVGProps } from 'react';
+import type { DateRange } from 'react-day-picker';
 
 import IconAlign from '@/public/icons/icon/align.svg';
 import IconCalendar from '@/public/icons/icon/calendar.svg';
@@ -11,19 +12,26 @@ import IconPersonFilled from '@/public/icons/icon/person_filled.svg';
 import IconProgress from '@/public/icons/icon/progress.svg';
 import IconSearch from '@/public/icons/icon/search_300.svg';
 import { Chip } from '@/shared/components/ui/chips';
+import { DateRangePicker } from '@/shared/components/ui/date-range-picker';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
+import { cn } from '@/shared/utils/cn';
 
 import type { KnownDocumentStatus } from '../../types/llmWikiModel';
 import DocumentStatusBadge from '../document/DocumentStatusBadge';
 import ReviewQueueFilterSearchPanel, {
   type ReviewQueueFilterOption,
 } from '../review-queue/ReviewQueueFilterSearchPanel';
-import { DASHBOARD_STATUS_OPTIONS } from './dashboardFilters';
+import {
+  DASHBOARD_SORT_OPTIONS,
+  DASHBOARD_STATUS_OPTIONS,
+  type DashboardSortId,
+  getSortLabel,
+} from './dashboardFilters';
 
 /** 필터 축. 생성일은 캘린더 시안이 별도라 아직 트리거까지만이다. */
 export type DashboardFilterId = 'assignee' | 'status' | 'created-at';
@@ -83,8 +91,11 @@ function FilterDropdown({ trigger, width, children }: { trigger: ReactNode; widt
 }
 
 interface DashboardFilterBarProps {
-  /** 정렬 칩 라벨. 옵션 목록 시안이 별도라 아직 현재값만 표시한다. */
-  sortLabel: string;
+  sortId: DashboardSortId;
+  onSortSelect: (sortId: DashboardSortId) => void;
+  /** 생성일 범위. 공용 DateRangePicker가 캘린더를 그린다. */
+  createdAtRange?: DateRange;
+  onCreatedAtChange: (range: DateRange | undefined) => void;
   /** 활성 필터 — 해당 축 칩이 선택 톤이 되고 "축: 값"으로 표기된다. */
   activeAxis?: DashboardFilterId | null;
   activeValueLabel?: string;
@@ -94,14 +105,15 @@ interface DashboardFilterBarProps {
   onAssigneeToggle: (optionId: string) => void;
   onStatusSelect: (status: KnownDocumentStatus) => void;
   onSearchChange?: (keyword: string) => void;
-  onCreatedAtClick?: () => void;
-  onSortClick?: () => void;
   onClearFilters?: () => void;
 }
 
 /** 대시보드 문서 표 위의 검색·필터 바. 축 목록은 시안 실재 3종으로 고정이다. */
 export default function DashboardFilterBar({
-  sortLabel,
+  sortId,
+  onSortSelect,
+  createdAtRange,
+  onCreatedAtChange,
   activeAxis,
   activeValueLabel,
   assigneeOptions,
@@ -109,8 +121,6 @@ export default function DashboardFilterBar({
   onAssigneeToggle,
   onStatusSelect,
   onSearchChange,
-  onCreatedAtClick,
-  onSortClick,
   onClearFilters,
 }: DashboardFilterBarProps) {
   const valueOf = (axis: DashboardFilterId) => (activeAxis === axis ? activeValueLabel : undefined);
@@ -159,25 +169,39 @@ export default function DashboardFilterBar({
             ))}
           </FilterDropdown>
 
-          {/* 생성일 — 캘린더 시안이 별도 구획이라 아직 콜백만 올려보낸다 */}
-          <FilterChip
-            axisLabel="생성일"
-            valueLabel={valueOf('created-at')}
-            Icon={IconCalendar}
-            onClick={onCreatedAtClick}
+          {/* 생성일 — 공용 DateRangePicker가 캘린더·액션 바를 그리고 칩은 트리거만 맡는다 */}
+          <DateRangePicker
+            value={createdAtRange}
+            onChange={onCreatedAtChange}
+            align="start"
+            trigger={<FilterChip axisLabel="생성일" valueLabel={valueOf('created-at')} Icon={IconCalendar} />}
           />
 
           {/* 정렬 칩만 항상 선택 톤이다 — 정렬은 늘 걸려 있다 */}
-          <Chip
-            variant="square"
-            selected
-            onClick={onSortClick}
-            leadingIcon={<IconAlign />}
-            trailingIcon={<IconDropdownDown />}
-            className={CHIP_CLASS}
+          <FilterDropdown
+            width="w-62.5"
+            trigger={
+              <Chip
+                variant="square"
+                selected
+                leadingIcon={<IconAlign />}
+                trailingIcon={<IconDropdownDown />}
+                className={CHIP_CLASS}
+              >
+                {getSortLabel(sortId)}
+              </Chip>
+            }
           >
-            {sortLabel}
-          </Chip>
+            {DASHBOARD_SORT_OPTIONS.map((option) => (
+              <DropdownMenuItem
+                key={option.id}
+                onSelect={() => onSortSelect(option.id)}
+                className={cn('h-10', option.id === sortId && 'bg-fill-normal-interaction-hover')}
+              >
+                <span className="min-w-0 flex-1 truncate">{option.label}</span>
+              </DropdownMenuItem>
+            ))}
+          </FilterDropdown>
         </div>
 
         <button

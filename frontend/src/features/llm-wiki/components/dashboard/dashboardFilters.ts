@@ -1,3 +1,6 @@
+import type { DateRange } from 'react-day-picker';
+import { endOfDay, format, startOfDay } from 'date-fns';
+
 import type { DocumentRowData, KnownDocumentStatus } from '../../types/llmWikiModel';
 import { getDocumentStatusLabel } from '../document/DocumentStatusBadge';
 import type { DashboardFilterId } from './DashboardFilterBar';
@@ -68,6 +71,56 @@ export function createAssigneeFilter(names: readonly string[]): DashboardActiveF
     label: names.join(', '),
     matches: (row) => row.ownerName !== null && names.includes(row.ownerName),
   };
+}
+
+/**
+ * 생성일 범위 → 필터. 하루 단위로 자른다 — 사용자가 고르는 것은 날짜이지 시각이 아니다.
+ * 시작만 고른 상태(범위 선택 도중)는 그 하루로 본다.
+ */
+export function createCreatedAtFilter(range: DateRange | undefined): DashboardActiveFilter | null {
+  if (!range?.from) return null;
+
+  const from = startOfDay(range.from).getTime();
+  const to = endOfDay(range.to ?? range.from).getTime();
+  const label = range.to
+    ? `${format(range.from, 'yyyy.MM.dd')} - ${format(range.to, 'yyyy.MM.dd')}`
+    : format(range.from, 'yyyy.MM.dd');
+
+  return {
+    axis: 'created-at',
+    label,
+    matches: (row) => {
+      const createdAt = new Date(row.createdAt).getTime();
+      return createdAt >= from && createdAt <= to;
+    },
+  };
+}
+
+/** 정렬 옵션. 시안 드롭다운은 2개다(사용자 확정). */
+export type DashboardSortId = 'recent' | 'oldest';
+
+export const DASHBOARD_SORT_OPTIONS: readonly { id: DashboardSortId; label: string }[] = [
+  { id: 'recent', label: '최근 변경 순' },
+  { id: 'oldest', label: '오래된순' },
+];
+
+export function getSortLabel(sortId: DashboardSortId): string {
+  return DASHBOARD_SORT_OPTIONS.find((option) => option.id === sortId)!.label;
+}
+
+/**
+ * 최근 활동 기준 정렬. 표시 문자열("3시간 전")은 상대 표기라 쓸 수 없어 ISO 값으로 비교한다.
+ * 원본을 건드리지 않는다 — 소비처가 넘긴 배열이 정렬로 바뀌면 안 된다.
+ */
+export function sortDocuments(
+  documents: readonly DocumentRowData[],
+  sortId: DashboardSortId,
+): readonly DocumentRowData[] {
+  return [...documents].sort((a, b) =>
+    sortId === 'recent'
+      ? b.lastActivityAt.localeCompare(a.lastActivityAt)
+      : a.lastActivityAt.localeCompare(b.lastActivityAt),
+  );
 }
 
 /** 필터가 없으면 원본을 그대로 돌려준다 — 표는 항상 같은 배열 계약을 받는다. */

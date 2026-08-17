@@ -11,6 +11,8 @@ const BASE_DOCUMENT_ROW: DocumentRowData = {
   status: 'reviewed',
   ownerName: '팀원F',
   ownerProfileImageUrl: null,
+  createdAt: '2024-09-02T01:00:00.000Z',
+  lastActivityAt: '2024-12-15T06:00:00.000Z',
   lastActivityLabel: '3시간 전',
 };
 
@@ -31,6 +33,8 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
     ],
     status: 'pending_review',
     ownerName: '직원10',
+    createdAt: '2024-10-11T02:00:00.000Z',
+    lastActivityAt: '2024-12-12T08:00:00.000Z',
     lastActivityLabel: '2024.12.12',
   }),
   createDocumentRow({
@@ -41,6 +45,8 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
       { kind: 'folder', label: '환불' },
     ],
     ownerName: '이진수',
+    createdAt: '2024-08-20T03:00:00.000Z',
+    lastActivityAt: '2024-12-14T09:00:00.000Z',
     lastActivityLabel: '어제',
   }),
   // 이하 9행은 표·페이지네이션을 실제 분량으로 보기 위한 것이다.
@@ -54,6 +60,8 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
     ],
     status: 'pending_review',
     ownerName: '김하은',
+    createdAt: '2024-11-01T04:00:00.000Z',
+    lastActivityAt: '2024-12-12T05:00:00.000Z',
     lastActivityLabel: '2024.12.12',
   }),
   createDocumentRow({
@@ -64,6 +72,8 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
       { kind: 'folder', label: '정산' },
     ],
     ownerName: '최민우',
+    createdAt: '2024-07-15T05:00:00.000Z',
+    lastActivityAt: '2024-12-13T07:00:00.000Z',
     lastActivityLabel: '3일 전',
   }),
   createDocumentRow({
@@ -75,6 +85,8 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
     ],
     status: 'pending_review',
     ownerName: '팀원G',
+    createdAt: '2024-11-20T06:00:00.000Z',
+    lastActivityAt: '2024-12-11T04:00:00.000Z',
     lastActivityLabel: '2024.12.11',
   }),
   createDocumentRow({
@@ -85,6 +97,8 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
       { kind: 'folder', label: '데이터' },
     ],
     ownerName: '직원30',
+    createdAt: '2024-06-30T07:00:00.000Z',
+    lastActivityAt: '2024-12-10T03:00:00.000Z',
     lastActivityLabel: '2024.12.10',
   }),
   createDocumentRow({
@@ -96,6 +110,8 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
     ],
     status: 'pending_review',
     ownerName: '오세훈',
+    createdAt: '2024-10-05T08:00:00.000Z',
+    lastActivityAt: '2024-12-09T02:00:00.000Z',
     lastActivityLabel: '2024.12.09',
   }),
   createDocumentRow({
@@ -106,6 +122,8 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
       { kind: 'folder', label: '도입' },
     ],
     ownerName: '문가영',
+    createdAt: '2024-05-18T09:00:00.000Z',
+    lastActivityAt: '2024-12-08T01:00:00.000Z',
     lastActivityLabel: '2024.12.08',
   }),
   createDocumentRow({
@@ -117,6 +135,8 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
     ],
     status: 'pending_review',
     ownerName: '배수지',
+    createdAt: '2024-09-27T10:00:00.000Z',
+    lastActivityAt: '2024-12-05T10:00:00.000Z',
     lastActivityLabel: '2024.12.05',
   }),
   createDocumentRow({
@@ -127,6 +147,8 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
       { kind: 'folder', label: '수단 관리' },
     ],
     ownerName: '강태호',
+    createdAt: '2024-04-09T11:00:00.000Z',
+    lastActivityAt: '2024-12-03T11:00:00.000Z',
     lastActivityLabel: '2024.12.03',
   }),
   createDocumentRow({
@@ -138,6 +160,8 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
     ],
     status: 'pending_review',
     ownerName: '윤서아',
+    createdAt: '2024-12-01T12:00:00.000Z',
+    lastActivityAt: '2024-12-01T12:00:00.000Z',
     lastActivityLabel: '2024.12.01',
   }),
   // 담당자 미지정 표본 — 지표 카드의 같은 이름 필터가 실제로 걸리는지 보려면 이 행이 있어야 한다
@@ -149,6 +173,8 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
       { kind: 'folder', label: '연동' },
     ],
     ownerName: null,
+    createdAt: '2024-03-14T13:00:00.000Z',
+    lastActivityAt: '2024-11-28T13:00:00.000Z',
     lastActivityLabel: '2024.11.28',
   }),
 ];

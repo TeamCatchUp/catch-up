@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import type { DateRange } from 'react-day-picker';
 
 import IconDashboard from '@/public/icons/icon/dashboard.svg';
 import IconKebabHorizontal from '@/public/icons/icon/kebab_horizontal.svg';
@@ -14,10 +15,13 @@ import WikiSpaceTableFooter from '../space/WikiSpaceTableFooter';
 import DashboardFilterBar from './DashboardFilterBar';
 import {
   createAssigneeFilter,
+  createCreatedAtFilter,
   createStatusFilter,
   type DashboardActiveFilter,
+  type DashboardSortId,
   filterDocuments,
   resolveStatFilter,
+  sortDocuments,
 } from './dashboardFilters';
 import ReviewStatCard from './ReviewStatCard';
 
@@ -27,11 +31,8 @@ interface WikiDashboardPageProps {
   /** "내 담당" 필터의 기준. 로그인 사용자 API가 없어 주입받는다. */
   currentUserName: string;
   assigneeOptions: readonly ReviewQueueFilterOption[];
-  sortLabel: string;
   pageSize: number;
   onDocumentClick?: (documentId: string) => void;
-  onSortClick?: () => void;
-  onCreatedAtClick?: () => void;
   onPageSizeClick?: () => void;
   onMoreClick?: () => void;
 }
@@ -42,22 +43,25 @@ export default function WikiDashboardPage({
   documents,
   currentUserName,
   assigneeOptions,
-  sortLabel,
   pageSize,
   onDocumentClick,
-  onSortClick,
-  onCreatedAtClick,
   onPageSizeClick,
   onMoreClick,
 }: WikiDashboardPageProps) {
   // 필터는 한 번에 하나다 — 지표 카드와 드롭다운이 같은 자리를 놓고 서로를 덮어쓴다.
   const [activeFilter, setActiveFilter] = useState<DashboardActiveFilter | null>(null);
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<readonly string[]>([]);
+  const [createdAtRange, setCreatedAtRange] = useState<DateRange | undefined>();
   const [keyword, setKeyword] = useState('');
+  const [sortId, setSortId] = useState<DashboardSortId>('recent');
   const [currentPage, setCurrentPage] = useState(1);
 
-  const applyFilter = (next: DashboardActiveFilter | null, assigneeIds: readonly string[] = []) => {
+  const applyFilter = (
+    next: DashboardActiveFilter | null,
+    { assigneeIds = [], range }: { assigneeIds?: readonly string[]; range?: DateRange } = {},
+  ) => {
     setSelectedAssigneeIds(assigneeIds);
+    setCreatedAtRange(range);
     setActiveFilter(next);
     setCurrentPage(1);
   };
@@ -68,17 +72,22 @@ export default function WikiDashboardPage({
       : [...selectedAssigneeIds, optionId];
     const names = assigneeOptions.filter((option) => nextIds.includes(option.id)).map((option) => option.label);
 
-    applyFilter(createAssigneeFilter(names), nextIds);
+    applyFilter(createAssigneeFilter(names), { assigneeIds: nextIds });
   };
 
   const handleStatusSelect = (status: KnownDocumentStatus) => applyFilter(createStatusFilter(status));
+
+  const handleCreatedAtChange = (range: DateRange | undefined) =>
+    applyFilter(createCreatedAtFilter(range), { range });
 
   const visibleDocuments = useMemo(() => {
     const filtered = filterDocuments(documents, activeFilter, currentUserName);
     const needle = keyword.trim().toLowerCase();
     // 검색은 제목 대조다 — 본문·태그 검색은 계약이 없다.
-    return needle ? filtered.filter((row) => row.title.toLowerCase().includes(needle)) : filtered;
-  }, [activeFilter, currentUserName, documents, keyword]);
+    const searched = needle ? filtered.filter((row) => row.title.toLowerCase().includes(needle)) : filtered;
+
+    return sortDocuments(searched, sortId);
+  }, [activeFilter, currentUserName, documents, keyword, sortId]);
 
   const totalPages = Math.max(1, Math.ceil(visibleDocuments.length / pageSize));
 
@@ -121,7 +130,10 @@ export default function WikiDashboardPage({
           </div>
 
           <DashboardFilterBar
-            sortLabel={sortLabel}
+            sortId={sortId}
+            onSortSelect={setSortId}
+            createdAtRange={createdAtRange}
+            onCreatedAtChange={handleCreatedAtChange}
             activeAxis={activeFilter?.axis ?? null}
             activeValueLabel={activeFilter?.label}
             assigneeOptions={assigneeOptions}
@@ -132,8 +144,6 @@ export default function WikiDashboardPage({
               setKeyword(next);
               setCurrentPage(1);
             }}
-            onCreatedAtClick={onCreatedAtClick}
-            onSortClick={onSortClick}
             onClearFilters={() => {
               setKeyword('');
               applyFilter(null);

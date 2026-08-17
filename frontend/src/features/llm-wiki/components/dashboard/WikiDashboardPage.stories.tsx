@@ -18,10 +18,8 @@ const meta = {
     documents: DOCUMENT_ROW_FIXTURES,
     currentUserName: '팀원F',
     assigneeOptions: REVIEW_QUEUE_ASSIGNEE_OPTIONS,
-    sortLabel: '최근 변경 순',
     pageSize: 20,
     onDocumentClick: fn(),
-    onSortClick: fn(),
   },
   parameters: {
     ...catchupParameters({

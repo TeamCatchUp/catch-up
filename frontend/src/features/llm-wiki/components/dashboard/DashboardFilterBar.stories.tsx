@@ -10,14 +10,14 @@ const meta = {
   component: DashboardFilterBar,
   tags: ['autodocs'],
   args: {
-    sortLabel: '최근 변경 순',
+    sortId: 'recent',
+    onSortSelect: fn(),
+    onCreatedAtChange: fn(),
     assigneeOptions: REVIEW_QUEUE_ASSIGNEE_OPTIONS,
     selectedAssigneeIds: [],
     onAssigneeToggle: fn(),
     onStatusSelect: fn(),
     onSearchChange: fn(),
-    onCreatedAtClick: fn(),
-    onSortClick: fn(),
     onClearFilters: fn(),
   },
   parameters: {
@@ -34,7 +34,15 @@ const meta = {
         nodeId: '18116:58674',
       },
       viewport: { width: 1040, height: 460 },
-      states: ['default', 'active-status', 'status-dropdown', 'assignee-dropdown', 'narrow-slot'],
+      states: [
+        'default',
+        'active-status',
+        'status-dropdown',
+        'assignee-dropdown',
+        'sort-dropdown',
+        'created-at-calendar',
+        'narrow-slot',
+      ],
       reuseNotes: [
         '필터 칩은 shared Chip(variant=square)이다 — 미선택·선택 토큰이 시안과 그대로 일치해 새 칩을 만들지 않았다. 활성 칩의 선택 톤(Fill/Primary/Normal/Assistive·Line/Primary/Normal·Text/Primary/Normal)이 시안 18183:139291과 같다.',
         '상태 드롭다운의 옵션은 DocumentStatusBadge 그 자체다 — 시안 18127:61560의 옵션이 배지(violet/green + dash-circle/verified + px8 py4 radius8)와 규격까지 같아 배지를 그대로 넣었다.',
@@ -44,8 +52,8 @@ const meta = {
       dataNotes: [
         '축 3종(담당자·상태·생성일)은 시안이 고정한 목록이라 컴포넌트가 들고 있다. 옵션 데이터(담당자)는 props다.',
         '상태 옵션은 검토 대기·검토 완료 2종이고 하나만 고를 수 있다 — 시안 메모 "하나 만 선택 가능하게(기본이 전체)". 전체로 되돌리는 경로는 "필터 초기화"뿐이라 옵션에 전체를 넣지 않았다.',
-        '생성일은 캘린더 시안이 별도 구획(18183:138806 Date picker 580×360)이라 이번 범위에서 제외했다 — 칩은 콜백만 올려보낸다.',
-        '정렬 드롭다운(18183:139128, 2옵션)도 이번 범위 밖이다 — 현재값만 표시한다.',
+        '생성일은 공용 DateRangePicker를 그대로 쓴다 — 시안(18183:138806 Date picker 580×360)의 2개월·구분선·"오늘 선택/초기화"·"닫기/적용" 구성이 그 컴포넌트와 일치해 새로 만들지 않았다. 칩은 커스텀 트리거로 넘긴다.',
+        '정렬 옵션은 최근 변경 순·오래된순 2종이다(사용자 확정 8/14, 시안 18183:139128의 2옵션과 개수 일치). 정렬 기준은 lastActivityAt(ISO)이고 표시 문자열("3시간 전")로는 순서를 만들 수 없어 모델에 필드를 추가했다.',
       ],
       tokenNotes: [
         '바 컨테이너: 배경 Fill/Normal/Assistive(흰색) + Line/Normal/Neutral 테두리 + radius 12 + padding 20 + gap 12.',
@@ -150,9 +158,46 @@ export const AssigneeDropdown: Story = {
   },
 };
 
+/** 정렬 드롭다운. 최근 변경 순·오래된순 2종이고 현재값이 지속 하이라이트된다. */
+export const SortDropdown: Story = {
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    await userEvent.click(canvas.getByRole('button', { name: /최근 변경 순/ }));
+
+    const items = await body.findAllByRole('menuitem');
+    await expect(items).toHaveLength(2);
+
+    // 적용 중인 정렬만 채움이 있다.
+    const recentItem = body.getByText('최근 변경 순', { selector: '[role=menuitem] span' }).closest('[role=menuitem]')!;
+    const oldestItem = body.getByText('오래된순').closest('[role=menuitem]')!;
+    await expect(getComputedStyle(recentItem).backgroundColor).not.toBe(getComputedStyle(oldestItem).backgroundColor);
+
+    await userEvent.click(body.getByText('오래된순'));
+    await expect(args.onSortSelect).toHaveBeenCalledWith('oldest');
+  },
+};
+
+/** 생성일 칩 → 공용 DateRangePicker. 캘린더 2개월과 액션 바가 열린다. */
+export const CreatedAtCalendar: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    await userEvent.click(canvas.getByRole('button', { name: '생성일' }));
+
+    // 시안대로 2개월이 나란히 뜨고 액션 바가 붙는다.
+    await expect(await body.findByRole('button', { name: '오늘 선택' })).toBeInTheDocument();
+    await expect(body.getByRole('button', { name: '초기화' })).toBeInTheDocument();
+    await expect(body.getByRole('button', { name: '적용' })).toBeInTheDocument();
+    await expect(body.getAllByRole('grid')).toHaveLength(2);
+  },
+};
+
 /** 좁은 슬롯. 칩 묶음이 줄고 초기화 버튼은 밀리지 않아야 한다. */
 export const NarrowSlot: Story = {
-  args: { sortLabel: '최근 변경 순으로 아주 길게 정렬하기' },
+  args: { activeAxis: 'assignee', activeValueLabel: '직원10, 이진수, 팀원F, 김하은, 최민우' },
   decorators: [
     (Story) => (
       <div className="w-160 overflow-hidden">
@@ -166,8 +211,9 @@ export const NarrowSlot: Story = {
 
     await expect(slot.scrollWidth).toBeLessThanOrEqual(slot.clientWidth);
 
-    const sortChip = canvas.getByRole('button', { name: /최근 변경 순으로/ });
-    await expect(sortChip.getBoundingClientRect().width).toBeLessThanOrEqual(180);
+    // 긴 값이 들어와도 칩은 상한 180 안에서 잘린다.
+    const assigneeChip = canvas.getByRole('button', { name: /^담당자/ });
+    await expect(assigneeChip.getBoundingClientRect().width).toBeLessThanOrEqual(180);
 
     await expect(canvas.getByRole('button', { name: /필터 초기화/ })).toBeVisible();
   },

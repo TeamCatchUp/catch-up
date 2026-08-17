@@ -27,7 +27,6 @@ export default function Page() {
       documents={DOCUMENT_ROW_FIXTURES}
       currentUserName={CURRENT_USER_NAME}
       assigneeOptions={REVIEW_QUEUE_ASSIGNEE_OPTIONS}
-      sortLabel="최근 변경 순"
       pageSize={PAGE_SIZE}
       onDocumentClick={(documentId) => router.push(`/llm-wiki/${documentId}`)}
     />

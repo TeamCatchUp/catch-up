@@ -68,6 +68,12 @@ export interface DocumentRowData {
    */
   ownerName: string | null;
   ownerProfileImageUrl: string | null;
+  /** [BE] 생성 시각(ISO). 생성일 필터가 대조하는 값이다 */
+  createdAt: string;
+  /**
+   * [BE] 최근 활동 시각(ISO). 정렬 기준이다 — 표시 문자열은 "3시간 전"처럼 상대 표기라 정렬에 쓸 수 없다.
+   */
+  lastActivityAt: string;
   /** [SPEC] 최근 활동 표시 문자열 (예: "3시간 전", "2024.12.12") */
   lastActivityLabel: string;
 }
