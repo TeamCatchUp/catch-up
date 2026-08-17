@@ -1,5 +1,6 @@
 """preset 카탈로그 상수가 서로 어긋나지 않는지 검사한다."""
 
+from catchup.knowledge_maintenance.domain.actor_identity import ACTOR_EXPOSURES
 from catchup.knowledge_maintenance.domain.artifact_definition import (
     validate_selection_spec,
 )
@@ -9,6 +10,7 @@ from catchup.knowledge_maintenance.domain.preset_catalog import (
 )
 from catchup.knowledge_maintenance.domain.preset_catalog import PRESET_DOMAINS
 from catchup.knowledge_maintenance.domain.preset_catalog import PRESET_STYLES
+from catchup.knowledge_maintenance.domain.preset_catalog import find_actor_exposure
 from catchup.knowledge_maintenance.domain.preset_catalog import find_kind
 from catchup.knowledge_maintenance.domain.preset_catalog import find_kind_by_name
 from catchup.knowledge_maintenance.domain.preset_catalog import find_purpose
@@ -196,3 +198,22 @@ def test_find_kind_by_name_reaches_every_registered_kind() -> None:
 def test_find_kind_by_name_returns_none_for_unknown() -> None:
     """카탈로그 밖 kind는 없음으로 답한다."""
     assert find_kind_by_name("entity_summary") is None
+
+
+def test_voc_domain_exposes_name_and_email() -> None:
+    """VOC 도메인은 이름과 이메일을 함께 드러내는 수준으로 고정돼 있다."""
+    domain = next(d for d in PRESET_DOMAINS if d.id == "voc")
+    assert domain.actor_exposure == "name_email"
+
+
+def test_actor_exposure_follows_purpose_domain() -> None:
+    """노출 수준은 목적이 속한 도메인을 따라가고, 모르면 기본값이다."""
+    voc_purpose = next(d for d in PRESET_DOMAINS if d.id == "voc").purposes[0].id
+    assert find_actor_exposure(voc_purpose) == "name_email"
+    assert find_actor_exposure(None) == "name"
+    assert find_actor_exposure("no-such-purpose") == "name"
+
+
+def test_every_domain_exposure_is_a_known_level() -> None:
+    """모든 도메인의 노출 수준이 규약에 있는 값이다."""
+    assert all(d.actor_exposure in ACTOR_EXPOSURES for d in PRESET_DOMAINS)

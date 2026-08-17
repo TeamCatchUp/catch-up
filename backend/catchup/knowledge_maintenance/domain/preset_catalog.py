@@ -19,6 +19,9 @@ from catchup.knowledge_maintenance.contracts.extraction import EntityTypeEntry
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 from catchup.knowledge_maintenance.contracts.extraction import RelationTypeEntry
+from catchup.knowledge_maintenance.domain.actor_identity import ACTOR_EXPOSURES
+from catchup.knowledge_maintenance.domain.actor_identity import EXPOSURE_NAME
+from catchup.knowledge_maintenance.domain.actor_identity import EXPOSURE_NAME_EMAIL
 from catchup.knowledge_maintenance.domain.artifact_definition import DIRECTION_IN
 from catchup.knowledge_maintenance.domain.artifact_definition import DIRECTION_OUT
 from catchup.knowledge_maintenance.domain.artifact_definition import RelationPath
@@ -88,6 +91,10 @@ class PresetDomain:
         kinds: 이 도메인에서 만들 수 있는 문서 종류들을 담는다.
         seed_vocabulary: 이 도메인의 출발 어휘를 담는다. 버전은 발행
             시점에 붙으므로 snapshot_id는 비어 있다.
+        actor_exposure: 이 도메인의 문서가 행위자를 어느 수준까지
+            드러낼지 정한다. VOC는 사내 도구에서 고객 이메일을
+            민감정보로 보지 않는다는 결정으로 name_email이 기본이며,
+            전화번호는 어느 단계에도 없다. 채널 override는 열지 않는다.
     """
 
     id: str
@@ -95,6 +102,14 @@ class PresetDomain:
     purposes: tuple[PresetPurpose, ...]
     kinds: tuple[PresetKind, ...]
     seed_vocabulary: ExtractionVocabulary
+    actor_exposure: str = EXPOSURE_NAME
+
+    def __post_init__(self) -> None:
+        """규약 밖 노출 수준을 등재 시점에 막는다."""
+        if self.actor_exposure not in ACTOR_EXPOSURES:
+            raise ValueError(
+                f"알 수 없는 행위자 노출 수준이다: {self.actor_exposure!r}"
+            )
 
 
 _VOC_SEED = ExtractionVocabulary(
@@ -370,6 +385,7 @@ PRESET_DOMAINS: tuple[PresetDomain, ...] = (
         purposes=_VOC_PURPOSES,
         kinds=_VOC_KINDS,
         seed_vocabulary=_VOC_SEED,
+        actor_exposure=EXPOSURE_NAME_EMAIL,
     ),
     PresetDomain(
         id="product",
@@ -463,6 +479,9 @@ DEFAULT_STYLE_INSTRUCTION = (
     " 순서대로 적고, 꾸미는 말을 더하지 않는다."
 )
 
+# 목적이 없거나 카탈로그 밖 목적일 때 쓰는 행위자 노출 수준이다.
+DEFAULT_ACTOR_EXPOSURE = EXPOSURE_NAME
+
 # 카탈로그 밖 kind로 만들어진 문서에 쓰는 목적 문장이다.
 DEFAULT_PURPOSE_SENTENCE = (
     "이 문서는 이 대상에 대해 지금까지 확인된 사실을 모아 두는 데 쓴다."
@@ -515,3 +534,19 @@ def find_style(style_id: str) -> PresetStyle | None:
         if style.id == style_id:
             return style
     return None
+
+
+def find_actor_exposure(purpose_id: str | None) -> str:
+    """목적 id로 그 문서가 행위자를 드러낼 수준을 정한다.
+
+    노출 수준은 도메인이 정하고 목적은 도메인을 가리키는 손잡이일
+    뿐이다. 목적이 없거나 카탈로그 밖 id면 기본값으로 떨어진다 —
+    모르는 목적에 더 넓은 수준을 주면 이메일이 조용히 새어 나간다.
+    """
+    if purpose_id is None:
+        return DEFAULT_ACTOR_EXPOSURE
+    found = find_purpose(purpose_id)
+    if found is None:
+        return DEFAULT_ACTOR_EXPOSURE
+    domain, _ = found
+    return domain.actor_exposure
