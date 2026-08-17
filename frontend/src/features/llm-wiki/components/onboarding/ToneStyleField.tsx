@@ -47,7 +47,7 @@ export default function ToneStyleField({ label, options, selectedId, onSelect, s
               </span>
 
               <span className="flex flex-col gap-2">
-                <span className="bg-accent-light-blue-neutral text-text-normal-normal text-body-xsmall rounded-md2 w-fit px-1.5 py-0.5">
+                <span className="bg-fill-normal-strong text-text-normal-alternative text-body-xsmall rounded-md2 w-fit px-1.5 py-0.5">
                   {sampleTagLabel}
                 </span>
                 <span className="text-body-small text-text-normal-alternative">{option.sampleText}</span>

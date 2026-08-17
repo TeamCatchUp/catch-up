@@ -17,6 +17,10 @@ export interface WikiPurposeOption {
   label: string;
 }
 
+// 정보 카테고리 칩 아이콘. 시안 6종만 알려져 있고 나머지는 열어둔다
+export type KnownInfoCategoryIcon = 'support-agent' | 'lightbulb' | 'shield' | 'client' | 'database' | 'group';
+export type InfoCategoryIcon = KnownInfoCategoryIcon | (string & {});
+
 /**
  * [SPEC] 1단계 정보 카테고리 칩.
  * 시안은 "고객 문의 (VOC)"를 고른 상태만 그려 나머지 카테고리의 목적 목록은 미정이다 —
@@ -25,6 +29,7 @@ export interface WikiPurposeOption {
 export interface WikiInfoCategory {
   id: string;
   label: string;
+  icon: InfoCategoryIcon;
   purposeOptions: readonly WikiPurposeOption[];
 }
 

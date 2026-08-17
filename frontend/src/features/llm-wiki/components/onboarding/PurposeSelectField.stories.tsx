@@ -48,8 +48,9 @@ const meta = {
         '목적 3열 그리드 — 시안 옵션 폭 301.33은 (936−32)/3의 결과값이라 고정하지 않는다.',
       ],
       tokenNotes: [
-        '선택 칩 = bg-accent-black-lighten(#46474C) + text-text-normal-inverse. **shared Chip을 쓰지 않았다** — Chip의 square/capsule selected는 파랑·초록 계열이라 시안의 검정 칩과 맞지 않고, 공유 계약을 이 화면 때문에 바꿀 수 없다.',
-        '분기 아이콘은 시안 자산명이 확인되지 않아 arrow_right2로 대체했다(감사 §7).',
+        '선택 칩 = bg-accent-black-lighten(#46474C) + text-text-normal-inverse, 미선택 테두리 line-normal-neutral(#EAEBEC). **shared Chip을 쓰지 않았다** — Chip의 square/capsule selected는 파랑·초록 계열이라 시안의 검정 칩과 맞지 않고, 공유 계약을 이 화면 때문에 바꿀 수 없다.',
+        '**칩 아이콘은 6종이 전부 다르다**(support_agent·lightbulb·shield·client·database·group) — REST 실측으로 확인했고 모두 기존 자산이다. 미지 icon 값은 tag로 떨어뜨린다.',
+        '들여쓰기 가이드는 **2px 점선**(strokeDashes 4,4) — 폭 32 중앙에 세로로 지난다. 목적 라벨 앞 아이콘은 add_circle_filled(primary).',
       ],
     }),
   },

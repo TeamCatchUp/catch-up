@@ -70,7 +70,7 @@ export default function DocKindSelectField({
               >
                 <span className="flex min-w-0 flex-1 flex-col gap-2">
                   <span className="flex items-center gap-2">
-                    <Icon className="text-icon-normal-normal size-5 shrink-0" />
+                    <Icon className="text-icon-primary-normal size-5 shrink-0" />
                     <span className="text-heading-small text-text-normal-normal truncate">{preset.label}</span>
                   </span>
                   <span className="text-body-small text-text-normal-alternative">{preset.description}</span>

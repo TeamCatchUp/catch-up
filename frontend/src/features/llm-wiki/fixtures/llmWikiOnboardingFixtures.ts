@@ -31,13 +31,14 @@ export const WIKI_NAME_FIELD = {
 } as const;
 
 export const INFO_CATEGORY_FIELD_LABEL = '어떤 정보를 정리하고 싶으세요?';
-export const PURPOSE_FIELD_LABEL = '목적을 알려주세요';
+export const PURPOSE_FIELD_LABEL = '이 위키를 어떻게 쓰실 건가요?';
 
 // 목적 목록은 시안이 VOC 카테고리만 펼쳐 그렸다. 나머지 5종은 미도시라 비워 둔다
 export const WIKI_INFO_CATEGORIES: readonly WikiInfoCategory[] = [
   {
     id: 'voc',
     label: '고객 문의 (VOC)',
+    icon: 'support-agent',
     purposeOptions: [
       { id: 'feature-demand', label: '어떤 기능을 가장 많이 요청하는지 모아보고 싶어요' },
       { id: 'faq', label: '자주 들어오는 질문과 답변을 정리해두고 싶어요' },
@@ -46,11 +47,11 @@ export const WIKI_INFO_CATEGORIES: readonly WikiInfoCategory[] = [
       { id: 'customer-needs', label: '상담에서 반복해서 보이는 고객 니즈를 모으고 싶어요' },
     ],
   },
-  { id: 'product', label: '제품과 기획', purposeOptions: [] },
-  { id: 'ops', label: '운영과 정책', purposeOptions: [] },
-  { id: 'sales', label: '세일즈와 고객', purposeOptions: [] },
-  { id: 'dev', label: '개발과 기술', purposeOptions: [] },
-  { id: 'team-guide', label: '팀 가이드 및 온보딩', purposeOptions: [] },
+  { id: 'product', label: '제품과 기획', icon: 'lightbulb', purposeOptions: [] },
+  { id: 'ops', label: '운영과 정책', icon: 'shield', purposeOptions: [] },
+  { id: 'sales', label: '세일즈와 고객', icon: 'client', purposeOptions: [] },
+  { id: 'dev', label: '개발과 기술', icon: 'database', purposeOptions: [] },
+  { id: 'team-guide', label: '팀 가이드 및 온보딩', icon: 'group', purposeOptions: [] },
 ];
 
 export const DOC_KIND_FIELD_LABEL = '어떤 종류의 문서를 만들까요?';
