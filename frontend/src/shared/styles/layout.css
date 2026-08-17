@@ -9,8 +9,8 @@
  */
 
 :root {
-  --snb-width-open: calc(var(--spacing) * 60.25);
-  --snb-width-collapsed: calc(var(--spacing) * 13);
+  --snb-width-open: calc(var(--spacing) * 60);
+  --snb-width-collapsed: calc(var(--spacing) * 16);
   --snb-width: var(--snb-width-open);
 }
 

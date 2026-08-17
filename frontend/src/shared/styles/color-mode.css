@@ -36,11 +36,12 @@
     --fill-strong: var(--color-neutral-1);
     --fill-primary: var(--color-blue-45);
     --fill-primary-assistive: var(--color-blue-1);
-    --fill-interaction-hover: var(--color-neutral-3);
-    --fill-interaction-pressed: var(--color-neutral-4);
-    --fill-interaction-pressed-hover: var(--color-neutral-5);
-    --fill-interaction-inactive: var(--color-neutral-1);
-    --fill-interaction-disable: var(--color-neutral-3);
+    /* 기존 배경 위에 얹는 알파 레이어 (2026-07-29 스펙) — 솔리드 교체가 아니다 */
+    --fill-interaction-hover: color-mix(in srgb, var(--color-gray-90) 6%, transparent);
+    --fill-interaction-pressed: color-mix(in srgb, var(--color-gray-90) 10%, transparent);
+    --fill-interaction-pressed-hover: color-mix(in srgb, var(--color-gray-90) 12%, transparent);
+    --fill-interaction-inactive: color-mix(in srgb, var(--color-gray-90) 3%, transparent);
+    --fill-interaction-disable: color-mix(in srgb, var(--color-gray-90) 8%, transparent);
     --fill-primary-interaction-hover: var(--color-blue-55);
     --fill-primary-interaction-pressed: var(--color-blue-60);
     --fill-primary-interaction-inactive: var(--color-blue-10);
@@ -48,6 +49,12 @@
     --fill-primary-interaction-hover-assistive: color-mix(in srgb, var(--color-blue-10) 68%, transparent);
     --fill-primary-normal-neutral: var(--color-blue-5);
     --fill-normal-assistive-dark: var(--color-white);
+    /* fill-normal-assistive-dark와 동일 값 — 한쪽만 바뀌면 갈라지므로 함께 유지 */
+    --fill-normal-assistive: var(--color-white);
+
+    /* 스켈레톤 전용 (상태 토큰을 정적 배경으로 쓰던 것을 분리 — 값은 분리 전과 동일) */
+    --skeleton-bone: var(--color-neutral-3);
+    --skeleton-shimmer: var(--color-neutral-3);
 
     /* Text */
     --text-strong: var(--color-gray-90);
@@ -181,11 +188,11 @@
     --fill-strong: var(--color-neutral-80);
     --fill-primary: var(--color-blue-40);
     --fill-primary-assistive: color-mix(in srgb, var(--color-blue-10) 8%, transparent);
-    --fill-interaction-hover: var(--color-neutral-75);
-    --fill-interaction-pressed: var(--color-neutral-70);
-    --fill-interaction-pressed-hover: var(--color-neutral-60);
-    --fill-interaction-inactive: var(--color-neutral-80);
-    --fill-interaction-disable: var(--color-neutral-70);
+    --fill-interaction-hover: color-mix(in srgb, var(--color-gray-5) 4%, transparent);
+    --fill-interaction-pressed: color-mix(in srgb, var(--color-gray-5) 7%, transparent);
+    --fill-interaction-pressed-hover: color-mix(in srgb, var(--color-gray-5) 9%, transparent);
+    --fill-interaction-inactive: color-mix(in srgb, var(--color-gray-5) 2%, transparent);
+    --fill-interaction-disable: color-mix(in srgb, var(--color-gray-5) 6%, transparent);
     --fill-primary-interaction-hover: var(--color-blue-45);
     --fill-primary-interaction-pressed: var(--color-blue-50);
     --fill-primary-interaction-inactive: var(--color-neutral-80);
@@ -193,6 +200,11 @@
     --fill-primary-interaction-hover-assistive: color-mix(in srgb, var(--color-blue-10) 20%, transparent);
     --fill-primary-normal-neutral: color-mix(in srgb, var(--color-blue-10) 12%, transparent);
     --fill-normal-assistive-dark: var(--color-neutral-83);
+    --fill-normal-assistive: var(--color-neutral-83);
+
+    /* 스켈레톤 전용 */
+    --skeleton-bone: var(--color-neutral-70);
+    --skeleton-shimmer: var(--color-neutral-75);
 
     /* Text */
     --text-strong: var(--color-gray-5);

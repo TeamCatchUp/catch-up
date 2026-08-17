@@ -4,6 +4,7 @@
   --color-fill-normal-normal: var(--fill-normal);
   --color-fill-normal-strong: var(--fill-strong);
   --color-fill-normal-assistive-dark: var(--fill-normal-assistive-dark);
+  --color-fill-normal-assistive: var(--fill-normal-assistive);
   --color-fill-normal-interaction-hover: var(--fill-interaction-hover);
   --color-fill-normal-interaction-pressed: var(--fill-interaction-pressed);
   --color-fill-normal-interaction-pressed-hover: var(--fill-interaction-pressed-hover);
@@ -17,6 +18,9 @@
   --color-fill-primary-normal-interaction-inactive: var(--fill-primary-interaction-inactive);
   --color-fill-primary-normal-interaction-disable: var(--fill-primary-interaction-disable);
   --color-fill-primary-normal-interaction-hover-assistive: var(--fill-primary-interaction-hover-assistive);
+
+  /* 스켈레톤 전용 */
+  --color-skeleton-bone: var(--skeleton-bone);
 
   /* Fill compatibility aliases */
   --color-fill-normal: var(--fill-normal);

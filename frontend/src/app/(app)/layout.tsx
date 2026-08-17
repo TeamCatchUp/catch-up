@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import InboxPanel from '@/shared/components/layout/panels/InboxPanel';
 import QuestionsHistoryPanel from '@/shared/components/layout/panels/QuestionsHistoryPanel';
 import SettingsPanel from '@/shared/components/layout/panels/SettingsPanel';
-import SideNavBar from '@/shared/components/layout/sideNavBar/SideNavBar';
+import AppSideNav from '@/shared/components/layout/sideNavBar/AppSideNav';
 import ServiceNoticeMount from '@/shared/components/notice/ServiceNoticeMount';
 import FloatingActionButton from '@/shared/components/ui/floating-action-button';
 import Toast from '@/shared/components/ui/toast';
@@ -59,7 +59,7 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
         */}
         {!isSettingsRoute && (
           <aside className="shrink-0">
-            <SideNavBar />
+            <AppSideNav />
           </aside>
         )}
         <div

@@ -122,15 +122,16 @@ describe('SideNavMenu', () => {
     expect(screen.getByRole('button', { name: /에이전트 스튜디오/ })).toBeInTheDocument();
   });
 
-  it('에이전트 스튜디오는 문서 탐색 아래, 설정 위에 렌더한다', () => {
+  it('에이전트 스튜디오는 설정 아래 별도 섹션에 렌더한다', () => {
     render(<SideNavMenu isOpen={true} />);
 
     const docs = screen.getByRole('button', { name: /문서 탐색/ });
-    const agentStudio = screen.getByRole('button', { name: /에이전트 스튜디오/ });
     const settings = screen.getByRole('button', { name: /설정/ });
+    const agentStudio = screen.getByRole('button', { name: /에이전트 스튜디오/ });
 
-    expect(docs.compareDocumentPosition(agentStudio)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(agentStudio.compareDocumentPosition(settings)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    // primary 그룹(홈·캐치스턴트 AI·문서 탐색·설정) 다음에 agent 그룹이 온다
+    expect(docs.compareDocumentPosition(settings)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(settings.compareDocumentPosition(agentStudio)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it('닫힘 상태에서 에이전트 스튜디오 텍스트를 숨긴다', () => {

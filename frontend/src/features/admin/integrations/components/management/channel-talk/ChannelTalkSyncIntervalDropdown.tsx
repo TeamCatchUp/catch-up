@@ -40,7 +40,7 @@ export default function ChannelTalkSyncIntervalDropdown({
             'border-line-normal-neutral flex h-11.5 w-full items-center gap-1.5 rounded-lg border p-3 transition-colors',
             disabled
               ? 'bg-fill-normal-interaction-disable cursor-not-allowed'
-              : 'bg-fill-normal-strong hover:bg-fill-normal-interaction-hover data-[state=open]:bg-fill-normal-interaction-pressed cursor-pointer',
+              : 'bg-fill-normal-strong hover:fill-overlay-hover data-[state=open]:fill-overlay-pressed cursor-pointer',
           )}
         >
           <div className="flex min-w-0 flex-1 items-center gap-2">
