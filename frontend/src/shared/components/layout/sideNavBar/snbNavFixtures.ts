@@ -2,7 +2,6 @@ import type { ComponentType, SVGProps } from 'react';
 
 import IconAdd from '@/public/icons/icon/add_small.svg';
 import IconAgent from '@/public/icons/icon/agent.svg';
-import IconCard from '@/public/icons/icon/card.svg';
 import IconDashboard from '@/public/icons/icon/dashboard.svg';
 import IconDocumentSearch from '@/public/icons/icon/document_search.svg';
 import IconFile from '@/public/icons/icon/file.svg';
@@ -73,15 +72,25 @@ export const WIKI_PRIMARY_ITEMS: readonly SnbNavFixtureItem[] = [
 ];
 
 export const WIKI_DROPDOWN_ITEMS: readonly SnbNavFixtureItem[] = [
-  { id: 'dashboard', label: '지식 대시보드', Icon: IconDashboard, selected: true },
-  { id: 'favorites', label: '즐겨찾기', Icon: IconStar },
+  { id: 'dashboard', label: '위키 대시보드', Icon: IconDashboard, selected: true },
+];
+
+/** 위키 펼침의 즐겨찾기 섹션. 시안은 문서 5행이다 */
+export const WIKI_FAVORITE_ITEMS: readonly SnbNavFixtureItem[] = [
+  { id: 'wiki-fav-1', label: '채널명 text text text text text text', Icon: IconFile },
+  { id: 'wiki-fav-2', label: '채널명 text text text text text text', Icon: IconFile },
+  { id: 'wiki-fav-3', label: '채널명 text text text text text text', Icon: IconFile },
+  { id: 'wiki-fav-4', label: '채널명 text text text text text text', Icon: IconFile },
+  { id: 'wiki-fav-5', label: '채널명 text text text text text text', Icon: IconFile },
 ];
 
 export const WIKI_RAIL_ITEMS: readonly SnbNavFixtureItem[] = [
+  { id: 'new-chat', label: '새 채팅', Icon: IconAdd },
   { id: 'search', label: '검색', Icon: IconSearch300 },
-  { id: 'knowledge', label: '지식 관리', Icon: IconCard },
   { id: 'requested', label: '요청됨', Icon: IconUpdate, selected: true, hasNotification: true },
-  { id: 'contents', label: '콘텐츠', Icon: IconFolder },
+  { id: 'dashboard', label: '위키 대시보드', Icon: IconDashboard },
+  { id: 'favorites', label: '즐겨찾기', Icon: IconStar },
+  { id: 'recent-wiki', label: '최근 위키', Icon: IconFolder },
 ];
 
 /** 시안 라벨은 전부 placeholder다 — 실제 데이터 형태가 아니다 */

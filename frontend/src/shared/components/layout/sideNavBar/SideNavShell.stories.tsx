@@ -195,7 +195,8 @@ export const WikiExpanded: Story = {
       footer={<SnbFooter userName="팀원G" userRole="PM" />}
     >
       <div className="flex flex-col gap-1.5">
-        <SnbSectionHeader label="프로젝트" />
+        {/* 위키 모드의 트리 섹션명은 "위키"다 (시안 15338:92139) */}
+        <SnbSectionHeader label="위키" />
         <NavTree
           nodes={PROJECT_TREE_NODES}
           activeId="channel-1"
@@ -211,7 +212,7 @@ export const WikiExpanded: Story = {
     const canvas = within(canvasElement);
 
     await expect(canvas.getByText('Acme의 지식 허브')).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: '지식 대시보드' })).toHaveAttribute('aria-current', 'page');
+    await expect(canvas.getByRole('button', { name: '위키 대시보드' })).toHaveAttribute('aria-current', 'page');
     // 홈에만 있는 섹션은 위키에 없다
     await expect(canvas.queryByText('최근 질문')).toBeNull();
     await expect(canvas.queryByText('에이전트')).toBeNull();

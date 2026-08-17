@@ -97,7 +97,7 @@ export default function HomeSideNav() {
       }
       primaryItems={
         <div className="flex flex-col">
-          <SnbNavRow Icon={IconAdd} label="새 채팅" selected={isHome} onClick={go('/')} />
+          <SnbNavRow Icon={IconAdd} label="새 채팅" iconOnDisc selected={isHome} onClick={go('/')} />
           <SnbNavRow Icon={IconSearch300} label="검색" selected={isSearch} onClick={go('/search')} />
           <SnbNavRow
             Icon={IconDocumentSearch}

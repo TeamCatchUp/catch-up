@@ -13,6 +13,8 @@ export interface SnbFooterProps {
   onSettingsClick?: () => void;
   /** 전달 시 프로필 버튼이 이 내용을 여는 트리거가 된다. 메뉴 항목은 소비처가 안다 */
   profileMenu?: React.ReactNode;
+  /** 온보딩 중처럼 만들 것이 없는 상태에서는 신규 버튼을 내린다 */
+  hideNewButton?: boolean;
   className?: string;
 }
 
@@ -27,6 +29,7 @@ export default function SnbFooter({
   onProfileClick,
   onSettingsClick,
   profileMenu,
+  hideNewButton = false,
   className,
 }: SnbFooterProps) {
   const profileButton = (
@@ -45,14 +48,14 @@ export default function SnbFooter({
 
   return (
     <div className={cn('border-line-normal-neutral flex flex-col gap-1 border-t px-2 pt-2.5', className)}>
-      <div className="flex items-center justify-center px-1">
+      <div className={cn('flex items-center justify-center px-1', hideNewButton && 'hidden')}>
         <button
           type="button"
           onClick={onNewClick}
           className="border-line-normal-normal bg-fill-normal-normal hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed flex h-9 w-full cursor-pointer items-center justify-center gap-1.5 rounded-full border px-3 py-1.5 transition-colors"
         >
           <IconAdd aria-hidden className="text-icon-normal-normal size-5 shrink-0" />
-          <span className="text-body-small text-text-normal-normal">신규</span>
+          <span className="text-body-small text-text-normal-normal">새 위키</span>
         </button>
       </div>
 

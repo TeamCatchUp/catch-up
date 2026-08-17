@@ -54,7 +54,7 @@ export const Default: Story = {
   play: async ({ args, canvasElement, userEvent }) => {
     const canvas = within(canvasElement);
 
-    await userEvent.click(canvas.getByRole('button', { name: '신규' }));
+    await userEvent.click(canvas.getByRole('button', { name: '새 위키' }));
     await expect(args.onNewClick).toHaveBeenCalledTimes(1);
 
     await userEvent.click(canvas.getByRole('button', { name: '설정' }));

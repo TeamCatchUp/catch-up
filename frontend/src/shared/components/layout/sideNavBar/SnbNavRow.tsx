@@ -12,6 +12,8 @@ export interface SnbNavRowProps {
   trailing?: React.ReactNode;
   /** 갈 곳이 아직 없는 메뉴. 시안에 disabled 상태가 없어 리포 버튼 관례를 따른다 */
   disabled?: boolean;
+  /** 아이콘을 원형 배경 위에 얹는다 — "새 채팅"처럼 만들기 행을 다른 메뉴와 구분한다 */
+  iconOnDisc?: boolean;
   onClick?: () => void;
   className?: string;
 }
@@ -27,6 +29,7 @@ export default function SnbNavRow({
   count,
   trailing,
   disabled = false,
+  iconOnDisc = false,
   onClick,
   className,
 }: SnbNavRowProps) {
@@ -49,17 +52,26 @@ export default function SnbNavRow({
     >
       <span className="flex min-w-0 flex-1 items-center gap-3">
         {Icon && (
-          <Icon
-            aria-hidden
+          <span
             className={cn(
-              'size-5.5 shrink-0',
-              disabled
-                ? 'text-icon-normal-assistive'
-                : selected
-                  ? 'text-icon-primary-normal'
-                  : 'text-icon-normal-normal',
+              'flex size-5.5 shrink-0 items-center justify-center',
+              iconOnDisc && 'bg-fill-normal-interaction-disable rounded-full',
             )}
-          />
+          >
+            <Icon
+              aria-hidden
+              className={cn(
+                iconOnDisc ? 'size-4' : 'size-5.5',
+                disabled
+                  ? 'text-icon-normal-assistive'
+                  : selected
+                    ? 'text-icon-primary-normal'
+                    : iconOnDisc
+                      ? 'text-icon-normal-neutral'
+                      : 'text-icon-normal-normal',
+              )}
+            />
+          </span>
         )}
         <span
           className={cn(

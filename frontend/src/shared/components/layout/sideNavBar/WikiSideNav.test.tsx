@@ -52,9 +52,10 @@ describe('WikiSideNav 펼침', () => {
     expect(screen.getByRole('button', { name: '검색' })).toBeInTheDocument();
     // 접근 이름에 배지 건수가 붙는다
     expect(screen.getByRole('button', { name: /^요청됨/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '지식 대시보드' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '즐겨찾기' })).toBeInTheDocument();
-    expect(screen.getByText('프로젝트')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '위키 대시보드' })).toBeInTheDocument();
+    // 즐겨찾기는 단일 행이 아니라 섹션이다 (시안 15338:92139)
+    expect(screen.getByText('즐겨찾기')).toBeInTheDocument();
+    expect(screen.getByText('위키')).toBeInTheDocument();
   });
 
   it('검색은 목적지가 없어 눌러도 이동하지 않는다', async () => {
@@ -66,13 +67,15 @@ describe('WikiSideNav 펼침', () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it('즐겨찾기는 갈 곳이 없어 비활성이다', () => {
+  it('즐겨찾기 섹션의 행은 목적지가 없어 전부 비활성이다', () => {
     render(<WikiSideNav />);
 
-    expect(screen.getByRole('button', { name: '즐겨찾기' })).toBeDisabled();
+    const favorites = screen.getAllByRole('button', { name: /^채널명/ });
+    expect(favorites.length).toBeGreaterThanOrEqual(5);
+    favorites.slice(0, 5).forEach((row) => expect(row).toBeDisabled());
   });
 
-  it('요청됨·지식 대시보드·홈 스위처가 각자 목적지로 이동한다', async () => {
+  it('요청됨·위키 대시보드·홈 스위처가 각자 목적지로 이동한다', async () => {
     const user = userEvent.setup();
     render(<WikiSideNav />);
 
@@ -113,7 +116,7 @@ describe('WikiSideNav 펼침', () => {
     render(<WikiSideNav />);
 
     expect(screen.getByRole('button', { name: /^요청됨/ })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('button', { name: '지식 대시보드' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('button', { name: '위키 대시보드' })).not.toHaveAttribute('aria-current');
   });
 
   it('로딩·빈 목록·에러 문구를 만들지 않는다', () => {
@@ -129,16 +132,17 @@ describe('WikiSideNav 닫힘', () => {
     mockSidebarState.isSidebarOpen = false;
   });
 
-  it('Rail 3항목만 렌더하고 지식 관리는 없다', () => {
+  it('Rail 6항목을 시안 순서대로 렌더한다', () => {
     render(<WikiSideNav />);
 
-    expect(screen.getByRole('button', { name: '검색' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '요청됨' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '콘텐츠' })).toBeInTheDocument();
-    // 시안에는 남아 있으나 제품 결정으로 삭제됐다
+    // 시안 15346:97297 — 새 채팅·검색·요청됨·위키 대시보드·즐겨찾기·최근 위키
+    ['새 채팅', '검색', '요청됨', '위키 대시보드', '즐겨찾기', '최근 위키'].forEach((label) =>
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument(),
+    );
+    // 지식 관리는 제품 결정으로 빠졌다
     expect(screen.queryByRole('button', { name: '지식 관리' })).toBeNull();
     // 닫힘에는 트리가 없다
-    expect(screen.queryByText('프로젝트')).toBeNull();
+    expect(screen.queryByText('위키')).toBeNull();
   });
 
   it('로고 버튼을 누르면 펼쳐진다', async () => {

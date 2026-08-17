@@ -124,10 +124,11 @@ export const WikiCollapsedMenuCompositionTBD: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await expect(canvas.getByRole('button', { name: '지식 관리' })).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: '콘텐츠' })).toBeInTheDocument();
+    // 컴포넌트 세트 15346:97297 기준 6항목. 8/7의 "지식 관리·콘텐츠" 구성은 폐기됐다
+    for (const label of ['새 채팅', '검색', '요청됨', '위키 대시보드', '즐겨찾기', '최근 위키']) {
+      await expect(canvas.getByRole('button', { name: label })).toBeInTheDocument();
+    }
+    await expect(canvas.queryByRole('button', { name: '지식 관리' })).toBeNull();
     await expect(canvas.getByRole('button', { name: '요청됨' })).toHaveAttribute('aria-current', 'page');
-    // 펼침에 있는 새 채팅이 닫힘에는 없다 — 불일치를 스토리가 드러낸다
-    await expect(canvas.queryByRole('button', { name: '새 채팅' })).toBeNull();
   },
 };
