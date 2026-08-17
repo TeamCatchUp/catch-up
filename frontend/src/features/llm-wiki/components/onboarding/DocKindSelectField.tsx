@@ -1,6 +1,9 @@
 'use client';
 
 import type { FC, SVGProps } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
+import remarkGfm from 'remark-gfm';
 
 import IconBook from '@/public/icons/icon/book.svg';
 import IconCheckCircle from '@/public/icons/icon/check_circle.svg';
@@ -32,6 +35,7 @@ interface DocKindSelectFieldProps {
   sampleTitle: string;
   /** 목적이 수집 범위에 영향 없다는 오해 방지 카피 — 8/14 시안에서 이 헤더로 이동했다 */
   sampleCaption: string;
+  /** 선택한 종류의 문서 양식(마크다운) */
   sampleText: string;
 }
 
@@ -86,15 +90,18 @@ export default function DocKindSelectField({
           })}
         </div>
 
-        <div className="border-line-normal-neutral flex min-w-0 flex-col border-l">
-          <div className="border-line-normal-neutral flex items-center gap-2 border-b px-8 py-3">
+        <div className="border-line-normal-neutral flex max-h-125 min-w-0 flex-col border-l">
+          <div className="border-line-normal-neutral flex shrink-0 items-center gap-2 border-b px-8 py-3">
             <IconFile className="text-icon-normal-normal size-5 shrink-0" />
             <span className="text-body-small text-text-normal-normal shrink-0">{sampleTitle}</span>
             <span className="text-label-xsmall text-text-normal-alternative min-w-0 flex-1 truncate text-right">
               {sampleCaption}
             </span>
           </div>
-          <p className="text-body-small text-text-normal-alternative px-8 py-6">{sampleText}</p>
+          {/* 양식은 마크다운이라 표·인용이 있다 — 공용 markdown.css 규격으로 렌더한다 */}
+          <div className="markdown-body custom-scrollbar min-h-0 flex-1 overflow-y-auto px-8 py-6 wrap-break-word">
+            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{sampleText}</ReactMarkdown>
+          </div>
         </div>
       </div>
     </div>
