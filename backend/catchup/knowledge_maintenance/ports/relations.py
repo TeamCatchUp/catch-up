@@ -8,10 +8,14 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from collections.abc import Sequence
 from dataclasses import dataclass
+from dataclasses import field
 from datetime import datetime
 from typing import Protocol
+
+from catchup.knowledge_maintenance.domain.source_version import JsonValue
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +35,11 @@ class StoredRelationEdge:
             이웃을 이름 차례로 세우려면 식별자만으로는 모자라기
             때문이다. 이름이 비어 있는 노드도 있으므로 None일 수 있다.
         target_display_name: 도착 쪽 노드의 표시 이름을 담는다.
+        source_attributes: 출발 쪽 노드의 attributes를 담는다. 노출
+            수준을 적용하려면 이름만으로는 모자라고 행위자 키·이메일이
+            필요하다. 이름과 함께 한 번에 캐야 걸음마다 왕복이 곱절이
+            되지 않는다.
+        target_attributes: 도착 쪽 노드의 attributes를 담는다.
     """
 
     id: uuid.UUID
@@ -39,6 +48,8 @@ class StoredRelationEdge:
     assertion_text: str | None
     source_display_name: str | None
     target_display_name: str | None
+    source_attributes: Mapping[str, JsonValue] = field(default_factory=dict)
+    target_attributes: Mapping[str, JsonValue] = field(default_factory=dict)
 
 
 class RelationRepository(Protocol):
@@ -81,6 +92,10 @@ class RelationRepository(Protocol):
 
         차례는 관계 주장 식별자 사전순이다. 같은 지식 상태에서 두 번
         물으면 같은 목록이 나와야 문서 본문이 흔들리지 않는다.
+
+        양 끝점의 attributes도 함께 돌려준다. 노출 수준을 적용하는
+        쪽이 행위자 키와 이메일을 봐야 하는데, 그것을 뒤늦게 따로
+        물으면 이름과 같은 이유로 왕복이 한 번씩 더 늘어난다.
 
         양 끝점의 표시 이름을 함께 돌려준다. 순회가 이웃을 이름 차례로
         세우고 상한을 자르므로, 이름을 뒤늦게 따로 물으면 걸음마다

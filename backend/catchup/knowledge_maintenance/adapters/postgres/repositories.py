@@ -3153,9 +3153,10 @@ class SqlAlchemyRelationRepository:
         정렬을 DB에 맡긴다. 식별자를 문자열로 캐 C 대조 규칙으로 줄을
         세우므로, 서버 로케일이 달라도 같은 차례가 나온다.
 
-        해소된 끝점 노드를 한 번 더 이어 표시 이름을 함께 캔다. 순회가
-        이웃을 이름 차례로 세우므로, 이름을 걸음마다 따로 물으면 왕복이
-        곱절이 된다.
+        해소된 끝점 노드를 한 번 더 이어 표시 이름과 attributes를 함께
+        캔다. 순회가 이웃을 이름 차례로 세우고, 노출 수준을 적용하는
+        쪽이 행위자 키·이메일을 보므로, 이것을 걸음마다 따로 물으면
+        왕복이 곱절이 된다.
         """
         source_candidate = aliased(KnowledgeEntityCandidateRow)
         target_candidate = aliased(KnowledgeEntityCandidateRow)
@@ -3189,6 +3190,8 @@ class SqlAlchemyRelationRepository:
                 KnowledgeRelationCandidateRow.assertion_text,
                 source_node.display_name,
                 target_node.display_name,
+                source_node.attributes,
+                target_node.attributes,
             )
             .outerjoin(
                 source_candidate,
@@ -3232,6 +3235,8 @@ class SqlAlchemyRelationRepository:
                 assertion_text=assertion_text,
                 source_display_name=source_display_name,
                 target_display_name=target_display_name,
+                source_attributes=dict(source_attributes or {}),
+                target_attributes=dict(target_attributes or {}),
             )
             for (
                 relation_id,
@@ -3240,6 +3245,8 @@ class SqlAlchemyRelationRepository:
                 assertion_text,
                 source_display_name,
                 target_display_name,
+                source_attributes,
+                target_attributes,
             ) in self._session.execute(statement).all()
         ]
 
