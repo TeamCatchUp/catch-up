@@ -112,6 +112,10 @@ class PresetDomain:
             )
 
 
+# seed는 양식이 predicate 블록으로 채우는 칸을 미리 선언한다. 문서 양식이
+# 요구하는 칸이 어휘에 없으면 선택 규칙 검증이 막히므로, 칸의 이름과 뜻을
+# 어휘 쪽에 먼저 등재해 둔다. 어휘는 더해지기만 하고 지워지지 않는다 —
+# 이미 저장된 claim이 가리키는 이름이 사라지면 그 claim을 읽을 수 없다.
 _VOC_SEED = ExtractionVocabulary(
     entity_type_entries=(
         EntityTypeEntry(
@@ -135,19 +139,28 @@ _VOC_SEED = ExtractionVocabulary(
             definition="반복해서 제기되는 불만의 주제를 가리킨다.",
             identity_scope="standalone",
         ),
+        EntityTypeEntry(
+            name="faq_question",
+            definition="반복해서 들어오는 고객 질문 하나를 가리킨다.",
+            identity_scope="standalone",
+        ),
     ),
     predicate_entries=(
         PredicateEntry(
             name="request_status",
-            definition="기능 요구가 어느 처리 단계에 있는지를 나타낸다.",
+            definition=(
+                "기능 요구가 어느 처리 단계에 있는지를 나타낸다."
+                " collected(수집됨)·under_review(검토중)·confirmed(확정)·"
+                "shipped(반영됨)·on_hold(보류)."
+            ),
             domain=("feature_request",),
             value_type="enum",
             enum_values=(
-                "proposed",
-                "accepted",
-                "in_progress",
+                "collected",
+                "under_review",
+                "confirmed",
                 "shipped",
-                "rejected",
+                "on_hold",
             ),
         ),
         PredicateEntry(
@@ -170,10 +183,167 @@ _VOC_SEED = ExtractionVocabulary(
             value_type="date",
         ),
         PredicateEntry(
+            name="last_reported_at",
+            definition="같은 요구가 마지막으로 접수된 날짜를 나타낸다.",
+            domain=("feature_request",),
+            value_type="date",
+        ),
+        PredicateEntry(
+            name="usage_context",
+            definition="그 요구가 필요한 업무 장면을 나타낸다.",
+            domain=("feature_request",),
+            value_type="text",
+        ),
+        PredicateEntry(
+            name="requester_role",
+            definition="요구를 낸 사람의 역할을 나타낸다(예: CS 리더, AM).",
+            domain=("feature_request",),
+            value_type="text",
+        ),
+        PredicateEntry(
+            name="frequency",
+            definition="그 장면이 얼마나 자주 있는지를 나타낸다(매일·매주·월말).",
+            domain=("feature_request",),
+            value_type="text",
+        ),
+        PredicateEntry(
+            name="support_status",
+            definition=(
+                "지금 제품이 그 요구를 어디까지 감당하는지를 나타낸다."
+                " supported(지원)·partial(부분 지원)·unsupported(미지원)."
+            ),
+            domain=("feature_request", "customer"),
+            value_type="enum",
+            enum_values=("supported", "partial", "unsupported"),
+        ),
+        PredicateEntry(
+            name="workaround",
+            definition="승인된 우회 방법이나 대안 단계를 나타낸다.",
+            domain=("feature_request", "faq_question"),
+            value_type="text",
+        ),
+        PredicateEntry(
             name="pain_description",
             definition="고객이 겪은 불편을 서술한 내용을 나타낸다.",
             domain=("feature_request", "complaint_topic"),
             value_type="text",
+        ),
+        PredicateEntry(
+            name="complaint_status",
+            definition=(
+                "그 불편이 어느 대응 단계에 있는지를 나타낸다."
+                " confirmed(확인됨)·discussing(대응 논의중)·"
+                "resolved(해소됨)·on_hold(보류)."
+            ),
+            domain=("complaint_topic",),
+            value_type="enum",
+            enum_values=("confirmed", "discussing", "resolved", "on_hold"),
+        ),
+        PredicateEntry(
+            name="expected_behavior",
+            definition="고객이 기대했던 동작이나 결과를 나타낸다.",
+            domain=("complaint_topic",),
+            value_type="text",
+        ),
+        PredicateEntry(
+            name="reproduction_steps",
+            definition=(
+                "어떤 상태에서 어떤 행동을 하면 어떤 결과가 나오는지를 나타낸다."
+            ),
+            domain=("complaint_topic",),
+            value_type="text",
+        ),
+        PredicateEntry(
+            name="impact",
+            definition="이 문제로 실제 발생하는 관찰된 결과를 나타낸다.",
+            domain=("complaint_topic",),
+            value_type="text",
+        ),
+        PredicateEntry(
+            name="guidance",
+            definition="문의가 들어왔을 때의 승인된 안내 기준을 나타낸다.",
+            domain=("complaint_topic",),
+            value_type="text",
+        ),
+        PredicateEntry(
+            name="faq_status",
+            definition=(
+                "그 질문의 답이 확정됐는지를 나타낸다."
+                " answer_confirmed(답변 확정)·needs_check(기준 확인 필요)."
+            ),
+            domain=("faq_question",),
+            value_type="enum",
+            enum_values=("answer_confirmed", "needs_check"),
+        ),
+        PredicateEntry(
+            name="faq_category",
+            definition=(
+                "그 질문이 어느 갈래인지를 나타낸다."
+                " pricing(요금)·data(데이터)·account(계정)·"
+                "integration(연동)."
+            ),
+            domain=("faq_question",),
+            value_type="enum",
+            enum_values=("pricing", "data", "account", "integration"),
+        ),
+        PredicateEntry(
+            name="current_answer",
+            definition="고객에게 그대로 보낼 수 있는 현재 기준 답변을 나타낸다.",
+            domain=("faq_question",),
+            value_type="text",
+        ),
+        PredicateEntry(
+            name="internal_notes",
+            definition="실무자만 알아야 할 예외·주의사항을 나타낸다.",
+            domain=("faq_question",),
+            value_type="text",
+        ),
+        PredicateEntry(
+            name="last_confirmed_at",
+            definition="이 답이 유효한지 마지막으로 확인된 날을 나타낸다.",
+            domain=("faq_question",),
+            value_type="date",
+        ),
+        PredicateEntry(
+            name="industry",
+            definition="고객사의 업종을 나타낸다.",
+            domain=("customer",),
+            value_type="text",
+        ),
+        PredicateEntry(
+            name="company_size",
+            definition="고객사의 규모를 나타낸다.",
+            domain=("customer",),
+            value_type="text",
+        ),
+        PredicateEntry(
+            name="adopted_at",
+            definition="그 고객사의 제품 도입 시기를 나타낸다.",
+            domain=("customer",),
+            value_type="date",
+        ),
+        PredicateEntry(
+            name="usage_pattern",
+            definition="제품을 어떤 업무 흐름에서 쓰는지를 나타낸다.",
+            domain=("customer",),
+            value_type="text",
+        ),
+        PredicateEntry(
+            name="account_request_status",
+            definition=(
+                "그 고객사가 낸 요청이 어느 단계에 있는지를 나타낸다."
+                " received(접수)·under_review(검토중)·answered(답변 완료)·"
+                "shipped(반영됨)·declined(거절)."
+            ),
+            domain=("customer",),
+            value_type="enum",
+            enum_values=(
+                "received",
+                "under_review",
+                "answered",
+                "shipped",
+                "declined",
+            ),
         ),
         PredicateEntry(
             name="churn_risk",
@@ -206,6 +376,12 @@ _VOC_SEED = ExtractionVocabulary(
             definition="그 고객이 제기한 불만 주제를 잇는다.",
             domain=("customer",),
             range_=("complaint_topic",),
+        ),
+        RelationTypeEntry(
+            name="related_question",
+            definition="함께 자주 묻는 다른 질문을 잇는다.",
+            domain=("faq_question",),
+            range_=("faq_question",),
         ),
     ),
 )

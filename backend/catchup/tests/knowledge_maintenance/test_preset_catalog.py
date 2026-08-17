@@ -217,3 +217,62 @@ def test_actor_exposure_follows_purpose_domain() -> None:
 def test_every_domain_exposure_is_a_known_level() -> None:
     """모든 도메인의 노출 수준이 규약에 있는 값이다."""
     assert all(d.actor_exposure in ACTOR_EXPOSURES for d in PRESET_DOMAINS)
+
+
+def test_voc_seed_carries_template_predicates() -> None:
+    """양식이 채우는 칸이 전부 seed 어휘에 선언돼 있다."""
+    voc = next(d for d in PRESET_DOMAINS if d.id == "voc")
+    names = {p.name for p in voc.seed_vocabulary.predicate_entries}
+    assert {
+        "last_reported_at",
+        "usage_context",
+        "requester_role",
+        "frequency",
+        "support_status",
+        "workaround",
+        "complaint_status",
+        "expected_behavior",
+        "reproduction_steps",
+        "impact",
+        "guidance",
+        "faq_status",
+        "faq_category",
+        "current_answer",
+        "internal_notes",
+        "last_confirmed_at",
+        "industry",
+        "company_size",
+        "adopted_at",
+        "usage_pattern",
+        "account_request_status",
+    } <= names
+    status = voc.seed_vocabulary.predicate_entry("request_status")
+    assert status is not None
+    assert status.enum_values == (
+        "collected",
+        "under_review",
+        "confirmed",
+        "shipped",
+        "on_hold",
+    )
+    entity_names = {e.name for e in voc.seed_vocabulary.entity_type_entries}
+    assert entity_names >= {"faq_question"}
+    relation_names = {r.name for r in voc.seed_vocabulary.relation_type_entries}
+    assert relation_names >= {"related_question"}
+
+
+def test_enum_predicates_name_their_korean_labels() -> None:
+    """enum 칸은 허용 값과 그 한국어 뜻을 정의문에 함께 적는다."""
+    voc = next(d for d in PRESET_DOMAINS if d.id == "voc")
+    for name in (
+        "request_status",
+        "complaint_status",
+        "faq_status",
+        "faq_category",
+        "account_request_status",
+        "support_status",
+    ):
+        entry = voc.seed_vocabulary.predicate_entry(name)
+        assert entry is not None
+        assert entry.value_type == "enum" and entry.enum_values
+        assert any(v in entry.definition for v in entry.enum_values)
