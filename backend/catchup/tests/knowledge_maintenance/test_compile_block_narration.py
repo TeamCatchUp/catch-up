@@ -480,13 +480,13 @@ def test_channel_style_reaches_the_request() -> None:
     uow = _uow(
         nodes=[(node_id, "요청 A", "feature_request", "active")],
         claims=[_verified(_claim(node_id=node_id))],
-        styles="style.faq",
+        styles="style.support_guide",
     )
     narrator = _FakeNarrator()
 
     _run(uow, narrator)
 
-    assert "자주 묻는 질문" in narrator.requests[0].style_instruction
+    assert "해요체" in narrator.requests[0].style_instruction
 
 
 def test_channel_purpose_reaches_the_request() -> None:
@@ -504,14 +504,15 @@ def test_channel_purpose_reaches_the_request() -> None:
 
     assert narrator.requests[0].purpose_sentence == (
         "이 문서의 목적은 '요구 처리 현황 따라가기'이다."
-        " 이 문서는 요구 하나가 지금 어느 단계에 있는지 정리한 문서다."
+        " 이 문서는 고객이 원하는 기능과 그 이유, 사용 상황을 하나의"
+        " 문서로 모은다. 제목은 기능 명칭이 아니라 원하는 결과 중심이다."
     )
 
 
 def test_same_kind_with_different_purposes_gets_different_sentences() -> None:
     """kind가 같아도 채널이 고른 목적이 다르면 목적 문장이 갈린다."""
     sentences = []
-    for purpose in ("voc.top_requests", "voc.churn_signals"):
+    for purpose in ("voc.top_requests", "voc.complaint_patterns"):
         node_id = uuid.uuid4()
         uow = _uow(
             nodes=[(node_id, "요청 A", "feature_request", "active")],
@@ -525,7 +526,7 @@ def test_same_kind_with_different_purposes_gets_different_sentences() -> None:
 
     assert sentences[0] != sentences[1]
     assert "많이 들어온 요구 보기" in sentences[0]
-    assert "이탈 신호 살피기" in sentences[1]
+    assert "반복되는 불편 찾기" in sentences[1]
 
 
 def test_purpose_off_the_recommended_kind_is_kept() -> None:
@@ -543,7 +544,7 @@ def test_purpose_off_the_recommended_kind_is_kept() -> None:
 
     sentence = narrator.requests[0].purpose_sentence
     assert "많이 들어온 요구 보기" in sentence
-    assert "요구 하나가 지금 어느 단계에 있는지 정리한 문서다." in sentence
+    assert "원하는 결과 중심이다." in sentence
 
 
 def test_kind_only_sentence_when_the_channel_has_no_purpose() -> None:
@@ -559,7 +560,8 @@ def test_kind_only_sentence_when_the_channel_has_no_purpose() -> None:
     _run(uow, narrator)
 
     assert narrator.requests[0].purpose_sentence == (
-        "이 문서는 요구 하나가 지금 어느 단계에 있는지 정리한 문서다."
+        "이 문서는 고객이 원하는 기능과 그 이유, 사용 상황을 하나의"
+        " 문서로 모은다. 제목은 기능 명칭이 아니라 원하는 결과 중심이다."
     )
 
 

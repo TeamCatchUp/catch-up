@@ -414,7 +414,7 @@ def test_downgrade_refuses_channel_settings(
             text(
                 "UPDATE channels SET purpose_preset = :preset"
                 " WHERE id = :id"
-            ).bindparams(preset="decision_log", id=channel_id)
+            ).bindparams(preset="voc.faq_consistency", id=channel_id)
         )
         session.commit()
 

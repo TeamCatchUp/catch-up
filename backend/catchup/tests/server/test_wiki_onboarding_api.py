@@ -273,7 +273,7 @@ def test_name_over_twenty_characters_is_rejected(
             "name": "가" * 21,
             "purpose_preset": "voc.top_requests",
             "style_preset": "style.report_summary",
-            "kind": "request_priority_board",
+            "kind": "feature_request_status",
         },
     )
     assert response.status_code == 422
@@ -282,12 +282,12 @@ def test_name_over_twenty_characters_is_rejected(
 def test_unknown_purpose_is_four_hundred(
     client: TestClient, member: User
 ) -> None:
-    """카탈로그에 없는 목적 id는 400이다."""
+    """카탈로그에서 내려간 목적 id는 400이다."""
     response = client.post(
         _ONBOARDING_PATH,
         json={
             "name": "잘못된 목적",
-            "purpose_preset": "voc.made_up",
+            "purpose_preset": "voc.churn_signals",
             "style_preset": "style.report_summary",
             "kind": "feature_request_status",
         },
@@ -299,14 +299,14 @@ def test_unknown_purpose_is_four_hundred(
 def test_unknown_style_is_four_hundred(
     client: TestClient, member: User
 ) -> None:
-    """카탈로그에 없는 문체 id는 400이다."""
+    """카탈로그에서 내려간 문체 id는 400이다."""
     response = client.post(
         _ONBOARDING_PATH,
         json={
             "name": "잘못된 문체",
             "purpose_preset": "voc.top_requests",
-            "style_preset": "style.made_up",
-            "kind": "request_priority_board",
+            "style_preset": "style.faq",
+            "kind": "feature_request_status",
         },
     )
     assert response.status_code == 400
@@ -316,14 +316,14 @@ def test_unknown_style_is_four_hundred(
 def test_kind_from_another_domain_is_four_hundred(
     client: TestClient, member: User
 ) -> None:
-    """목적의 도메인에 없는 kind는 400이다."""
+    """카탈로그에서 내려간 kind는 400이다."""
     response = client.post(
         _ONBOARDING_PATH,
         json={
             "name": "도메인 밖 kind",
             "purpose_preset": "voc.top_requests",
             "style_preset": "style.report_summary",
-            "kind": "release_notes",
+            "kind": "request_priority_board",
         },
     )
     assert response.status_code == 400
@@ -341,7 +341,7 @@ def test_duplicate_channel_name_is_four_hundred_nine(
         "name": "중복 이름",
         "purpose_preset": "voc.top_requests",
         "style_preset": "style.report_summary",
-        "kind": "request_priority_board",
+        "kind": "feature_request_status",
     }
     assert client.post(_ONBOARDING_PATH, json=payload).status_code == 201
 
@@ -369,7 +369,7 @@ def test_definition_failure_rolls_back_the_channel(
                     "name": "롤백 확인",
                     "purpose_preset": "voc.top_requests",
                     "style_preset": "style.report_summary",
-                    "kind": "request_priority_board",
+                    "kind": "feature_request_status",
                 },
             )
     db.rollback()
@@ -386,7 +386,7 @@ def test_second_onboarding_in_the_same_domain_reuses_vocabulary(
             "name": "첫 위키",
             "purpose_preset": "voc.top_requests",
             "style_preset": "style.report_summary",
-            "kind": "request_priority_board",
+            "kind": "feature_request_status",
         },
     )
     second = client.post(
@@ -394,7 +394,7 @@ def test_second_onboarding_in_the_same_domain_reuses_vocabulary(
         json={
             "name": "둘째 위키",
             "purpose_preset": "voc.complaint_patterns",
-            "style_preset": "style.faq",
+            "style_preset": "style.support_guide",
             "kind": "complaint_topic_brief",
         },
     )
@@ -412,7 +412,7 @@ def test_requires_workspace_membership(
             "name": "남의 workspace",
             "purpose_preset": "voc.top_requests",
             "style_preset": "style.report_summary",
-            "kind": "request_priority_board",
+            "kind": "feature_request_status",
         },
     )
     assert response.status_code == 403

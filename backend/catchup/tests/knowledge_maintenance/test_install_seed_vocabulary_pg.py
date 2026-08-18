@@ -162,7 +162,9 @@ def test_pg_roundtrip_keeps_entity_type_entries(
         )
 
     assert stored.entity_type_entry("customer").identity_scope == "anchored"
-    assert stored.predicate_entry("request_status").enum_values[0] == "proposed"
+    assert (
+        stored.predicate_entry("request_status").enum_values[0] == "collected"
+    )
 
 
 def test_pg_second_workspace_starts_its_own_lineage(

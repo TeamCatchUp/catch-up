@@ -99,8 +99,8 @@ def test_voc_domain_is_fully_populated() -> None:
     found = find_purpose("voc.top_requests")
     assert found is not None
     voc = found[0]
-    assert len(voc.purposes) == 5
-    assert len(voc.kinds) == 6
+    assert len(voc.purposes) == 6
+    assert len(voc.kinds) == 5
 
 
 def test_empty_domains_are_listed_with_no_choices() -> None:
@@ -124,11 +124,11 @@ def test_domain_and_purpose_and_kind_ids_are_unique() -> None:
 
 def test_find_purpose_returns_its_owning_domain() -> None:
     """목적을 찾으면 그 목적이 속한 도메인이 함께 나온다."""
-    found = find_purpose("voc.churn_signals")
+    found = find_purpose("voc.complaint_patterns")
     assert found is not None
     domain, purpose = found
     assert domain.id == "voc"
-    assert purpose.recommended_kind == "churn_risk_watch"
+    assert purpose.recommended_kind == "complaint_topic_brief"
     assert purpose in domain.purposes
 
 
@@ -142,18 +142,18 @@ def test_find_kind_looks_inside_the_given_domain_only() -> None:
     found = find_purpose("voc.top_requests")
     assert found is not None
     voc = found[0]
-    preset_kind = find_kind(voc, "request_priority_board")
+    preset_kind = find_kind(voc, "faq_answer")
     assert preset_kind is not None
-    assert preset_kind.kind == "request_priority_board"
+    assert preset_kind.kind == "faq_answer"
     other = next(d for d in PRESET_DOMAINS if d.id == "product")
-    assert find_kind(other, "request_priority_board") is None
+    assert find_kind(other, "faq_answer") is None
 
 
 def test_find_style_matches_the_catalog() -> None:
     """문체 조회는 카탈로그에 있는 id에만 응답한다."""
-    style = find_style("style.faq")
+    style = find_style("style.support_guide")
     assert style is not None
-    assert style.id == "style.faq"
+    assert style.id == "style.support_guide"
     assert find_style("style.unknown") is None
 
 
@@ -217,3 +217,142 @@ def test_actor_exposure_follows_purpose_domain() -> None:
 def test_every_domain_exposure_is_a_known_level() -> None:
     """모든 도메인의 노출 수준이 규약에 있는 값이다."""
     assert all(d.actor_exposure in ACTOR_EXPOSURES for d in PRESET_DOMAINS)
+
+
+def test_voc_seed_carries_template_predicates() -> None:
+    """양식이 채우는 칸이 전부 seed 어휘에 선언돼 있다."""
+    voc = next(d for d in PRESET_DOMAINS if d.id == "voc")
+    names = {p.name for p in voc.seed_vocabulary.predicate_entries}
+    assert {
+        "last_reported_at",
+        "usage_context",
+        "requester_role",
+        "frequency",
+        "support_status",
+        "workaround",
+        "complaint_status",
+        "expected_behavior",
+        "reproduction_steps",
+        "impact",
+        "guidance",
+        "faq_status",
+        "faq_category",
+        "current_answer",
+        "internal_notes",
+        "last_confirmed_at",
+        "industry",
+        "company_size",
+        "adopted_at",
+        "usage_pattern",
+        "account_request_status",
+    } <= names
+    status = voc.seed_vocabulary.predicate_entry("request_status")
+    assert status is not None
+    assert status.enum_values == (
+        "collected",
+        "under_review",
+        "confirmed",
+        "shipped",
+        "on_hold",
+    )
+    entity_names = {e.name for e in voc.seed_vocabulary.entity_type_entries}
+    assert entity_names >= {"faq_question"}
+    relation_names = {r.name for r in voc.seed_vocabulary.relation_type_entries}
+    assert relation_names >= {"related_question"}
+
+
+def test_enum_predicates_name_their_korean_labels() -> None:
+    """enum 칸은 허용 값과 그 한국어 뜻을 정의문에 함께 적는다."""
+    voc = next(d for d in PRESET_DOMAINS if d.id == "voc")
+    for name in (
+        "request_status",
+        "complaint_status",
+        "faq_status",
+        "faq_category",
+        "account_request_status",
+        "support_status",
+    ):
+        entry = voc.seed_vocabulary.predicate_entry(name)
+        assert entry is not None
+        assert entry.value_type == "enum" and entry.enum_values
+        assert any(v in entry.definition for v in entry.enum_values)
+
+
+def test_voc_kinds_match_the_planning_templates() -> None:
+    """VOC 문서 종류가 양식 5종으로만 등재돼 있다."""
+    voc = next(d for d in PRESET_DOMAINS if d.id == "voc")
+    assert [k.kind for k in voc.kinds] == [
+        "feature_request_status",
+        "complaint_topic_brief",
+        "faq_answer",
+        "customer_voice_profile",
+        "customer_history",
+    ]
+    assert find_kind_by_name("request_priority_board") is None
+    assert find_kind_by_name("churn_risk_watch") is None
+
+
+def test_feature_request_kind_selects_template_sections() -> None:
+    """기능 요청 문서가 양식이 요구하는 칸을 차례대로 고른다."""
+    voc = next(d for d in PRESET_DOMAINS if d.id == "voc")
+    preset_kind = find_kind(voc, "feature_request_status")
+    assert preset_kind is not None
+    spec = preset_kind.spec_template()
+    assert spec.predicate_sections == (
+        "request_status",
+        "request_priority",
+        "request_count",
+        "first_reported_at",
+        "last_reported_at",
+        "usage_context",
+        "requester_role",
+        "frequency",
+        "support_status",
+        "workaround",
+    )
+
+
+def test_top_requests_purpose_keeps_request_count_in_its_recommended_kind() -> (
+    None
+):
+    """많이 들어온 요구를 보는 목적이 접수 횟수를 근거로 남긴다.
+
+    목적과 문서 종류의 짝을 함께 본다. 종류의 절 목록만 보면, 목적이
+    가리키는 종류가 바뀌었을 때 목적이 근거 없는 문서를 받게 되는 것을
+    놓친다.
+    """
+    found = find_purpose("voc.top_requests")
+    assert found is not None
+    _, purpose = found
+    preset_kind = find_kind_by_name(purpose.recommended_kind)
+    assert preset_kind is not None
+    sections = preset_kind.spec_template().predicate_sections
+    assert sections is not None
+    assert "request_count" in sections
+
+
+def test_styles_are_the_three_presets_plus_custom() -> None:
+    """문체는 preset 3종과 직접 지정 하나로 고정된다."""
+    assert [s.id for s in PRESET_STYLES] == [
+        "style.wiki_standard",
+        "style.support_guide",
+        "style.report_summary",
+        "style.custom",
+    ]
+    assert find_style("style.faq") is None
+    assert DEFAULT_STYLE_INSTRUCTION == PRESET_STYLES[0].instruction
+
+
+def test_voc_purposes_map_to_surviving_kinds() -> None:
+    """목적 6종이 전부 살아 있는 문서 종류를 가리킨다."""
+    voc = next(d for d in PRESET_DOMAINS if d.id == "voc")
+    mapping = {p.id: p.recommended_kind for p in voc.purposes}
+    assert mapping == {
+        "voc.request_status_tracking": "feature_request_status",
+        "voc.top_requests": "feature_request_status",
+        "voc.complaint_patterns": "complaint_topic_brief",
+        "voc.customer_understanding": "customer_history",
+        "voc.faq_consistency": "faq_answer",
+        "voc.account_requests": "customer_voice_profile",
+    }
+    assert find_purpose("voc.churn_signals") is None
