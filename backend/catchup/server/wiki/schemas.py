@@ -14,7 +14,9 @@ ORM 모델을 그대로 내보내지 않고 여기서 한 번 옮겨 담는다. 
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
@@ -294,6 +296,9 @@ class ArtifactDocumentResponse(BaseModel):
 
     published_at은 그 판이 만들어진 시각이다. 판은 덮어쓰지 않고 쌓으므로
     이 값이 곧 그 문장이 발행된 시점이다.
+
+    담당자와 즐겨찾기를 함께 싣는다. 문서 화면이 늘 같이 그리는 값이라,
+    따로 물어보게 하면 한 화면에 왕복이 세 번 생기고 그 사이에 값이 갈린다.
     """
 
     artifact_id: str
@@ -301,6 +306,104 @@ class ArtifactDocumentResponse(BaseModel):
     definition_id: str | None
     kind: str
     title: str
+    folder_id: str | None
+    owners: list[OwnerResponse]
+    is_favorite: bool
     revision_id: str
     published_at: datetime
     blocks: list[ArtifactDocumentBlockResponse]
+
+
+class LatestRevisionResponse(BaseModel):
+    """문서의 가장 최근 발행 판을 목록 한 줄만큼 담는다."""
+
+    revision_id: str
+    revision_number: int
+    published_at: datetime
+
+
+class ArtifactListItemResponse(BaseModel):
+    """문서 목록 한 줄을 담는다.
+
+    상태·담당자·즐겨찾기를 한 줄에 함께 싣는다. 목록 화면이 줄마다 그리는
+    값이라, 따로 물어보게 하면 한 화면에 왕복이 여러 번 생기고 그 사이에
+    값이 갈린다.
+
+    status는 컬럼이 아니라 계류 제안 수와 최신 판에서 계산한 값이다. 계류
+    제안이 있으면 그것이 먼저다 — 발행본이 있어도 사람이 볼 일이 남아 있는
+    쪽을 먼저 알려야 한다.
+    """
+
+    artifact_id: str
+    kind: str
+    title: str
+    channel_id: str | None
+    folder_id: str | None
+    created_at: datetime
+    status: Literal["pending_review", "published", "no_revision"]
+    pending_proposal_count: int
+    latest_revision: LatestRevisionResponse | None
+    owners: list[OwnerResponse]
+    is_favorite: bool
+
+
+class ArtifactListResponse(BaseModel):
+    """문서 목록 한 쪽과 필터 뒤 전체 수를 담는다.
+
+    total은 limit·offset을 걸기 전의 수다. 소비자가 쪽 수를 계산하려면 이
+    쪽에 실린 개수가 아니라 필터 뒤 전체 수를 알아야 한다.
+    """
+
+    items: list[ArtifactListItemResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class ArtifactMoveRequest(BaseModel):
+    """문서를 옮길 폴더를 담는다.
+
+    folder_id가 None이면 채널 루트로 올린다. 채널은 여기서 바꾸지 않는다 —
+    채널 이동은 정의·담당자·관리자 판정이 함께 따라와야 하는 조작이라
+    폴더 이동과 같은 문에 두지 않는다.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    folder_id: uuid.UUID | None = None
+
+
+class ArtifactLocationResponse(BaseModel):
+    """문서가 지금 놓인 자리를 담는다."""
+
+    artifact_id: str
+    channel_id: str | None
+    folder_id: str | None
+
+
+class FavoriteItemResponse(BaseModel):
+    """즐겨찾기 목록 한 줄을 담는다."""
+
+    artifact_id: str
+    title: str
+    kind: str
+    channel_id: str | None
+    folder_id: str | None
+    favorited_at: datetime
+
+
+class FavoriteListResponse(BaseModel):
+    """즐겨찾기 목록 전체를 담는다."""
+
+    items: list[FavoriteItemResponse]
+
+
+class FavoriteResponse(BaseModel):
+    """즐겨찾기 지정 결과를 담는다.
+
+    지정은 멱등이라 응답 코드만으로는 지금 상태를 알 수 없다. 결과 상태를
+    같이 실어 소비자가 응답 하나로 화면을 정하게 한다.
+    """
+
+    artifact_id: str
+    is_favorite: bool

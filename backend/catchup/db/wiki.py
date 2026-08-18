@@ -226,6 +226,16 @@ def get_folder(
     )
 
 
+def get_folder_any(db: Session, *, folder_id: uuid.UUID) -> ChannelFolder | None:
+    """채널을 가리지 않고 폴더 하나를 읽는다.
+
+    폴더 이동이 실패했을 때 그 폴더가 아예 없는 것인지, 다른 채널에 있는
+    것인지를 가르려고 쓴다. 두 경우의 응답 코드가 달라야 소비자가 "없는
+    폴더"와 "채널이 다른 폴더"에 서로 다른 화면을 낼 수 있다.
+    """
+    return db.get(ChannelFolder, folder_id)
+
+
 def list_folders(db: Session, workspace_id: int) -> list[ChannelFolder]:
     """이 workspace의 폴더를 생성순으로 읽는다."""
     return list(

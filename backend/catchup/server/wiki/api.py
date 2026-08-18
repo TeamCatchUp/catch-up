@@ -23,9 +23,12 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter
 from fastapi import Depends
+from fastapi import Query
 from fastapi import Response
 from fastapi import status
 from sqlalchemy.exc import IntegrityError
@@ -76,6 +79,10 @@ from catchup.server.wiki.roles import load_wiki_roles
 from catchup.server.wiki.schemas import ArtifactBlockSourceResponse
 from catchup.server.wiki.schemas import ArtifactDocumentBlockResponse
 from catchup.server.wiki.schemas import ArtifactDocumentResponse
+from catchup.server.wiki.schemas import ArtifactListItemResponse
+from catchup.server.wiki.schemas import ArtifactListResponse
+from catchup.server.wiki.schemas import ArtifactLocationResponse
+from catchup.server.wiki.schemas import ArtifactMoveRequest
 from catchup.server.wiki.schemas import ArtifactOwnerResponse
 from catchup.server.wiki.schemas import ChannelAdminResponse
 from catchup.server.wiki.schemas import ChannelCreateRequest
@@ -87,9 +94,14 @@ from catchup.server.wiki.schemas import ChannelRenameRequest
 from catchup.server.wiki.schemas import ChannelResponse
 from catchup.server.wiki.schemas import DefinitionPresetsResponse
 from catchup.server.wiki.schemas import DefinitionSummaryResponse
+from catchup.server.wiki.schemas import FavoriteItemResponse
+from catchup.server.wiki.schemas import FavoriteListResponse
+from catchup.server.wiki.schemas import FavoriteResponse
 from catchup.server.wiki.schemas import FolderCreateRequest
 from catchup.server.wiki.schemas import FolderRenameRequest
 from catchup.server.wiki.schemas import FolderResponse
+from catchup.server.wiki.schemas import LatestRevisionResponse
+from catchup.server.wiki.schemas import OwnerResponse
 from catchup.server.wiki.schemas import PresetDomainResponse
 from catchup.server.wiki.schemas import PresetKindResponse
 from catchup.server.wiki.schemas import PresetPurposeResponse
@@ -215,6 +227,35 @@ def _load_folder(
             message="폴더를 찾을 수 없습니다.",
         )
     return folder
+
+
+def _reject_folder(
+    db: Session, *, folder_id: uuid.UUID, workspace_id: int
+) -> None:
+    """그 채널에 없는 폴더를 두 갈래로 갈라 거절한다.
+
+    다른 채널에 있는 폴더는 422(고른 폴더가 틀렸다), 아예 없는 폴더는
+    404(폴더가 사라졌다)다. 한 코드로 묶으면 소비자가 두 상황에 같은 화면을
+    내게 된다.
+
+    다른 workspace의 폴더는 없는 것으로 답한다. 422로 가르면 응답만으로 남의
+    workspace에 그 폴더가 있는지를 떠볼 수 있다.
+
+    Raises:
+        HTTPException: 늘 422 또는 404를 던진다.
+    """
+    folder = wiki_queries.get_folder_any(db, folder_id=folder_id)
+    if folder is not None and folder.workspace_id == workspace_id:
+        raise review_error(
+            422,
+            code="FOLDER_CHANNEL_MISMATCH",
+            message="문서가 놓인 채널의 폴더가 아닙니다.",
+        )
+    raise review_error(
+        404,
+        code="FOLDER_NOT_FOUND",
+        message="폴더를 찾을 수 없습니다.",
+    )
 
 
 def _load_artifact(
@@ -858,6 +899,195 @@ def delete_folder(
     return Response(status_code=204)
 
 
+def _to_list_item(
+    row: wiki_queries.ArtifactListRow,
+    *,
+    owners: list[OwnerResponse],
+    is_favorite: bool,
+) -> ArtifactListItemResponse:
+    """문서 목록 한 줄을 응답 모양으로 옮겨 담는다."""
+    latest = None
+    if row.latest_revision_id is not None:
+        latest = LatestRevisionResponse(
+            revision_id=str(row.latest_revision_id),
+            revision_number=row.latest_revision_number or 0,
+            published_at=row.latest_published_at,
+        )
+    return ArtifactListItemResponse(
+        artifact_id=str(row.artifact_id),
+        kind=row.kind,
+        title=row.title,
+        channel_id=None if row.channel_id is None else str(row.channel_id),
+        folder_id=None if row.folder_id is None else str(row.folder_id),
+        created_at=row.created_at,
+        status=wiki_queries.artifact_status(row),
+        pending_proposal_count=row.pending_proposal_count,
+        latest_revision=latest,
+        owners=owners,
+        is_favorite=is_favorite,
+    )
+
+
+@router.get(
+    path="/artifacts",
+    response_model=ArtifactListResponse,
+    description="이 workspace의 문서를 상태·담당자·즐겨찾기와 함께 조회한다.",
+)
+def list_artifacts(
+    channel_id: uuid.UUID | None = Query(None),
+    folder_id: uuid.UUID | None = Query(None),
+    kind: str | None = Query(None),
+    status_filter: (
+        Literal["pending_review", "published", "no_revision"] | None
+    ) = Query(None, alias="status"),
+    owner_user_id: int | None = Query(None),
+    created_after: datetime | None = Query(None),
+    created_before: datetime | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    context: MemberContext = Depends(resolve_member_workspace),
+    db: Session = Depends(get_db),
+) -> ArtifactListResponse:
+    """문서 목록 한 쪽을 상태·담당자·즐겨찾기와 함께 돌려준다.
+
+    담당자와 즐겨찾기는 줄마다 따로 묻지 않고 한 번에 읽어 붙인다. 줄 수만큼
+    질의가 늘면 목록 한 장을 그리는 비용이 문서 수에 비례해 커진다.
+
+    total은 limit·offset을 걸기 전의 수다. 이 쪽에 실린 개수로는 소비자가
+    쪽 수를 계산할 수 없다.
+    """
+    rows, total = wiki_queries.list_artifacts(
+        db,
+        workspace_id=context.workspace_id,
+        channel_id=channel_id,
+        folder_id=folder_id,
+        kind=kind,
+        status=status_filter,
+        owner_user_id=owner_user_id,
+        created_after=created_after,
+        created_before=created_before,
+        limit=limit,
+        offset=offset,
+    )
+    artifact_ids = [row.artifact_id for row in rows]
+    owners = owners_by_artifact(db, artifact_ids)
+    favorites = wiki_queries.list_favorite_artifact_ids(
+        db, user_id=context.user.id, workspace_id=context.workspace_id
+    )
+    return ArtifactListResponse(
+        items=[
+            _to_list_item(
+                row,
+                owners=owners[row.artifact_id],
+                is_favorite=row.artifact_id in favorites,
+            )
+            for row in rows
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    path="/favorites",
+    response_model=FavoriteListResponse,
+    description="이 workspace에서 즐겨찾기한 문서를 최근에 담은 순으로 조회한다.",
+)
+def list_favorites(
+    context: MemberContext = Depends(resolve_member_workspace),
+    db: Session = Depends(get_db),
+) -> FavoriteListResponse:
+    """즐겨찾기한 문서를 최근에 담은 순으로 돌려준다."""
+    rows = wiki_queries.list_favorites(
+        db, user_id=context.user.id, workspace_id=context.workspace_id
+    )
+    return FavoriteListResponse(
+        items=[
+            FavoriteItemResponse(
+                artifact_id=str(artifact.id),
+                title=artifact.title,
+                kind=artifact.kind,
+                channel_id=(
+                    None
+                    if artifact.channel_id is None
+                    else str(artifact.channel_id)
+                ),
+                folder_id=(
+                    None
+                    if artifact.folder_id is None
+                    else str(artifact.folder_id)
+                ),
+                favorited_at=favorited_at,
+            )
+            for artifact, favorited_at in rows
+        ]
+    )
+
+
+@router.put(
+    path="/favorites/{artifact_id}",
+    response_model=FavoriteResponse,
+    description="문서를 즐겨찾기에 담는다. 이미 담겨 있어도 같은 결과다.",
+)
+def add_favorite(
+    artifact_id: uuid.UUID,
+    context: MemberContext = Depends(resolve_member_workspace),
+    db: Session = Depends(get_db),
+) -> FavoriteResponse:
+    """문서 하나를 즐겨찾기에 담는다.
+
+    멱등이다. 이미 담겨 있어도 200으로 답한다 — 즐겨찾기는 있고 없고만
+    의미가 있어, 결과 상태가 같은 두 번째 요청을 실패로 볼 이유가 없다.
+
+    Raises:
+        HTTPException: 이 workspace의 문서가 아니면 404를 던진다.
+    """
+    artifact = _load_artifact(
+        db, artifact_id=artifact_id, workspace_id=context.workspace_id
+    )
+    wiki_queries.add_favorite(
+        db,
+        user_id=context.user.id,
+        artifact_id=artifact.id,
+        workspace_id=context.workspace_id,
+    )
+    try:
+        db.commit()
+    except IntegrityError:
+        # 같은 문서를 동시에 담은 경우다. 결과 상태가 요청과 같으므로
+        # 멱등 경로로 합류시킨다.
+        db.rollback()
+
+    return FavoriteResponse(artifact_id=str(artifact.id), is_favorite=True)
+
+
+@router.delete(
+    path="/favorites/{artifact_id}",
+    status_code=204,
+    description="문서를 즐겨찾기에서 뺀다. 담겨 있지 않아도 같은 결과다.",
+)
+def remove_favorite(
+    artifact_id: uuid.UUID,
+    context: MemberContext = Depends(resolve_member_workspace),
+    db: Session = Depends(get_db),
+) -> Response:
+    """문서 하나를 즐겨찾기에서 뺀다. 지정과 같은 이유로 멱등이다.
+
+    Raises:
+        HTTPException: 이 workspace의 문서가 아니면 404를 던진다.
+    """
+    artifact = _load_artifact(
+        db, artifact_id=artifact_id, workspace_id=context.workspace_id
+    )
+    wiki_queries.remove_favorite(
+        db, user_id=context.user.id, artifact_id=artifact.id
+    )
+    db.commit()
+
+    return Response(status_code=204)
+
+
 @router.get(
     path="/artifacts/{artifact_id}",
     response_model=ArtifactDocumentResponse,
@@ -902,6 +1132,13 @@ def get_artifact_document(
         ),
         kind=artifact.kind,
         title=artifact.title,
+        folder_id=(
+            None if artifact.folder_id is None else str(artifact.folder_id)
+        ),
+        owners=owners_by_artifact(db, [artifact.id])[artifact.id],
+        is_favorite=wiki_queries.is_favorite(
+            db, user_id=context.user.id, artifact_id=artifact.id
+        ),
         revision_id=str(revision.id),
         published_at=revision.created_at,
         blocks=[
@@ -925,6 +1162,89 @@ def get_artifact_document(
             )
             for index, block in enumerate(deserialize_blocks(revision.blocks))
         ],
+    )
+
+
+@router.patch(
+    path="/artifacts/{artifact_id}",
+    response_model=ArtifactLocationResponse,
+    description="문서를 같은 채널 안의 다른 폴더로 옮긴다. 관리자 또는 담당자만 할 수 있다.",
+)
+def move_artifact(
+    artifact_id: uuid.UUID,
+    request: ArtifactMoveRequest,
+    context: MemberContext = Depends(resolve_member_workspace),
+    db: Session = Depends(get_db),
+) -> ArtifactLocationResponse:
+    """문서를 같은 채널 안의 폴더로 옮기거나 채널 루트로 올린다.
+
+    폴더가 그 문서의 채널에 달린 것인지 여기서 본다. DB의 복합 FK는 문서와
+    폴더가 같은 workspace인지까지만 보므로, 채널이 다른 폴더로 옮기는 배치를
+    막는 자리는 이 문 하나뿐이다.
+
+    같은 채널에 없는 폴더는 두 갈래로 갈라 답한다. 다른 채널에 있으면 422,
+    아예 없으면 404다. 둘을 한 코드로 묶으면 소비자가 "폴더를 잘못 골랐다"와
+    "폴더가 지워졌다"에 같은 화면을 내게 된다.
+
+    Raises:
+        HTTPException: 문서가 없으면 404, 옮길 자격이 없으면 403, 폴더가
+            다른 채널의 것이면 422, 폴더가 없으면 404를 던진다.
+    """
+    artifact = _load_artifact(
+        db, artifact_id=artifact_id, workspace_id=context.workspace_id
+    )
+    roles = load_wiki_roles(
+        db, user_id=context.user.id, workspace_id=context.workspace_id
+    )
+    owner_user_ids = frozenset(
+        wiki_queries.list_artifact_owner_ids(db, artifact.id)
+    )
+    if not can_manage_owners(
+        roles,
+        artifact_channel_id=artifact.channel_id,
+        artifact_id=artifact.id,
+        owner_user_ids=owner_user_ids,
+        user_id=context.user.id,
+        for_removal=False,
+    ):
+        raise deny_reviewer(
+            403,
+            code="NOT_DOCUMENT_REVIEWER",
+            message="이 문서를 옮길 권한이 없습니다.",
+            user_id=context.user.id,
+            workspace_id=context.workspace_id,
+        )
+
+    if request.folder_id is not None:
+        if artifact.channel_id is None:
+            raise review_error(
+                422,
+                code="FOLDER_CHANNEL_MISMATCH",
+                message="채널에 놓이지 않은 문서는 폴더에 넣을 수 없습니다.",
+            )
+        folder = wiki_queries.get_folder(
+            db, folder_id=request.folder_id, channel_id=artifact.channel_id
+        )
+        if folder is None:
+            _reject_folder(
+                db,
+                folder_id=request.folder_id,
+                workspace_id=context.workspace_id,
+            )
+
+    wiki_queries.set_artifact_folder(
+        db, artifact=artifact, folder_id=request.folder_id
+    )
+    db.commit()
+
+    return ArtifactLocationResponse(
+        artifact_id=str(artifact.id),
+        channel_id=(
+            None if artifact.channel_id is None else str(artifact.channel_id)
+        ),
+        folder_id=(
+            None if artifact.folder_id is None else str(artifact.folder_id)
+        ),
     )
 
 
