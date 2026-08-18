@@ -294,6 +294,14 @@ export const RowActionsMenuOpen: Story = {
     await expect(Math.round(more.getBoundingClientRect().width)).toBe(22);
     await expect(more).toHaveAttribute('aria-expanded', 'true');
 
+    /*
+     * 메뉴가 열린 버튼은 DS Icon button의 Pressed(12%)다 — hover(10%)보다 한 단계 진하다.
+     * 토큰이 srgb 표기로 계산돼 나와서 알파만 본다.
+     */
+    await expect(getComputedStyle(more).backgroundColor).toMatch(/0\.12/);
+    const add = canvas.getByRole('button', { name: '채널명 text text text text 1 하위 페이지 추가' });
+    await expect(getComputedStyle(add).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+
     // 다른 행은 그대로 숨어 있다
     await expect(canvas.queryByRole('button', { name: '폴더명 text text text t 2 추가 작업' })).toBeNull();
   },

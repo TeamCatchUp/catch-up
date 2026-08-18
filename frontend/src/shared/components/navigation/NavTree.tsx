@@ -59,9 +59,13 @@ function RowActionButton({
       aria-label={label}
       aria-expanded={active || undefined}
       onClick={(event) => onClick(event.currentTarget)}
+      /*
+       * DS Icon button(392:1887)의 상태 fill이다 — hover 10%, 메뉴 열림 12%.
+       * 토큰 이름과 한 칸씩 어긋나 보이지만 22px 원에서 6%는 거의 보이지 않는다.
+       */
       className={cn(
         'text-icon-normal-neutral flex size-5.5 shrink-0 cursor-pointer items-center justify-center rounded-full',
-        active ? 'bg-fill-normal-interaction-pressed' : 'hover:bg-fill-normal-interaction-hover',
+        active ? 'bg-fill-normal-interaction-pressed-hover' : 'hover:bg-fill-normal-interaction-pressed',
       )}
     >
       <Icon aria-hidden className="size-4.5" />
@@ -173,7 +177,7 @@ export default function NavTree({
                 aria-expanded={expanded}
                 onClick={() => toggle(node.id)}
                 className={cn(
-                  'hover:bg-fill-normal-interaction-hover absolute hidden size-5.5 cursor-pointer items-center justify-center rounded-full group-focus-within:flex group-hover:flex',
+                  'hover:bg-fill-normal-interaction-pressed absolute hidden size-5.5 cursor-pointer items-center justify-center rounded-full group-focus-within:flex group-hover:flex',
                   isActive ? 'text-icon-primary-normal' : 'text-icon-normal-neutral',
                 )}
               >
