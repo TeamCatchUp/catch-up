@@ -202,11 +202,12 @@ class FakeArtifactRepository:
         kind: str,
         subject_node_id: uuid.UUID,
         title: str,
+        folder_id: uuid.UUID | None = None,
     ) -> uuid.UUID:
         """정의가 대상에 만드는 문서를 찾거나 새로 만든다.
 
-        실 저장소와 같이 (정의, 대상)으로만 찾고, 이미 있으면 제목을
-        덮어쓰지 않는다.
+        실 저장소와 같이 (정의, 대상)으로만 찾고, 이미 있으면 제목도
+        폴더도 덮어쓰지 않는다.
         """
         found = self.definition_artifacts.get((definition_id, subject_node_id))
         if found is not None:
@@ -222,6 +223,7 @@ class FakeArtifactRepository:
             kind=kind,
             subject_node_id=subject_node_id,
             title=title,
+            folder_id=folder_id,
         )
         return artifact_id
 
@@ -245,6 +247,7 @@ class FakeArtifactRepository:
         kind: str,
         subject_node_id: uuid.UUID,
         title: str,
+        folder_id: uuid.UUID | None = None,
     ) -> None:
         """새로 만든 문서 행의 칸들을 적어 둔다."""
         self.artifact_rows[artifact_id] = {
@@ -254,6 +257,7 @@ class FakeArtifactRepository:
             "kind": kind,
             "subject_node_id": subject_node_id,
             "title": title,
+            "folder_id": folder_id,
         }
         self.subjects[artifact_id] = subject_node_id
         self.titles[artifact_id] = title

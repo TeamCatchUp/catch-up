@@ -124,6 +124,7 @@ class ArtifactRepository(Protocol):
         kind: str,
         subject_node_id: uuid.UUID,
         title: str,
+        folder_id: uuid.UUID | None = None,
     ) -> uuid.UUID:
         """정의가 대상에 만드는 문서를 찾거나 새로 만든다.
 
@@ -136,6 +137,9 @@ class ArtifactRepository(Protocol):
 
         채널과 kind는 정의에서 그대로 이어받아 새 행에만 적는다. 문서가
         딛고 선 정의와 같은 채널·kind임을 저장 계층이 보증하기 때문이다.
+
+        folder_id도 새 행에만 적는다. 이미 있는 문서의 폴더는 덮어쓰지
+        않는다. 폴더 이동은 사람의 결정이다.
         """
         ...
 

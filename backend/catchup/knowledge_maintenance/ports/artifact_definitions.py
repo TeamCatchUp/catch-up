@@ -30,6 +30,10 @@ class StoredArtifactDefinition:
             kind와 같은 값으로 채운다. 제목 조립이 읽는 칸을 kind와
             따로 두어, 뒤에 정의마다 다른 제목을 주게 되어도 읽는 쪽을
             고치지 않는다.
+        folder_id: 이 정의가 만드는 문서를 놓을 폴더를 가리킨다. 폴더를
+            고르지 않았으면 None이고, 그때 문서는 채널 바로 아래에 선다.
+            컴파일은 이 값을 새 문서 행에 옮겨 적기만 하고 폴더가
+            무엇인지는 알지 않는다.
     """
 
     id: uuid.UUID
@@ -37,6 +41,7 @@ class StoredArtifactDefinition:
     kind: str
     selection_spec: SelectionSpec
     title_prefix: str
+    folder_id: uuid.UUID | None = None
 
 
 class ArtifactDefinitionRepository(Protocol):
@@ -59,12 +64,15 @@ class ArtifactDefinitionRepository(Protocol):
         """
         ...
 
-    def find_channel_purpose(self, *, channel_id: uuid.UUID) -> str | None:
-        """채널에 걸린 목적 preset id를 읽는다. 없으면 None이다.
+    def find_channel_purposes(self, *, channel_id: uuid.UUID) -> tuple[str, ...]:
+        """채널이 고른 목적 preset id를 고른 순서대로 돌려준다. 없으면 빈 튜플이다.
 
         저장된 값을 그대로 돌려준다. 그 id가 카탈로그에 실존하는지, 어떤
-        이름으로 풀리는지는 읽는 쪽이 정한다 — 저장소가 카탈로그를
+        이름으로 풀리는지는 읽는 쪽이 정한다. 저장소가 카탈로그를
         해석하기 시작하면 상수 개정이 저장 계층까지 흔든다.
+
+        채널 하나가 목적을 여러 개 고를 수 있어 목록이다. 순서는 사람이
+        고른 차례이고, 그 차례가 문서에 적히는 차례가 된다.
 
         문체와 같은 이유로 이 포트에 둔다. 문서의 목적은 정의가 걸린
         채널에서 사람이 고른 값이고, 컴파일이 채널에 닿는 길은 정의뿐이다.

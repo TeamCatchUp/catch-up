@@ -83,6 +83,7 @@ def _uow(
     sections=("status",),
     kind=None,
     purpose=None,
+    purposes=None,
 ) -> FakeDefinitionUnitOfWork:
     """정의 하나·노드·claim으로 fake UnitOfWork를 세운다."""
     row_kwargs = {} if kind is None else {"kind": kind}
@@ -96,9 +97,12 @@ def _uow(
         uow.artifact_definitions.channel_styles = {
             definition[1]: styles,
         }
+    chosen = purposes if purposes is not None else ()
     if purpose:
+        chosen = (purpose, *chosen)
+    if chosen:
         uow.artifact_definitions.channel_purposes = {
-            definition[1]: purpose,
+            definition[1]: tuple(chosen),
         }
     return uow
 
@@ -512,7 +516,7 @@ def test_channel_purpose_reaches_the_request() -> None:
 def test_same_kind_with_different_purposes_gets_different_sentences() -> None:
     """kind가 같아도 채널이 고른 목적이 다르면 목적 문장이 갈린다."""
     sentences = []
-    for purpose in ("voc.top_requests", "voc.complaint_patterns"):
+    for purpose in ("voc.top_requests", "voc.request_status_tracking"):
         node_id = uuid.uuid4()
         uow = _uow(
             nodes=[(node_id, "요청 A", "feature_request", "active")],
@@ -526,17 +530,20 @@ def test_same_kind_with_different_purposes_gets_different_sentences() -> None:
 
     assert sentences[0] != sentences[1]
     assert "많이 들어온 요구 보기" in sentences[0]
-    assert "반복되는 불편 찾기" in sentences[1]
+    assert "요구 처리 현황 따라가기" in sentences[1]
 
 
-def test_purpose_off_the_recommended_kind_is_kept() -> None:
-    """추천 kind와 어긋난 목적도 사람이 고른 그대로 실린다."""
+def test_purpose_sentence_keeps_only_purposes_recommending_this_kind() -> None:
+    """목적이 여럿이어도 이 kind를 추천하는 목적만 목적 문장에 실린다.
+
+    다른 kind를 추천하는 목적까지 적으면 문서 하나가 여러 용도를 주장한다.
+    """
     node_id = uuid.uuid4()
     uow = _uow(
         nodes=[(node_id, "요청 A", "feature_request", "active")],
         claims=[_verified(_claim(node_id=node_id))],
         kind="feature_request_status",
-        purpose="voc.top_requests",
+        purposes=("voc.top_requests", "voc.complaint_patterns"),
     )
     narrator = _FakeNarrator()
 
@@ -544,7 +551,46 @@ def test_purpose_off_the_recommended_kind_is_kept() -> None:
 
     sentence = narrator.requests[0].purpose_sentence
     assert "많이 들어온 요구 보기" in sentence
+    assert "반복되는 불편 찾기" not in sentence
     assert "원하는 결과 중심이다." in sentence
+
+
+def test_purpose_sentence_lists_several_purposes_of_this_kind() -> None:
+    """같은 kind를 추천하는 목적이 여럿이면 고른 순서대로 함께 적는다."""
+    node_id = uuid.uuid4()
+    uow = _uow(
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[_verified(_claim(node_id=node_id))],
+        kind="feature_request_status",
+        purposes=("voc.top_requests", "voc.request_status_tracking"),
+    )
+    narrator = _FakeNarrator()
+
+    _run(uow, narrator)
+
+    assert narrator.requests[0].purpose_sentence.startswith(
+        "이 문서의 목적은 '많이 들어온 요구 보기',"
+        " '요구 처리 현황 따라가기'이다."
+    )
+
+
+def test_purpose_off_the_recommended_kind_leaves_the_kind_sentence() -> None:
+    """고른 목적이 모두 다른 kind를 추천하면 kind 설명 한 줄만 남는다."""
+    node_id = uuid.uuid4()
+    uow = _uow(
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[_verified(_claim(node_id=node_id))],
+        kind="feature_request_status",
+        purpose="voc.complaint_patterns",
+    )
+    narrator = _FakeNarrator()
+
+    _run(uow, narrator)
+
+    assert narrator.requests[0].purpose_sentence == (
+        "이 문서는 고객이 원하는 기능과 그 이유, 사용 상황을 하나의"
+        " 문서로 모은다. 제목은 기능 명칭이 아니라 원하는 결과 중심이다."
+    )
 
 
 def test_kind_only_sentence_when_the_channel_has_no_purpose() -> None:
@@ -727,7 +773,8 @@ def _actor_edge(
 
 def _actor_uow(
     *,
-    purpose: str | None,
+    purpose: str | None = None,
+    purposes: tuple[str, ...] | None = None,
     assertion_text: str = "커넥터 있어?",
     target_node_id: uuid.UUID | None = None,
     target_display_name: str | None = "팀원A",
@@ -766,8 +813,13 @@ def _actor_uow(
             ]
         ),
     )
+    chosen = purposes if purposes is not None else ()
     if purpose is not None:
-        uow.artifact_definitions.channel_purposes = {definition[1]: purpose}
+        chosen = (purpose, *chosen)
+    if chosen:
+        uow.artifact_definitions.channel_purposes = {
+            definition[1]: tuple(chosen),
+        }
     return uow
 
 
@@ -855,6 +907,21 @@ def test_relation_block_hash_differs_by_exposure() -> None:
     assert block_content_hash(_relation_block(named)) != block_content_hash(
         _relation_block(with_email)
     )
+
+
+def test_actor_exposure_follows_the_first_purpose() -> None:
+    """목적이 여럿이어도 첫 목적으로 행위자 노출 수준을 정한다.
+
+    노출은 도메인이 정하고 목적은 그 도메인을 가리키는 손잡이라, 목록을
+    받아도 첫 목적 하나면 수준이 정해진다.
+    """
+    uow = _actor_uow(
+        purposes=("voc.request_status_tracking", "voc.complaint_patterns")
+    )
+
+    _run_with_actor_vocabulary(uow)
+
+    assert "팀원A (neo@x.com)" in _relation_block(uow).body
 
 
 def _relation_request(narrator):
