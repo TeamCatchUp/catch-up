@@ -92,7 +92,7 @@ export default function WikiPageHeader(props: WikiPageHeaderProps) {
         </div>
       )}
 
-      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+      {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
     </header>
   );
 }

@@ -3,9 +3,8 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 
 import IconArrowDown from '@/public/icons/icon/arrow_down.svg';
 import IconArrowUp from '@/public/icons/icon/arrow_up.svg';
-import IconDashboard from '@/public/icons/icon/dashboard.svg';
+import IconGrid from '@/public/icons/icon/grid.svg';
 import IconKebabHorizontal from '@/public/icons/icon/kebab_horizontal.svg';
-import IconOpenInNew from '@/public/icons/icon/open_in_new_24.svg';
 import { Button } from '@/shared/components/ui/button';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
@@ -21,7 +20,7 @@ function MoreButton({ onClick }: { onClick?: () => void }) {
   );
 }
 
-/** 검토큐 문서 헤더의 우측 3종(다음·이전·미리보기). */
+/** 검토큐 문서 헤더의 우측 2종(다음·이전). 미리보기 버튼은 8/18 재실측에서 시안에서 빠졌다. */
 function ReviewQueueActions() {
   return (
     <>
@@ -30,10 +29,6 @@ function ReviewQueueActions() {
       </Button>
       <Button variant="icon-only-gray" size="md" aria-label="이전 문서">
         <IconArrowUp aria-hidden className="size-6" />
-      </Button>
-      <Button variant="box-outline-gray" size="md">
-        미리보기
-        <IconOpenInNew aria-hidden className="size-5" />
       </Button>
     </>
   );
@@ -74,17 +69,18 @@ const meta = {
       ],
       reuseNotes: [
         'Figma `Header` 세트(585:7525)의 두 state를 그대로 옮겼다 — state=Main(17001:78508)이 variant="main", state=세부페이지_2단이상(522:2436)이 variant="detail". 검토큐(17930:57154)만 detach된 FRAME이지만 구조는 detail과 같다.',
-        '채널 화면은 시안(17752:45516)이 아직 main형이지만 detail(채널 1마디)로 구현했다 — 사용자 확정(8/10), 시안 갱신 대기. 구현 직전 시안 재확인 규칙의 예외이고, 갱신되면 이 노트를 지운다. main state 자체는 대시보드가 계속 쓴다.',
+        '채널 화면은 시안(17752:45516)이 아직 main형이지만 detail(채널 1마디)로 구현했다 — 사용자 확정(8/10), 시안 갱신 대기. 구현 직전 시안 재확인 규칙의 예외이고, 갱신되면 이 노트를 지운다. main state 자체는 대시보드가 계속 쓴다. [8/18 재실측] 여전히 main형이고 선두 아이콘만 home→wiki_channel로 갱신됨 — 마디 아이콘 매핑(channel→wiki_channel)과는 일치.',
         '리포에 같은 셸의 선례가 둘 있다: AgentStudioHeader(main, px-16)와 RagContentHeader(detail, px-6). 둘 다 h-13 · justify-between · border-b · py-2로 같고 좌우 패딩만 갈린다 — 이 컴포넌트가 그 공통부를 가진다.',
         '우측 버튼은 shared Button 재사용이다. ⋯ = icon-only-gray/md(p-1.5 + rounded-lg → 36px, Figma Icon button 585:5628과 정확히 일치), 미리보기 = box-outline-gray/md(px-2.5 py-1.5 = Figma 10/6, Box Button 636:6333).',
         'breadcrumb 마디만 Button을 쓰지 않는다. Figma는 Text Button(582:3810)의 size=large_{이전,현재}페이지인데 코드 variant text-secondary-mono에는 그 규격이 없다(lg는 17px·rounded-full, md는 Medium 15px). RagContentHeader도 같은 이유로 직접 그렸다.',
-        '아이콘은 menu·arrow_right2를 SVG mask id(=Figma 노드 id)로 동일 확인했고, kebab_horizontal·dashboard·folder·wiki_channel·arrow_down은 path 좌표 대조로 일치를 확인했다. 신규는 arrow_up(기존에 없음)과 open_in_new_24(기존 open_in_new는 18그리드·다른 노드·path 구조 불일치 — SNB의 search_300 선례) 2개다.',
+        '아이콘은 menu·arrow_right2를 SVG mask id(=Figma 노드 id)로 동일 확인했고, kebab_horizontal·folder·wiki_channel·arrow_down은 path 좌표 대조로 일치를 확인했다. 신규는 arrow_up(기존에 없음)과 open_in_new_24(기존 open_in_new는 18그리드·다른 노드 — SNB의 search_300 선례) 2개다.',
+        '[8/18 재실측 반영] 대시보드 선두 아이콘이 icon/dashboard→icon/grid로 교체됨 — 리포 grid.svg가 mask id로 동일 확인돼 스토리만 교체(하드코드 fill은 currentColor로 정규화, 소비처 0). 검토큐 미리보기 버튼은 시안에서 삭제돼 스토리에서 제거 — open_in_new_24 자산은 diff 세션(BlockDiffSection)이 소비 중이라 유지.',
       ],
       dataNotes: [
         'breadcrumb는 전부 props 주입이고 기존 DocumentBreadcrumb 계약(kind + label)을 그대로 쓴다 — 공유 파일 llmWikiModel.ts는 건드리지 않았다.',
         '마지막 마디가 현재 페이지다. 버튼이 아니고 aria-current="page"를 갖는다 — 클릭 대상이 아니라는 사실을 시각(색)이 아니라 마크업으로도 남긴다.',
         '우측 슬롯 내용물은 전부 소비처 몫이다. ⋯ 메뉴 항목 시안이 없어 트리거만 두고 DropdownMenu를 붙이지 않았다.',
-        '"검토 필요" 태그는 상태 배지 워크스트림의 DocumentStatusBadge(status="needs_review" size="sm")다 — 헤더는 자리(현재 마디 옆, gap 8)만 정하고 내용을 모른다. 8/10 통합 전에는 이 폴더의 ReviewNeededTag였다.',
+        '검토큐 태그는 상태 배지 워크스트림의 DocumentStatusBadge(size="sm")다 — 헤더는 자리(현재 마디 옆, gap 8)만 정하고 내용을 모른다. 8/10 통합 전에는 이 폴더의 ReviewNeededTag였다. [8/18 재실측] 시안 태그 문구가 "검토 필요"→"검토 대기"로 교체됨(같은 Tag type=purple, 기하 동일) — 스토리를 status="pending_review"로 전환. needs_review와의 관계는 상태 배지 워크스트림 질문(#19)으로 이관됨.',
         '로딩·빈·에러 헤더는 만들지 않는다(시안 없음, 감사 금지 목록).',
       ],
       tokenNotes: [
@@ -98,6 +94,7 @@ const meta = {
         '높이 52 = py 8×2 + 내용물 36. main(Icon button 36)과 detail(Text Button 36) 둘 다 같은 값이 나온다. 선례 둘도 h-13이라 그대로 못박았다.',
         '좌우 패딩은 state에 묶인 값이다 — main 64(px-16), detail 24(px-6). Figma가 그렇게 갈라 뒀고 리포 선례 둘도 같은 숫자다.',
         '폭 흡수는 좌측 하나뿐(min-w-0). 축소 순서는 현재 마디 truncate가 먼저고, 이전 마디들과 우측 액션은 shrink-0으로 고정이다 — 가로 스크롤은 넣지 않았다.',
+        '[8/18 재실측] 우측 액션 gap 8→4 — 다중 액션의 유일한 근거인 검토큐 우측 클러스터 실측값을 따라 gap-1로 교정.',
         'Figma 검토큐 시안에서도 현재 마디만 말줄임 처리돼 있다("Update documentation con…") — 흡수 슬롯 선택의 근거다.',
         '마디 높이 36은 padding(4)+라인박스(22.5)=30.5로는 나오지 않는 Figma 고정값이라 h-9로 못박았다. hover 배경이 이 높이로 그려진다.',
       ],
@@ -108,11 +105,11 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof WikiPageHeader>;
 
-/** 대시보드 — 아이콘 + 제목, 우측 ⋯ */
+/** 대시보드 — 아이콘 + 제목, 우측 ⋯. 선두 아이콘은 8/18 재실측으로 icon/grid가 됐다. */
 export const Dashboard: Story = {
   args: {
     variant: 'main',
-    icon: <IconDashboard />,
+    icon: <IconGrid />,
     title: '대시보드',
     actions: <MoreButton />,
   },
@@ -224,7 +221,7 @@ export const Document: Story = {
   },
 };
 
-/** 검토큐 문서 — 3단 + "검토 필요" 태그 + 우측 3종 */
+/** 검토큐 문서 — 3단 + "검토 대기" 태그 + 우측 2종. 태그 문구는 8/18 재실측 기준이다. */
 export const ReviewQueueDocument: Story = {
   args: {
     variant: 'detail',
@@ -234,19 +231,18 @@ export const ReviewQueueDocument: Story = {
       { kind: 'document', label: 'Update documentation content' },
     ],
     onBreadcrumbClick: fn(),
-    badge: <DocumentStatusBadge status="needs_review" size="sm" />,
+    badge: <DocumentStatusBadge status="pending_review" size="sm" />,
     actions: <ReviewQueueActions />,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await expect(canvas.getByText('검토 필요')).toBeInTheDocument();
+    await expect(canvas.getByText('검토 대기')).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: '다음 문서' })).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: '이전 문서' })).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: /미리보기/ })).toBeInTheDocument();
 
     // shared Badge 기본이 rounded-full이라, 덮어쓰기를 놓치면 알약으로 조용히 되돌아간다.
-    const tag = canvas.getByText('검토 필요');
+    const tag = canvas.getByText('검토 대기');
     await expect(getComputedStyle(tag).borderRadius).toBe('6px');
 
     // 아이콘 stroke가 하드코딩 hex로 재export되면 다크 모드에서만 어긋난다 — 속성을 직접 못박는다.
@@ -267,7 +263,7 @@ export const LongTitleInNarrowSlot: Story = {
       { kind: 'folder', label: '폴더명' },
       { kind: 'document', label: NARROW_CURRENT_LABEL },
     ],
-    badge: <DocumentStatusBadge status="needs_review" size="sm" />,
+    badge: <DocumentStatusBadge status="pending_review" size="sm" />,
     actions: <ReviewQueueActions />,
   },
   decorators: [
@@ -295,8 +291,7 @@ export const LongTitleInNarrowSlot: Story = {
     // 잘리는 쪽은 현재 마디뿐이다 — 이전 마디와 우측 액션은 폭을 내주지 않는다.
     const folderCrumb = canvas.getByRole('button', { name: '폴더명' });
     await expect(folderCrumb.scrollWidth).toBeLessThanOrEqual(folderCrumb.clientWidth);
-    await expect(canvas.getByRole('button', { name: /미리보기/ }).scrollWidth).toBeLessThanOrEqual(
-      canvas.getByRole('button', { name: /미리보기/ }).clientWidth,
-    );
+    const prevDocButton = canvas.getByRole('button', { name: '이전 문서' });
+    await expect(prevDocButton.getBoundingClientRect().width).toBe(36);
   },
 };
