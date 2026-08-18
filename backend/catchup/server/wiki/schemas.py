@@ -178,6 +178,19 @@ class ChannelListResponse(BaseModel):
     channels: list[ChannelListItemResponse]
 
 
+class OwnerResponse(BaseModel):
+    """담당자 한 명을 화면에 그릴 만큼 담는다.
+
+    id만 내보내면 화면이 이름과 사진을 얻으려고 사용자 조회를 한 번 더
+    해야 한다. 담당자는 목록에서도 문서에서도 늘 사람 이름으로 보이므로
+    이름과 사진을 같이 싣는다. 사진은 없을 수 있어 None을 허용한다.
+    """
+
+    user_id: int
+    display_name: str
+    profile_image_url: str | None
+
+
 class ArtifactOwnerResponse(BaseModel):
     """문서 담당자 한 명의 지정 결과를 담는다.
 
@@ -187,7 +200,7 @@ class ArtifactOwnerResponse(BaseModel):
     """
 
     artifact_id: str
-    user_ids: list[int]
+    owners: list[OwnerResponse]
 
 
 class ChannelAdminResponse(BaseModel):

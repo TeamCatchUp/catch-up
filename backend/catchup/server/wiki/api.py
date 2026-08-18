@@ -70,6 +70,7 @@ from catchup.server.wiki.dependencies import MemberContext
 from catchup.server.wiki.dependencies import deny_reviewer
 from catchup.server.wiki.dependencies import resolve_member_workspace
 from catchup.server.wiki.dependencies import review_error
+from catchup.server.wiki.owners import owners_by_artifact
 from catchup.server.wiki.roles import can_manage_owners
 from catchup.server.wiki.roles import load_wiki_roles
 from catchup.server.wiki.schemas import ArtifactBlockSourceResponse
@@ -1001,9 +1002,7 @@ def assign_artifact_owner(
 
     return ArtifactOwnerResponse(
         artifact_id=str(artifact.id),
-        user_ids=sorted(
-            wiki_queries.list_artifact_owner_ids(db, artifact.id)
-        ),
+        owners=owners_by_artifact(db, [artifact.id])[artifact.id],
     )
 
 

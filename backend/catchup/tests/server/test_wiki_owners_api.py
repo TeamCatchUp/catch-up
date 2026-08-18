@@ -120,7 +120,8 @@ def _make_user(
     """테스트용 사용자 한 명을 만든다."""
     user = User(
         email=f"{prefix}-{uuid.uuid4().hex[:8]}@example.com",
-        name="구성원",
+        name=f"구성원-{prefix}",
+        picture=f"https://example.com/{prefix}.png",
         provider="keycloak",
         status=UserStatus.ACTIVE,
         role=role,
@@ -275,6 +276,22 @@ def _owner_path(artifact_id: uuid.UUID, user: User) -> str:
     return f"/api/v1/wiki/artifacts/{artifact_id}/owners/{user.id}"
 
 
+def _owner_payload(user: User) -> dict[str, object]:
+    """담당자 한 명이 응답에 실릴 모양을 만든다."""
+    return {
+        "user_id": user.id,
+        "display_name": user.name,
+        "profile_image_url": user.picture,
+    }
+
+
+def _owners_of(response_body: dict[str, object]) -> list[dict[str, object]]:
+    """응답의 담당자 목록을 user_id 순으로 세운다."""
+    owners = response_body["owners"]
+    assert isinstance(owners, list)
+    return sorted(owners, key=lambda owner: owner["user_id"])
+
+
 # ======================= 브리프 케이스 =======================
 
 
@@ -291,8 +308,9 @@ def test_owner_assigns_co_owner(
     response = client.put(_owner_path(artifact_id, member_b))
 
     assert response.status_code == 201
-    assert sorted(response.json()["user_ids"]) == sorted(
-        [owner_user.id, member_b.id]
+    assert _owners_of(response.json()) == sorted(
+        [_owner_payload(owner_user), _owner_payload(member_b)],
+        key=lambda owner: owner["user_id"],
     )
 
 
@@ -419,8 +437,9 @@ def test_assigning_twice_is_idempotent(
     again = client.put(path)
 
     assert again.status_code == 200
-    assert sorted(again.json()["user_ids"]) == sorted(
-        [owner_user.id, member_b.id]
+    assert _owners_of(again.json()) == sorted(
+        [_owner_payload(owner_user), _owner_payload(member_b)],
+        key=lambda owner: owner["user_id"],
     )
 
 
