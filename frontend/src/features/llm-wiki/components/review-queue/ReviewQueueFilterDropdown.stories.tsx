@@ -6,6 +6,7 @@ import IconCalendarClock from '@/public/icons/icon/calendar_clock.svg';
 import IconPerson from '@/public/icons/icon/person.svg';
 import IconPersonFilled from '@/public/icons/icon/person_filled.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
+import IconWikiChannelFilled from '@/public/icons/icon/wiki_channel_filled.svg';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
 import { REVIEW_QUEUE_ASSIGNEE_OPTIONS, REVIEW_QUEUE_CHANNEL_OPTIONS } from '../../fixtures/llmWikiFixtures';
@@ -18,7 +19,7 @@ const SECTIONS: readonly ReviewQueueFilterSection[] = [
     label: '대상 채널',
     Icon: IconWikiChannel,
     searchPlaceholder: '부서명 검색',
-    OptionIcon: IconWikiChannel,
+    OptionIcon: IconWikiChannelFilled,
     options: REVIEW_QUEUE_CHANNEL_OPTIONS,
   },
   {

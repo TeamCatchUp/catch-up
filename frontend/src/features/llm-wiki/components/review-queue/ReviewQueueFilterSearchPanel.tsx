@@ -20,7 +20,7 @@ interface ReviewQueueFilterSearchPanelProps {
   /** 선택·해제 공통 신호. 이미 선택된 id가 오면 해제다. */
   onToggle: (optionId: string) => void;
   placeholder: string;
-  /** 칩·행 좌측 글리프. 담당자는 person_filled, 채널은 wiki_channel이다. */
+  /** 칩·행 좌측 글리프. 담당자는 person_filled, 채널은 wiki_channel_filled다. */
   OptionIcon: ComponentType<SVGProps<SVGSVGElement>>;
 }
 

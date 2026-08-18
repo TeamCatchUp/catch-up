@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect, userEvent, within } from 'storybook/test';
 
 import IconPersonFilled from '@/public/icons/icon/person_filled.svg';
-import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
+import IconWikiChannelFilled from '@/public/icons/icon/wiki_channel_filled.svg';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
 import { REVIEW_QUEUE_ASSIGNEE_OPTIONS, REVIEW_QUEUE_CHANNEL_OPTIONS } from '../../fixtures/llmWikiFixtures';
@@ -66,7 +66,7 @@ const meta = {
       reuseNotes: [
         'cmdk 래퍼 `shared/components/ui/command`를 쓴다(직접 import 금지). Popover+Command 조합의 선례는 AccountSelectDropdown, 칩+검색창 조합의 선례는 SourceFilterDropdown·FilterOptionList다.',
         'FilterOptionList(shared, 소비처 0)가 같은 DS 조각으로 만들어져 있고 직책 라벨 규격(max-w 72·min-w 30)까지 일치한다. 그대로 쓰지 않은 이유는 셋이다 — ① 선택 키가 name 문자열이라 동명이인에서 깨진다(픽스처에 "이진수" 2명을 둬 이 계약을 밟는다) ② 빈 결과 표시가 없다 ③ 모달 본문용 레이아웃(self-stretch·flex-1)이라 드롭다운 패널과 맞지 않는다. 공유 코드라 고치지 않고 이 화면 몫만 만들었다.',
-        'cancel_small·TextfiledDelete·person_filled·wiki_channel 전부 기존 에셋 재사용 — 신규 export 없음.',
+        'cancel_small·TextfiledDelete·person_filled·wiki_channel_filled 전부 기존 에셋 재사용 — 신규 export 없음. 채널 글리프는 filled 변형이다(18116:57859 사용자 확인).',
       ],
       dataNotes: [
         '옵션·직책은 전부 fixture다(REVIEW_QUEUE_ASSIGNEE_OPTIONS·REVIEW_QUEUE_CHANNEL_OPTIONS). 컴포넌트는 목록을 알지 못한다.',
@@ -215,7 +215,7 @@ export const ClearAll: Story = {
 /** 대상 채널 축. 같은 패널에 글리프와 픽스처만 바뀐다 — 직책 자리는 비어 있다. */
 export const ChannelAxis: Story = {
   render: () => (
-    <StatefulPanel options={REVIEW_QUEUE_CHANNEL_OPTIONS} placeholder="부서명 검색" OptionIcon={IconWikiChannel} />
+    <StatefulPanel options={REVIEW_QUEUE_CHANNEL_OPTIONS} placeholder="부서명 검색" OptionIcon={IconWikiChannelFilled} />
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

@@ -39,6 +39,7 @@ import IconCalendarClock from '@/public/icons/icon/calendar_clock.svg';
 import IconPerson from '@/public/icons/icon/person.svg';
 import IconPersonFilled from '@/public/icons/icon/person_filled.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
+import IconWikiChannelFilled from '@/public/icons/icon/wiki_channel_filled.svg';
 import { Avatar } from '@/shared/components/ui/avatar';
 import { Button } from '@/shared/components/ui/button';
 
@@ -150,7 +151,7 @@ export default function Page() {
       label: '대상 채널',
       Icon: IconWikiChannel,
       searchPlaceholder: '부서명 검색',
-      OptionIcon: IconWikiChannel,
+      OptionIcon: IconWikiChannelFilled,
       options: REVIEW_QUEUE_CHANNEL_OPTIONS,
       selectedOptionIds: channelIds,
     },
