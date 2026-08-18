@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 
 import IconAdd from '@/public/icons/icon/add_small.svg';
+import IconAdd400 from '@/public/icons/icon/add_small_400.svg';
 import IconDashboard from '@/public/icons/icon/dashboard.svg';
 import IconEditSquare from '@/public/icons/icon/edit_square.svg';
 import IconFile from '@/public/icons/icon/file.svg';
@@ -235,7 +236,7 @@ export default function WikiSideNav() {
           actions={
             <SnbSectionAction
               label="추가하기"
-              Icon={IconAdd}
+              Icon={IconAdd400}
               active={menu?.kind === 'section-add'}
               onClick={(anchor) => setMenu({ kind: 'section-add', anchor })}
             />

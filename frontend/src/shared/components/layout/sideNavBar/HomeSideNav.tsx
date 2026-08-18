@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import IconAdd from '@/public/icons/icon/add_small.svg';
+import IconAdd400 from '@/public/icons/icon/add_small_400.svg';
 import IconAgent from '@/public/icons/icon/agent.svg';
 import IconDocumentSearch from '@/public/icons/icon/document_search.svg';
 import IconHistory from '@/public/icons/icon/history.svg';
@@ -129,7 +130,7 @@ export default function HomeSideNav() {
           actions={
             <>
               <SnbSectionAction label="전체 보기" Icon={IconList} onClick={() => togglePanel('questionsHistory')} />
-              <SnbSectionAction label="새 채팅" Icon={IconAdd} onClick={go('/')} />
+              <SnbSectionAction label="새 채팅" Icon={IconAdd400} onClick={go('/')} />
             </>
           }
         />

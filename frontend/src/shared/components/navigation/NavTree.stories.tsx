@@ -302,6 +302,11 @@ export const RowActionsMenuOpen: Story = {
     const add = canvas.getByRole('button', { name: '채널명 text text text text 1 하위 페이지 추가' });
     await expect(getComputedStyle(add).backgroundColor).toBe('rgba(0, 0, 0, 0)');
 
+    // 아이콘 자산이 currentColor여야 토큰 클래스가 먹는다 — 하드코드 fill이면 여기서 걸린다
+    for (const button of [more, add]) {
+      await expect(getComputedStyle(button.querySelector('svg path')!).fill).toBe('rgb(109, 120, 130)');
+    }
+
     // 다른 행은 그대로 숨어 있다
     await expect(canvas.queryByRole('button', { name: '폴더명 text text text t 2 추가 작업' })).toBeNull();
   },

@@ -2,10 +2,10 @@
 
 import { type ComponentType, type SVGProps, useState } from 'react';
 
-import IconAdd from '@/public/icons/icon/add_small.svg';
+import IconAdd from '@/public/icons/icon/add_small_400.svg';
 // 표시형의 depth 연결자와 탐색형의 접기 캐럿이 같은 자산을 쓴다
 import IconArrowRight2 from '@/public/icons/icon/arrow_right2.svg';
-import IconMore from '@/public/icons/icon/kebab_horizontal.svg';
+import IconMore from '@/public/icons/icon/kebab_horizontal_400.svg';
 import { cn } from '@/shared/utils/cn';
 
 export interface NavTreeNode {
