@@ -25,6 +25,8 @@ from sqlalchemy.orm import sessionmaker
 
 from catchup.configs.config import settings
 from catchup.db.models import ArtifactDefinition
+from catchup.db.models import ChannelFolder
+from catchup.db.models import ChannelPurpose
 from catchup.db.models import User
 from catchup.db.models import Workspace
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
@@ -68,21 +70,25 @@ class FakeArtifactDefinitionRepository:
         self,
         rows: list[tuple[uuid.UUID, uuid.UUID, str, dict[str, Any]]],
         channel_styles: dict[uuid.UUID, str] | None = None,
-        channel_purposes: dict[uuid.UUID, str] | None = None,
+        channel_purposes: dict[uuid.UUID, tuple[str, ...]] | None = None,
+        definition_folders: dict[uuid.UUID, uuid.UUID] | None = None,
     ) -> None:
         self.rows = list(rows)
         # 채널 문체는 저장된 id 그대로다. 카탈로그 해석은 서비스가 한다.
         self.channel_styles = dict(channel_styles or {})
-        # 채널 목적도 저장된 id 그대로 둔다. 문체와 같은 규칙이다.
+        # 채널 목적도 저장된 id 그대로 둔다. 문체와 같은 규칙이고, 채널
+        # 하나가 목적을 여러 개 고를 수 있어 고른 순서대로 담는다.
         self.channel_purposes = dict(channel_purposes or {})
+        # 정의가 가리키는 폴더다. 정의 id로 찾아 문서 행에 이어 준다.
+        self.definition_folders = dict(definition_folders or {})
 
     def find_channel_style(self, *, channel_id: uuid.UUID) -> str | None:
         """채널에 걸린 문체 preset id를 돌려준다. 없으면 None이다."""
         return self.channel_styles.get(channel_id)
 
-    def find_channel_purpose(self, *, channel_id: uuid.UUID) -> str | None:
-        """채널에 걸린 목적 preset id를 돌려준다. 없으면 None이다."""
-        return self.channel_purposes.get(channel_id)
+    def find_channel_purposes(self, *, channel_id: uuid.UUID) -> tuple[str, ...]:
+        """채널이 고른 목적 preset id를 고른 순서대로 돌려준다."""
+        return tuple(self.channel_purposes.get(channel_id, ()))
 
     def list_definitions(self) -> tuple[StoredArtifactDefinition, ...]:
         return tuple(
@@ -92,6 +98,7 @@ class FakeArtifactDefinitionRepository:
                 kind=kind,
                 selection_spec=deserialize_selection_spec(raw_spec),
                 title_prefix=kind,
+                folder_id=self.definition_folders.get(definition_id),
             )
             for definition_id, channel_id, kind, raw_spec in sorted(
                 self.rows, key=lambda row: str(row[0])
@@ -249,6 +256,7 @@ def _seed_definition(
     *,
     definition_id: uuid.UUID | None = None,
     selection_spec: dict[str, Any] | None = None,
+    folder_id: uuid.UUID | None = None,
 ) -> uuid.UUID:
     """채널 하나와 그 아래 정의 하나를 새로 넣는다.
 
@@ -270,6 +278,7 @@ def _seed_definition(
                     else selection_spec
                 ),
                 created_by=user_id,
+                folder_id=folder_id,
             )
         )
         session.commit()
@@ -392,3 +401,150 @@ def test_broken_spec_raises_selection_spec_error(
     with uow_factory() as uow:
         with pytest.raises(SelectionSpecError):
             uow.artifact_definitions.list_definitions()
+
+
+def _channel_with_purposes(
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+    user_id: int,
+    presets: tuple[str, ...],
+) -> uuid.UUID:
+    """채널 하나를 만들고 목적을 받은 순서대로 걸어 둔다."""
+    channel_id = _channel(session_factory, workspace_id, user_id)
+    with session_factory() as session:
+        for position, preset in enumerate(presets):
+            session.add(
+                ChannelPurpose(
+                    channel_id=channel_id,
+                    purpose_preset=preset,
+                    position=position,
+                )
+            )
+        session.commit()
+    return channel_id
+
+
+def test_find_channel_purposes_follows_the_stored_order(
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+    user_id: int,
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """채널이 고른 목적을 position 순서 그대로 읽는다.
+
+    사람이 고른 차례가 곧 문서에 적히는 차례다. 순서를 잃으면 같은 채널
+    설정에서도 목적 문장의 차례가 실행마다 달라진다.
+    """
+    channel_id = _channel_with_purposes(
+        session_factory,
+        workspace_id,
+        user_id,
+        ("voc.top_requests", "voc.complaint_patterns"),
+    )
+
+    with uow_factory() as uow:
+        found = uow.artifact_definitions.find_channel_purposes(
+            channel_id=channel_id
+        )
+
+    assert found == ("voc.top_requests", "voc.complaint_patterns")
+
+
+def test_find_channel_purposes_is_empty_without_any_purpose(
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+    user_id: int,
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """목적을 하나도 고르지 않은 채널은 빈 튜플로 답한다."""
+    channel_id = _channel(session_factory, workspace_id, user_id)
+
+    with uow_factory() as uow:
+        found = uow.artifact_definitions.find_channel_purposes(
+            channel_id=channel_id
+        )
+
+    assert found == ()
+
+
+def test_find_channel_purposes_ignores_other_workspaces(
+    session_factory: Callable[[], Session],
+    seed_workspace_id: int,
+    workspace_id: int,
+    user_id: int,
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """다른 workspace 채널의 목적은 읽지 않는다.
+
+    채널 식별자만으로 찾으면 남의 workspace 채널 설정이 이 workspace
+    문서에 실린다.
+    """
+    channel_id = _channel_with_purposes(
+        session_factory,
+        seed_workspace_id,
+        user_id,
+        ("voc.complaint_patterns",),
+    )
+
+    with uow_factory() as uow:
+        found = uow.artifact_definitions.find_channel_purposes(
+            channel_id=channel_id
+        )
+
+    assert found == ()
+
+
+def test_list_definitions_reads_the_folder_id(
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+    user_id: int,
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """정의에 걸린 폴더를 조회 결과가 그대로 들고 온다.
+
+    이 값이 비면 컴파일이 만드는 문서가 채널 루트로 떨어져, 온보딩에서
+    고른 폴더 배치가 사라진다.
+    """
+    channel_id = _channel(session_factory, workspace_id, user_id)
+    with session_factory() as session:
+        folder = ChannelFolder(
+            workspace_id=workspace_id,
+            channel_id=channel_id,
+            name="기능 요청 문서",
+        )
+        session.add(folder)
+        session.commit()
+        folder_id = folder.id
+    with session_factory() as session:
+        session.add(
+            ArtifactDefinition(
+                id=FIRST_DEFINITION_ID,
+                workspace_id=workspace_id,
+                channel_id=channel_id,
+                kind=DEFINITION_KIND,
+                selection_spec=SELECTION_SPEC,
+                created_by=user_id,
+                folder_id=folder_id,
+            )
+        )
+        session.commit()
+
+    with uow_factory() as uow:
+        stored = uow.artifact_definitions.list_definitions()
+
+    assert [definition.folder_id for definition in stored] == [folder_id]
+
+
+def test_list_definitions_folder_id_is_none_without_a_folder(
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+    user_id: int,
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """폴더를 걸지 않은 정의는 folder_id가 없음으로 나온다."""
+    _seed_definition(session_factory, workspace_id, user_id)
+
+    with uow_factory() as uow:
+        stored = uow.artifact_definitions.list_definitions()
+
+    assert [definition.folder_id for definition in stored] == [None]

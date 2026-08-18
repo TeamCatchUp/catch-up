@@ -66,9 +66,9 @@ class _FakeDefinitionRepository:
         self.style_calls.append(channel_id)
         return "style.support_guide"
 
-    def find_channel_purpose(self, *, channel_id: uuid.UUID) -> str | None:
+    def find_channel_purposes(self, *, channel_id: uuid.UUID) -> tuple[str, ...]:
         self.purpose_calls.append(channel_id)
-        return "voc.top_requests"
+        return ("voc.top_requests",)
 
 
 class _FakeUnitOfWork:
@@ -167,12 +167,12 @@ def test_channel_purpose_lookup_passes_through() -> None:
     channel_id = uuid.uuid4()
 
     with wrapped:
-        found = wrapped.artifact_definitions.find_channel_purpose(
+        found = wrapped.artifact_definitions.find_channel_purposes(
             channel_id=channel_id
         )
         assert inner.artifact_definitions.purpose_calls == [channel_id]
 
-    assert found == "voc.top_requests"
+    assert found == ("voc.top_requests",)
 
 
 class _FakeEngine:

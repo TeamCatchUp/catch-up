@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
 from catchup.configs.config import settings
+from catchup.db.models import ChannelFolder
 from catchup.db.models import KnowledgeArtifact
 from catchup.db.models import KnowledgeArtifactChangeProposal as ProposalRow
 from catchup.db.models import KnowledgeClaimCandidate as ClaimRow
@@ -305,6 +306,53 @@ def test_get_or_create_definition_artifact_is_idempotent(
                 KnowledgeArtifact.id == first
             )
         ).scalar_one() == "결제 기능"
+
+
+def test_get_or_create_definition_artifact_copies_folder_id(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """새 문서는 넘긴 folder_id를 받고, 이미 있는 문서의 folder_id는 바뀌지 않는다."""
+    with session_factory() as session:
+        node_id = _entity_node(session, workspace_id, "결제 기능")
+        session.commit()
+    definition = _definition_with_channel(session_factory, workspace_id)
+    with session_factory() as session:
+        folder = ChannelFolder(
+            workspace_id=workspace_id,
+            channel_id=definition.channel_id,
+            name="기능 요청 문서",
+        )
+        session.add(folder)
+        session.commit()
+        folder_id = folder.id
+
+    with uow_factory() as uow:
+        first = uow.artifacts.get_or_create_definition_artifact(
+            definition_id=definition.id,
+            channel_id=definition.channel_id,
+            kind=definition.kind,
+            subject_node_id=node_id,
+            title="결제 기능",
+            folder_id=folder_id,
+        )
+        uow.commit()
+    with uow_factory() as uow:
+        second = uow.artifacts.get_or_create_definition_artifact(
+            definition_id=definition.id,
+            channel_id=definition.channel_id,
+            kind=definition.kind,
+            subject_node_id=node_id,
+            title="결제 기능",
+            folder_id=None,
+        )
+        uow.commit()
+
+    assert first == second
+    with session_factory() as session:
+        # 폴더를 옮기는 일은 사람의 결정이라 컴파일이 다시 돌아도 그대로다.
+        assert session.get(KnowledgeArtifact, first).folder_id == folder_id
 
 
 def test_add_or_revive_proposal_revives_abandoned_row(

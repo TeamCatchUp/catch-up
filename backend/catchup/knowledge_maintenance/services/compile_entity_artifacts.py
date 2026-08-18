@@ -359,6 +359,7 @@ def compile_definition_artifacts(
                         kind=definition.kind,
                         subject_node_id=source.node_id,
                         title=_definition_title(definition, source),
+                        folder_id=definition.folder_id,
                     )
                 )
                 try:
@@ -485,30 +486,42 @@ def _purpose_sentence(
 
     사람이 온보딩에서 고른 목적을 먼저 적고 kind 설명을 잇는다. kind는
     목적을 이루는 수단으로 추천된 값일 뿐이라, kind 설명만 실으면 왜 이
-    문서를 만들었는지가 프롬프트에서 사라진다. 추천과 다른 kind를 고른
-    채널에서는 둘이 어긋나 보이지만, 어긋난 채로 알려야 서술이 사람의
-    선택을 따른다.
+    문서를 만들었는지가 프롬프트에서 사라진다.
 
-    카탈로그는 코드 상수라 포트를 거치지 않고 직접 읽는다. 목적을 고르지
-    않았거나 카탈로그 밖 id면 kind 한 줄만, 카탈로그 밖 kind면 기본 한
-    줄만 남는다 — 상수 개정도 손으로 넣은 정의도 컴파일을 멈추지 않는다.
+    채널이 목적을 여러 개 고를 수 있으므로, 그 가운데 이 정의의 kind를
+    추천하는 목적만 골라 고른 순서대로 적는다. 다른 kind를 추천하는
+    목적까지 적으면 문서 하나가 여러 용도를 주장하게 된다.
+
+    카탈로그는 코드 상수라 포트를 거치지 않고 직접 읽는다. 남는 목적이
+    없거나 카탈로그 밖 id뿐이면 kind 한 줄만, 카탈로그 밖 kind면 기본 한
+    줄만 남는다. 상수 개정도 손으로 넣은 정의도 컴파일을 멈추지 않는다.
 
     kind 설명은 그 자체로 끝맺은 한 문장이라 뒤에 용도를 덧붙이지 않는다.
     덧붙이면 한 줄 안에 문장이 둘 겹쳐 읽힌다.
     """
-    purpose_id = uow.artifact_definitions.find_channel_purpose(
+    purpose_ids = uow.artifact_definitions.find_channel_purposes(
         channel_id=definition.channel_id,
     )
-    found = None if purpose_id is None else find_purpose(purpose_id)
     preset_kind = find_kind_by_name(definition.kind)
-    if preset_kind is None:
-        kind_sentence = DEFAULT_PURPOSE_SENTENCE
-    else:
-        kind_sentence = f"이 문서는 {preset_kind.description}"
-    if found is None:
+    kind_sentence = (
+        DEFAULT_PURPOSE_SENTENCE
+        if preset_kind is None
+        else f"이 문서는 {preset_kind.description}"
+    )
+    labels = []
+    for purpose_id in purpose_ids:
+        found = find_purpose(purpose_id)
+        if found is None:
+            continue
+        _, purpose = found
+        # 이 kind를 추천하는 목적만 이 문서의 목적으로 적는다. 다른 kind의
+        # 목적을 함께 적으면 문서 하나가 여러 용도를 주장하게 된다.
+        if purpose.recommended_kind == definition.kind:
+            labels.append(purpose.label)
+    if not labels:
         return kind_sentence
-    _, purpose = found
-    return f"이 문서의 목적은 '{purpose.label}'이다. {kind_sentence}"
+    joined = ", ".join(f"'{label}'" for label in labels)
+    return f"이 문서의 목적은 {joined}이다. {kind_sentence}"
 
 
 def _actor_exposure(
@@ -517,19 +530,18 @@ def _actor_exposure(
 ) -> str:
     """정의가 걸린 채널의 목적으로 행위자 노출 수준을 정한다.
 
-    노출은 도메인이 정하고 목적은 그 도메인을 가리키는 손잡이라, 채널이
-    고른 목적 하나만 읽으면 된다. 목적이 없거나 카탈로그 밖 id면 기본
-    수준으로 떨어진다 — 모르는 목적에 더 넓은 수준을 주면 이메일이 조용히
-    문서로 새어 나간다.
+    노출은 도메인이 정하고 목적은 그 도메인을 가리키는 손잡이다. 목적이
+    여럿이어도 같은 도메인이라 첫 목적으로 노출을 정한다. 목적이 없거나
+    카탈로그 밖 id면 기본 수준으로 떨어진다. 모르는 목적에 더 넓은 수준을
+    주면 이메일이 조용히 문서로 새어 나간다.
 
     narrator 유무와 무관하게 읽는다. 노출은 산문이 아니라 블록 본문 자체를
     바꾸므로, 서술을 붙이지 않는 컴파일에서도 같은 값이 필요하다.
     """
-    return find_actor_exposure(
-        uow.artifact_definitions.find_channel_purpose(
-            channel_id=definition.channel_id,
-        )
+    purposes = uow.artifact_definitions.find_channel_purposes(
+        channel_id=definition.channel_id,
     )
+    return find_actor_exposure(purposes[0] if purposes else None)
 
 
 def _actor_edge_line(exposure: str) -> EdgeFormatter:

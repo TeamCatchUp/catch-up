@@ -57,6 +57,9 @@ from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
     CODE_CONFLICT_RACE,
 )
 from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
+    CODE_STALE_BLOCK,
+)
+from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
     PublishError,
 )
 from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
@@ -389,6 +392,141 @@ def test_publish_rolls_back_earlier_contradiction_decision(
             )
             == 3
         )
+
+
+def test_publish_rolls_back_bulk_verdicts_when_publish_fails(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    seed: _Seed,
+) -> None:
+    """일괄 승인이 적힌 뒤 발행이 막히면 그 판정 기록까지 되감긴다.
+
+    사람이 미리 남긴 결정 하나의 지문을 본문과 어긋나게 심어 둔다. 발행은
+    미결정 블록에 승인을 먼저 적고, 그다음 지문 검사에서 STALE_BLOCK으로
+    막힌다. 두 쓰기가 한 transaction이 아니면 발행되지 않은 문서에 일괄
+    승인만 남아, 다음 발행이 사람이 읽지도 않은 블록을 이미 결정된 것으로
+    읽는다.
+
+    지문이 어긋난 행은 저장소에 직접 넣는다. 단건 결정 서비스는 지문이
+    다르면 거절하므로 이 상태를 서비스로는 만들 수 없다.
+    """
+    decided_at = datetime(2026, 8, 18, 9, 0, tzinfo=timezone.utc)
+
+    with uow_factory() as uow:
+        # 다툼 블록 둘만 사람이 미리 결정해 둔다. 첫 블록은 미결정으로
+        # 남아 일괄 승인이 적을 자리가 된다.
+        uow.block_verdicts.insert_verdict_if_absent(
+            proposal_id=seed.proposal_id,
+            block_index=1,
+            block_content_hash="어긋난 지문",
+            verdict="approved",
+            rejection_reason=None,
+            chosen_winner_claim_id=seed.release_claims[0],
+            reviewer="user:human",
+            reviewed_at=decided_at,
+        )
+        uow.block_verdicts.insert_verdict_if_absent(
+            proposal_id=seed.proposal_id,
+            block_index=2,
+            block_content_hash=block_content_hash(seed.blocks[2]),
+            verdict="approved",
+            rejection_reason=None,
+            chosen_winner_claim_id=seed.owner_claims[0],
+            reviewer="user:human",
+            reviewed_at=decided_at,
+        )
+        uow.commit()
+
+    with pytest.raises(PublishError) as raised:
+        publish_artifact_proposal(
+            uow_factory(),
+            workspace_id=workspace_id,
+            proposal_id=seed.proposal_id,
+            base_revision_id=None,
+            reviewer=REVIEWER,
+            undecided="approve",
+        )
+
+    assert raised.value.code == CODE_STALE_BLOCK
+
+    with session_factory() as session:
+        rows = list(
+            session.scalars(
+                select(VerdictRow)
+                .where(VerdictRow.proposal_id == seed.proposal_id)
+                .order_by(VerdictRow.block_index)
+            )
+        )
+        proposal = session.get(ProposalRow, seed.proposal_id)
+
+    # 미리 있던 사람의 결정 둘만 남는다. 일괄 승인이 적으려던 첫 블록에는
+    # 행이 생기지 않는다.
+    assert [row.block_index for row in rows] == [1, 2]
+    assert {row.reviewer for row in rows} == {"user:human"}
+    assert proposal is not None
+    assert proposal.status == "pending"
+
+
+def test_insert_verdict_if_absent_never_touches_an_existing_verdict(
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    seed: _Seed,
+) -> None:
+    """없을 때만 쓰기는 첫 번만 들어가고 이미 있는 행은 한 컬럼도 안 바꾼다.
+
+    일괄 처리가 이 함수만 쓰므로, 이 성질이 사람의 결정을 지키는 마지막
+    울타리다. `ON CONFLICT DO NOTHING`이 실제 UNIQUE 위에서 그렇게 도는지
+    실 DB로 본다.
+    """
+    block = seed.blocks[0]
+    decided_at = datetime(2026, 8, 18, 9, 0, tzinfo=timezone.utc)
+
+    with uow_factory() as uow:
+        first = uow.block_verdicts.insert_verdict_if_absent(
+            proposal_id=seed.proposal_id,
+            block_index=0,
+            block_content_hash=block_content_hash(block),
+            verdict="rejected",
+            rejection_reason="사람이 직접 반려했다",
+            chosen_winner_claim_id=None,
+            reviewer="user:human",
+            reviewed_at=decided_at,
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        second = uow.block_verdicts.insert_verdict_if_absent(
+            proposal_id=seed.proposal_id,
+            block_index=0,
+            block_content_hash="다른 지문",
+            verdict="approved",
+            rejection_reason=None,
+            chosen_winner_claim_id=None,
+            reviewer="user:bulk",
+            reviewed_at=datetime(2026, 8, 18, 10, 0, tzinfo=timezone.utc),
+        )
+        uow.commit()
+
+    assert first is True
+    assert second is False
+
+    with session_factory() as session:
+        rows = list(
+            session.scalars(
+                select(VerdictRow).where(
+                    VerdictRow.proposal_id == seed.proposal_id,
+                    VerdictRow.block_index == 0,
+                )
+            )
+        )
+
+    assert len(rows) == 1
+    stored = rows[0]
+    assert stored.verdict == "rejected"
+    assert stored.rejection_reason == "사람이 직접 반려했다"
+    assert stored.reviewer == "user:human"
+    assert stored.block_content_hash == block_content_hash(block)
 
 
 def _approve_all(

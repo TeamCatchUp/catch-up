@@ -63,6 +63,31 @@ class BlockVerdictRepository(Protocol):
         """
         ...
 
+    def insert_verdict_if_absent(
+        self,
+        *,
+        proposal_id: uuid.UUID,
+        block_index: int,
+        block_content_hash: str,
+        verdict: str,
+        rejection_reason: str | None,
+        chosen_winner_claim_id: uuid.UUID | None,
+        reviewer: str,
+        reviewed_at: datetime,
+    ) -> bool:
+        """결정이 없는 블록에만 결정을 쓴다.
+
+        이미 결정이 있으면 아무것도 바꾸지 않고 False를 돌려준다. 사람의
+        결정은 불변이므로 일괄 처리 경로는 이 함수만 쓴다. 목록을 읽어
+        미결정을 고른 뒤 쓰기까지 사이에 사람이 단건 결정을 저장해도, 그
+        결정이 그대로 남는다.
+
+        Raises:
+            ValueError: 변경안이 저장소가 고정한 workspace에 없을 때
+                던진다.
+        """
+        ...
+
     def list_for_proposal(
         self, *, proposal_id: uuid.UUID
     ) -> tuple[StoredBlockVerdict, ...]:

@@ -28,6 +28,7 @@ from sqlalchemy.orm import sessionmaker
 
 from catchup.configs.config import settings
 from catchup.db.dependencies import get_db
+from catchup.db.models import ArtifactOwner
 from catchup.db.models import ChannelFolder
 from catchup.db.models import KnowledgeArtifact
 from catchup.db.models import KnowledgeArtifactChangeProposal
@@ -36,6 +37,7 @@ from catchup.db.models import KnowledgeNode
 from catchup.db.models import User
 from catchup.db.models import UserStatus
 from catchup.db.models import UserWorkspace
+from catchup.db.models import WikiArtifactFavorite
 from catchup.db.models import Workspace
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
@@ -379,3 +381,40 @@ def test_requires_workspace_membership(client, outsider):
     response = client.get(f"/api/v1/wiki/artifacts/{uuid.uuid4()}")
 
     assert response.status_code == 403
+
+
+def test_document_carries_folder_owners_and_favorite(
+    client, member, db, workspace_id
+):
+    """문서 응답에 폴더·담당자·즐겨찾기가 함께 실린다.
+
+    문서 화면은 본문만으로 그려지지 않는다. 담당자와 즐겨찾기를 따로 물어
+    보게 하면 화면 한 장에 왕복이 세 번 생기고, 그 사이에 값이 갈린다.
+    """
+    artifact_id, _ = _publish(db, workspace_id=workspace_id, narrative="문장이다.")
+    db.add(ArtifactOwner(artifact_id=artifact_id, user_id=member.id))
+    db.add(
+        WikiArtifactFavorite(
+            user_id=member.id,
+            artifact_id=artifact_id,
+            workspace_id=workspace_id,
+        )
+    )
+    db.flush()
+
+    body = client.get(f"/api/v1/wiki/artifacts/{artifact_id}").json()
+
+    assert body["folder_id"] is None
+    assert body["owners"][0]["user_id"] == member.id
+    assert body["owners"][0]["display_name"] == member.name
+    assert body["is_favorite"] is True
+
+
+def test_document_without_owner_or_favorite(client, member, db, workspace_id):
+    """담당자도 즐겨찾기도 없으면 빈 목록과 False다."""
+    artifact_id, _ = _publish(db, workspace_id=workspace_id, narrative="문장이다.")
+
+    body = client.get(f"/api/v1/wiki/artifacts/{artifact_id}").json()
+
+    assert body["owners"] == []
+    assert body["is_favorite"] is False

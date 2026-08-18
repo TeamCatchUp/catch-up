@@ -1,9 +1,7 @@
 """통합 검토 큐 목록 서비스를 fake 저장소 위에서 확인한다.
 
-큐의 계약은 정렬과 페이지다. 충돌이 걸린 안건이 앞이고 그 안에서 오래된
-것이 먼저이며, 자르기는 정렬 뒤에 한다. 페이지 안에서만 정렬하면 2쪽에
-있던 충돌 안건이 1쪽으로 올라오지 못해 "급한 것부터 본다"는 계약이
-페이지 경계에서 조용히 깨진다.
+큐의 계약은 정렬과 거르기와 페이지다. 정렬은 created_at 오름차순 하나이고,
+거르기를 다 적용한 뒤에 자른다. 충돌 여부는 정렬에 쓰지 않는다.
 
 충돌 표시는 본문의 다툼(contested) 블록에서 나온다. 그래서 fake는
 저장소가 내주는 블록을 실 DB처럼 직렬화·역직렬화해 돌린다 — 후보가
@@ -88,6 +86,7 @@ class FakeState:
         heading: str = "release_month",
         body: str = "9월 출시 예정입니다.",
         title: str = "결제 기능",
+        artifact_id: uuid.UUID | None = None,
     ) -> uuid.UUID:
         """검토를 기다리는 문서 변경안 한 건을 넣는다."""
         proposal_id = uuid.uuid4()
@@ -99,7 +98,7 @@ class FakeState:
         self.proposals.append(
             {
                 "id": proposal_id,
-                "artifact_id": uuid.uuid4(),
+                "artifact_id": artifact_id or uuid.uuid4(),
                 "subject_node_id": uuid.uuid4(),
                 "title": title,
                 "status": status,
@@ -179,42 +178,67 @@ class FakeUnitOfWork:
         return None
 
 
-def test_queue_sorts_conflict_first_then_oldest() -> None:
-    """충돌 포함 항목이 앞, 그 안에서 created_at 오름차순이다."""
+def test_sorts_by_created_at_only() -> None:
+    """충돌 안건도 앞으로 오지 않는다. 오래된 순 하나다."""
     state = FakeState()
     calm_old = state.add_proposal(created_at=BASE_TIME)
-    hot_middle = state.add_proposal(
+    hot_new = state.add_proposal(
         contested=True, created_at=BASE_TIME + timedelta(hours=1)
     )
-    hot_late = state.add_proposal(
-        contested=True, created_at=BASE_TIME + timedelta(hours=2)
-    )
-    calm_late = state.add_proposal(created_at=BASE_TIME + timedelta(hours=3))
 
     page = list_review_queue(
         FakeUnitOfWork(state), workspace_id=WORKSPACE_ID
     )
 
-    assert [item.proposal_id for item in page.items] == [
-        hot_middle,
-        hot_late,
-        calm_old,
-        calm_late,
-    ]
-    assert [item.contains_conflict for item in page.items] == [
-        True,
-        True,
-        False,
-        False,
-    ]
-    assert page.total == 4
+    assert [item.proposal_id for item in page.items] == [calm_old, hot_new]
+    assert [item.contains_conflict for item in page.items] == [False, True]
+    assert page.total == 2
+
+
+def test_filters_by_artifact_ids_and_time_window() -> None:
+    """문서 id와 시간창으로 각각 거르고 total도 거른 뒤의 수다."""
+    state = FakeState()
+    artifact_a = uuid.uuid4()
+    artifact_b = uuid.uuid4()
+    on_a = state.add_proposal(artifact_id=artifact_a, created_at=BASE_TIME)
+    on_b_late = state.add_proposal(
+        artifact_id=artifact_b, created_at=BASE_TIME + timedelta(hours=2)
+    )
+
+    only_a = list_review_queue(
+        FakeUnitOfWork(state),
+        workspace_id=WORKSPACE_ID,
+        artifact_ids=frozenset({artifact_a}),
+    )
+    after = list_review_queue(
+        FakeUnitOfWork(state),
+        workspace_id=WORKSPACE_ID,
+        created_after=BASE_TIME + timedelta(hours=1),
+    )
+    before = list_review_queue(
+        FakeUnitOfWork(state),
+        workspace_id=WORKSPACE_ID,
+        created_before=BASE_TIME + timedelta(hours=1),
+    )
+    empty = list_review_queue(
+        FakeUnitOfWork(state),
+        workspace_id=WORKSPACE_ID,
+        artifact_ids=frozenset(),
+    )
+
+    assert [item.proposal_id for item in only_a.items] == [on_a]
+    assert only_a.total == 1
+    assert [item.proposal_id for item in after.items] == [on_b_late]
+    assert after.total == 1
+    assert [item.proposal_id for item in before.items] == [on_a]
+    assert before.total == 1
+    assert empty.items == ()
+    assert empty.total == 0
 
 
 def test_queue_pagination_and_total() -> None:
-    """limit/offset은 정렬 뒤에 자르고 total은 전체 수다."""
+    """limit/offset은 정렬 뒤에 자르고 total은 거른 뒤의 전체 수다."""
     state = FakeState()
-    # 충돌 안건을 목록 뒤쪽 시각에 둔다. 페이지 안에서만 정렬하면
-    # 1쪽에 올라오지 못하는 배치다.
     calm = [
         state.add_proposal(created_at=BASE_TIME + timedelta(hours=index))
         for index in range(4)
@@ -232,9 +256,16 @@ def test_queue_pagination_and_total() -> None:
         limit=2,
         offset=2,
     )
+    last = list_review_queue(
+        FakeUnitOfWork(state),
+        workspace_id=WORKSPACE_ID,
+        limit=2,
+        offset=4,
+    )
 
-    assert [item.proposal_id for item in first.items] == [hot, calm[0]]
-    assert [item.proposal_id for item in second.items] == [calm[1], calm[2]]
+    assert [item.proposal_id for item in first.items] == [calm[0], calm[1]]
+    assert [item.proposal_id for item in second.items] == [calm[2], calm[3]]
+    assert [item.proposal_id for item in last.items] == [hot]
     assert first.total == 5
     assert second.total == 5
 

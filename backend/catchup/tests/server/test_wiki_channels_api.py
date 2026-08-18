@@ -30,7 +30,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
 from catchup.configs.config import settings
+from catchup.db import wiki as wiki_queries
 from catchup.db.dependencies import get_db
+from catchup.db.models import ArtifactDefinition
 from catchup.db.models import Channel
 from catchup.db.models import ChannelAdmin
 from catchup.db.models import ChannelFolder
@@ -362,13 +364,17 @@ def test_folder_of_other_channel_is_not_found(
     assert mismatched.json()["detail"]["code"] == "FOLDER_NOT_FOUND"
 
 
-def test_folder_with_documents_cannot_be_deleted(
+def test_folder_delete_moves_documents_and_definitions_to_root(
     client: TestClient,
     db: Session,
     member: User,
     workspace_ids: tuple[int, int],
 ) -> None:
-    """문서가 든 폴더 삭제는 409다 — RESTRICT가 500으로 새지 않는다."""
+    """폴더를 지우면 그 안의 문서와 정의는 채널 루트로 옮겨진다.
+
+    두 FK가 ON DELETE SET NULL이라 folder_id만 비워진다. 행이 함께
+    지워지거나 삭제가 막히면 안 된다.
+    """
     workspace_id, _ = workspace_ids
     channel_id = client.post(
         "/api/v1/wiki/channels", json={"name": f"보관-{uuid.uuid4().hex[:8]}"}
@@ -376,29 +382,40 @@ def test_folder_with_documents_cannot_be_deleted(
     folder_id = client.post(
         f"/api/v1/wiki/channels/{channel_id}/folders", json={"name": "요구사항"}
     ).json()["id"]
-    _make_artifact(
+    artifact_id = _make_artifact(
         db,
         workspace_id=workspace_id,
         channel_id=uuid.UUID(channel_id),
         folder_id=uuid.UUID(folder_id),
     )
+    definition = wiki_queries.add_artifact_definition(
+        db,
+        workspace_id=workspace_id,
+        channel_id=uuid.UUID(channel_id),
+        kind="feature_request_status",
+        selection_spec={"entity_types": ["feature_request"]},
+        created_by=member.id,
+        folder_id=uuid.UUID(folder_id),
+    )
     db.commit()
+    definition_id = definition.id
 
-    denied = client.delete(
+    removed = client.delete(
         f"/api/v1/wiki/channels/{channel_id}/folders/{folder_id}"
     )
 
-    assert denied.status_code == 409
-    assert denied.json()["detail"]["code"] == "FOLDER_NOT_EMPTY"
-    # 폴더는 그대로 남는다 — 거부된 삭제가 절반만 반영되지 않는다.
+    assert removed.status_code == 204, removed.text
+    db.expire_all()
     assert (
         db.scalar(
             select(ChannelFolder).where(
                 ChannelFolder.id == uuid.UUID(folder_id)
             )
         )
-        is not None
+        is None
     )
+    assert db.get(KnowledgeArtifact, artifact_id).folder_id is None
+    assert db.get(ArtifactDefinition, definition_id).folder_id is None
 
 
 def test_duplicate_folder_name_conflicts(
@@ -451,6 +468,43 @@ def test_channel_list_carries_folders_and_document_count(
     assert mine[0]["is_admin"] is True
     assert mine[0]["document_count"] == 1
     assert [folder["name"] for folder in mine[0]["folders"]] == ["요구사항"]
+
+
+def test_channel_list_carries_purposes_and_definitions(
+    client: TestClient, db: Session, member: User, workspace_ids: tuple[int, int]
+) -> None:
+    """온보딩으로 만든 채널은 목록에서 목적 preset과 정의 요약을 함께 싣는다."""
+    name = f"온보딩-{uuid.uuid4().hex[:8]}"
+    created = client.post(
+        "/api/v1/wiki/channels/onboarding",
+        json={
+            "name": name,
+            "domain_preset": "voc",
+            "purpose_presets": ["voc.top_requests", "voc.faq_consistency"],
+            "kinds": ["feature_request_status", "faq_answer"],
+            "style_preset": "style.wiki_standard",
+        },
+    )
+    assert created.status_code == 201, created.json()
+    channel_id = created.json()["channel"]["id"]
+
+    listed = client.get("/api/v1/wiki/channels")
+
+    assert listed.status_code == 200
+    mine = [
+        item for item in listed.json()["channels"] if item["id"] == channel_id
+    ]
+    assert len(mine) == 1
+    assert mine[0]["purpose_presets"] == [
+        "voc.top_requests",
+        "voc.faq_consistency",
+    ]
+    definitions = {item["kind"]: item for item in mine[0]["definitions"]}
+    assert set(definitions) == {"feature_request_status", "faq_answer"}
+    assert definitions["feature_request_status"]["folder_id"] is not None
+    assert definitions["faq_answer"]["purpose_presets"] == [
+        "voc.faq_consistency"
+    ]
 
 
 def test_channel_of_other_workspace_is_not_found(

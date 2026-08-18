@@ -42,7 +42,7 @@ _BLOCK_VERDICTS = (BLOCK_VERDICT_APPROVED, BLOCK_VERDICT_REJECTED)
 PROPOSAL_STATUS_PENDING = "pending"
 
 # 거절 사유를 가르는 코드다. 호출자는 이 값으로 응답을 정한다.
-CODE_NOT_FOUND = "NOT_FOUND"
+CODE_NOT_FOUND = "PROPOSAL_NOT_FOUND"
 CODE_ALREADY_DECIDED = "ALREADY_DECIDED"
 CODE_STALE_BLOCK = "STALE_BLOCK"
 CODE_INVALID = "INVALID"
@@ -52,7 +52,7 @@ class BlockVerdictError(Exception):
     """블록 결정을 받아들일 수 없음을 알린다. code로 사유를 가른다.
 
     하나의 예외로 모으되 code를 남기는 이유는, 호출자가 사유마다 다르게
-    응대해야 하기 때문이다. NOT_FOUND와 ALREADY_DECIDED는 목록을 다시
+    응대해야 하기 때문이다. PROPOSAL_NOT_FOUND와 ALREADY_DECIDED는 목록을 다시
     읽어야 하고, STALE_BLOCK은 검토자에게 바뀐 본문을 다시 보여 줘야
     하며, INVALID는 보낸 값 자체가 틀린 것이다. 문자열 메시지를 뜯어
     보게 두지 않으려고 코드를 필드로 세운다.
@@ -105,7 +105,8 @@ def upsert_block_verdict(
 
     Raises:
         BlockVerdictError: 결정을 받아들일 수 없을 때 던진다. code는
-            NOT_FOUND·ALREADY_DECIDED·STALE_BLOCK·INVALID 중 하나다.
+            PROPOSAL_NOT_FOUND·ALREADY_DECIDED·STALE_BLOCK·INVALID 중
+            하나다.
     """
     if not reviewer.strip():
         # 누가 결정했는지 없는 판정은 감사 기록이 되지 못한다.
@@ -113,7 +114,11 @@ def upsert_block_verdict(
     reviewed_at = datetime.now(UTC) if now is None else now
 
     with uow:
-        proposal = uow.artifacts.get_proposal(proposal_id=proposal_id)
+        # 일괄 발행과 같은 행을 잠근다. 두 경로가 이 행 하나를 두고 줄을
+        # 서야 한쪽의 미결정 판단이 다른 쪽 때문에 도중에 어긋나지 않는다.
+        proposal = uow.artifacts.get_proposal(
+            proposal_id=proposal_id, for_update=True
+        )
         if proposal is None:
             # 저장소가 workspace를 고정하므로, 남의 workspace 변경안도
             # 여기서는 없는 것과 같다.

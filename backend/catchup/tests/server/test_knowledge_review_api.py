@@ -6,9 +6,11 @@
 dependency_overrides로 우회한다 — 쿠키 JWT를 만드는 일은 이 라우터의 검증
 대상이 아니다.
 
-인가는 두 겹이라 확인도 두 겹이다. 의존성이 보는 "검수 표면에 설 자격"은
+인가는 두 겹이라 확인도 두 겹이다. 의존성이 보는 "이 표면에 설 자격"은
 NOT_REVIEWER로, 핸들러가 보는 "이 문서를 결정할 자격"은
-NOT_DOCUMENT_REVIEWER로 갈린다. 대부분의 응답 계약 테스트는 전역 ADMIN을
+NOT_DOCUMENT_REVIEWER로 갈린다. 다만 첫 겹은 경로에 따라 다르다. 큐 목록과
+상세는 workspace 구성원이면 열리므로 역할 없는 사람에게 NOT_MEMBER만 걸리고,
+판정 경로에서만 NOT_REVIEWER가 걸린다. 대부분의 응답 계약 테스트는 전역 ADMIN을
 검토자로 세운다 — 대역 변경안이 가리키는 문서는 DB에 없어 미분류로 읽히고,
 미분류의 폴백이 전역 ADMIN이기 때문이다.
 
@@ -54,6 +56,7 @@ from catchup.db.models import Channel
 from catchup.db.models import ChannelAdmin
 from catchup.db.models import KnowledgeArtifact
 from catchup.db.models import KnowledgeArtifactChangeProposal
+from catchup.db.models import KnowledgeArtifactRevision
 from catchup.db.models import KnowledgeNode
 from catchup.db.models import User
 from catchup.db.models import UserRole
@@ -97,6 +100,7 @@ from catchup.knowledge_maintenance.services.review_artifact_proposal import Revi
 from catchup.server.knowledge_review.api import _to_block
 from catchup.server.knowledge_review.api import router
 from catchup.server.knowledge_review.dependencies import ReviewerContext
+from catchup.server.knowledge_review.dependencies import get_member_review_uow_factory
 from catchup.server.knowledge_review.dependencies import get_review_uow_factory
 from catchup.server.knowledge_review.dependencies import get_reviewer_user
 from catchup.server.knowledge_review.dependencies import resolve_reviewer_workspace
@@ -304,7 +308,7 @@ class _FakeArtifacts:
         self._latest = latest
 
     def get_proposal(
-        self, *, proposal_id: uuid.UUID
+        self, *, proposal_id: uuid.UUID, for_update: bool = False
     ) -> StoredArtifactProposal | None:
         if self._proposal is None or self._proposal.id != proposal_id:
             return None
@@ -550,10 +554,30 @@ def _relation_proposal(
 # ======================= 앱 fixture =======================
 
 
+class _UowOverrides(dict):
+    """UoW factory 우회를 열람 경로에도 같이 걸어 주는 override 사전이다.
+
+    라우터의 UoW factory 의존성은 두 개다. 판정 경로는
+    `get_review_uow_factory`를, 목록·상세 열람 경로는
+    `get_member_review_uow_factory`를 쓴다. 테스트는 어느 라우트를 부르든
+    같은 대역 저장소를 보길 원하므로, 한쪽을 덮으면 다른 쪽도 같은 값으로
+    덮는다. 테스트마다 두 줄을 쓰게 두면 한쪽만 덮은 테스트가 실 DB로
+    새어 나가 원인을 찾기 어려운 실패가 된다.
+    """
+
+    def __setitem__(self, key: object, value: object) -> None:
+        super().__setitem__(key, value)
+        if key is get_review_uow_factory:
+            super().__setitem__(get_member_review_uow_factory, value)
+        elif key is get_member_review_uow_factory:
+            super().__setitem__(get_review_uow_factory, value)
+
+
 @pytest.fixture
 def app() -> FastAPI:
     application = FastAPI()
     application.include_router(router)
+    application.dependency_overrides = _UowOverrides()
     return application
 
 
@@ -851,20 +875,96 @@ def test_authentication_error_hides_internal_reason(
     assert response.json()["detail"]["code"] == "UNAUTHENTICATED"
 
 
-def test_queue_requires_reviewer(
+def test_queue_is_readable_by_member_without_any_role(
     app: FastAPI,
     client: TestClient,
     db: Session,
     workspace_ids: tuple[int, int],
     as_user: Callable[[User], None],
 ) -> None:
-    """검토자 권한이 없으면 목록도 못 본다."""
+    """역할이 하나도 없는 구성원도 목록을 볼 수 있고, can_review는 false다."""
     workspace_id, _ = workspace_ids
     user = _make_user(db, email="queue-member@example.com")
     _join(db, user=user, workspace_id=workspace_id)
     as_user(user)
+    item = ReviewQueueItem(
+        proposal_id=uuid.uuid4(),
+        artifact_id=uuid.uuid4(),
+        title="오픈 API",
+        status="pending",
+        summary="속도 제한: rate_limit은 60이다",
+        origin="compiled",
+        contains_conflict=False,
+        created_at=AT,
+    )
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
+
+    with patch(
+        "catchup.server.knowledge_review.api.list_review_queue",
+        return_value=ReviewQueuePage(items=(item,), total=1),
+    ):
+        response = client.get("/api/v1/knowledge-review/queue")
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["can_review"] is False
+
+
+def test_queue_detail_is_readable_by_member_without_any_role(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """상세도 역할 없는 구성원에게 열리고, can_review는 false다."""
+    workspace_id, _ = workspace_ids
+    user = _make_user(db, email="detail-member@example.com")
+    _join(db, user=user, workspace_id=workspace_id)
+    as_user(user)
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(proposal=_proposal(proposal_id=proposal_id))
+    )
+
+    response = client.get(f"/api/v1/knowledge-review/queue/{proposal_id}")
+
+    assert response.status_code == 200
+    assert response.json()["can_review"] is False
+
+
+def test_queue_denies_non_member(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    as_user: Callable[[User], None],
+) -> None:
+    """어느 workspace에도 속하지 않으면 목록부터 막힌다."""
+    user = _make_user(db, email="queue-outsider@example.com")
+    as_user(user)
 
     response = client.get("/api/v1/knowledge-review/queue")
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "NOT_MEMBER"
+
+
+def test_verdict_still_requires_reviewer_role(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """열람이 열려도 판정 경로는 역할 게이트를 그대로 지킨다."""
+    workspace_id, _ = workspace_ids
+    user = _make_user(db, email="verdict-member@example.com")
+    _join(db, user=user, workspace_id=workspace_id)
+    as_user(user)
+
+    response = client.put(
+        _verdict_path(uuid.uuid4(), 1),
+        json={"verdict": "approved", "block_content_hash": "sha256:x"},
+    )
 
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "NOT_REVIEWER"
@@ -926,17 +1026,120 @@ def test_queue_returns_page_shape(
     assert returned == {
         "proposal_id": str(item.proposal_id),
         "status": "pending",
-        "artifact": {"id": str(item.artifact_id), "title": "오픈 API"},
+        "artifact": {
+            "id": str(item.artifact_id),
+            "title": "오픈 API",
+            "channel_id": None,
+            "folder_id": None,
+        },
         "summary": "속도 제한: rate_limit은 60이다",
         "origin": "compiled",
         "contains_conflict": True,
+        "owners": [],
+        "can_review": True,
     }
     assert service.call_args.kwargs == {
         "workspace_id": workspace_id,
         "contains_conflict": True,
+        "artifact_ids": None,
+        "created_after": None,
+        "created_before": None,
         "limit": 1,
         "offset": 2,
     }
+
+
+def test_queue_filters_narrow_artifact_ids(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    reviewer: User,
+    workspace_ids: tuple[int, int],
+) -> None:
+    """채널·담당자 조건은 문서 id 집합으로 바뀌어 서비스에 들어간다."""
+    workspace_id, _ = workspace_ids
+    channel_id = _make_channel(
+        db, workspace_id=workspace_id, created_by=reviewer.id
+    )
+    both = _make_artifact(
+        db, workspace_id=workspace_id, channel_id=channel_id
+    )
+    _make_artifact(db, workspace_id=workspace_id, channel_id=channel_id)
+    owner_only = _make_artifact(db, workspace_id=workspace_id)
+    _make_owner(db, artifact_id=both, user=reviewer)
+    _make_owner(db, artifact_id=owner_only, user=reviewer)
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
+    page = ReviewQueuePage(items=(), total=0)
+
+    with patch(
+        "catchup.server.knowledge_review.api.list_review_queue",
+        return_value=page,
+    ) as service:
+        response = client.get(
+            "/api/v1/knowledge-review/queue",
+            params={
+                "channel_id": str(channel_id),
+                "owner_user_id": reviewer.id,
+                "created_after": "2026-08-01T00:00:00+00:00",
+                "created_before": "2026-08-31T00:00:00+00:00",
+            },
+        )
+
+    assert response.status_code == 200
+    kwargs = service.call_args.kwargs
+    assert kwargs["artifact_ids"] == frozenset({both})
+    assert kwargs["created_after"] == datetime(
+        2026, 8, 1, tzinfo=timezone.utc
+    )
+    assert kwargs["created_before"] == datetime(
+        2026, 8, 31, tzinfo=timezone.utc
+    )
+
+
+def test_queue_carries_location_owners_and_can_review(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    reviewer: User,
+    workspace_ids: tuple[int, int],
+) -> None:
+    """항목마다 문서 위치·담당자·결정 가능 여부를 함께 싣는다."""
+    workspace_id, _ = workspace_ids
+    channel_id = _make_channel(
+        db, workspace_id=workspace_id, created_by=reviewer.id
+    )
+    artifact_id = _make_artifact(
+        db, workspace_id=workspace_id, channel_id=channel_id
+    )
+    other = _make_user(db, email="queue-owner@example.com")
+    _join(db, user=other, workspace_id=workspace_id)
+    _make_owner(db, artifact_id=artifact_id, user=other)
+    item = ReviewQueueItem(
+        proposal_id=uuid.uuid4(),
+        artifact_id=artifact_id,
+        title="오픈 API",
+        status="pending",
+        summary="속도 제한: rate_limit은 60이다",
+        origin="compiled",
+        contains_conflict=False,
+        created_at=AT,
+    )
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
+    page = ReviewQueuePage(items=(item,), total=1)
+
+    with patch(
+        "catchup.server.knowledge_review.api.list_review_queue",
+        return_value=page,
+    ):
+        response = client.get("/api/v1/knowledge-review/queue")
+
+    assert response.status_code == 200
+    returned = response.json()["items"][0]
+    assert returned["artifact"]["channel_id"] == str(channel_id)
+    assert returned["artifact"]["folder_id"] is None
+    assert [owner["user_id"] for owner in returned["owners"]] == [other.id]
+    # 담당자가 있는 문서는 담당자만 결정한다. 전역 관리자 폴백이 서지 않는다.
+    assert returned["can_review"] is False
 
 
 def test_queue_rejects_out_of_range_limit(
@@ -1113,6 +1316,233 @@ def test_detail_relation_block_carries_relation_ids(
         "proposal_ids": [],
         "relation_ids": [str(relation_id)],
     }
+
+
+def _revision_blocks(
+    *, claim_id: uuid.UUID, body: str
+) -> tuple[ArtifactBlock, ...]:
+    """발행판에 저장할 블록 한 벌을 만든다."""
+    return (
+        ArtifactBlock(
+            block_kind=BLOCK_KIND_CLAIM_SECTION,
+            heading="속도 제한",
+            body=body,
+            claim_ids=(claim_id,),
+            proposal_ids=(),
+            ontology_version="v1",
+        ),
+    )
+
+
+def _seed_revision(
+    db: Session,
+    *,
+    workspace_id: int,
+    artifact_id: uuid.UUID,
+    blocks: tuple[ArtifactBlock, ...],
+) -> uuid.UUID:
+    """문서의 1판을 그 판을 낳은 승인된 변경안과 함께 넣는다.
+
+    판 행은 자기를 낳은 변경안을 가리켜야 하고, 그 변경안은 결정 저널
+    (검토자·결정 시각)이 채워진 승인 상태여야 한다. DB CHECK가 그것을
+    요구하므로 여기서도 같은 모양으로 넣는다.
+    """
+    source_proposal_id = uuid.uuid4()
+    db.add(
+        KnowledgeArtifactChangeProposal(
+            id=source_proposal_id,
+            workspace_id=workspace_id,
+            artifact_id=artifact_id,
+            blocks=serialize_blocks(blocks),
+            status="approved",
+            content_hash=blocks_content_hash(blocks),
+            idempotency_key=f"seed:{source_proposal_id}",
+            base_revision_id=None,
+            reviewed_at=AT,
+            reviewer="test:seed",
+        )
+    )
+    db.flush()
+    revision_id = uuid.uuid4()
+    db.add(
+        KnowledgeArtifactRevision(
+            id=revision_id,
+            workspace_id=workspace_id,
+            artifact_id=artifact_id,
+            revision_number=1,
+            blocks=serialize_blocks(blocks),
+            source_proposal_id=source_proposal_id,
+        )
+    )
+    db.flush()
+    return revision_id
+
+
+def _two_block_proposal(
+    *,
+    proposal_id: uuid.UUID,
+    artifact_id: uuid.UUID,
+    claim_id: uuid.UUID,
+    body: str,
+) -> StoredArtifactProposal:
+    """발행판 블록 하나를 고치고 블록 하나를 더한 변경안을 만든다."""
+    return StoredArtifactProposal(
+        id=proposal_id,
+        artifact_id=artifact_id,
+        subject_node_id=uuid.uuid4(),
+        title="오픈 API",
+        status="pending",
+        blocks=(
+            ArtifactBlock(
+                block_kind=BLOCK_KIND_CLAIM_SECTION,
+                heading="속도 제한",
+                body=body,
+                claim_ids=(claim_id,),
+                proposal_ids=(),
+                ontology_version="v1",
+            ),
+            ArtifactBlock(
+                block_kind=BLOCK_KIND_CLAIM_SECTION,
+                heading="담당",
+                body="담당은 플랫폼 팀이다",
+                claim_ids=(uuid.uuid4(),),
+                proposal_ids=(),
+                ontology_version="v1",
+            ),
+        ),
+        content_hash="hash",
+        base_revision_id=None,
+        rejection_reason=None,
+        origin="compiled",
+        created_at=AT,
+    )
+
+
+def test_detail_is_readable_by_member_without_document_role_but_can_review_false(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """워크스페이스 역할이 하나라도 있으면 200이고 can_review는 False다.
+
+    열람과 판정을 나눈다. 남의 채널 문서라도 검토자는 내용을 읽을 수
+    있어야 하고, 결정 버튼만 잠기면 된다.
+    """
+    workspace_id, _ = workspace_ids
+    outsider = _make_user(db, email="other-channel-admin@example.com")
+    _join(db, user=outsider, workspace_id=workspace_id)
+    own_channel_id = _make_channel(
+        db, workspace_id=workspace_id, created_by=outsider.id
+    )
+    _make_channel_admin(db, channel_id=own_channel_id, user=outsider)
+    other_channel_id = _make_channel(
+        db, workspace_id=workspace_id, created_by=outsider.id
+    )
+    artifact_id = _make_artifact(
+        db, workspace_id=workspace_id, channel_id=other_channel_id
+    )
+    owner = _make_user(db, email="detail-owner@example.com")
+    _join(db, user=owner, workspace_id=workspace_id)
+    _make_owner(db, artifact_id=artifact_id, user=owner)
+    as_user(outsider)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+
+    response = client.get(f"/api/v1/knowledge-review/queue/{proposal_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["can_review"] is False
+    assert [item["user_id"] for item in data["owners"]] == [owner.id]
+    assert data["artifact"]["channel_id"] == str(other_channel_id)
+
+
+def test_detail_embeds_base_blocks_and_block_changes(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    reviewer: User,
+    workspace_ids: tuple[int, int],
+) -> None:
+    """발행판이 있으면 base_blocks가 실리고 block_changes가 백엔드 계산으로 온다."""
+    workspace_id, _ = workspace_ids
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    claim_id = uuid.uuid4()
+    _seed_revision(
+        db,
+        workspace_id=workspace_id,
+        artifact_id=artifact_id,
+        blocks=_revision_blocks(claim_id=claim_id, body="rate_limit은 60이다"),
+    )
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_two_block_proposal(
+                proposal_id=proposal_id,
+                artifact_id=artifact_id,
+                claim_id=claim_id,
+                body="rate_limit은 120이다",
+            )
+        )
+    )
+
+    response = client.get(f"/api/v1/knowledge-review/queue/{proposal_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["can_review"] is True
+    assert [
+        (item["block_index"], item["body"]) for item in data["base_blocks"]
+    ] == [(0, "rate_limit은 60이다")]
+    assert data["block_changes"] == [
+        {"change": "modified", "block_index": 0, "base_block_index": 0},
+        {"change": "added", "block_index": 1, "base_block_index": None},
+    ]
+    assert data["blocks"][0]["change_reason"] == "산문 갱신"
+    assert data["blocks"][1]["change_reason"] == "새 섹션"
+    assert data["blocks"][0]["markdown"].startswith("## 속도 제한")
+
+
+def test_detail_without_revision_has_empty_base_blocks(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    reviewer: User,
+    workspace_ids: tuple[int, int],
+) -> None:
+    """발행판이 없는 문서는 base_blocks가 비고 모든 블록이 새 블록이다."""
+    workspace_id, _ = workspace_ids
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_two_block_proposal(
+                proposal_id=proposal_id,
+                artifact_id=artifact_id,
+                claim_id=uuid.uuid4(),
+                body="rate_limit은 120이다",
+            )
+        )
+    )
+
+    response = client.get(f"/api/v1/knowledge-review/queue/{proposal_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["base_blocks"] == []
+    assert [item["change"] for item in data["block_changes"]] == [
+        "added",
+        "added",
+    ]
 
 
 def test_detail_missing_proposal_returns_404(
@@ -2297,7 +2727,7 @@ def test_block_verdict_missing_proposal_returns_404(
         )
 
     assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "NOT_FOUND"
+    assert response.json()["detail"]["code"] == "PROPOSAL_NOT_FOUND"
 
 
 def test_block_verdict_audit_records_block_index(
@@ -2445,7 +2875,7 @@ def test_publish_stale_base_returns_409(
     session_factory: Callable[[], Session],
     workspace_ids: tuple[int, int],
 ) -> None:
-    """클라이언트가 본 기준 판이 다르면 409 STALE_BASE다."""
+    """클라이언트가 본 기준 판이 다르면 409 STALE_BASE_REVISION이다."""
     workspace_id, _ = workspace_ids
     proposal_id, blocks = _seed_two_block_proposal(
         session_factory,
@@ -2468,7 +2898,7 @@ def test_publish_stale_base_returns_409(
         )
 
     assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "STALE_BASE"
+    assert response.json()["detail"]["code"] == "STALE_BASE_REVISION"
 
 
 def test_publish_audit_records_proposal_id(
@@ -2546,6 +2976,94 @@ def test_publish_invalid_returns_422(
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "INVALID"
     assert "조립한 본문이" not in response.text
+
+
+def test_publish_passes_undecided_to_the_service(
+    app: FastAPI, client: TestClient, reviewer: User
+) -> None:
+    """body의 일괄 결정 값이 발행 서비스 인자로 그대로 넘어간다."""
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(proposal=_proposal(proposal_id=proposal_id))
+    )
+    result = PublishResult(
+        proposal_id=proposal_id,
+        verdict="rejected",
+        revision_id=None,
+        revision_number=None,
+        blocks_published=0,
+        blocks_rejected=2,
+        contradictions_resolved=0,
+        claims_accepted=0,
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.publish_artifact_proposal",
+        return_value=result,
+    ) as service:
+        response = client.post(
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+            json={
+                "base_revision_id": None,
+                "undecided": "reject",
+                "rejection_reason": "이번 판에는 싣지 않는다",
+            },
+        )
+
+    assert response.status_code == 200
+    assert service.call_args.kwargs["undecided"] == "reject"
+    assert (
+        service.call_args.kwargs["rejection_reason"]
+        == "이번 판에는 싣지 않는다"
+    )
+
+
+def test_publish_undecided_reject_without_reason_returns_400(
+    app: FastAPI, client: TestClient, reviewer: User
+) -> None:
+    """사유 없는 일괄 반려는 서비스에 닿기 전에 400 REASON_REQUIRED다."""
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(proposal=_proposal(proposal_id=proposal_id))
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.publish_artifact_proposal"
+    ) as service:
+        response = client.post(
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+            json={"base_revision_id": None, "undecided": "reject"},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "REASON_REQUIRED"
+    service.assert_not_called()
+
+
+def test_publish_undecided_reject_with_blank_reason_returns_400(
+    app: FastAPI, client: TestClient, reviewer: User
+) -> None:
+    """공백뿐인 사유도 사유가 없는 것과 같게 400으로 막는다."""
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(proposal=_proposal(proposal_id=proposal_id))
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.publish_artifact_proposal"
+    ) as service:
+        response = client.post(
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+            json={
+                "base_revision_id": None,
+                "undecided": "reject",
+                "rejection_reason": "   ",
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "REASON_REQUIRED"
+    service.assert_not_called()
 
 
 def test_approve_after_block_verdict_is_blocked_and_publish_works(
@@ -2795,7 +3313,7 @@ def test_block_verdict_hides_other_workspace_proposal(
         )
 
     assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "NOT_FOUND"
+    assert response.json()["detail"]["code"] == "PROPOSAL_NOT_FOUND"
     with KnowledgeMaintenanceUnitOfWork(
         session_factory, workspace_id=second
     ) as uow:
@@ -2830,7 +3348,7 @@ def test_publish_hides_other_workspace_proposal(
         )
 
     assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "NOT_FOUND"
+    assert response.json()["detail"]["code"] == "PROPOSAL_NOT_FOUND"
     with KnowledgeMaintenanceUnitOfWork(
         session_factory, workspace_id=second
     ) as uow:
@@ -2863,7 +3381,9 @@ def test_block_response_carries_the_narrative() -> None:
         narrative="이 요구는 아직 검토 중이다.",
     )
 
-    response = _to_block(block, block_index=0, verdict=None)
+    response = _to_block(
+        block, block_index=0, verdict=None, reason=None
+    )
 
     assert response.narrative == "이 요구는 아직 검토 중이다."
     assert response.sources[0].statement == "상태는 검토 중이다"
@@ -2881,4 +3401,9 @@ def test_block_response_without_narrative_is_none() -> None:
         ontology_version="v3",
     )
 
-    assert _to_block(block, block_index=0, verdict=None).narrative is None
+    assert (
+        _to_block(
+            block, block_index=0, verdict=None, reason=None
+        ).narrative
+        is None
+    )

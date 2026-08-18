@@ -12,22 +12,43 @@
 from __future__ import annotations
 
 import uuid
+from collections import defaultdict
+from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
+from sqlalchemy import case
 from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import aliased
 
 from catchup.db.models import ArtifactDefinition
 from catchup.db.models import ArtifactOwner
 from catchup.db.models import Channel
 from catchup.db.models import ChannelAdmin
 from catchup.db.models import ChannelFolder
+from catchup.db.models import ChannelPurpose
 from catchup.db.models import KnowledgeArtifact
+from catchup.db.models import KnowledgeArtifactChangeProposal
 from catchup.db.models import KnowledgeArtifactRevision
 from catchup.db.models import User
 from catchup.db.models import UserRole
 from catchup.db.models import UserWorkspace
+from catchup.db.models import WikiArtifactFavorite
+
+# 문서 목록 한 줄의 상태는 컬럼이 아니라 계류 제안 수와 최신 판에서
+# 계산한다. 이름을 상수로 묶어 두어야 서버 계층 필터와 여기 계산이 같은
+# 문자열을 쓴다.
+ARTIFACT_STATUS_PENDING_REVIEW = "pending_review"
+ARTIFACT_STATUS_PUBLISHED = "published"
+ARTIFACT_STATUS_NO_REVISION = "no_revision"
+ARTIFACT_STATUSES = (
+    ARTIFACT_STATUS_PENDING_REVIEW,
+    ARTIFACT_STATUS_PUBLISHED,
+    ARTIFACT_STATUS_NO_REVISION,
+)
 
 
 def get_user_role(db: Session, user_id: int) -> UserRole | None:
@@ -126,7 +147,6 @@ def add_channel(
     workspace_id: int,
     name: str,
     created_by: int,
-    purpose_preset: str | None = None,
     style_preset: str | None = None,
 ) -> Channel:
     """채널 한 개를 세션에 넣는다.
@@ -141,7 +161,6 @@ def add_channel(
         workspace_id=workspace_id,
         name=name,
         created_by=created_by,
-        purpose_preset=purpose_preset,
         style_preset=style_preset,
     )
     db.add(channel)
@@ -157,6 +176,8 @@ def add_artifact_definition(
     kind: str,
     selection_spec: dict[str, Any],
     created_by: int,
+    folder_id: uuid.UUID | None = None,
+    purpose: str | None = None,
 ) -> ArtifactDefinition:
     """아티팩트 정의 한 행을 세션에 넣는다.
 
@@ -172,6 +193,8 @@ def add_artifact_definition(
         kind=kind,
         selection_spec=selection_spec,
         created_by=created_by,
+        folder_id=folder_id,
+        purpose=purpose,
     )
     db.add(definition)
 
@@ -201,6 +224,16 @@ def get_folder(
             ChannelFolder.channel_id == channel_id,
         )
     )
+
+
+def get_folder_any(db: Session, *, folder_id: uuid.UUID) -> ChannelFolder | None:
+    """채널을 가리지 않고 폴더 하나를 읽는다.
+
+    폴더 이동이 실패했을 때 그 폴더가 아예 없는 것인지, 다른 채널에 있는
+    것인지를 가르려고 쓴다. 두 경우의 응답 코드가 달라야 소비자가 "없는
+    폴더"와 "채널이 다른 폴더"에 서로 다른 화면을 낼 수 있다.
+    """
+    return db.get(ChannelFolder, folder_id)
 
 
 def list_folders(db: Session, workspace_id: int) -> list[ChannelFolder]:
@@ -368,3 +401,411 @@ def list_membership_workspace_ids(db: Session, user_id: int) -> list[int]:
             .order_by(UserWorkspace.workspace_id)
         ).all()
     )
+
+
+# ======================= 담당자·위치 =======================
+
+
+@dataclass(frozen=True, slots=True)
+class OwnerRow:
+    """담당자 한 명을 화면에 그릴 만큼만 담는다."""
+
+    artifact_id: uuid.UUID
+    user_id: int
+    display_name: str
+    profile_image_url: str | None
+
+
+def list_owners_by_artifact(
+    db: Session, *, artifact_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, list[OwnerRow]]:
+    """여러 문서의 담당자를 사용자 이름·사진과 함께 문서별로 묶어 읽는다.
+
+    문서 하나씩 조회하면 목록 한 쪽에 질의가 행 수만큼 늘어난다. 그래서
+    id 목록을 한 번에 받아 in으로 읽고 dict으로 나눈다. 담당자가 없는
+    문서는 결과에 키가 없다.
+    """
+    if not artifact_ids:
+        return {}
+
+    rows = db.execute(
+        select(
+            ArtifactOwner.artifact_id,
+            ArtifactOwner.user_id,
+            User.name,
+            User.picture,
+        )
+        .join(User, User.id == ArtifactOwner.user_id)
+        .where(ArtifactOwner.artifact_id.in_(artifact_ids))
+        .order_by(ArtifactOwner.artifact_id, ArtifactOwner.user_id)
+    ).all()
+
+    grouped: dict[uuid.UUID, list[OwnerRow]] = defaultdict(list)
+    for artifact_id, user_id, name, picture in rows:
+        grouped[artifact_id].append(OwnerRow(artifact_id, user_id, name, picture))
+
+    return dict(grouped)
+
+
+def get_artifact_locations(
+    db: Session, *, artifact_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, tuple[uuid.UUID | None, uuid.UUID | None]]:
+    """여러 문서가 놓인 (채널, 폴더)를 한 번에 읽는다.
+
+    미분류 문서는 둘 다 None이고, 채널 루트에 있는 문서는 폴더만 None이다.
+    없는 id는 결과에 키가 없다.
+    """
+    if not artifact_ids:
+        return {}
+
+    rows = db.execute(
+        select(
+            KnowledgeArtifact.id,
+            KnowledgeArtifact.channel_id,
+            KnowledgeArtifact.folder_id,
+        ).where(KnowledgeArtifact.id.in_(artifact_ids))
+    ).all()
+
+    return {
+        artifact_id: (channel_id, folder_id)
+        for artifact_id, channel_id, folder_id in rows
+    }
+
+
+def list_artifact_ids_by_channel(
+    db: Session, *, workspace_id: int, channel_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """그 채널에 놓인 문서 id를 읽는다."""
+    return list(
+        db.scalars(
+            select(KnowledgeArtifact.id).where(
+                KnowledgeArtifact.workspace_id == workspace_id,
+                KnowledgeArtifact.channel_id == channel_id,
+            )
+        ).all()
+    )
+
+
+def list_artifact_ids_by_owner(
+    db: Session, *, workspace_id: int, user_id: int
+) -> list[uuid.UUID]:
+    """이 workspace에서 그 사용자가 담당자인 문서 id를 읽는다."""
+    return list(
+        db.scalars(
+            select(ArtifactOwner.artifact_id)
+            .join(
+                KnowledgeArtifact,
+                KnowledgeArtifact.id == ArtifactOwner.artifact_id,
+            )
+            .where(
+                ArtifactOwner.user_id == user_id,
+                KnowledgeArtifact.workspace_id == workspace_id,
+            )
+        ).all()
+    )
+
+
+def set_artifact_folder(
+    db: Session, *, artifact: KnowledgeArtifact, folder_id: uuid.UUID | None
+) -> None:
+    """문서를 채널 안의 다른 폴더로 옮긴다. None이면 채널 루트로 올린다.
+
+    폴더가 그 문서의 채널에 달린 것인지는 서버 계층이 미리 본다.
+    """
+    artifact.folder_id = folder_id
+
+
+# ======================= 채널 목적 =======================
+
+
+def list_channel_purposes(db: Session, *, channel_id: uuid.UUID) -> list[str]:
+    """채널이 고른 목적 preset id를 고른 순서대로 읽는다."""
+    return list(
+        db.scalars(
+            select(ChannelPurpose.purpose_preset)
+            .where(ChannelPurpose.channel_id == channel_id)
+            .order_by(ChannelPurpose.position)
+        ).all()
+    )
+
+
+def add_channel_purposes(
+    db: Session, *, channel_id: uuid.UUID, purpose_presets: Sequence[str]
+) -> None:
+    """채널 목적 여러 개를 받은 순서 그대로 세션에 넣는다.
+
+    position은 받은 순서다. 사용자가 고른 차례가 곧 노출 차례라서, 순서를
+    따로 저장하지 않으면 다시 읽을 때 되살릴 수 없다.
+    """
+    for position, preset in enumerate(purpose_presets):
+        db.add(
+            ChannelPurpose(
+                channel_id=channel_id,
+                purpose_preset=preset,
+                position=position,
+            )
+        )
+
+
+def list_channel_purposes_by_workspace(
+    db: Session, workspace_id: int
+) -> dict[uuid.UUID, list[str]]:
+    """이 workspace 채널들의 목적을 채널별로 묶어 읽는다.
+
+    채널 목록 화면이 채널마다 따로 묻지 않게 한 번에 읽는다. 목적이 없는
+    채널은 결과에 키가 없다.
+    """
+    rows = db.execute(
+        select(ChannelPurpose.channel_id, ChannelPurpose.purpose_preset)
+        .join(Channel, Channel.id == ChannelPurpose.channel_id)
+        .where(Channel.workspace_id == workspace_id)
+        .order_by(ChannelPurpose.channel_id, ChannelPurpose.position)
+    ).all()
+
+    grouped: dict[uuid.UUID, list[str]] = defaultdict(list)
+    for channel_id, preset in rows:
+        grouped[channel_id].append(preset)
+
+    return dict(grouped)
+
+
+# ======================= 폴더·정의 =======================
+
+
+def get_folder_by_name(
+    db: Session, *, channel_id: uuid.UUID, name: str
+) -> ChannelFolder | None:
+    """그 채널 안에서 이름이 같은 폴더를 읽는다.
+
+    (channel_id, name)이 UNIQUE라 있으면 하나다. 온보딩이 같은 이름 폴더를
+    두 번 만들지 않으려고 먼저 본다.
+    """
+    return db.scalar(
+        select(ChannelFolder).where(
+            ChannelFolder.channel_id == channel_id,
+            ChannelFolder.name == name,
+        )
+    )
+
+
+def list_definitions_by_workspace(
+    db: Session, workspace_id: int
+) -> dict[uuid.UUID, list[ArtifactDefinition]]:
+    """이 workspace의 정의를 채널별로 묶어 kind 사전순으로 읽는다.
+
+    정의가 없는 채널은 결과에 키가 없다.
+    """
+    rows = db.scalars(
+        select(ArtifactDefinition)
+        .where(ArtifactDefinition.workspace_id == workspace_id)
+        .order_by(ArtifactDefinition.channel_id, ArtifactDefinition.kind)
+    ).all()
+
+    grouped: dict[uuid.UUID, list[ArtifactDefinition]] = defaultdict(list)
+    for definition in rows:
+        grouped[definition.channel_id].append(definition)
+
+    return dict(grouped)
+
+
+# ======================= 문서 목록 =======================
+
+
+@dataclass(frozen=True, slots=True)
+class ArtifactListRow:
+    """문서 목록 한 줄이다. 상태는 컬럼이 아니라 아래 두 값에서 계산한다."""
+
+    artifact_id: uuid.UUID
+    kind: str
+    title: str
+    channel_id: uuid.UUID | None
+    folder_id: uuid.UUID | None
+    created_at: datetime
+    pending_proposal_count: int
+    latest_revision_id: uuid.UUID | None
+    latest_revision_number: int | None
+    latest_published_at: datetime | None
+
+
+def artifact_status(row: ArtifactListRow) -> str:
+    """문서 목록 한 줄의 상태를 계산한다. 계류 제안이 있으면 검토 대기가 우선이다."""
+    if row.pending_proposal_count > 0:
+        return ARTIFACT_STATUS_PENDING_REVIEW
+    if row.latest_revision_id is not None:
+        return ARTIFACT_STATUS_PUBLISHED
+    return ARTIFACT_STATUS_NO_REVISION
+
+
+def list_artifacts(
+    db: Session,
+    *,
+    workspace_id: int,
+    channel_id: uuid.UUID | None = None,
+    folder_id: uuid.UUID | None = None,
+    kind: str | None = None,
+    status: str | None = None,
+    owner_user_id: int | None = None,
+    created_after: datetime | None = None,
+    created_before: datetime | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[ArtifactListRow], int]:
+    """문서 목록 한 쪽과 필터 뒤 전체 수를 돌려준다.
+
+    계류 제안 수와 최신 판은 상관 서브쿼리로 붙인다. 상태 필터는 그 두 값
+    위에서 계산한 CASE 식에 건다. 정렬은 created_at desc, 같으면 id다.
+    """
+    pending_count = (
+        select(func.count(KnowledgeArtifactChangeProposal.id))
+        .where(
+            KnowledgeArtifactChangeProposal.artifact_id == KnowledgeArtifact.id,
+            KnowledgeArtifactChangeProposal.status == "pending",
+        )
+        .correlate(KnowledgeArtifact)
+        .scalar_subquery()
+    )
+    latest = (
+        select(
+            KnowledgeArtifactRevision.artifact_id.label("artifact_id"),
+            func.max(KnowledgeArtifactRevision.revision_number).label(
+                "revision_number"
+            ),
+        )
+        .where(KnowledgeArtifactRevision.workspace_id == workspace_id)
+        .group_by(KnowledgeArtifactRevision.artifact_id)
+        .subquery()
+    )
+    latest_row = aliased(KnowledgeArtifactRevision)
+    status_expr = case(
+        (pending_count > 0, ARTIFACT_STATUS_PENDING_REVIEW),
+        (latest_row.id.is_not(None), ARTIFACT_STATUS_PUBLISHED),
+        else_=ARTIFACT_STATUS_NO_REVISION,
+    )
+    statement = (
+        select(
+            KnowledgeArtifact.id,
+            KnowledgeArtifact.kind,
+            KnowledgeArtifact.title,
+            KnowledgeArtifact.channel_id,
+            KnowledgeArtifact.folder_id,
+            KnowledgeArtifact.created_at,
+            pending_count.label("pending_proposal_count"),
+            latest_row.id.label("latest_revision_id"),
+            latest_row.revision_number.label("latest_revision_number"),
+            latest_row.created_at.label("latest_published_at"),
+        )
+        .outerjoin(latest, latest.c.artifact_id == KnowledgeArtifact.id)
+        .outerjoin(
+            latest_row,
+            (latest_row.artifact_id == KnowledgeArtifact.id)
+            & (latest_row.revision_number == latest.c.revision_number),
+        )
+        .where(KnowledgeArtifact.workspace_id == workspace_id)
+    )
+    if channel_id is not None:
+        statement = statement.where(KnowledgeArtifact.channel_id == channel_id)
+    if folder_id is not None:
+        statement = statement.where(KnowledgeArtifact.folder_id == folder_id)
+    if kind is not None:
+        statement = statement.where(KnowledgeArtifact.kind == kind)
+    if status is not None:
+        statement = statement.where(status_expr == status)
+    if owner_user_id is not None:
+        statement = statement.where(
+            KnowledgeArtifact.id.in_(
+                select(ArtifactOwner.artifact_id).where(
+                    ArtifactOwner.user_id == owner_user_id
+                )
+            )
+        )
+    if created_after is not None:
+        statement = statement.where(KnowledgeArtifact.created_at >= created_after)
+    if created_before is not None:
+        statement = statement.where(KnowledgeArtifact.created_at <= created_before)
+
+    total = db.scalar(select(func.count()).select_from(statement.subquery()))
+    rows = db.execute(
+        statement.order_by(KnowledgeArtifact.created_at.desc(), KnowledgeArtifact.id)
+        .limit(limit)
+        .offset(offset)
+    ).all()
+
+    return [ArtifactListRow(*row) for row in rows], int(total or 0)
+
+
+# ======================= 즐겨찾기 =======================
+
+
+def is_favorite(db: Session, *, user_id: int, artifact_id: uuid.UUID) -> bool:
+    """그 사용자가 이 문서를 즐겨찾기했는지 행 존재로 읽는다."""
+    return (db.get(WikiArtifactFavorite, (user_id, artifact_id))) is not None
+
+
+def list_favorite_artifact_ids(
+    db: Session, *, user_id: int, workspace_id: int
+) -> set[uuid.UUID]:
+    """이 workspace에서 그 사용자가 즐겨찾기한 문서 id를 읽는다.
+
+    목록 화면이 줄마다 즐겨찾기 여부를 표시할 때 한 번에 읽어 쓴다.
+    """
+    return set(
+        db.scalars(
+            select(WikiArtifactFavorite.artifact_id).where(
+                WikiArtifactFavorite.user_id == user_id,
+                WikiArtifactFavorite.workspace_id == workspace_id,
+            )
+        ).all()
+    )
+
+
+def list_favorites(
+    db: Session, *, user_id: int, workspace_id: int
+) -> list[tuple[KnowledgeArtifact, datetime]]:
+    """즐겨찾기한 문서를 최근에 담은 순으로 읽는다."""
+    rows = db.execute(
+        select(KnowledgeArtifact, WikiArtifactFavorite.created_at)
+        .join(
+            WikiArtifactFavorite,
+            WikiArtifactFavorite.artifact_id == KnowledgeArtifact.id,
+        )
+        .where(
+            WikiArtifactFavorite.user_id == user_id,
+            WikiArtifactFavorite.workspace_id == workspace_id,
+        )
+        .order_by(WikiArtifactFavorite.created_at.desc(), KnowledgeArtifact.id)
+    ).all()
+
+    return [(artifact, favorited_at) for artifact, favorited_at in rows]
+
+
+def add_favorite(
+    db: Session, *, user_id: int, artifact_id: uuid.UUID, workspace_id: int
+) -> bool:
+    """즐겨찾기 행 하나를 세션에 넣는다. 새로 넣었으면 True다.
+
+    같은 요청을 두 번 보내도 오류가 아니라 False다. 즐겨찾기는 있고 없고만
+    의미가 있어, 이미 있는 상태를 실패로 볼 이유가 없다.
+    """
+    if db.get(WikiArtifactFavorite, (user_id, artifact_id)) is not None:
+        return False
+
+    db.add(
+        WikiArtifactFavorite(
+            user_id=user_id,
+            artifact_id=artifact_id,
+            workspace_id=workspace_id,
+        )
+    )
+
+    return True
+
+
+def remove_favorite(db: Session, *, user_id: int, artifact_id: uuid.UUID) -> bool:
+    """즐겨찾기 행 하나를 세션에서 지운다. 지울 것이 있었으면 True다."""
+    favorite = db.get(WikiArtifactFavorite, (user_id, artifact_id))
+    if favorite is None:
+        return False
+
+    db.delete(favorite)
+
+    return True

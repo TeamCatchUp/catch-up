@@ -47,8 +47,9 @@ SELECTION_SPEC: dict[str, Any] = {
     "predicate_sections": None,
 }
 
+# 목적 preset은 채널 칸이 아니라 channel_purposes 테이블로 옮겼다. 채널
+# 하나가 목적을 여러 개 고를 수 있어서다.
 CHANNEL_CONFIG_COLUMNS = (
-    "purpose_preset",
     "purpose_text",
     "style_preset",
     "style_text",

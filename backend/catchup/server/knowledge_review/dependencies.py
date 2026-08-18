@@ -1,18 +1,21 @@
 """검수 루프 API가 서는 자리(누가·어느 workspace)를 확정한다.
 
-이 라우터의 모든 엔드포인트는 "이 workspace의 위키 검토자"만 쓸 수 있다.
-그 판정을 핸들러마다 하지 않고 의존성 하나로 모은다. 조회·결정·적용이
-같은 문을 지나야, 목록은 보이는데 결정만 막히는 식의 어긋남이 생기지
-않는다.
+문은 두 개다. 큐 목록과 상세는 이 workspace에 속하기만 하면 열리고,
+판정(블록 결정·발행·승인·반려)은 위키 역할을 가진 사람만 지난다. 열람과
+판정을 나눈 이유는, 무슨 변경안이 올라와 있는지는 팀 전체가 알아야 하고
+그것을 확정하는 일만 담당자의 몫이기 때문이다.
+
+두 문 모두 판정을 핸들러마다 하지 않고 의존성으로 모은다. 문이 하나씩
+정해져 있어야 라우트마다 다른 규칙이 조용히 생기는 자리를 없앨 수 있다.
 
 소속·workspace 결정과 오류·감사 헬퍼는 `server.wiki.dependencies`에 있다.
 검수는 위키 역할 위에 서는 표면이므로 아래층인 위키 쪽을 가져다 쓴다 —
 여기서 다시 정의하면 두 표면의 workspace 결정 규칙이 갈릴 자리가 생긴다.
 
-이 문은 "검수 표면에 설 자격"까지만 본다. 어느 문서를 결정할 수 있는지는
+두 문 다 "이 표면에 설 자격"까지만 본다. 어느 문서를 결정할 수 있는지는
 문서마다 갈리므로 대상이 정해지는 핸들러에서 다시 판정한다. 큐 목록을 각자
-담당 범위로 좁히는 일은 이 슬라이스 밖이다 — 지금은 역할이 하나라도 있으면
-목록 전체가 보인다.
+담당 범위로 좁히는 일은 이 슬라이스 밖이다. 지금은 workspace 구성원이면
+목록 전체가 보이고, 줄마다 결정 가능 여부만 can_review로 표시한다.
 
 UnitOfWork도 여기서 만든다. `KnowledgeMaintenanceUnitOfWork`는 생성 시점의
 workspace_id로 artifact 저장소를 고정하고, mutation 저장소는 호출마다
@@ -107,9 +110,41 @@ def resolve_reviewer_workspace(
     )
 
 
-def get_review_uow_factory(
-    context: ReviewerContext = Depends(resolve_reviewer_workspace),
-) -> ReviewUowFactory:
+def resolve_member_reviewer_context(
+    workspace_id: int | None = None,
+    current_user: User = Depends(get_reviewer_user),
+    db: Session = Depends(get_db),
+) -> ReviewerContext:
+    """열람 전용 컨텍스트를 확정한다.
+
+    소속과 workspace 결정은 `resolve_member_workspace`가 하고, 위키 역할은
+    읽기만 한다. 역할이 하나도 없어도 통과시키는 것이 이 문의 요점이다.
+    검토 큐는 팀이 함께 보는 목록이라, 담당자가 아니라는 이유로 무엇이
+    올라와 있는지조차 볼 수 없게 하면 검토가 담당자 개인의 일이 된다.
+
+    역할을 그래도 읽는 이유는 응답의 can_review 때문이다. 줄마다 결정할 수
+    있는지 표시하려면 역할 스냅샷이 필요하고, 요청 한 번에 한 번만 읽어야
+    같은 응답 안에서 판정이 갈리지 않는다.
+
+    Raises:
+        HTTPException: 소속이 없거나, 여러 소속에서 workspace를 고르지
+            않았을 때 던진다.
+    """
+    member = resolve_member_workspace(
+        workspace_id=workspace_id, current_user=current_user, db=db
+    )
+    roles = load_wiki_roles(
+        db, user_id=current_user.id, workspace_id=member.workspace_id
+    )
+    return ReviewerContext(
+        user=current_user,
+        workspace_id=member.workspace_id,
+        reviewer=f"user:{current_user.id}",
+        roles=roles,
+    )
+
+
+def _uow_factory_for(context: ReviewerContext) -> ReviewUowFactory:
     """컨텍스트의 workspace에 묶인 UnitOfWork factory를 만든다.
 
     factory인 이유는 적용(apply)이 안건 하나를 트랜잭션 하나로 쓰기
@@ -127,3 +162,25 @@ def get_review_uow_factory(
         )
 
     return factory
+
+
+def get_review_uow_factory(
+    context: ReviewerContext = Depends(resolve_reviewer_workspace),
+) -> ReviewUowFactory:
+    """판정 경로가 쓸 UnitOfWork factory를 만든다.
+
+    역할 게이트를 지난 컨텍스트에서만 workspace_id를 가져온다.
+    """
+    return _uow_factory_for(context)
+
+
+def get_member_review_uow_factory(
+    context: ReviewerContext = Depends(resolve_member_reviewer_context),
+) -> ReviewUowFactory:
+    """열람 경로가 쓸 UnitOfWork factory를 만든다.
+
+    factory를 만드는 방식은 판정 경로와 같고 컨텍스트의 출처만 다르다.
+    역할 게이트를 지난 컨텍스트에 묶인 factory를 열람에서 그대로 쓰면,
+    역할 없는 구성원이 목록을 여는 순간 403이 된다.
+    """
+    return _uow_factory_for(context)

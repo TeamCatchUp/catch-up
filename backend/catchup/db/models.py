@@ -481,8 +481,10 @@ class Channel(Base):
     나머지 config 필드는 두지 않는다 — 별도 테이블이 이 id를 참조하는
     방향이다.
 
-    목적·문체는 프리셋 id를 저장하고, text 컬럼은 자연어 입력 개방을 위한
-    예약 자리다 — 문체의 효력은 표현층이 생길 때부터다.
+    문체는 프리셋 id를 저장하고, text 컬럼은 자연어 입력 개방을 위한
+    예약 자리다 — 문체의 효력은 표현층이 생길 때부터다. 목적 프리셋은
+    채널 하나가 여러 개를 고를 수 있어 이 표가 아니라 channel_purposes
+    표에 있다.
     """
 
     __tablename__ = "channels"
@@ -507,9 +509,6 @@ class Channel(Base):
         ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    purpose_preset: Mapped[str | None] = mapped_column(
-        String(64), nullable=True
-    )
     purpose_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     style_preset: Mapped[str | None] = mapped_column(String(64), nullable=True)
     style_text: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -565,6 +564,50 @@ class ChannelFolder(Base):
     )
 
 
+class ChannelPurpose(Base):
+    """채널이 고른 목적 preset 하나를 담는다.
+
+    채널 하나가 목적을 여러 개 고를 수 있어 별도 테이블이다. position은
+    사용자가 고른 순서이며, 노출 수준처럼 목적 하나만 필요한 곳은 position
+    0을 쓴다.
+    """
+
+    __tablename__ = "channel_purposes"
+
+    channel_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("channels.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    purpose_preset: Mapped[str] = mapped_column(String(64), primary_key=True)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class WikiArtifactFavorite(Base):
+    """사용자 한 명이 문서 하나를 즐겨찾기한 사실을 담는다.
+
+    workspace_id는 artifact에서 유도되지만 사용자별 목록을 workspace로
+    좁혀 읽기 위해 승격해 둔다.
+    """
+
+    __tablename__ = "wiki_artifact_favorites"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    artifact_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("knowledge_artifacts.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class ArtifactDefinition(Base):
     """아티팩트 정의 하나를 담는다.
 
@@ -613,6 +656,14 @@ class ArtifactDefinition(Base):
     )
     # 문서 kind 컬럼과 길이가 같아야 정의 kind가 문서에 그대로 실린다.
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    # 이 정의가 새로 만드는 문서가 놓일 폴더다. 온보딩이 kind 라벨로 만든
+    # 폴더를 여기에 걸고, 컴파일은 새 문서 행에 이 값을 복사한다. 폴더가
+    # 지워지면 NULL이 되고 이후 문서는 채널 루트에 생긴다.
+    folder_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("channel_folders.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     purpose: Mapped[str | None] = mapped_column(Text, nullable=True)
     selection_spec: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False
@@ -5257,18 +5308,23 @@ class KnowledgeArtifact(Base):
             ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
             name="fk_knowledge_artifacts_subject_node",
         ),
-        # 문서와 채널·폴더가 같은 workspace임을 DB가 보증한다. ondelete를
-        # 주지 않아 RESTRICT다 — 문서가 남아 있는 채널·폴더는 지워지지
+        # 문서와 채널·폴더가 같은 workspace임을 DB가 보증한다. 채널 FK는
+        # ondelete를 주지 않아 RESTRICT다. 문서가 남아 있는 채널은 지워지지
         # 않고, 지우려면 문서를 먼저 옮겨야 한다.
         ForeignKeyConstraint(
             ["workspace_id", "channel_id"],
             ["channels.workspace_id", "channels.id"],
             name="fk_knowledge_artifacts_channel",
         ),
+        # 폴더 FK는 SET NULL이다. 폴더를 지우면 그 폴더에 있던 문서는
+        # 채널 루트로 옮겨진다. 비울 컬럼을 folder_id로 지정하지 않으면
+        # PostgreSQL이 참조 컬럼을 모두 비워 NOT NULL인 workspace_id까지
+        # 건드린다.
         ForeignKeyConstraint(
             ["workspace_id", "folder_id"],
             ["channel_folders.workspace_id", "channel_folders.id"],
             name="fk_knowledge_artifacts_folder",
+            ondelete="SET NULL (folder_id)",
         ),
         # 문서가 딛고 선 정의와 같은 workspace·채널·kind임을 DB가 보증한다.
         # 정의는 "이 채널의 이 종류 문서"를 정하는 행이라, 문서가 다른 채널

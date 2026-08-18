@@ -14,10 +14,15 @@ debug 라우터와 달리 인증과 검토자 권한을 요구하고, 결정 저
 운영 도구를 인증 표면에 노출하지 않으려는 것이며, 그 경로는 debug 라우터와
 `catchup/evaluation/`의 CLI 러너가 담당한다.
 
-인가는 두 겹이다. 의존성이 "검수 표면에 설 자격"을 보고, 대상이 정해지는
+인가는 두 겹이다. 의존성이 "이 표면에 설 자격"을 보고, 대상이 정해지는
 핸들러가 "이 문서를 결정할 수 있는가"를 다시 본다. 문서마다 담당자가 다르니
 자격 하나로는 부족하고, 그렇다고 판정을 서비스로 내리면 CLI·debug 표면까지
 같은 인가를 지게 된다.
+
+첫 겹은 경로에 따라 갈린다. 큐 목록과 상세는 workspace 구성원이면 열리고,
+판정 경로(블록 결정·발행·승인·반려)만 위키 역할을 요구한다. 역할이 없는
+구성원에게는 목록이 그대로 나가되 can_review가 false로 실린다. 두 번째 겹은
+결정 경로에만 선다.
 
 불변식은 전부 서비스가 지킨다. 이 라우터는 컨텍스트를 확정하고 서비스를
 부르고 예외를 상태 코드로 옮기는 껍데기이며, 결정 규칙을 스스로 갖지
@@ -29,6 +34,8 @@ debug 라우터와 달리 인증과 검토자 권한을 요구하고, 결정 저
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
+from datetime import datetime
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -45,6 +52,11 @@ from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.artifact import block_content_hash
+from catchup.knowledge_maintenance.domain.artifact import deserialize_blocks
+from catchup.knowledge_maintenance.domain.block_diff import BlockChange
+from catchup.knowledge_maintenance.domain.block_diff import block_markdown
+from catchup.knowledge_maintenance.domain.block_diff import change_reason
+from catchup.knowledge_maintenance.domain.block_diff import diff_blocks
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
 from catchup.knowledge_maintenance.ports.block_verdicts import StoredBlockVerdict
 from catchup.knowledge_maintenance.ports.mutation_proposals import (
@@ -81,9 +93,13 @@ from catchup.knowledge_maintenance.services.review_block_verdict import (
 )
 from catchup.server.knowledge_review.dependencies import ReviewerContext
 from catchup.server.knowledge_review.dependencies import ReviewUowFactory
+from catchup.server.knowledge_review.dependencies import get_member_review_uow_factory
 from catchup.server.knowledge_review.dependencies import get_review_uow_factory
+from catchup.server.knowledge_review.dependencies import resolve_member_reviewer_context
 from catchup.server.knowledge_review.dependencies import resolve_reviewer_workspace
 from catchup.server.knowledge_review.schemas import ArtifactRefResponse
+from catchup.server.knowledge_review.schemas import BaseBlockResponse
+from catchup.server.knowledge_review.schemas import BlockChangeResponse
 from catchup.server.knowledge_review.schemas import BlockResponse
 from catchup.server.knowledge_review.schemas import BlockSourceResponse
 from catchup.server.knowledge_review.schemas import BlockVerdictRequest
@@ -100,7 +116,9 @@ from catchup.server.knowledge_review.schemas import ReadSetResponse
 from catchup.server.knowledge_review.schemas import RejectRequest
 from catchup.server.knowledge_review.schemas import VariantResponse
 from catchup.server.wiki.dependencies import review_error
+from catchup.server.wiki.owners import owners_by_artifact
 from catchup.server.wiki.roles import can_decide_artifact
+from catchup.server.wiki.schemas import OwnerResponse
 
 router = APIRouter(
     prefix="/api/v1/knowledge-review",
@@ -111,7 +129,7 @@ router = APIRouter(
 # 준 코드를 그대로 응답 code로 쓰되, 문구는 여기서 정한다 — 예외 문자열은
 # 변경안 식별자와 저장소 사정을 담고 있어 그대로 내보낼 수 없다.
 _BLOCK_VERDICT_ERRORS: dict[str, tuple[int, str]] = {
-    "NOT_FOUND": (404, "변경안을 찾을 수 없습니다."),
+    "PROPOSAL_NOT_FOUND": (404, "변경안을 찾을 수 없습니다."),
     "ALREADY_DECIDED": (409, "이미 결정된 변경안입니다."),
     "STALE_BLOCK": (409, "블록 본문이 바뀌었습니다. 다시 읽어 주세요."),
     "INVALID": (422, "블록 결정 요청이 올바르지 않습니다."),
@@ -132,10 +150,13 @@ _ARTIFACT_REVIEW_ERRORS: dict[str, tuple[int, str]] = {
 }
 
 _PUBLISH_ERRORS: dict[str, tuple[int, str]] = {
-    "NOT_FOUND": (404, "변경안을 찾을 수 없습니다."),
+    "PROPOSAL_NOT_FOUND": (404, "변경안을 찾을 수 없습니다."),
     "ALREADY_DECIDED": (409, "이미 결정된 변경안입니다."),
     "UNDECIDED_BLOCKS": (409, "아직 결정하지 않은 블록이 있습니다."),
-    "STALE_BASE": (409, "문서가 새 판으로 넘어가 이 변경안은 낡았습니다."),
+    "STALE_BASE_REVISION": (
+        409,
+        "문서가 새 판으로 넘어가 이 변경안은 낡았습니다.",
+    ),
     "STALE_BLOCK": (409, "블록 본문이 결정 시점과 달라졌습니다."),
     "CONFLICT_RACE": (409, "모순 안건이 먼저 결정돼 발행할 수 없습니다."),
     "INVALID": (422, "발행 요청이 올바르지 않습니다."),
@@ -152,8 +173,6 @@ def _require_decidable_proposal(
     db: Session,
     context: ReviewerContext,
     proposal_id: uuid.UUID,
-    *,
-    not_found_code: str = "PROPOSAL_NOT_FOUND",
 ) -> StoredArtifactProposal:
     """변경안을 읽고 담당자·폴백 판정을 통과시킨다.
 
@@ -161,9 +180,9 @@ def _require_decidable_proposal(
     UoW의 내부 세션을 꺼내 쓰면 저장소 경계가 무너지고, 인가 조회가
     knowledge_maintenance 포트에 얹혀 표면마다 따라다니게 된다.
 
-    없음을 알리는 코드는 호출자가 정한다. 블록 결정·발행은 서비스가 쓰던
-    NOT_FOUND를 이미 소비자와 약속했고, 인가를 앞에 끼워 넣었다는 이유로
-    그 코드가 바뀌면 화면이 깨진다.
+    없음을 알리는 코드는 모든 라우트가 PROPOSAL_NOT_FOUND 하나다. 같은
+    "변경안이 없다"를 라우트마다 다른 이름으로 알리면 소비자가 코드를
+    라우트별로 갈라 다뤄야 한다.
 
     Raises:
         HTTPException: 변경안이 없으면 404, 이 문서의 검수 권한이 없으면
@@ -176,7 +195,7 @@ def _require_decidable_proposal(
         # 여기서 404가 된다 — 존재 여부를 떠볼 자리가 없다.
         raise review_error(
             404,
-            code=not_found_code,
+            code="PROPOSAL_NOT_FOUND",
             message="변경안을 찾을 수 없습니다.",
         )
     if not can_decide_artifact(
@@ -198,31 +217,157 @@ def _require_decidable_proposal(
     return proposal
 
 
+def _load_proposal_for_view(
+    uow_factory: ReviewUowFactory,
+    proposal_id: uuid.UUID,
+) -> StoredArtifactProposal:
+    """열람용으로 변경안을 읽는다. 담당자 게이트를 두지 않는다.
+
+    검수 표면에 설 자격은 의존성이 이미 봤다. 그 위에 문서별 담당자
+    게이트를 또 두면 남의 채널 문서는 내용조차 볼 수 없게 되는데, 검토는
+    보는 일과 정하는 일이 다르다. 그래서 여기서는 워크스페이스 경계만
+    지키고, 정할 수 있는지는 응답의 can_review로 따로 알린다.
+
+    Raises:
+        HTTPException: 이 workspace에 변경안이 없으면 404
+            PROPOSAL_NOT_FOUND를 던진다.
+    """
+    with uow_factory() as uow:
+        proposal = uow.artifacts.get_proposal(proposal_id=proposal_id)
+    if proposal is None:
+        raise review_error(
+            404,
+            code="PROPOSAL_NOT_FOUND",
+            message="변경안을 찾을 수 없습니다.",
+        )
+    return proposal
+
+
+def _queue_artifact_ids(
+    db: Session,
+    *,
+    workspace_id: int,
+    channel_id: uuid.UUID | None,
+    owner_user_id: int | None,
+) -> frozenset[uuid.UUID] | None:
+    """채널·담당자 조건을 문서 id 집합 하나로 합친다.
+
+    둘 다 주면 교집합이다. 두 조건은 서로를 좁히는 관계이므로 합집합으로
+    보면 "이 채널에서 내가 맡은 문서"를 물었을 때 남의 문서까지 나온다.
+    둘 다 없으면 None을 돌려주어 서비스가 거르지 않게 한다. 조건은 있으나
+    맞는 문서가 없으면 빈 집합이고, 그때는 빈 페이지가 나온다.
+    """
+    if channel_id is None and owner_user_id is None:
+        return None
+
+    ids: frozenset[uuid.UUID] | None = None
+    if channel_id is not None:
+        ids = frozenset(
+            wiki_queries.list_artifact_ids_by_channel(
+                db, workspace_id=workspace_id, channel_id=channel_id
+            )
+        )
+    if owner_user_id is not None:
+        owned = frozenset(
+            wiki_queries.list_artifact_ids_by_owner(
+                db, workspace_id=workspace_id, user_id=owner_user_id
+            )
+        )
+        ids = owned if ids is None else ids & owned
+    return ids
+
+
 @router.get(
     path="/queue",
     response_model=QueuePageResponse,
-    description="검토 대기 중인 위키 문서 변경안을 충돌 우선으로 조회한다.",
+    description=(
+        "검토 대기 중인 문서 변경안 목록을 조회한다. "
+        "정렬은 created_at 오름차순이다."
+    ),
 )
 @audit_log(action=KnowledgeReviewAction.LIST)
 def list_queue(
     contains_conflict: bool | None = Query(
-        None, description="충돌 여부로 거른다. 생략하면 전부 본다."
+        None,
+        description="다툼(contested) 블록 유무로 거른다. 생략하면 전부 조회한다.",
     ),
-    limit: int = Query(50, ge=1, le=200, description="한 쪽에 담을 안건 수"),
-    offset: int = Query(0, ge=0, description="건너뛸 안건 수"),
-    context: ReviewerContext = Depends(resolve_reviewer_workspace),
-    uow_factory: ReviewUowFactory = Depends(get_review_uow_factory),
+    channel_id: uuid.UUID | None = Query(
+        None, description="해당 채널 문서의 변경안만 조회한다."
+    ),
+    owner_user_id: int | None = Query(
+        None,
+        description="해당 사용자가 담당자인 문서의 변경안만 조회한다.",
+    ),
+    created_after: datetime | None = Query(
+        None, description="해당 시각 이후에 만들어진 변경안만 조회한다."
+    ),
+    created_before: datetime | None = Query(
+        None, description="해당 시각 이전에 만들어진 변경안만 조회한다."
+    ),
+    limit: int = Query(
+        50, ge=1, le=200, description="한 페이지에 담을 변경안 수"
+    ),
+    offset: int = Query(0, ge=0, description="건너뛸 변경안 수"),
+    context: ReviewerContext = Depends(resolve_member_reviewer_context),
+    uow_factory: ReviewUowFactory = Depends(get_member_review_uow_factory),
+    db: Session = Depends(get_db),
 ) -> QueuePageResponse:
-    """검토 큐 한 페이지를 돌려준다."""
+    """검토 큐 한 페이지를 문서 위치·담당자·결정 가능 여부와 함께 돌려준다.
+
+    목록은 workspace 구성원이면 누구나 연다. 역할이 없는 사람에게도 같은
+    페이지가 나가고, 줄마다 can_review가 false로 실린다.
+
+    위치와 담당자 조회는 페이지에 실린 문서 id로 한 번씩만 나간다. 줄마다
+    조회하면 한 쪽에 문서 수만큼 질의가 붙는다.
+    """
     page = list_review_queue(
         uow_factory(),
         workspace_id=context.workspace_id,
         contains_conflict=contains_conflict,
+        artifact_ids=_queue_artifact_ids(
+            db,
+            workspace_id=context.workspace_id,
+            channel_id=channel_id,
+            owner_user_id=owner_user_id,
+        ),
+        created_after=created_after,
+        created_before=created_before,
         limit=limit,
         offset=offset,
     )
+
+    artifact_ids = [item.artifact_id for item in page.items]
+    locations = wiki_queries.get_artifact_locations(
+        db, artifact_ids=artifact_ids
+    )
+    owners = owners_by_artifact(db, artifact_ids)
+    items = []
+    for item in page.items:
+        # 저장소에 없는 문서는 미분류로 읽는다. 판정이 전역 관리자 폴백으로
+        # 가고, 채널 관리자에게 열리지 않는다.
+        artifact_channel_id, folder_id = locations.get(
+            item.artifact_id, (None, None)
+        )
+        artifact_owners = owners[item.artifact_id]
+        items.append(
+            _to_queue_item(
+                item,
+                channel_id=artifact_channel_id,
+                folder_id=folder_id,
+                owners=artifact_owners,
+                can_review=can_decide_artifact(
+                    context.roles,
+                    artifact_channel_id=artifact_channel_id,
+                    artifact_id=item.artifact_id,
+                    owner_user_ids=frozenset(
+                        owner.user_id for owner in artifact_owners
+                    ),
+                    user_id=context.user.id,
+                ),
+            )
+        )
     return QueuePageResponse(
-        items=[_to_queue_item(item) for item in page.items],
+        items=items,
         total=page.total,
         limit=limit,
         offset=offset,
@@ -232,13 +377,16 @@ def list_queue(
 @router.get(
     path="/queue/{proposal_id}",
     response_model=ProposalDetailResponse,
-    description="변경안 본문·근거 장부와 이 대상에 걸린 충돌을 조회한다.",
+    description=(
+        "문서 변경안 하나를 블록·근거·발행판 대비 변경 목록·충돌과 함께 "
+        "조회한다."
+    ),
 )
 @audit_log(action=KnowledgeReviewAction.DETAIL)
 def get_queue_item(
     proposal_id: uuid.UUID,
-    context: ReviewerContext = Depends(resolve_reviewer_workspace),
-    uow_factory: ReviewUowFactory = Depends(get_review_uow_factory),
+    context: ReviewerContext = Depends(resolve_member_reviewer_context),
+    uow_factory: ReviewUowFactory = Depends(get_member_review_uow_factory),
     db: Session = Depends(get_db),
 ) -> ProposalDetailResponse:
     """변경안 하나를 충돌 목록·블록 결정과 함께 돌려준다.
@@ -248,13 +396,36 @@ def get_queue_item(
     켜졌는데 목록이 비는 것은 그 안건이 이미 결정돼 계류 목록에서 빠진
     경우이며, 그때도 표시는 본문에 다툼 블록이 있다는 사실 그대로다.
 
+    상세는 workspace 구성원이면 역할이 없어도 열린다. 결정 가능 여부는
+    can_review로 실어 보내고, 결정 경로는 저마다 같은 판정을 다시 한다.
+
+    발행판은 문서마다 한 번만 읽는다. base_blocks와 block_changes가 같은
+    한 벌에서 나와야 소비자가 두 값을 짝지어 볼 수 있다.
+
     Raises:
-        HTTPException: 이 workspace에 그 변경안이 없으면 404, 이 문서의
-            검수 권한이 없으면 403을 던진다.
+        HTTPException: 이 workspace에 그 변경안이 없으면 404를 던진다.
     """
-    proposal = _require_decidable_proposal(
-        uow_factory, db, context, proposal_id
+    proposal = _load_proposal_for_view(uow_factory, proposal_id)
+    channel_id, folder_id = wiki_queries.get_artifact_locations(
+        db, artifact_ids=[proposal.artifact_id]
+    ).get(proposal.artifact_id, (None, None))
+    owners = owners_by_artifact(db, [proposal.artifact_id])[
+        proposal.artifact_id
+    ]
+    can_review = can_decide_artifact(
+        context.roles,
+        artifact_channel_id=channel_id,
+        artifact_id=proposal.artifact_id,
+        owner_user_ids=frozenset(owner.user_id for owner in owners),
+        user_id=context.user.id,
     )
+    revision = wiki_queries.get_latest_revision(
+        db, artifact_id=proposal.artifact_id, workspace_id=context.workspace_id
+    )
+    base_blocks = (
+        () if revision is None else deserialize_blocks(revision.blocks)
+    )
+    changes = diff_blocks(base_blocks, proposal.blocks)
     with uow_factory() as uow:
         verdicts = uow.block_verdicts.list_for_proposal(
             proposal_id=proposal_id,
@@ -273,13 +444,27 @@ def get_queue_item(
         for item in contradictions
         if item.id in contested_ids
     ]
-    return _to_detail(proposal, conflicts=conflicts, verdicts=verdicts)
+    return _to_detail(
+        proposal,
+        conflicts=conflicts,
+        verdicts=verdicts,
+        channel_id=channel_id,
+        folder_id=folder_id,
+        owners=owners,
+        can_review=can_review,
+        base_blocks=base_blocks,
+        changes=changes,
+    )
 
 
 @router.post(
     path="/artifacts/{proposal_id}/approve",
     response_model=DecisionResponse,
-    description="문서 변경안을 승인해 새 판을 발행한다.",
+    description=(
+        "문서 변경안 전체를 승인해 새 revision을 발행한다. "
+        "블록 판정이 시작된 변경안에는 쓸 수 없다. "
+        "문서 담당자만 할 수 있다."
+    ),
 )
 @audit_log(
     action=KnowledgeReviewAction.APPROVE,
@@ -329,7 +514,10 @@ def approve_artifact(
 @router.post(
     path="/artifacts/{proposal_id}/reject",
     response_model=DecisionResponse,
-    description="문서 변경안을 사유와 함께 반려한다.",
+    description=(
+        "문서 변경안 전체를 사유와 함께 반려한다. "
+        "문서 담당자만 할 수 있다."
+    ),
 )
 @audit_log(
     action=KnowledgeReviewAction.REJECT,
@@ -384,7 +572,10 @@ def reject_artifact(
 @router.put(
     path="/queue/{proposal_id}/blocks/{block_index}/verdict",
     response_model=BlockVerdictResponse,
-    description="변경안 본문 블록 하나에 승인·반려를 기록한다.",
+    description=(
+        "변경안의 블록 하나에 승인 또는 반려를 기록한다. "
+        "문서 담당자만 할 수 있다."
+    ),
 )
 @audit_log(
     action=KnowledgeReviewAction.BLOCK_VERDICT,
@@ -411,9 +602,7 @@ def put_block_verdict(
             403, 이미 결정됐거나 본문이 바뀌었으면 409, 보낸 값 자체가
             틀렸으면 422를 던진다.
     """
-    _require_decidable_proposal(
-        uow_factory, db, context, proposal_id, not_found_code="NOT_FOUND"
-    )
+    _require_decidable_proposal(uow_factory, db, context, proposal_id)
     try:
         stored = upsert_block_verdict(
             uow_factory(),
@@ -438,7 +627,12 @@ def put_block_verdict(
 @router.post(
     path="/queue/{proposal_id}/publish",
     response_model=PublishResponse,
-    description="블록 결정을 모아 변경안을 확정하고 새 판을 발행한다.",
+    description=(
+        "블록 판정을 마감한다. 승인 블록으로 새 revision을 발행하고, "
+        "전부 반려면 변경안을 반려로 끝낸다. "
+        "undecided로 미판정 블록을 일괄 승인 또는 반려할 수 있다. "
+        "문서 담당자만 할 수 있다."
+    ),
 )
 @audit_log(
     action=KnowledgeReviewAction.PUBLISH,
@@ -457,14 +651,24 @@ def publish_proposal(
     소비자는 검토자를 어느 블록으로 데려가야 하는지 알 수 없어 목록을
     처음부터 다시 훑게 된다.
 
+    남은 블록을 일괄 반려하는데 사유가 비었으면 서비스에 닿기 전에 막는다.
+    단건 반려와 같은 상황이므로 같은 400 REASON_REQUIRED로 답해야 소비자가
+    입력만 고치면 되는 상황임을 알 수 있다.
+
     Raises:
-        HTTPException: 변경안이 없으면 404, 이 문서의 검수 권한이 없으면
-            403, 미결정·낡음·경합이면 409, 보낸 값이나 조립 결과가 계약을
-            어기면 422를 던진다.
+        HTTPException: 일괄 반려에 사유가 없으면 400, 변경안이 없으면 404,
+            이 문서의 검수 권한이 없으면 403, 미결정·낡음·경합이면 409,
+            보낸 값이나 조립 결과가 계약을 어기면 422를 던진다.
     """
-    _require_decidable_proposal(
-        uow_factory, db, context, proposal_id, not_found_code="NOT_FOUND"
-    )
+    if payload.undecided == "reject" and not (
+        payload.rejection_reason or ""
+    ).strip():
+        raise review_error(
+            400,
+            code="REASON_REQUIRED",
+            message="반려는 사유가 있어야 합니다.",
+        )
+    _require_decidable_proposal(uow_factory, db, context, proposal_id)
     try:
         result = publish_artifact_proposal(
             uow_factory(),
@@ -472,6 +676,8 @@ def publish_proposal(
             proposal_id=proposal_id,
             base_revision_id=payload.base_revision_id,
             reviewer=context.reviewer,
+            undecided=payload.undecided,
+            rejection_reason=payload.rejection_reason,
         )
     except PublishError as error:
         status_code, message = _PUBLISH_ERRORS.get(
@@ -551,18 +757,30 @@ def _artifact_review_error(
     )
 
 
-def _to_queue_item(item: ReviewQueueItem) -> QueueItemResponse:
-    """큐 한 줄을 응답으로 옮긴다."""
+def _to_queue_item(
+    item: ReviewQueueItem,
+    *,
+    channel_id: uuid.UUID | None,
+    folder_id: uuid.UUID | None,
+    owners: list[OwnerResponse],
+    can_review: bool,
+) -> QueueItemResponse:
+    """큐 한 줄을 문서 위치·담당자·결정 가능 여부와 함께 응답으로 옮긴다."""
     return QueueItemResponse(
         proposal_id=str(item.proposal_id),
         status=item.status,
         artifact=ArtifactRefResponse(
-            id=str(item.artifact_id), title=item.title
+            id=str(item.artifact_id),
+            title=item.title,
+            channel_id=str(channel_id) if channel_id else None,
+            folder_id=str(folder_id) if folder_id else None,
         ),
         summary=item.summary,
         origin=item.origin,
         contains_conflict=item.contains_conflict,
         created_at=item.created_at,
+        owners=owners,
+        can_review=can_review,
     )
 
 
@@ -627,12 +845,15 @@ def _to_block(
     *,
     block_index: int,
     verdict: StoredBlockVerdict | None,
+    reason: str | None,
 ) -> BlockResponse:
     """블록 하나를 상세 응답의 블록으로 옮긴다.
 
     다툼 블록은 후보(variants)만 싣고 블록 자체의 sources는 비운다. 같은
     인용이 두 자리에 나오면 소비자가 어느 쪽을 정본으로 삼을지 알 수 없고,
     후보별로 갈린 근거가 한 덩어리로 뭉쳐 보인다.
+
+    reason은 발행판과 견준 변경 사유다. 바뀌지 않은 블록은 없음으로 받는다.
     """
     contested = block.block_kind == BLOCK_KIND_CONTESTED
     return BlockResponse(
@@ -660,6 +881,28 @@ def _to_block(
             else None
         ),
         verdict=None if verdict is None else _to_block_verdict(verdict),
+        markdown=block_markdown(block),
+        change_reason=reason,
+    )
+
+
+def _to_base_block(
+    block: ArtifactBlock, *, block_index: int
+) -> BaseBlockResponse:
+    """발행판 블록 하나를 상세 응답의 발행판 블록으로 옮긴다.
+
+    다툼 블록을 따로 다루지 않는다. 발행판에는 이미 승자가 정해진 문장만
+    남으므로 후보를 나열할 자리가 없다.
+    """
+    return BaseBlockResponse(
+        block_index=block_index,
+        block_kind=block.block_kind,
+        heading=block.heading,
+        body=block.body,
+        narrative=block.narrative,
+        claim_ids=[str(claim_id) for claim_id in block.claim_ids],
+        relation_ids=[str(item) for item in block.relation_ids],
+        sources=_to_sources(block.sources),
     )
 
 
@@ -668,10 +911,27 @@ def _to_detail(
     *,
     conflicts: list[ConflictResponse],
     verdicts: tuple[StoredBlockVerdict, ...],
+    channel_id: uuid.UUID | None,
+    folder_id: uuid.UUID | None,
+    owners: list[OwnerResponse],
+    can_review: bool,
+    base_blocks: Sequence[ArtifactBlock],
+    changes: tuple[BlockChange, ...],
 ) -> ProposalDetailResponse:
-    """변경안 하나를 상세 응답으로 옮긴다."""
+    """변경안 하나를 상세 응답으로 옮긴다.
+
+    변경 사유는 블록 자리로 짚어 붙인다. changes에는 바뀐 블록만 들어
+    있으므로, 목록에 없는 자리의 블록은 사유가 없음이 된다.
+    """
     contains_conflict = _has_contested(proposal)
     by_index = {verdict.block_index: verdict for verdict in verdicts}
+    reasons = {
+        change.block_index: change_reason(
+            change, base=base_blocks, proposed=proposal.blocks
+        )
+        for change in changes
+        if change.block_index is not None
+    }
     claim_ids: dict[str, None] = {}
     proposal_ids: dict[str, None] = {}
     relation_ids: dict[str, None] = {}
@@ -688,13 +948,17 @@ def _to_detail(
                 block,
                 block_index=index,
                 verdict=by_index.get(index),
+                reason=reasons.get(index),
             )
         )
     return ProposalDetailResponse(
         proposal_id=str(proposal.id),
         status=proposal.status,
         artifact=ArtifactRefResponse(
-            id=str(proposal.artifact_id), title=proposal.title
+            id=str(proposal.artifact_id),
+            title=proposal.title,
+            channel_id=str(channel_id) if channel_id else None,
+            folder_id=str(folder_id) if folder_id else None,
         ),
         origin=proposal.origin,
         created_at=proposal.created_at,
@@ -704,7 +968,21 @@ def _to_detail(
             else str(proposal.base_revision_id)
         ),
         contains_conflict=contains_conflict,
+        owners=owners,
+        can_review=can_review,
         blocks=blocks,
+        base_blocks=[
+            _to_base_block(block, block_index=index)
+            for index, block in enumerate(base_blocks)
+        ],
+        block_changes=[
+            BlockChangeResponse(
+                change=change.change,
+                block_index=change.block_index,
+                base_block_index=change.base_block_index,
+            )
+            for change in changes
+        ],
         read_set=ReadSetResponse(
             claim_ids=list(claim_ids),
             proposal_ids=list(proposal_ids),

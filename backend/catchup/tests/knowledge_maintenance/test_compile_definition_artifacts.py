@@ -38,6 +38,7 @@ from structlog.testing import capture_logs
 from catchup.configs.config import settings
 from catchup.db.models import ArtifactDefinition
 from catchup.db.models import Channel
+from catchup.db.models import ChannelPurpose
 from catchup.db.models import KnowledgeClaimCandidate as ClaimRow
 from catchup.db.models import KnowledgeExtractionRun as RunRow
 from catchup.db.models import KnowledgeNode as NodeRow
@@ -340,6 +341,28 @@ def test_definition_artifacts_carry_definition_and_channel() -> None:
     assert _pending_by_title(uow)[stored["title"]]["artifact_id"] == (
         artifact_id
     )
+
+
+def test_definition_artifacts_carry_the_definition_folder() -> None:
+    """정의에 걸린 폴더를 새 문서 행이 그대로 이어받는다.
+
+    폴더는 온보딩에서 사람이 고른 자리다. 이어받지 않으면 컴파일이 만든
+    문서가 채널 루트로 떨어져 사람이 정한 배치가 사라진다.
+    """
+    node_id = uuid.uuid4()
+    row = _definition_row()
+    folder_id = uuid.uuid4()
+    uow = FakeDefinitionUnitOfWork(
+        definitions=[row],
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[_claim(node_id=node_id)],
+    )
+    uow.artifact_definitions.definition_folders = {row[0]: folder_id}
+
+    _run(uow)
+
+    artifact_id = uow.artifacts.definition_artifacts[(row[0], node_id)]
+    assert uow.artifacts.artifact_rows[artifact_id]["folder_id"] == folder_id
 
 
 def test_predicate_sections_orders_and_filters() -> None:
@@ -1431,13 +1454,13 @@ def test_pg_find_channel_style_ignores_other_workspaces(
     assert found is None
 
 
-def test_pg_find_channel_purpose_reads_the_stored_preset(
+def test_pg_find_channel_purposes_reads_the_stored_presets(
     session_factory: Callable[[], Session],
     workspace_id: int,
     user_id: int,
     uow_factory,
 ) -> None:
-    """채널에 저장된 목적 id를 정의 저장소가 그대로 읽는다."""
+    """채널에 저장된 목적 id를 정의 저장소가 고른 순서대로 읽는다."""
     session = session_factory()
     channel_id = uuid.uuid4()
     session.add(
@@ -1445,28 +1468,41 @@ def test_pg_find_channel_purpose_reads_the_stored_preset(
             id=channel_id,
             workspace_id=workspace_id,
             name=f"목적-{uuid.uuid4().hex[:8]}",
-            purpose_preset="voc.top_requests",
             created_by=user_id,
+        )
+    )
+    session.add(
+        ChannelPurpose(
+            channel_id=channel_id,
+            purpose_preset="voc.top_requests",
+            position=0,
+        )
+    )
+    session.add(
+        ChannelPurpose(
+            channel_id=channel_id,
+            purpose_preset="voc.complaint_patterns",
+            position=1,
         )
     )
     session.commit()
     session.close()
 
     with uow_factory() as uow:
-        found = uow.artifact_definitions.find_channel_purpose(
+        found = uow.artifact_definitions.find_channel_purposes(
             channel_id=channel_id
         )
 
-    assert found == "voc.top_requests"
+    assert found == ("voc.top_requests", "voc.complaint_patterns")
 
 
-def test_pg_find_channel_purpose_is_none_without_a_preset(
+def test_pg_find_channel_purposes_is_empty_without_a_preset(
     session_factory: Callable[[], Session],
     workspace_id: int,
     user_id: int,
     uow_factory,
 ) -> None:
-    """목적을 고르지 않은 채널은 없음으로 답한다."""
+    """목적을 고르지 않은 채널은 빈 튜플로 답한다."""
     session = session_factory()
     channel_id = uuid.uuid4()
     session.add(
@@ -1481,14 +1517,14 @@ def test_pg_find_channel_purpose_is_none_without_a_preset(
     session.close()
 
     with uow_factory() as uow:
-        found = uow.artifact_definitions.find_channel_purpose(
+        found = uow.artifact_definitions.find_channel_purposes(
             channel_id=channel_id
         )
 
-    assert found is None
+    assert found == ()
 
 
-def test_pg_find_channel_purpose_ignores_other_workspaces(
+def test_pg_find_channel_purposes_ignores_other_workspaces(
     session_factory: Callable[[], Session],
     seed_workspace_id: int,
     workspace_id: int,
@@ -1503,19 +1539,25 @@ def test_pg_find_channel_purpose_ignores_other_workspaces(
             id=channel_id,
             workspace_id=seed_workspace_id,
             name=f"남의목적-{uuid.uuid4().hex[:8]}",
-            purpose_preset="voc.complaint_patterns",
             created_by=user_id,
+        )
+    )
+    session.add(
+        ChannelPurpose(
+            channel_id=channel_id,
+            purpose_preset="voc.complaint_patterns",
+            position=0,
         )
     )
     session.commit()
     session.close()
 
     with uow_factory() as uow:
-        found = uow.artifact_definitions.find_channel_purpose(
+        found = uow.artifact_definitions.find_channel_purposes(
             channel_id=channel_id
         )
 
-    assert found is None
+    assert found == ()
 
 
 def test_pg_reusable_narratives_come_from_revision_and_pending(

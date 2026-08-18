@@ -32,6 +32,7 @@ from sqlalchemy.orm import aliased
 
 from catchup.db.models import ArtifactDefinition as ArtifactDefinitionRow
 from catchup.db.models import Channel as ChannelRow
+from catchup.db.models import ChannelPurpose as ChannelPurposeRow
 from catchup.db.models import KnowledgeArtifact as KnowledgeArtifactRow
 from catchup.db.models import (
     KnowledgeArtifactChangeProposal as KnowledgeArtifactChangeProposalRow,
@@ -2490,6 +2491,7 @@ class SqlAlchemyArtifactRepository:
         kind: str,
         subject_node_id: uuid.UUID,
         title: str,
+        folder_id: uuid.UUID | None = None,
     ) -> uuid.UUID:
         """정의가 대상에 만드는 문서를 찾거나 새로 만든다.
 
@@ -2499,6 +2501,9 @@ class SqlAlchemyArtifactRepository:
 
         이미 있으면 제목도 채널도 덮어쓰지 않는다. 제목은 문서의 정체성
         이고, 채널을 옮기는 일은 컴파일이 아니라 사람의 결정이다.
+
+        폴더도 새 행에만 적는다. 이미 있는 문서의 폴더는 덮어쓰지 않는다.
+        폴더 이동은 사람의 결정이다.
         """
         found = self._session.scalar(
             select(KnowledgeArtifactRow.id).where(
@@ -2520,6 +2525,7 @@ class SqlAlchemyArtifactRepository:
                 kind=kind,
                 subject_node_id=subject_node_id,
                 title=title,
+                folder_id=folder_id,
             )
         )
         self._session.flush()
@@ -2851,13 +2857,23 @@ class SqlAlchemyArtifactRepository:
         self,
         *,
         proposal_id: uuid.UUID,
+        for_update: bool = False,
     ) -> StoredArtifactProposal | None:
-        """변경안 하나를 문서 제목·대상과 함께 읽는다."""
-        row = self._session.execute(
-            self._proposal_statement().where(
-                KnowledgeArtifactChangeProposalRow.id == proposal_id
+        """변경안 하나를 문서 제목·대상과 함께 읽는다.
+
+        for_update가 참이면 변경안 행에만 FOR UPDATE를 건다. 함께 읽는
+        문서 행까지 잠그면 그 문서를 건드리는 다른 일까지 줄을 서므로,
+        잠금 대상을 변경안 행으로 좁힌다. 잠금은 transaction이 끝날 때
+        풀린다.
+        """
+        statement = self._proposal_statement().where(
+            KnowledgeArtifactChangeProposalRow.id == proposal_id
+        )
+        if for_update:
+            statement = statement.with_for_update(
+                of=KnowledgeArtifactChangeProposalRow
             )
-        ).first()
+        row = self._session.execute(statement).first()
         if row is None:
             return None
         return _artifact_proposal_to_domain(row[0], row[1], row[2])
@@ -3051,17 +3067,26 @@ class SqlAlchemyArtifactDefinitionRepository:
             )
         )
 
-    def find_channel_purpose(self, *, channel_id: uuid.UUID) -> str | None:
-        """채널에 걸린 목적 preset id를 읽는다. 없으면 None이다.
+    def find_channel_purposes(self, *, channel_id: uuid.UUID) -> tuple[str, ...]:
+        """채널이 고른 목적 preset id를 고른 순서대로 읽는다. 없으면 빈 튜플이다.
+
+        목적은 채널 칸이 아니라 channel_purposes 행으로 산다. 채널 하나가
+        목적을 여러 개 고를 수 있어서다. position이 사람이 고른 차례라
+        그 순서로 줄을 세운다.
 
         workspace를 조건에 함께 건다. 채널 식별자만으로 찾으면 남의
         workspace 채널의 목적이 이 workspace 문서에 실린다.
         """
-        return self._session.scalar(
-            select(ChannelRow.purpose_preset).where(
-                ChannelRow.id == channel_id,
-                ChannelRow.workspace_id == self._workspace_id,
-            )
+        return tuple(
+            self._session.scalars(
+                select(ChannelPurposeRow.purpose_preset)
+                .join(ChannelRow, ChannelRow.id == ChannelPurposeRow.channel_id)
+                .where(
+                    ChannelPurposeRow.channel_id == channel_id,
+                    ChannelRow.workspace_id == self._workspace_id,
+                )
+                .order_by(ChannelPurposeRow.position)
+            ).all()
         )
 
     def list_definitions(self) -> tuple[StoredArtifactDefinition, ...]:
@@ -3076,6 +3101,9 @@ class SqlAlchemyArtifactDefinitionRepository:
         title_prefix는 kind와 같은 값으로 채운다. 아직 제목 앞자리를
         따로 저장하는 칸이 없다.
 
+        folder_id는 저장된 값을 그대로 싣는다. 컴파일이 만드는 문서가
+        어느 폴더에 설지는 정의에 적혀 있다.
+
         Raises:
             SelectionSpecError: 저장된 선택 규칙을 읽을 수 없을 때 던진다.
         """
@@ -3085,6 +3113,7 @@ class SqlAlchemyArtifactDefinitionRepository:
                 ArtifactDefinitionRow.channel_id,
                 ArtifactDefinitionRow.kind,
                 ArtifactDefinitionRow.selection_spec,
+                ArtifactDefinitionRow.folder_id,
             )
             .where(ArtifactDefinitionRow.workspace_id == self._workspace_id)
             .order_by(collate(cast(ArtifactDefinitionRow.id, Text), "C"))
@@ -3096,10 +3125,15 @@ class SqlAlchemyArtifactDefinitionRepository:
                 kind=kind,
                 selection_spec=deserialize_selection_spec(selection_spec),
                 title_prefix=kind,
+                folder_id=folder_id,
             )
-            for definition_id, channel_id, kind, selection_spec in (
-                self._session.execute(statement).all()
-            )
+            for (
+                definition_id,
+                channel_id,
+                kind,
+                selection_spec,
+                folder_id,
+            ) in self._session.execute(statement).all()
         )
 
 
@@ -3324,6 +3358,52 @@ class SqlAlchemyBlockVerdictRepository:
         )
         self._session.execute(statement)
         self._session.flush()
+
+    def insert_verdict_if_absent(
+        self,
+        *,
+        proposal_id: uuid.UUID,
+        block_index: int,
+        block_content_hash: str,
+        verdict: str,
+        rejection_reason: str | None,
+        chosen_winner_claim_id: uuid.UUID | None,
+        reviewer: str,
+        reviewed_at: datetime,
+    ) -> bool:
+        """결정이 없는 블록에만 결정을 쓴다.
+
+        `ON CONFLICT DO NOTHING`이라 이미 결정이 있으면 한 컬럼도 바뀌지
+        않는다. 넣었으면 True, 이미 있어서 건너뛰었으면 False다. 판단과
+        쓰기가 한 문장 안에서 끝나므로, 미결정을 고른 뒤 사람이 단건
+        결정을 저장해도 그 결정을 덮어쓰지 않는다.
+
+        넣었는지는 RETURNING이 돌려준 행으로 본다. 이 조합에서 rowcount는
+        -1로 나와 쓸 수 없고, 충돌해서 건너뛴 INSERT는 RETURNING 행이
+        아예 없다.
+
+        Raises:
+            ValueError: 변경안이 고정된 workspace에 없을 때 던진다.
+        """
+        self._assert_proposal_in_workspace(proposal_id)
+        statement = pg_insert(KnowledgeBlockVerdictRow).values(
+            id=uuid.uuid4(),
+            workspace_id=self._workspace_id,
+            proposal_id=proposal_id,
+            block_index=block_index,
+            block_content_hash=block_content_hash,
+            verdict=verdict,
+            rejection_reason=rejection_reason,
+            chosen_winner_claim_id=chosen_winner_claim_id,
+            reviewer=reviewer,
+            reviewed_at=reviewed_at,
+        )
+        statement = statement.on_conflict_do_nothing(
+            constraint="uq_block_verdict_proposal_block",
+        ).returning(KnowledgeBlockVerdictRow.id)
+        inserted = self._session.execute(statement).first()
+        self._session.flush()
+        return inserted is not None
 
     def list_for_proposal(
         self, *, proposal_id: uuid.UUID

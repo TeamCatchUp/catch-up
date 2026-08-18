@@ -320,11 +320,13 @@ def _clear(
         if definitions:
             session.execute(text("DELETE FROM artifact_definitions"))
         if channel_settings:
+            # 목적은 channel_purposes 행으로, 나머지 설정은 채널 칸으로
+            # 나뉘어 있어 둘 다 걷어내야 사람이 정리한 상태가 된다.
+            session.execute(text("DELETE FROM channel_purposes"))
             session.execute(
                 text(
-                    "UPDATE channels SET purpose_preset = NULL,"
-                    " purpose_text = NULL, style_preset = NULL,"
-                    " style_text = NULL"
+                    "UPDATE channels SET purpose_text = NULL,"
+                    " style_preset = NULL, style_text = NULL"
                 )
             )
         session.commit()
@@ -412,8 +414,9 @@ def test_downgrade_refuses_channel_settings(
     with Session(engine) as session:
         session.execute(
             text(
-                "UPDATE channels SET purpose_preset = :preset"
-                " WHERE id = :id"
+                "INSERT INTO channel_purposes"
+                " (channel_id, purpose_preset, position)"
+                " VALUES (:id, :preset, 0)"
             ).bindparams(preset="voc.faq_consistency", id=channel_id)
         )
         session.commit()
@@ -424,12 +427,9 @@ def test_downgrade_refuses_channel_settings(
     assert "아티팩트 정의" not in message
     assert "downgrade를 중단한다" in message
 
+    # 거부는 아무것도 commit하지 않으므로 사람이 넣은 목적이 그대로 남는다.
     assert (
-        _scalar(
-            engine,
-            "SELECT count(*) FROM channels WHERE purpose_preset IS NOT NULL",
-        )
-        == 1
+        _scalar(engine, "SELECT count(*) FROM channel_purposes") == 1
     )
 
 

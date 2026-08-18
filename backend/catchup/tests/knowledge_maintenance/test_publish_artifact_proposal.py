@@ -42,6 +42,12 @@ from catchup.knowledge_maintenance.ports.mutation_proposals import (
     StoredContradictionValue,
 )
 from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
+    CODE_NOT_FOUND,
+)
+from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
+    CODE_STALE_BASE,
+)
+from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
     PublishError,
 )
 from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
@@ -151,7 +157,7 @@ class FakeArtifactRepository:
         return proposal_id
 
     def get_proposal(
-        self, *, proposal_id: uuid.UUID
+        self, *, proposal_id: uuid.UUID, for_update: bool = False
     ) -> StoredArtifactProposal | None:
         row = self.proposals.get(proposal_id)
         if row is None:
@@ -286,6 +292,33 @@ class FakeBlockVerdictRepository:
             "reviewer": reviewer,
             "reviewed_at": reviewed_at,
         }
+
+    def insert_verdict_if_absent(
+        self,
+        *,
+        proposal_id: uuid.UUID,
+        block_index: int,
+        block_content_hash: str,
+        verdict: str,
+        rejection_reason: str | None,
+        chosen_winner_claim_id: uuid.UUID | None,
+        reviewer: str,
+        reviewed_at: datetime,
+    ) -> bool:
+        """이미 결정이 있는 블록은 건드리지 않는다."""
+        if (proposal_id, block_index) in self.verdicts:
+            return False
+        self.upsert_verdict(
+            proposal_id=proposal_id,
+            block_index=block_index,
+            block_content_hash=block_content_hash,
+            verdict=verdict,
+            rejection_reason=rejection_reason,
+            chosen_winner_claim_id=chosen_winner_claim_id,
+            reviewer=reviewer,
+            reviewed_at=reviewed_at,
+        )
+        return True
 
     def list_for_proposal(
         self, *, proposal_id: uuid.UUID
@@ -509,6 +542,8 @@ def _publish(
     proposal_id: uuid.UUID,
     *,
     base_revision_id: uuid.UUID | None = None,
+    undecided: str | None = None,
+    rejection_reason: str | None = None,
 ):
     """발행을 같은 인자로 부르는 지름길이다."""
     return publish_artifact_proposal(
@@ -517,6 +552,8 @@ def _publish(
         proposal_id=proposal_id,
         base_revision_id=base_revision_id,
         reviewer=REVIEWER,
+        undecided=undecided,
+        rejection_reason=rejection_reason,
         now=DECIDED_AT,
     )
 
@@ -687,7 +724,7 @@ def test_intervening_revision_refuses_publish() -> None:
     with pytest.raises(PublishError) as error:
         _publish(uow, proposal_id, base_revision_id=base)
 
-    assert error.value.code == "STALE_BASE"
+    assert error.value.code == "STALE_BASE_REVISION"
     assert len(uow.artifacts.revisions) == 2
     assert uow.artifacts.proposals[proposal_id]["status"] == "pending"
     assert uow.committed == 0
@@ -707,7 +744,7 @@ def test_client_base_revision_mismatch_refuses_publish() -> None:
     with pytest.raises(PublishError) as error:
         _publish(uow, proposal_id, base_revision_id=uuid.uuid4())
 
-    assert error.value.code == "STALE_BASE"
+    assert error.value.code == "STALE_BASE_REVISION"
     assert uow.artifacts.revisions == []
     assert uow.committed == 0
 
@@ -749,7 +786,7 @@ def test_revision_number_collision_maps_to_stale_base() -> None:
     finally:
         uow.artifacts.find_latest_revision_id_and_number = original  # type: ignore[method-assign]
 
-    assert error.value.code == "STALE_BASE"
+    assert error.value.code == "STALE_BASE_REVISION"
     assert uow.artifacts.proposals[proposal_id]["status"] == "pending"
     assert uow.committed == 0
 
@@ -1134,7 +1171,7 @@ def test_unknown_proposal_is_refused() -> None:
     with pytest.raises(PublishError) as error:
         _publish(uow, uuid.uuid4())
 
-    assert error.value.code == "NOT_FOUND"
+    assert error.value.code == "PROPOSAL_NOT_FOUND"
     assert uow.committed == 0
 
 
@@ -1161,3 +1198,173 @@ def test_blank_reviewer_is_refused() -> None:
 
     assert error.value.code == "INVALID"
     assert uow.committed == 0
+
+
+def test_error_codes_renamed() -> None:
+    """낡음·없음 코드는 다른 라우트와 같은 이름 하나로 통일돼 있다."""
+    assert CODE_STALE_BASE == "STALE_BASE_REVISION"
+    assert CODE_NOT_FOUND == "PROPOSAL_NOT_FOUND"
+
+
+def test_undecided_approve_records_verdicts_and_publishes() -> None:
+    """미판정 블록에 approved 결정이 기록되고 그대로 발행된다.
+
+    이미 있던 반려 결정은 그대로 남는다. 사람이 내린 결정을 일괄 승인이
+    덮으면 안 되기 때문이다.
+    """
+    uow = FakeUnitOfWork()
+    claims = uow.knowledge_candidates
+    blocks = tuple(
+        _claim_block(claims.add_claim(), f"predicate_{index}")
+        for index in range(3)
+    )
+    proposal_id = uow.artifacts.add_proposal(
+        artifact_id=uuid.uuid4(), blocks=blocks, base_revision_id=None
+    )
+    _record_verdict(
+        uow,
+        proposal_id,
+        1,
+        verdict="rejected",
+        rejection_reason="근거가 약하다",
+    )
+
+    result = _publish(uow, proposal_id, undecided="approve")
+
+    stored = uow.block_verdicts.list_for_proposal(proposal_id=proposal_id)
+    assert [(row.block_index, row.verdict) for row in stored] == [
+        (0, "approved"),
+        (1, "rejected"),
+        (2, "approved"),
+    ]
+    assert stored[0].reviewer == REVIEWER
+    assert stored[2].reviewer == REVIEWER
+    assert stored[1].rejection_reason == "근거가 약하다"
+    assert result.blocks_published == 2
+    assert result.blocks_rejected == 1
+
+
+def test_undecided_approve_refuses_when_contested_block_is_undecided() -> None:
+    """다툼 블록은 승자를 골라야 하므로 일괄 승인이 대신 결정하지 않는다."""
+    uow = FakeUnitOfWork()
+    claims = uow.knowledge_candidates
+    winner = claims.add_claim()
+    loser = claims.add_claim()
+    contradiction_id = uow.mutation_proposals.add_contradiction(
+        claim_ids=(winner, loser)
+    )
+    blocks = (
+        _claim_block(claims.add_claim(), "release_month"),
+        _contested_block(
+            heading="rate_limit_per_minute",
+            contradiction_id=contradiction_id,
+            first=winner,
+            second=loser,
+        ),
+    )
+    proposal_id = uow.artifacts.add_proposal(
+        artifact_id=uuid.uuid4(), blocks=blocks, base_revision_id=None
+    )
+
+    with pytest.raises(PublishError) as error:
+        _publish(uow, proposal_id, undecided="approve")
+
+    assert error.value.code == "UNDECIDED_BLOCKS"
+    assert error.value.undecided == (1,)
+    assert uow.block_verdicts.verdicts == {}
+    assert uow.artifacts.revisions == []
+    assert uow.committed == 0
+
+
+def test_undecided_reject_requires_reason_and_rejects_rest() -> None:
+    """일괄 반려는 사유가 있어야 하고, 남은 블록을 모두 반려로 끝맺는다."""
+    uow = FakeUnitOfWork()
+    claims = uow.knowledge_candidates
+    blocks = tuple(
+        _claim_block(claims.add_claim(), f"predicate_{index}")
+        for index in range(2)
+    )
+    proposal_id = uow.artifacts.add_proposal(
+        artifact_id=uuid.uuid4(), blocks=blocks, base_revision_id=None
+    )
+
+    with pytest.raises(PublishError) as error:
+        _publish(uow, proposal_id, undecided="reject")
+
+    assert error.value.code == "INVALID"
+    assert uow.block_verdicts.verdicts == {}
+
+    result = _publish(
+        uow,
+        proposal_id,
+        undecided="reject",
+        rejection_reason="이번 판에는 싣지 않는다",
+    )
+
+    stored = uow.block_verdicts.list_for_proposal(proposal_id=proposal_id)
+    assert [(row.block_index, row.verdict) for row in stored] == [
+        (0, "rejected"),
+        (1, "rejected"),
+    ]
+    assert all(
+        row.rejection_reason == "이번 판에는 싣지 않는다" for row in stored
+    )
+    assert result.verdict == "rejected"
+    assert result.revision_id is None
+    assert result.blocks_published == 0
+    assert result.blocks_rejected == 2
+
+
+def test_bulk_undecided_never_overwrites_a_concurrent_human_verdict() -> None:
+    """미결정 목록을 읽은 뒤 들어온 사람의 판정이 그대로 살아남는다.
+
+    일괄 승인은 결정 목록을 먼저 읽어 빈 블록을 고른다. 그 사이에 다른
+    검토자가 같은 블록에 반려를 저장하면, 일괄 쓰기가 그 반려를 덮어써서는
+    안 된다. 저장소의 첫 목록 조회 직후 사람의 반려를 끼워 넣어 그 틈을
+    그대로 만든다.
+    """
+    uow = FakeUnitOfWork()
+    claims = uow.knowledge_candidates
+    blocks = tuple(
+        _claim_block(claims.add_claim(), f"predicate_{index}")
+        for index in range(3)
+    )
+    proposal_id = uow.artifacts.add_proposal(
+        artifact_id=uuid.uuid4(), blocks=blocks, base_revision_id=None
+    )
+
+    verdicts = uow.block_verdicts
+    original_list = verdicts.list_for_proposal
+    interleaved: list[int] = []
+
+    def list_then_interleave(
+        *, proposal_id: uuid.UUID
+    ) -> tuple[StoredBlockVerdict, ...]:
+        rows = original_list(proposal_id=proposal_id)
+        if not interleaved:
+            interleaved.append(1)
+            verdicts.upsert_verdict(
+                proposal_id=proposal_id,
+                block_index=1,
+                block_content_hash=block_content_hash(blocks[1]),
+                verdict="rejected",
+                rejection_reason="사람이 직접 반려했다",
+                chosen_winner_claim_id=None,
+                reviewer="user:other",
+                reviewed_at=DECIDED_AT,
+            )
+        return rows
+
+    verdicts.list_for_proposal = list_then_interleave
+
+    result = _publish(uow, proposal_id, undecided="approve")
+
+    human = verdicts.verdicts[(proposal_id, 1)]
+    assert human["verdict"] == "rejected"
+    assert human["reviewer"] == "user:other"
+    assert human["rejection_reason"] == "사람이 직접 반려했다"
+    # 발행은 실제로 저장된 결정으로 진행된다. 사람이 반려한 블록 하나가
+    # 반려로 세어진다.
+    assert result.verdict == "approved"
+    assert result.blocks_published == 2
+    assert result.blocks_rejected == 1

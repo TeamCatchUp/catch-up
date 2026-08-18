@@ -65,9 +65,7 @@ def workspace_ids(engine: Engine) -> tuple[int, int]:
     """실 DB에 있는 workspace 두 개를 빌린다."""
     with engine.connect() as connection:
         found = (
-            connection.execute(
-                select(Workspace.id).order_by(Workspace.id).limit(2)
-            )
+            connection.execute(select(Workspace.id).order_by(Workspace.id).limit(2))
             .scalars()
             .all()
         )
@@ -125,8 +123,12 @@ def _make_user(db: Session, *, email: str) -> User:
 # ======================= 테스트 =======================
 
 
-def test_add_channel_stores_preset_ids(db, workspace_ids) -> None:
-    """preset id가 채널 행에 그대로 저장된다."""
+def test_add_channel_stores_the_style_preset_id(db, workspace_ids) -> None:
+    """문체 preset id가 채널 행에 그대로 저장된다.
+
+    목적 preset은 채널 하나가 여러 개를 고를 수 있어 이 행이 아니라
+    channel_purposes 표에 들어간다.
+    """
     workspace_id, _ = workspace_ids
     user = _make_user(db, email="onboard@example.com")
     channel = wiki_queries.add_channel(
@@ -134,17 +136,13 @@ def test_add_channel_stores_preset_ids(db, workspace_ids) -> None:
         workspace_id=workspace_id,
         name=f"voc-{uuid.uuid4().hex[:8]}",
         created_by=user.id,
-        purpose_preset="voc.top_requests",
         style_preset="style.report_summary",
     )
     db.flush()
-    assert channel.purpose_preset == "voc.top_requests"
     assert channel.style_preset == "style.report_summary"
 
 
-def test_add_channel_without_presets_leaves_them_empty(
-    db, workspace_ids
-) -> None:
+def test_add_channel_without_presets_leaves_them_empty(db, workspace_ids) -> None:
     """preset을 주지 않은 기존 호출자는 그대로 동작한다."""
     workspace_id, _ = workspace_ids
     user = _make_user(db, email="onboard0@example.com")
@@ -155,13 +153,10 @@ def test_add_channel_without_presets_leaves_them_empty(
         created_by=user.id,
     )
     db.flush()
-    assert channel.purpose_preset is None
     assert channel.style_preset is None
 
 
-def test_add_artifact_definition_roundtrips_the_spec(
-    db, workspace_ids
-) -> None:
+def test_add_artifact_definition_roundtrips_the_spec(db, workspace_ids) -> None:
     """직렬화한 선택 규칙이 JSONB를 왕복해도 같은 값으로 돌아온다."""
     workspace_id, _ = workspace_ids
     user = _make_user(db, email="onboard2@example.com")
@@ -231,9 +226,7 @@ def test_list_definitions_by_channel_orders_by_kind(db, workspace_ids) -> None:
     ]
 
 
-def test_duplicate_kind_in_a_channel_violates_the_unique(
-    db, workspace_ids
-) -> None:
+def test_duplicate_kind_in_a_channel_violates_the_unique(db, workspace_ids) -> None:
     """같은 채널에 같은 kind 정의를 두 번 넣으면 DB가 막는다."""
     workspace_id, _ = workspace_ids
     user = _make_user(db, email="onboard4@example.com")

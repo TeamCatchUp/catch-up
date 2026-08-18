@@ -124,6 +124,7 @@ class ArtifactRepository(Protocol):
         kind: str,
         subject_node_id: uuid.UUID,
         title: str,
+        folder_id: uuid.UUID | None = None,
     ) -> uuid.UUID:
         """정의가 대상에 만드는 문서를 찾거나 새로 만든다.
 
@@ -136,6 +137,9 @@ class ArtifactRepository(Protocol):
 
         채널과 kind는 정의에서 그대로 이어받아 새 행에만 적는다. 문서가
         딛고 선 정의와 같은 채널·kind임을 저장 계층이 보증하기 때문이다.
+
+        folder_id도 새 행에만 적는다. 이미 있는 문서의 폴더는 덮어쓰지
+        않는다. 폴더 이동은 사람의 결정이다.
         """
         ...
 
@@ -252,8 +256,15 @@ class ArtifactRepository(Protocol):
         self,
         *,
         proposal_id: uuid.UUID,
+        for_update: bool = False,
     ) -> StoredArtifactProposal | None:
-        """변경안 하나를 문서 제목·대상과 함께 읽는다."""
+        """변경안 하나를 문서 제목·대상과 함께 읽는다.
+
+        for_update가 참이면 변경안 행을 transaction이 끝날 때까지 잠근다.
+        같은 변경안을 건드리는 단건 판정과 일괄 발행이 이 행 하나를 두고
+        줄을 서므로, 한쪽이 읽은 결정 목록이 다른 쪽 때문에 도중에 바뀌지
+        않는다.
+        """
         ...
 
     def list_pending_proposals(
