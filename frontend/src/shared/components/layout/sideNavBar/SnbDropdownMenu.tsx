@@ -21,7 +21,7 @@ export interface SnbDropdownMenuProps {
   className?: string;
 }
 
-const Divider = () => <div data-testid="snb-dropdown-menu-divider" className="bg-line-normal-neutral mx-2 my-2 h-px" />;
+const Divider = () => <div data-testid="snb-dropdown-menu-divider" className="bg-line-normal-normal mx-2 my-2 h-px" />;
 
 /**
  * SNB 트리 행의 컨텍스트 메뉴 셸. 팝오버 배치·열림 상태는 소비처가 들고,
@@ -32,7 +32,7 @@ export default function SnbDropdownMenu({ categoryLabel, groups, metaLines, clas
     <div
       data-testid="snb-dropdown-menu"
       className={cn(
-        'bg-background-elevated-normal shadow-dropdown-menu flex w-[250px] flex-col rounded-xl px-1.5 py-2',
+        'bg-background-elevated-normal border-line-normal-normal shadow-dropdown-menu flex w-[250px] flex-col rounded-xl border px-1.5 py-2',
         className,
       )}
     >
@@ -50,7 +50,7 @@ export default function SnbDropdownMenu({ categoryLabel, groups, metaLines, clas
                   key={item.id}
                   type="button"
                   onClick={item.onSelect}
-                  className="hover:bg-fill-normal-interaction-hover flex h-[31px] w-full cursor-pointer items-center gap-2 rounded-lg px-2 transition-colors"
+                  className="hover:bg-fill-normal-interaction-hover flex h-[31px] w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 transition-colors"
                 >
                   {item.Icon && <item.Icon aria-hidden className="text-icon-normal-normal size-5 shrink-0" />}
                   <span className="text-body-small text-text-normal-normal min-w-0 truncate text-left">
@@ -65,7 +65,7 @@ export default function SnbDropdownMenu({ categoryLabel, groups, metaLines, clas
       {metaLines && metaLines.length > 0 && (
         <>
           <Divider />
-          <div data-testid="snb-dropdown-menu-meta" className="text-body-xsmall text-text-normal-alternative px-2">
+          <div data-testid="snb-dropdown-menu-meta" className="text-body-xsmall text-text-normal-assistive px-2">
             {metaLines.map((line) => (
               <p key={line}>{line}</p>
             ))}

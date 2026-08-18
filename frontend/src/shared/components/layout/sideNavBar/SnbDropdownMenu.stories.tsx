@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect, fn, within } from 'storybook/test';
 
-import IconEditPencil from '@/public/icons/icon/edit_pencil.svg';
+import IconEditSquare from '@/public/icons/icon/edit_square.svg';
 import IconFile from '@/public/icons/icon/file.svg';
 import IconFolder from '@/public/icons/icon/folder.svg';
 import IconLink from '@/public/icons/icon/link.svg';
@@ -67,7 +67,7 @@ const treeRowGroups = [
   [{ id: 'favorite', label: '즐겨찾기', Icon: IconStar, onSelect: onFavorite }],
   [
     { id: 'copy-link', label: '링크 복사', Icon: IconLink, onSelect: onCopyLink },
-    { id: 'rename', label: '이름 바꾸기', Icon: IconEditPencil, onSelect: onRename },
+    { id: 'rename', label: '이름 바꾸기', Icon: IconEditSquare, onSelect: onRename },
   ],
 ];
 
@@ -90,6 +90,23 @@ export const ChannelContextMenu: Story = {
 
     await expect(menu.getBoundingClientRect().width).toBe(250);
     await expect(canvas.getAllByTestId('snb-dropdown-menu-divider')).toHaveLength(2);
+
+    // 시안 18486:96323 실측 — 껍데기 테두리·구분선은 Line/Normal/Normal(#e1e2e4)로 같은 색이다
+    const rgb = (el: Element, prop: string) => getComputedStyle(el).getPropertyValue(prop);
+    await expect(rgb(menu, 'border-top-color')).toBe('rgb(225, 226, 228)');
+    await expect(rgb(canvas.getAllByTestId('snb-dropdown-menu-divider')[0], 'background-color')).toBe(
+      'rgb(225, 226, 228)',
+    );
+    // 하단 메타는 라벨보다 옅다 — Text/Normal/Assistive(#b1b8be)
+    await expect(rgb(canvas.getByTestId('snb-dropdown-menu-meta'), 'color')).toBe('rgb(177, 184, 190)');
+
+    // 항목 아이콘과 라벨 사이는 10이다(항목 좌우 패딩 8과 다르다)
+    const favorite = canvas.getByRole('button', { name: '즐겨찾기' });
+    const icon = favorite.querySelector('svg')!;
+    const text = favorite.querySelector('span')!;
+    await expect(
+      Math.round(text.getBoundingClientRect().left - icon.getBoundingClientRect().right),
+    ).toBe(10);
     await expect(canvas.getByTestId('snb-dropdown-menu-meta')).toHaveTextContent('팀원G 최종 편집');
     await expect(canvas.getAllByRole('button')).toHaveLength(3);
   },
@@ -160,10 +177,13 @@ export const AddSubPage: Story = {
     const label = canvas.getByText('하위 페이지 추가');
     const items = canvas.getAllByRole('button');
 
-    await expect(Math.round(box(label).top - box(menu).top)).toBe(8);
+    // 시안의 1px 테두리는 inside stroke라 레이아웃을 밀지 않는다 — CSS border는 밀어서 걷어낸다
+    const border = menu.clientTop;
+    await expect(border).toBe(1);
+    await expect(Math.round(box(label).top - box(menu).top - border)).toBe(8);
     await expect(Math.round(box(items[0]).top - box(label).bottom)).toBe(8);
     await expect(Math.round(box(items[1]).top - box(items[0]).bottom)).toBe(4);
-    await expect(Math.round(box(menu).bottom - box(items[1]).bottom)).toBe(8);
+    await expect(Math.round(box(menu).bottom - box(items[1]).bottom - border)).toBe(8);
   },
 };
 
@@ -201,7 +221,7 @@ export const WithoutCategoryLabel: Story = {
     groups: [
       [
         { id: 'copy-link', label: '링크 복사', Icon: IconLink, onSelect: fn() },
-        { id: 'rename', label: '이름 바꾸기', Icon: IconEditPencil, onSelect: fn() },
+        { id: 'rename', label: '이름 바꾸기', Icon: IconEditSquare, onSelect: fn() },
       ],
     ],
   },

@@ -33,8 +33,8 @@ export function SnbSectionAction({
       aria-expanded={active || undefined}
       onClick={(event) => onClick(event.currentTarget)}
       className={cn(
-        'text-icon-normal-neutral hover:bg-fill-normal-interaction-hover flex size-5.5 shrink-0 cursor-pointer items-center justify-center rounded-full',
-        active && 'bg-fill-normal-interaction-pressed',
+        'text-icon-normal-neutral flex size-5.5 shrink-0 cursor-pointer items-center justify-center rounded-full',
+        active ? 'bg-fill-normal-interaction-pressed' : 'hover:bg-fill-normal-interaction-hover',
       )}
     >
       <Icon aria-hidden className="size-4.5" />
@@ -107,7 +107,7 @@ export default function SnbSectionHeader({
           aria-expanded={expanded}
           onClick={onToggleCollapse}
           className={cn(
-            'text-icon-normal-neutral hover:bg-fill-normal-interaction-hover size-4.5 shrink-0 cursor-pointer items-center justify-center rounded-full',
+            'text-icon-normal-alternative hover:bg-fill-normal-interaction-hover size-4.5 shrink-0 cursor-pointer items-center justify-center rounded-full',
             revealClass,
           )}
         >
@@ -124,7 +124,7 @@ export default function SnbSectionHeader({
         className={cn(leadClass, 'cursor-pointer')}
       >
         {labelContent}
-        <ChevronIcon aria-hidden className={cn('text-icon-normal-neutral size-4.5 shrink-0', revealClass)} />
+        <ChevronIcon aria-hidden className={cn('text-icon-normal-alternative size-4.5 shrink-0', revealClass)} />
       </button>
     );
   } else if (onClick) {
@@ -142,8 +142,9 @@ export default function SnbSectionHeader({
       data-slot="snb-section-header"
       className={cn(
         'group/header flex h-7.5 items-center gap-0.5 rounded-lg px-2.5',
+        // 행과 달리 머리글 hover는 알파 오버레이가 아니라 Fill/Normal/Strong 단색이다
         (collapsible || onClick) &&
-          'hover:bg-fill-normal-interaction-hover has-[button:active]:bg-fill-normal-interaction-pressed transition-colors',
+          'hover:bg-fill-normal-strong has-[button:active]:bg-fill-normal-interaction-pressed transition-colors',
         className,
       )}
     >

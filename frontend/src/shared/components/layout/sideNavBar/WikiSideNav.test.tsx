@@ -126,7 +126,7 @@ describe('WikiSideNav 펼침', () => {
     // 액션은 hover·포커스에서만 나온다. jsdom엔 Tailwind가 없어 항상 트리에 있지만
     // 접근 이름으로 좁혀야 캐럿이 아니라 더보기가 잡힌다
     const channelLabel = '채널명 text text text text text text text text';
-    await user.click(screen.getAllByRole('button', { name: `${channelLabel} 더보기` })[0]);
+    await user.click(screen.getAllByRole('button', { name: `${channelLabel} 추가 작업` })[0]);
 
     expect(screen.getByText('채널')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '링크 복사' })).toBeInTheDocument();
@@ -145,7 +145,7 @@ describe('WikiSideNav 펼침', () => {
     render(<WikiSideNav />);
 
     const channelLabel = '채널명 text text text text text text text text';
-    await user.click(screen.getAllByRole('button', { name: `${channelLabel} 하위 추가` })[0]);
+    await user.click(screen.getAllByRole('button', { name: `${channelLabel} 하위 페이지 추가` })[0]);
 
     expect(screen.getByText('하위 페이지 추가')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '파일' })).toBeInTheDocument();
@@ -182,7 +182,7 @@ describe('WikiSideNav 펼침', () => {
      * 돌려줘 팝오버가 좌상단으로 튄다. jsdom은 Tailwind가 없어 클래스로 검사한다.
      */
     const channelLabel = '채널명 text text text text text text text text';
-    const more = screen.getAllByRole('button', { name: `${channelLabel} 더보기` })[0];
+    const more = screen.getAllByRole('button', { name: `${channelLabel} 추가 작업` })[0];
     await user.click(more);
 
     expect(more.parentElement).toHaveClass('flex');
@@ -196,7 +196,7 @@ describe('WikiSideNav 펼침', () => {
     const user = userEvent.setup();
     render(<WikiSideNav />);
 
-    await user.click(screen.getByRole('button', { name: '채널 추가' }));
+    await user.click(screen.getByRole('button', { name: '추가하기' }));
 
     expect(screen.getByText('하위 페이지 추가')).toBeInTheDocument();
     // 섹션에서는 채널만 만든다 — 파일·폴더는 채널 아래에서만 생긴다

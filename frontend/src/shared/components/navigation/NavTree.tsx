@@ -60,8 +60,8 @@ function RowActionButton({
       aria-expanded={active || undefined}
       onClick={(event) => onClick(event.currentTarget)}
       className={cn(
-        'text-icon-normal-neutral hover:bg-fill-normal-interaction-hover flex size-5.5 shrink-0 cursor-pointer items-center justify-center rounded-full',
-        active && 'bg-fill-normal-interaction-pressed',
+        'text-icon-normal-neutral flex size-5.5 shrink-0 cursor-pointer items-center justify-center rounded-full',
+        active ? 'bg-fill-normal-interaction-pressed' : 'hover:bg-fill-normal-interaction-hover',
       )}
     >
       <Icon aria-hidden className="size-4.5" />
@@ -196,7 +196,7 @@ export default function NavTree({
             >
               {onNodeMore && (
                 <RowActionButton
-                  label={`${node.label} 더보기`}
+                  label={`${node.label} 추가 작업`}
                   Icon={IconMore}
                   active={menuOpen && openActionMenu?.kind === 'more'}
                   onClick={(trigger) => onNodeMore(node.id, trigger)}
@@ -204,7 +204,7 @@ export default function NavTree({
               )}
               {onNodeAdd && node.canAddChild && (
                 <RowActionButton
-                  label={`${node.label} 하위 추가`}
+                  label={`${node.label} 하위 페이지 추가`}
                   Icon={IconAdd}
                   active={menuOpen && openActionMenu?.kind === 'add'}
                   onClick={(trigger) => onNodeAdd(node.id, trigger)}

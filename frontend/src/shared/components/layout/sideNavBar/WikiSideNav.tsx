@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 
 import IconAdd from '@/public/icons/icon/add_small.svg';
 import IconDashboard from '@/public/icons/icon/dashboard.svg';
-import IconEditPencil from '@/public/icons/icon/edit_pencil.svg';
+import IconEditSquare from '@/public/icons/icon/edit_square.svg';
 import IconFile from '@/public/icons/icon/file.svg';
 import IconFolder from '@/public/icons/icon/folder.svg';
 import IconLink from '@/public/icons/icon/link.svg';
@@ -111,7 +111,7 @@ export default function WikiSideNav() {
         [{ id: 'favorite', label: '즐겨찾기', Icon: IconStar }],
         [
           { id: 'copy-link', label: '링크 복사', Icon: IconLink },
-          { id: 'rename', label: '이름 바꾸기', Icon: IconEditPencil },
+          { id: 'rename', label: '이름 바꾸기', Icon: IconEditSquare },
         ],
       ],
     };
@@ -234,7 +234,7 @@ export default function WikiSideNav() {
           actionsOpen={menu?.kind === 'section-add'}
           actions={
             <SnbSectionAction
-              label="채널 추가"
+              label="추가하기"
               Icon={IconAdd}
               active={menu?.kind === 'section-add'}
               onClick={(anchor) => setMenu({ kind: 'section-add', anchor })}

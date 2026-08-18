@@ -270,12 +270,12 @@ export const RowActionsMenuOpen: Story = {
      * 열린 행의 액션은 hover·포커스 없이도 살아 있어야 한다. 숨으면 앵커가 0×0이 되어
      * 소비처의 팝오버가 좌상단으로 튄다.
      */
-    const more = canvas.getByRole('button', { name: '채널명 text text text text 1 더보기' });
+    const more = canvas.getByRole('button', { name: '채널명 text text text text 1 추가 작업' });
     await expect(Math.round(more.getBoundingClientRect().width)).toBe(22);
     await expect(more).toHaveAttribute('aria-expanded', 'true');
 
     // 다른 행은 그대로 숨어 있다
-    await expect(canvas.queryByRole('button', { name: '폴더명 text text text t 2 더보기' })).toBeNull();
+    await expect(canvas.queryByRole('button', { name: '폴더명 text text text t 2 추가 작업' })).toBeNull();
   },
 };
 
@@ -299,13 +299,13 @@ export const RowActions: Story = {
     const canvas = within(canvasElement);
 
     // 아무 행도 hover·포커스 상태가 아니면 액션은 보이지 않는다
-    await expect(canvas.queryByRole('button', { name: '채널명 text text text text 1 더보기' })).toBeNull();
+    await expect(canvas.queryByRole('button', { name: '채널명 text text text text 1 추가 작업' })).toBeNull();
 
     const channel = canvas.getByRole('button', { name: '채널명 text text text text 1' });
     channel.focus();
 
-    const more = canvas.getByRole('button', { name: '채널명 text text text text 1 더보기' });
-    const add = canvas.getByRole('button', { name: '채널명 text text text text 1 하위 추가' });
+    const more = canvas.getByRole('button', { name: '채널명 text text text text 1 추가 작업' });
+    const add = canvas.getByRole('button', { name: '채널명 text text text text 1 하위 페이지 추가' });
 
     // 액션 버튼 크기와 그룹 간격
     await expect(Math.round(more.getBoundingClientRect().width)).toBe(22);
@@ -323,12 +323,12 @@ export const RowActions: Story = {
     // 하위를 가질 수 없는 행은 ⋯만 갖는다
     const file = canvas.getByRole('button', { name: '파일명texttexttext 1' });
     file.focus();
-    await expect(canvas.getByRole('button', { name: '파일명texttexttext 1 더보기' })).toBeInTheDocument();
-    await expect(canvas.queryByRole('button', { name: '파일명texttexttext 1 하위 추가' })).toBeNull();
+    await expect(canvas.getByRole('button', { name: '파일명texttexttext 1 추가 작업' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: '파일명texttexttext 1 하위 페이지 추가' })).toBeNull();
 
     // 액션 클릭은 이동도 토글도 건드리지 않는다.
     // 두 번째 인자는 눌린 버튼 자신이다 — 소비처가 메뉴를 이 위치에 붙인다
-    const moreButton = canvas.getByRole('button', { name: '파일명texttexttext 1 더보기' });
+    const moreButton = canvas.getByRole('button', { name: '파일명texttexttext 1 추가 작업' });
     await userEvent.click(moreButton);
     await expect(args.onNodeMore).toHaveBeenCalledWith('file-1', moreButton);
     await expect(args.onNodeClick).not.toHaveBeenCalled();
@@ -336,7 +336,7 @@ export const RowActions: Story = {
     // 하위 추가는 canAddChild 행에서만 불린다
     const folder = canvas.getByRole('button', { name: '폴더명 text text text t 2' });
     folder.focus();
-    const addButton = canvas.getByRole('button', { name: '폴더명 text text text t 2 하위 추가' });
+    const addButton = canvas.getByRole('button', { name: '폴더명 text text text t 2 하위 페이지 추가' });
     await userEvent.click(addButton);
     await expect(args.onNodeAdd).toHaveBeenCalledWith('folder-2', addButton);
   },
