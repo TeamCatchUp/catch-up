@@ -169,6 +169,12 @@ export const Interactive: Story = {
     await userEvent.click(collapse);
     await expect(canvas.queryByRole('button', { name: '파일명texttexttext 1' })).toBeNull();
 
+    /*
+     * 마우스로 누르면 캐럿이 다시 숨는다 — 어포던스가 hover·focus-visible에만 걸려 있기
+     * 때문이다. 실제 브라우저에서는 마우스가 행 위에 남아 :hover가 유지하지만
+     * userEvent.click은 CSS :hover를 켜지 못해서 여기서만 다시 포커스를 준다.
+     */
+    channel.focus();
     const expand = canvas.getByRole('button', { name: '채널명 text text text text 1 펼치기' });
     await expect(expand).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(expand);

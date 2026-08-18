@@ -3,7 +3,8 @@
 import { type ComponentType, type SVGProps, useState } from 'react';
 
 import IconAdd from '@/public/icons/icon/add_small_400.svg';
-// 표시형의 depth 연결자와 탐색형의 접기 캐럿이 같은 자산을 쓴다
+import IconArrowRightFilled from '@/public/icons/icon/arrow_right_filled.svg';
+// 표시형 depth 연결자는 꺾쇠, 탐색형 접기 캐럿은 속이 찬 삼각형이다 — 자산이 다르다
 import IconArrowRight2 from '@/public/icons/icon/arrow_right2.svg';
 import IconMore from '@/public/icons/icon/kebab_horizontal_400.svg';
 import { cn } from '@/shared/utils/cn';
@@ -177,7 +178,7 @@ export default function NavTree({
                 className={cn(
                   'size-5.5',
                   isActive ? 'text-icon-primary-normal' : 'text-icon-normal-neutral',
-                  hasChildren && 'group-focus-within:hidden group-hover:hidden',
+                  hasChildren && 'group-hover:hidden group-has-[:focus-visible]:hidden',
                 )}
               />
             )}
@@ -188,11 +189,14 @@ export default function NavTree({
                 aria-expanded={expanded}
                 onClick={() => toggle(node.id)}
                 className={cn(
-                  'hover:bg-fill-normal-interaction-pressed absolute hidden size-5.5 cursor-pointer items-center justify-center rounded-full group-focus-within:flex group-hover:flex',
+                  'hover:bg-fill-normal-interaction-pressed absolute hidden size-5.5 cursor-pointer items-center justify-center rounded-full group-hover:flex group-has-[:focus-visible]:flex',
                   isActive ? 'text-icon-primary-normal' : 'text-icon-normal-neutral',
                 )}
               >
-                <IconArrowRight2 aria-hidden className={cn('size-4.5 transition-transform', expanded && 'rotate-90')} />
+                <IconArrowRightFilled
+                  aria-hidden
+                  className={cn('size-4.5 transition-transform', expanded && 'rotate-90')}
+                />
               </button>
             )}
           </span>
@@ -209,13 +213,13 @@ export default function NavTree({
         </button>
 
         {/*
-         * 액션은 오버레이가 아니라 in-flow다. hover만 걸면 키보드로 도달할 수 없어 focus-within을
-         * 함께 본다. 메뉴가 열린 동안 숨기면 앵커가 0×0이 되어 팝오버가 좌상단으로 튄다.
+         * 액션은 오버레이가 아니라 in-flow다. focus-within이 아니라 focus-visible을 보는 이유는
+         * 클릭 후에도 포커스가 남아 어포던스가 붙어 있기 때문이다 — 키보드 접근은 그대로 된다.
          */}
         {(onNodeMore || (onNodeAdd && node.canAddChild)) && (
           <div
             className={cn(
-              'shrink-0 items-center gap-0.5 group-focus-within:flex group-hover:flex',
+              'shrink-0 items-center gap-0.5 group-hover:flex group-has-[:focus-visible]:flex',
               // 선택 행의 액션은 파랑이다 (시안 Selected_hover는 Icon only(Blue))
               isActive ? 'text-icon-primary-normal' : 'text-icon-normal-neutral',
               menuOpen ? 'flex' : 'hidden',

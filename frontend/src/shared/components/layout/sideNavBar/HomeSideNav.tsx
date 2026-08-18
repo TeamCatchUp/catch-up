@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
-import IconAdd from '@/public/icons/icon/add_small.svg';
 import IconAdd400 from '@/public/icons/icon/add_small_400.svg';
 import IconAgent from '@/public/icons/icon/agent.svg';
 import IconDocumentSearch from '@/public/icons/icon/document_search.svg';
@@ -11,6 +10,7 @@ import IconHistory from '@/public/icons/icon/history.svg';
 import IconMore from '@/public/icons/icon/kebab_horizontal.svg';
 import IconList from '@/public/icons/icon/list.svg';
 import IconSearch300 from '@/public/icons/icon/search_300.svg';
+import IconSearch400 from '@/public/icons/icon/search_400.svg';
 import IconUpdate from '@/public/icons/icon/update.svg';
 import { UserMenuContent } from '@/shared/components/layout/sideNavBar/modal/UserModal';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
@@ -70,8 +70,8 @@ export default function HomeSideNav() {
         }
         footer={<SnbRailFooter userName={user?.name ?? '이름없음'} onSettingsClick={goSettings} profileMenu={profileMenu} />}
       >
-        <SnbRailItem Icon={IconAdd} label="새 채팅" selected={isHome} onClick={go('/')} />
-        <SnbRailItem Icon={IconSearch300} label="검색" selected={isSearch} onClick={go('/search')} />
+        <SnbRailItem Icon={IconAdd400} label="새 채팅" selected={isHome} onClick={go('/')} />
+        <SnbRailItem Icon={IconSearch400} label="검색" selected={isSearch} onClick={go('/search')} />
         <SnbRailItem Icon={IconUpdate} label="요청됨" onClick={go('/llm-wiki/review')} />
         <SnbRailItem Icon={IconAgent} label="문의 대응" selected={isAgentStudio} onClick={go('/agent-studio')} />
         <SnbRailItem
@@ -96,7 +96,7 @@ export default function HomeSideNav() {
       }
       primaryItems={
         <div className="flex flex-col">
-          <SnbNavRow Icon={IconAdd} label="새 채팅" iconOnDisc selected={isHome} onClick={go('/')} />
+          <SnbNavRow Icon={IconAdd400} label="새 채팅" iconOnDisc selected={isHome} onClick={go('/')} />
           <SnbNavRow Icon={IconSearch300} label="검색" selected={isSearch} onClick={go('/search')} />
           <SnbNavRow
             Icon={IconDocumentSearch}
