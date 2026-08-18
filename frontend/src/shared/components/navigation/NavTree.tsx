@@ -64,7 +64,7 @@ function RowActionButton({
        * 토큰 이름과 한 칸씩 어긋나 보이지만 22px 원에서 6%는 거의 보이지 않는다.
        */
       className={cn(
-        'text-icon-normal-neutral flex size-5.5 shrink-0 cursor-pointer items-center justify-center rounded-full',
+        'flex size-5.5 shrink-0 cursor-pointer items-center justify-center rounded-full',
         active ? 'bg-fill-normal-interaction-pressed-hover' : 'hover:bg-fill-normal-interaction-pressed',
       )}
     >
@@ -143,12 +143,16 @@ export default function NavTree({
           'group flex h-9 items-center rounded-lg py-1.5 pr-2.5 transition-colors',
           depth === 0 ? 'pl-2.5' : 'pl-5',
           hasDot ? 'gap-2' : 'gap-3',
-          // 행이 버튼이 아니라서 pressed는 내부 버튼의 :active를 has()로 받는다.
-          'hover:bg-fill-normal-interaction-hover has-[button:active]:bg-fill-normal-interaction-pressed',
+          'hover:bg-fill-normal-interaction-hover',
           // 메뉴가 열려 있는 동안은 마우스가 떠나도 hover 상태를 유지한다.
           menuOpen && 'bg-fill-normal-interaction-hover',
-          // 선택 상태에서는 중립 hover 대신 primary hover_assistive가 덮는다.
-          isActive && 'bg-fill-primary-normal-neutral hover:bg-fill-primary-normal-interaction-hover-assistive',
+          /*
+           * 선택 상태는 중립 hover 대신 primary hover_assistive가 덮는다. 시안에
+           * Selected_pressed가 없어 선택 행에는 중립 pressed를 걸지 않는다.
+           */
+          isActive
+            ? 'bg-fill-primary-normal-neutral hover:bg-fill-primary-normal-interaction-hover-assistive'
+            : 'has-[button:active]:bg-fill-normal-interaction-pressed',
         )}
       >
         {hasDot && (
@@ -205,6 +209,8 @@ export default function NavTree({
           <div
             className={cn(
               'shrink-0 items-center gap-0.5 group-focus-within:flex group-hover:flex',
+              // 선택 행의 액션은 파랑이다 (시안 Selected_hover는 Icon only(Blue))
+              isActive ? 'text-icon-primary-normal' : 'text-icon-normal-neutral',
               menuOpen ? 'flex' : 'hidden',
             )}
           >

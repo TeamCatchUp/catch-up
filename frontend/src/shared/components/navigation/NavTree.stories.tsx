@@ -184,6 +184,8 @@ export const ActiveHighlight: Story = {
     activeId: 'folder-1',
     defaultExpandedIds: ['channel-1'],
     onNodeClick: fn(),
+    onNodeMore: fn(),
+    onNodeAdd: fn(),
   },
   render: (args) => (
     <Frame>
@@ -204,6 +206,18 @@ export const ActiveHighlight: Story = {
     // 선택 상태는 primary 계열이다
     const active = canvas.getByRole('button', { name: '폴더명 text text text t 1' });
     await expect(rowOf(active)).toHaveClass('bg-fill-primary-normal-neutral');
+    await expect(getComputedStyle(active.querySelector('span')!).color).toBe('rgb(0, 94, 235)');
+
+    /*
+     * 선택 행의 액션은 파랑이다 — 시안 Selected_hover가 Icon only(Blue)를 쓴다.
+     * 캐럿만 파랑이고 ⋯·+는 회색으로 갈리면 같은 행 안에서 색이 어긋난다.
+     */
+    active.focus();
+    const activeMore = canvas.getByRole('button', { name: '폴더명 text text text t 1 추가 작업' });
+    await expect(getComputedStyle(activeMore.querySelector('svg path')!).fill).toBe('rgb(0, 102, 255)');
+
+    // 시안에 Selected_pressed가 없다 — 선택 행에 중립 pressed를 걸지 않는다
+    await expect(rowOf(active)).not.toHaveClass('has-[button:active]:bg-fill-normal-interaction-pressed');
     await expect(active.querySelector('span')).toHaveClass('text-text-primary-normal');
   },
 };

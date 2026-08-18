@@ -44,8 +44,11 @@ export default function SnbNavRow({
         disabled
           ? 'cursor-not-allowed'
           : cn(
-              'cursor-pointer hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed',
-              selected && 'bg-fill-primary-normal-neutral hover:bg-fill-primary-normal-interaction-hover-assistive',
+              'hover:bg-fill-normal-interaction-hover cursor-pointer',
+              // 시안에 Selected_pressed가 없다 — 선택 행은 눌러도 회색으로 덮이지 않는다
+              selected
+                ? 'bg-fill-primary-normal-neutral hover:bg-fill-primary-normal-interaction-hover-assistive'
+                : 'active:bg-fill-normal-interaction-pressed',
             ),
         className,
       )}
@@ -76,11 +79,7 @@ export default function SnbNavRow({
         <span
           className={cn(
             'text-body-small min-w-0 truncate text-left',
-            disabled
-              ? 'text-text-normal-assistive'
-              : selected
-                ? 'text-text-primary-normal'
-                : 'text-text-normal-normal',
+            disabled ? 'text-text-normal-assistive' : selected ? 'text-text-primary-normal' : 'text-text-normal-normal',
           )}
         >
           {label}
@@ -89,7 +88,7 @@ export default function SnbNavRow({
       {count !== undefined && (
         <span
           data-testid="snb-nav-row-count"
-          className="bg-fill-primary-normal-assistive text-text-primary-normal text-body-xsmall flex h-5 shrink-0 items-center justify-center rounded-md px-0.5"
+          className="bg-fill-primary-normal-assistive text-text-primary-assistive text-body-xsmall flex h-5 shrink-0 items-center justify-center rounded-md px-0.5"
         >
           {count}
         </span>
