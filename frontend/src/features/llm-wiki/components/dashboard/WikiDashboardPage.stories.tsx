@@ -102,7 +102,8 @@ export const Default: Story = {
     await expect(sortChip).toHaveAttribute('data-selected', 'true');
     await expect(getComputedStyle(sortChip).backgroundColor).not.toBe(getComputedStyle(assigneeChip).backgroundColor);
 
-    await userEvent.click(canvas.getByText('결제 승인 실패 시 재시도 정책'));
+    // 행 클릭은 오버레이 버튼(접근명=제목)으로 흐른다 — 제목 텍스트는 오버레이 아래라 직접 못 누른다.
+    await userEvent.click(canvas.getByRole('button', { name: '결제 승인 실패 시 재시도 정책' }));
     await expect(args.onDocumentClick).toHaveBeenCalledWith('doc-payment-retry');
   },
 };
@@ -111,7 +112,8 @@ export const Default: Story = {
 export const StatCardFiltersTable: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const rowCount = () => canvas.getAllByRole('button').filter((el) => el.querySelector('.text-heading-small')).length;
+    // 행 제목만 .text-heading-small.truncate를 쓴다 — 행이 오버레이 버튼 구조로 바뀌어 버튼 내부 조회로는 못 센다.
+    const rowCount = () => canvasElement.querySelectorAll('.text-heading-small.truncate').length;
 
     const before = rowCount();
     const statsGrid = canvasElement.querySelector('div.grid') as HTMLElement;
