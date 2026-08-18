@@ -5308,18 +5308,23 @@ class KnowledgeArtifact(Base):
             ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
             name="fk_knowledge_artifacts_subject_node",
         ),
-        # 문서와 채널·폴더가 같은 workspace임을 DB가 보증한다. ondelete를
-        # 주지 않아 RESTRICT다 — 문서가 남아 있는 채널·폴더는 지워지지
+        # 문서와 채널·폴더가 같은 workspace임을 DB가 보증한다. 채널 FK는
+        # ondelete를 주지 않아 RESTRICT다. 문서가 남아 있는 채널은 지워지지
         # 않고, 지우려면 문서를 먼저 옮겨야 한다.
         ForeignKeyConstraint(
             ["workspace_id", "channel_id"],
             ["channels.workspace_id", "channels.id"],
             name="fk_knowledge_artifacts_channel",
         ),
+        # 폴더 FK는 SET NULL이다. 폴더를 지우면 그 폴더에 있던 문서는
+        # 채널 루트로 옮겨진다. 비울 컬럼을 folder_id로 지정하지 않으면
+        # PostgreSQL이 참조 컬럼을 모두 비워 NOT NULL인 workspace_id까지
+        # 건드린다.
         ForeignKeyConstraint(
             ["workspace_id", "folder_id"],
             ["channel_folders.workspace_id", "channel_folders.id"],
             name="fk_knowledge_artifacts_folder",
+            ondelete="SET NULL (folder_id)",
         ),
         # 문서가 딛고 선 정의와 같은 workspace·채널·kind임을 DB가 보증한다.
         # 정의는 "이 채널의 이 종류 문서"를 정하는 행이라, 문서가 다른 채널

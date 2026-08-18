@@ -22,7 +22,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """정의 folder_id, 채널 목적 테이블, 즐겨찾기 테이블을 만들고 채널의 단일 목적 컬럼을 없앤다."""
+    """정의 folder_id, 채널 목적 테이블, 즐겨찾기 테이블을 만들고 채널의 단일 목적 컬럼을 없앤다.
+
+    문서의 폴더 FK도 SET NULL로 다시 건다. 폴더를 지우면 그 폴더에 있던
+    문서와 정의는 채널 루트로 옮겨진다.
+    """
     op.add_column(
         "artifact_definitions",
         sa.Column("folder_id", postgresql.UUID(as_uuid=True), nullable=True),
@@ -34,6 +38,23 @@ def upgrade() -> None:
         ["folder_id"],
         ["id"],
         ondelete="SET NULL",
+    )
+
+    # 폴더를 지우면 그 폴더의 문서는 채널 루트로 옮겨진다. 기존 FK는
+    # ondelete가 없어 RESTRICT라, 문서가 하나라도 있으면 폴더를 지울 수
+    # 없었다. 복합 FK에 그냥 SET NULL을 걸면 PostgreSQL이 참조 컬럼을 모두
+    # 비워 NOT NULL인 workspace_id까지 건드리므로, 비울 컬럼을 folder_id로
+    # 지정한다.
+    op.drop_constraint(
+        "fk_knowledge_artifacts_folder", "knowledge_artifacts", type_="foreignkey"
+    )
+    op.create_foreign_key(
+        "fk_knowledge_artifacts_folder",
+        "knowledge_artifacts",
+        "channel_folders",
+        ["workspace_id", "folder_id"],
+        ["workspace_id", "id"],
+        ondelete="SET NULL (folder_id)",
     )
 
     op.create_table(
@@ -103,6 +124,17 @@ def downgrade() -> None:
         """
     )
     op.drop_table("channel_purposes")
+
+    op.drop_constraint(
+        "fk_knowledge_artifacts_folder", "knowledge_artifacts", type_="foreignkey"
+    )
+    op.create_foreign_key(
+        "fk_knowledge_artifacts_folder",
+        "knowledge_artifacts",
+        "channel_folders",
+        ["workspace_id", "folder_id"],
+        ["workspace_id", "id"],
+    )
 
     op.drop_constraint(
         "fk_artifact_definitions_folder", "artifact_definitions", type_="foreignkey"
