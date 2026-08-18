@@ -34,10 +34,23 @@ is about. Never state them as facts and never quote them.
 These lines come from the relation graph the compiler walked. Each line is a
 fact about how this subject is connected, and a line saying the walk was cut
 short means the list below is partial. State only the relations listed here
-and never infer another connection.
+and never infer another connection. Each line names both parties as
+`source → relation → target`. State each relation exactly that way; the source
+is the subject of the relation and the target is the other party. Never treat
+quoted text as a party.
 
 {% for edge in edges -%}
 - << edge >>
+{% endfor %}
+{% endif -%}
+{% if hints -%}
+## Wording hints (not facts)
+
+These are the original sentences the relations were read from. Use them only
+to choose natural wording; never add a party, a date or a number from them.
+
+{% for hint in hints -%}
+- << hint >>
 {% endfor %}
 {% endif -%}
 {% if variants -%}
@@ -55,7 +68,8 @@ verified quote are left out, so never say how many readings exist in total.
 {% endif %}
 ## Rules
 
-1. State only what the quotes and relation lines above already say.
+1. State only what the quotes and relation lines above already say;
+   wording hints add no facts.
 2. Never invent or infer a person, a team, a date or a number. If the quotes
    do not carry it, it does not exist.
 3. Write 1 to 3 sentences. No heading, no bullet list, no markdown.

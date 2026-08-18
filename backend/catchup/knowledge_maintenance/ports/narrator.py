@@ -33,14 +33,17 @@ class NarrationRequest:
             문장이라 근거가 아니라 주제 힌트다.
         statements: 검증된 인용 원문을 담는다. claim 절·열린 질문·대조
             블록에서 산문이 말할 수 있는 사실은 이것뿐이다.
-        edges: 관계 절의 본문 줄을 담는다. 관계에 붙은 원문 유래 문장과
-            잘린 걸음을 알리는 줄이며, 관계 절은 인용 대신 이것을 사실
-            입력으로 쓴다. 관계 절이 아닌 블록에서는 비어 있다.
+        edges: 관계 절의 간선 줄을 담는다. 양끝 이름을 명시한 줄과 잘린
+            걸음을 알리는 줄이며, 관계 절은 인용 대신 이것을 사실 입력으로
+            쓴다. 관계 절이 아닌 블록에서는 비어 있다.
         variants: 대조 후보를 (후보 본문, 그 후보의 인용들)로 담는다.
             후보마다 근거가 갈려 있어 한 덩어리로 뭉치면 어느 인용이
             어느 후보의 것인지 사라진다.
         style_instruction: 어떤 문체로 쓸지 알리는 지시 한 문단이다.
         purpose_sentence: 이 문서가 무엇에 쓰이는지 알리는 한 줄이다.
+        hints: 관계에 붙은 원문 유래 문장을 담는다. 사실 입력이 아니라
+            표현 힌트다 — 그 문장의 화자를 관계의 상대 노드로 읽는
+            오해를 막으려면 사실 목록과 자리를 갈라 두어야 한다.
     """
 
     block_kind: str
@@ -51,6 +54,7 @@ class NarrationRequest:
     variants: tuple[tuple[str, tuple[str, ...]], ...]
     style_instruction: str
     purpose_sentence: str
+    hints: tuple[str, ...] = ()
 
 
 class BlockNarrator(Protocol):

@@ -9,6 +9,7 @@
     "customer": {
       "channel_id": "ch-catchup-eval",
       "external_user_id": "user-472bc3787295",
+      "unified_id": "unified-008",
       "user_type": "user",
       "name": "사용자 008"
     },

@@ -332,6 +332,7 @@ def _collect_entities(
                     for key, value in (
                         ("email", customer.email),
                         ("user_type", customer.user_type),
+                        ("unified_id", customer.unified_id),
                     )
                     if value is not None
                 },

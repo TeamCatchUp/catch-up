@@ -27,6 +27,13 @@ from types import TracebackType
 from typing import Protocol
 from typing import Self
 
+from catchup.knowledge_maintenance.domain.actor_identity import ACTOR_ENTITY_TYPE
+from catchup.knowledge_maintenance.domain.actor_identity import ActorIdentity
+from catchup.knowledge_maintenance.domain.actor_identity import actor_canonical_key
+from catchup.knowledge_maintenance.domain.actor_identity import (
+    actor_identity_from_candidate_attributes,
+)
+from catchup.knowledge_maintenance.domain.actor_identity import actor_node_attributes
 from catchup.knowledge_maintenance.domain.entity_resolution import (
     deterministic_canonical_key,
 )
@@ -147,6 +154,36 @@ def resolve_entity_candidates(
         ]
 
         for candidate in deterministic:
+            identity = actor_identity_from_candidate_attributes(
+                candidate.raw_payload.get("attributes") or {},
+                display_name=candidate.proposed_name,
+            )
+            if identity is not None:
+                node, status = _resolve_actor_candidate(
+                    candidate,
+                    identity=identity,
+                    workspace_id=workspace_id,
+                    uow=uow,
+                )
+                if status is EntityResolutionStatus.ACCEPTED:
+                    nodes_created += 1
+                    accepted += 1
+                else:
+                    merged += 1
+                uow.knowledge_candidates.mark_entity_resolved(
+                    candidate_id=candidate.id,
+                    status=status,
+                    resolved_node_id=node.id,
+                )
+                uow.knowledge_nodes.add_alias(
+                    workspace_id=workspace_id,
+                    node_id=node.id,
+                    alias=candidate.proposed_name,
+                    normalized_alias=normalize_name(candidate.proposed_name),
+                    source="source",
+                )
+                continue
+
             external_key = _external_key(candidate)
             if external_key is None:
                 logger.info(
@@ -279,6 +316,89 @@ def _external_key(candidate: StoredEntityCandidate) -> str | None:
     if not isinstance(external_key, str) or not external_key.strip():
         return None
     return external_key
+
+
+def _resolve_actor_candidate(
+    candidate: StoredEntityCandidate,
+    *,
+    identity: ActorIdentity,
+    workspace_id: int,
+    uow: ResolutionUnitOfWork,
+) -> tuple[KnowledgeNode, EntityResolutionStatus]:
+    """행위자 후보를 노드에 결합한다. LLM 판정은 거치지 않는다.
+
+    행위자가 누구인지는 source metadata에 이미 적혀 있는 확정 사실이라
+    추론할 것이 없다. 순서는 이메일 → external_key → canonical_key →
+    신규다. 이메일을 먼저 보는 이유는 이메일이 사람 단위 식별자라,
+    세션마다 갈리는 external_key보다 같은 사람을 넓게 묶기 때문이다.
+
+    canonical_key를 마지막에 한 번 더 보는 이유는 앞의 두 조회가 active
+    노드만 보는 반면 (workspace_id, entity_type, canonical_key) 유일
+    index는 lifecycle을 가리지 않기 때문이다. 그 틈을 두면 병합·퇴역한
+    노드와 같은 키로 create를 불러 index 위반으로 해소가 통째로 깨진다.
+
+    찾은 노드는 attributes를 지우지 않고 이번 identity를 얹어 다시 쓴다.
+    노드가 지금까지 본 이메일·external_key를 모두 들고 있어야 다음 후보가
+    어느 키로 오든 같은 노드에 닿는다.
+
+    남기는 로그의 matched_by는 email·external_key·canonical_key·new 중
+    하나다.
+    """
+    node = None
+    matched_by = "new"
+    if identity.email is not None:
+        node = uow.knowledge_nodes.find_entity_by_actor_key(
+            workspace_id=workspace_id,
+            entity_type=ACTOR_ENTITY_TYPE,
+            key_kind="emails",
+            value=identity.email,
+        )
+        if node is not None:
+            matched_by = "email"
+    if node is None:
+        node = uow.knowledge_nodes.find_entity_by_actor_key(
+            workspace_id=workspace_id,
+            entity_type=ACTOR_ENTITY_TYPE,
+            key_kind="external_keys",
+            value=identity.external_key,
+        )
+        if node is not None:
+            matched_by = "external_key"
+
+    canonical_key = actor_canonical_key(candidate.source_type, identity)
+    if node is None:
+        node = uow.knowledge_nodes.get_entity_by_canonical_key(
+            workspace_id=workspace_id,
+            canonical_key=canonical_key,
+        )
+        if node is not None:
+            matched_by = "canonical_key"
+
+    if node is None:
+        node = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type=ACTOR_ENTITY_TYPE,
+            canonical_key=canonical_key,
+            display_name=identity.display_name,
+            attributes=actor_node_attributes(identity, None),
+        )
+        status = EntityResolutionStatus.ACCEPTED
+    else:
+        node = uow.knowledge_nodes.set_entity_attributes(
+            workspace_id=workspace_id,
+            node_id=node.id,
+            attributes=actor_node_attributes(identity, node.attributes),
+        )
+        status = EntityResolutionStatus.MERGED
+
+    logger.info(
+        "entity_actor_resolved",
+        workspace_id=workspace_id,
+        candidate_id=str(candidate.id),
+        node_id=str(node.id),
+        matched_by=matched_by,
+    )
+    return node, status
 
 
 def _reattachable_node(

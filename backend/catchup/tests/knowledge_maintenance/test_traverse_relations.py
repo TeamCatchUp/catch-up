@@ -30,7 +30,12 @@ from catchup.knowledge_maintenance.domain.artifact_definition import MAX_NODES_P
 from catchup.knowledge_maintenance.domain.artifact_definition import RelationPath
 from catchup.knowledge_maintenance.domain.artifact_definition import RelationStep
 from catchup.knowledge_maintenance.ports.relations import StoredRelationEdge
+from catchup.knowledge_maintenance.services.traverse_relations import (
+    RELATION_HINT_PREFIX,
+)
 from catchup.knowledge_maintenance.services.traverse_relations import PathTraversal
+from catchup.knowledge_maintenance.services.traverse_relations import default_edge_line
+from catchup.knowledge_maintenance.services.traverse_relations import format_edge_line
 from catchup.knowledge_maintenance.services.traverse_relations import (
     relation_section_block,
 )
@@ -153,7 +158,7 @@ def test_two_hop_collects_intermediate_relation_ids() -> None:
 
     assert result.reached == (node(3),)
     assert set(result.relation_ids) == {relation(1), relation(2)}
-    assert result.assertion_lines == ("A가 B를 맡는다", "C는 B 소속")
+    assert result.hint_lines == ("A가 B를 맡는다", "C는 B 소속")
     assert result.truncated_steps == ()
 
 
@@ -206,7 +211,7 @@ def test_step_cap_truncates_and_marks() -> None:
     assert result.truncated_steps == (0,)
     assert len(result.relation_ids) == MAX_NODES_PER_STEP
     assert relation(60) not in result.relation_ids
-    assert "L60" not in result.assertion_lines
+    assert "L60" not in result.hint_lines
 
 
 def test_step_cap_keeps_the_first_names_not_the_first_ids() -> None:
@@ -264,9 +269,9 @@ def test_dead_branch_edges_stay_out_of_the_ledger() -> None:
 
     assert result.reached == (node(4),)
     assert relation(1) not in result.relation_ids
-    assert "끊기는 가지" not in result.assertion_lines
+    assert "끊기는 가지" not in result.hint_lines
     assert result.relation_ids == (relation(2), relation(3))
-    assert result.assertion_lines == ("이어지는 가지", "끝까지 감")
+    assert result.hint_lines == ("이어지는 가지", "끝까지 감")
 
 
 def test_edges_to_dropped_nodes_do_not_contribute() -> None:
@@ -285,7 +290,7 @@ def test_edges_to_dropped_nodes_do_not_contribute() -> None:
     )
 
     assert relation(90) not in result.relation_ids
-    assert result.assertion_lines == ()
+    assert "잘린 쪽" not in result.hint_lines
 
 
 def test_cycle_does_not_loop() -> None:
@@ -313,7 +318,7 @@ def test_cycle_does_not_loop() -> None:
     assert node(1) not in result.reached
     assert result.reached == ()
     assert result.relation_ids == ()
-    assert result.assertion_lines == ()
+    assert result.hint_lines == ()
 
 
 def test_traversal_stops_when_frontier_empties() -> None:
@@ -381,11 +386,11 @@ def test_self_loop_is_not_reached() -> None:
 
     assert result.reached == ()
     assert result.relation_ids == ()
-    assert result.assertion_lines == ()
+    assert result.hint_lines == ()
 
 
 def test_missing_assertion_text_keeps_relation_id() -> None:
-    """문장이 없는 관계도 근거 장부에는 남고 줄만 만들지 않는다."""
+    """문장이 없는 관계도 근거 장부에 남고 힌트 줄만 비운다."""
     repository = FakeRelationRepository()
     repository.add("owns", relation(1), node(1), node(2), None)
     repository.add("owns", relation(2), node(1), node(3), "설명 있음")
@@ -398,7 +403,7 @@ def test_missing_assertion_text_keeps_relation_id() -> None:
     )
 
     assert result.relation_ids == (relation(1), relation(2))
-    assert result.assertion_lines == ("설명 있음",)
+    assert result.hint_lines == ("", "설명 있음")
 
 
 def test_parallel_edges_to_the_same_node_both_count() -> None:
@@ -416,7 +421,7 @@ def test_parallel_edges_to_the_same_node_both_count() -> None:
 
     assert result.reached == (node(2),)
     assert result.relation_ids == (relation(1), relation(2))
-    assert result.assertion_lines == ("첫째 근거", "둘째 근거")
+    assert result.hint_lines == ("첫째 근거", "둘째 근거")
 
 
 def test_empty_path_reaches_the_start_node() -> None:
@@ -466,7 +471,7 @@ def test_deterministic_ordering() -> None:
     assert first == second
     assert first.reached == (node(4), node(7), node(9))
     assert first.relation_ids == (relation(3), relation(4), relation(5))
-    assert first.assertion_lines == ("셋", "다섯")
+    assert first.hint_lines == ("셋", "", "다섯")
 
 
 PATH_2HOP = RelationPath(
@@ -482,7 +487,8 @@ def test_block_carries_full_relation_ledger() -> None:
     traversal = PathTraversal(
         reached=(node(3),),
         relation_ids=(relation(1), relation(2)),
-        assertion_lines=("A가 B를 맡는다", "C는 B 소속"),
+        edge_lines=("A → owns → B", "C → member_of → B"),
+        hint_lines=("A가 B를 맡는다", "C는 B 소속"),
         truncated_steps=(),
     )
 
@@ -497,7 +503,9 @@ def test_block_carries_full_relation_ledger() -> None:
     assert block.sources == ()
     assert block.proposal_ids == ()
     assert block.ontology_version == "v1"
-    assert block.body == "A가 B를 맡는다\nC는 B 소속"
+    assert block.body == (
+        "A → owns → B\n  ↳ A가 B를 맡는다\nC → member_of → B\n  ↳ C는 B 소속"
+    )
     validate_blocks((block,))
 
 
@@ -508,7 +516,8 @@ def test_heading_names_the_path_regardless_of_content() -> None:
         traversal=PathTraversal(
             reached=(node(3),),
             relation_ids=(relation(1),),
-            assertion_lines=("첫째",),
+            edge_lines=("A → owns → B",),
+            hint_lines=("첫째",),
             truncated_steps=(),
         ),
         ontology_version=None,
@@ -518,7 +527,8 @@ def test_heading_names_the_path_regardless_of_content() -> None:
         traversal=PathTraversal(
             reached=(node(4),),
             relation_ids=(relation(2),),
-            assertion_lines=("둘째",),
+            edge_lines=("A → owns → C",),
+            hint_lines=("둘째",),
             truncated_steps=(),
         ),
         ontology_version=None,
@@ -537,7 +547,8 @@ def test_truncation_appears_in_body() -> None:
         traversal=PathTraversal(
             reached=(node(3),),
             relation_ids=(relation(1),),
-            assertion_lines=("A가 B를 맡는다",),
+            edge_lines=("A → owns → B",),
+            hint_lines=("A가 B를 맡는다",),
             truncated_steps=(0,),
         ),
         ontology_version="v1",
@@ -557,7 +568,8 @@ def test_every_truncated_step_gets_its_own_line() -> None:
         traversal=PathTraversal(
             reached=(node(3),),
             relation_ids=(relation(1),),
-            assertion_lines=(),
+            edge_lines=(),
+            hint_lines=(),
             truncated_steps=(1, 0),
         ),
         ontology_version="v1",
@@ -578,7 +590,8 @@ def test_truncation_alone_still_makes_a_block() -> None:
         traversal=PathTraversal(
             reached=(),
             relation_ids=(relation(1),),
-            assertion_lines=(),
+            edge_lines=(),
+            hint_lines=(),
             truncated_steps=(0,),
         ),
         ontology_version="v1",
@@ -594,7 +607,8 @@ def test_empty_traversal_returns_none() -> None:
     empty = PathTraversal(
         reached=(),
         relation_ids=(),
-        assertion_lines=(),
+        edge_lines=(),
+        hint_lines=(),
         truncated_steps=(),
     )
 
@@ -613,7 +627,8 @@ def test_reached_without_relation_ledger_returns_none() -> None:
         traversal=PathTraversal(
             reached=(node(1),),
             relation_ids=(),
-            assertion_lines=(),
+            edge_lines=(),
+            hint_lines=(),
             truncated_steps=(),
         ),
         ontology_version="v1",
@@ -629,10 +644,205 @@ def test_dropped_reach_without_truncation_returns_none() -> None:
         traversal=PathTraversal(
             reached=(),
             relation_ids=(relation(1),),
-            assertion_lines=("A가 B를 맡는다",),
+            edge_lines=("A → owns → B",),
+            hint_lines=("A가 B를 맡는다",),
             truncated_steps=(),
         ),
         ontology_version="v1",
     )
 
     assert block is None
+
+
+PATH_REQUESTED_BY = RelationPath(
+    steps=(RelationStep("requested_by", DIRECTION_OUT),)
+)
+
+
+def _requested_by_repository(
+    assertion_text: str | None,
+) -> FakeRelationRepository:
+    """이름이 붙은 간선 하나짜리 저장소를 만든다."""
+    repository = FakeRelationRepository()
+    repository.add(
+        "requested_by",
+        relation(1),
+        node(1),
+        node(2),
+        assertion_text,
+        source_display_name="기능 요청 A",
+        target_display_name="팀원A",
+    )
+    return repository
+
+
+def test_edge_lines_name_both_parties_and_keep_assertion_as_hint() -> None:
+    """사실 입력은 양끝 이름을 명시한 줄이고 원문은 힌트로 남는다."""
+    result = traverse_relation_path(
+        _requested_by_repository("커넥터 있어?"),
+        start_node_id=node(1),
+        path=PATH_REQUESTED_BY,
+        now=NOW,
+    )
+
+    assert result.edge_lines == ("기능 요청 A → requested_by → 팀원A",)
+    assert result.hint_lines == ("커넥터 있어?",)
+
+
+def test_edge_line_formatter_is_injectable() -> None:
+    """줄 서식은 주입할 수 있다 — 노출 수준이 이 자리를 갈아 끼운다."""
+    result = traverse_relation_path(
+        _requested_by_repository("커넥터 있어?"),
+        start_node_id=node(1),
+        path=PATH_REQUESTED_BY,
+        now=NOW,
+        edge_line=lambda edge, rel: f"[{rel}] {edge.target_display_name}",
+    )
+
+    assert result.edge_lines == ("[requested_by] 팀원A",)
+
+
+def test_relation_block_body_puts_hint_under_its_edge() -> None:
+    """블록 본문은 간선 줄 바로 아래에 그 간선의 힌트를 붙인다."""
+    result = traverse_relation_path(
+        _requested_by_repository("커넥터 있어?"),
+        start_node_id=node(1),
+        path=PATH_REQUESTED_BY,
+        now=NOW,
+    )
+
+    block = relation_section_block(
+        path=PATH_REQUESTED_BY, traversal=result, ontology_version="v1"
+    )
+
+    assert block is not None
+    assert block.body == "기능 요청 A → requested_by → 팀원A\n  ↳ 커넥터 있어?"
+
+
+def test_relation_block_collapses_multiline_hint_into_one_line() -> None:
+    """여러 줄짜리 원문도 힌트 줄 하나로 접는다.
+
+    접두가 붙는 것은 첫 줄뿐이라, 줄바꿈을 그대로 두면 둘째 줄부터가
+    접두 없는 줄이 되어 소비처에서 사실 줄로 읽힌다.
+    """
+    result = traverse_relation_path(
+        _requested_by_repository("첫 줄\n둘째 줄"),
+        start_node_id=node(1),
+        path=PATH_REQUESTED_BY,
+        now=NOW,
+    )
+
+    block = relation_section_block(
+        path=PATH_REQUESTED_BY, traversal=result, ontology_version="v1"
+    )
+
+    assert block is not None
+    body_lines = block.body.split("\n")
+    assert [
+        line for line in body_lines if line.startswith(RELATION_HINT_PREFIX)
+    ] == ["  ↳ 첫 줄 둘째 줄"]
+    assert len(body_lines) == 2
+
+
+def test_edge_line_collapses_newline_in_display_name() -> None:
+    """표시 이름에 줄바꿈이 있어도 간선은 한 줄로 적는다."""
+    edge = StoredRelationEdge(
+        id=relation(1),
+        source_node_id=node(1),
+        target_node_id=node(2),
+        assertion_text=None,
+        source_display_name="기능\n요청 A",
+        target_display_name="팀원A  님",
+    )
+
+    line = default_edge_line(edge, "requested_by")
+
+    assert line == "기능 요청 A → requested_by → 팀원A 님"
+
+
+def test_relation_block_omits_hint_line_when_assertion_missing() -> None:
+    """원문 문장이 없으면 힌트 줄 자체를 만들지 않는다."""
+    result = traverse_relation_path(
+        _requested_by_repository(None),
+        start_node_id=node(1),
+        path=PATH_REQUESTED_BY,
+        now=NOW,
+    )
+
+    block = relation_section_block(
+        path=PATH_REQUESTED_BY, traversal=result, ontology_version="v1"
+    )
+
+    assert block is not None
+    assert block.body == "기능 요청 A → requested_by → 팀원A"
+
+
+def test_format_edge_line_collapses_multiline_names() -> None:
+    """양끝 이름에 줄바꿈이 있어도 한 줄로 접는다."""
+    edge = StoredRelationEdge(
+        id=relation(1),
+        source_node_id=node(1),
+        target_node_id=node(2),
+        assertion_text=None,
+        source_display_name="기능\n요청 A",
+        target_display_name="제품\n관리",
+    )
+
+    line = format_edge_line(edge, "requested_by")
+
+    assert line == "기능 요청 A → requested_by → 제품 관리"
+
+
+def test_format_edge_line_falls_back_to_node_ids_when_names_are_empty() -> None:
+    """이름이 없거나 공백뿐이면 노드 식별자로 대신한다."""
+    edge = StoredRelationEdge(
+        id=relation(1),
+        source_node_id=node(1),
+        target_node_id=node(2),
+        assertion_text=None,
+        source_display_name=None,
+        target_display_name="   ",
+    )
+
+    line = format_edge_line(edge, "requested_by")
+
+    assert line == f"{node(1)} → requested_by → {node(2)}"
+
+
+def test_format_edge_line_prefers_the_given_names() -> None:
+    """넘긴 이름이 간선의 표시 이름을 밀어내고, 그 이름도 한 줄로 접힌다."""
+    edge = StoredRelationEdge(
+        id=relation(1),
+        source_node_id=node(1),
+        target_node_id=node(2),
+        assertion_text=None,
+        source_display_name="기능 요청 A",
+        target_display_name="팀원A",
+    )
+
+    line = format_edge_line(
+        edge,
+        "requested_by",
+        source_name="고객\n문의 A",
+        target_name="팀원A (neo@x.com)",
+    )
+
+    assert line == "고객 문의 A → requested_by → 팀원A (neo@x.com)"
+
+
+def test_format_edge_line_falls_back_when_the_given_name_is_empty() -> None:
+    """넘긴 이름이 비어 있어도 노드 식별자 대체가 그대로 걸린다."""
+    edge = StoredRelationEdge(
+        id=relation(1),
+        source_node_id=node(1),
+        target_node_id=node(2),
+        assertion_text=None,
+        source_display_name="기능 요청 A",
+        target_display_name="팀원A",
+    )
+
+    line = format_edge_line(
+        edge, "requested_by", source_name="", target_name=None
+    )
+
+    assert line == f"{node(1)} → requested_by → 팀원A"

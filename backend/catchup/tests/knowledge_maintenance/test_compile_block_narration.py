@@ -10,10 +10,13 @@ from __future__ import annotations
 import uuid
 from dataclasses import replace
 
+import pytest
 from structlog.testing import capture_logs
 
+from catchup.knowledge_maintenance.contracts.extraction import RelationTypeEntry
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_RELATION_SECTION
+from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.domain.preset_catalog import DEFAULT_PURPOSE_SENTENCE
 from catchup.knowledge_maintenance.domain.preset_catalog import (
@@ -23,6 +26,9 @@ from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPending
 from catchup.knowledge_maintenance.ports.narrator import NarrationError
 from catchup.knowledge_maintenance.ports.narrator import NarrationRequest
 from catchup.knowledge_maintenance.ports.relations import StoredRelationEdge
+from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
+    _actor_edge_line,
+)
 from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
     compile_definition_artifacts,
 )
@@ -440,7 +446,8 @@ def test_case_g_relation_section_is_narrated_from_body_lines() -> None:
         if item.block_kind == BLOCK_KIND_RELATION_SECTION
     )
     assert relation_request.statements == ()
-    assert relation_request.edges == ("요청 A는 결제팀이 맡는다",)
+    assert relation_request.edges == ("요청 A → owned_by → 결제팀",)
+    assert relation_request.hints == ("요청 A는 결제팀이 맡는다",)
     assert result.blocks_narrated == 2
     relation_block = next(
         block
@@ -663,3 +670,251 @@ def test_contested_block_without_any_verified_quote_is_not_narrated() -> None:
     assert result.nodes_failed == 0
     assert result.blocks_narrated == 0
     assert all(block.narrative is None for block in _blocks(uow))
+
+
+# 관계 종류 requested_by를 쓰는 시험을 위해 어휘에 한 줄을 더한다. 선택
+# 규칙 검사가 어휘에 없는 관계 종류를 거르므로, 어휘를 넓히지 않으면 그
+# 정의 자체가 컴파일에서 빠진다.
+ACTOR_VOCABULARY = VOCABULARY.model_copy(
+    update={
+        "relation_type_entries": (
+            *VOCABULARY.relation_type_entries,
+            RelationTypeEntry(
+                name="requested_by", definition="요구를 낸 쪽을 가리킨다."
+            ),
+        )
+    }
+)
+
+
+ACTOR_ATTRIBUTES = {
+    "external_key": "chat-1",
+    "actor": {
+        "source_entity_type": "channel_talk_user",
+        "emails": ["neo@x.com"],
+    },
+}
+
+
+def _actor_edge(
+    *,
+    source_node_id: uuid.UUID,
+    target_node_id: uuid.UUID,
+    assertion_text: str = "커넥터 있어?",
+    target_display_name: str | None = "팀원A",
+    target_attributes: dict | None = None,
+) -> StoredRelationEdge:
+    """행위자 노드로 이어지는 간선 하나를 만든다.
+
+    도착 쪽 이름과 attributes를 갈아 끼울 수 있게 열어 둔다. 행위자가
+    아닌 노드나 이름이 비어 있는 노드도 같은 서식을 거치기 때문이다.
+    """
+    return StoredRelationEdge(
+        id=uuid.uuid4(),
+        source_node_id=source_node_id,
+        target_node_id=target_node_id,
+        assertion_text=assertion_text,
+        source_display_name="기능 요청 A",
+        target_display_name=target_display_name,
+        source_attributes={},
+        target_attributes=(
+            ACTOR_ATTRIBUTES if target_attributes is None else target_attributes
+        ),
+    )
+
+
+def _actor_uow(
+    *,
+    purpose: str | None,
+    assertion_text: str = "커넥터 있어?",
+    target_node_id: uuid.UUID | None = None,
+    target_display_name: str | None = "팀원A",
+    target_attributes: dict | None = None,
+) -> FakeDefinitionUnitOfWork:
+    """행위자 간선 하나를 갖는 정의 컴파일용 fake를 세운다."""
+    node_id = uuid.uuid4()
+    definition = _definition_row(
+        spec=_spec(
+            relation_paths=[
+                {"steps": [{"type": "requested_by", "dir": "out"}]}
+            ],
+            predicate_sections=["status"],
+        )
+    )
+    uow = FakeDefinitionUnitOfWork(
+        definitions=[definition],
+        nodes=[(node_id, "기능 요청 A", "feature_request", "active")],
+        claims=[_verified(_claim(node_id=node_id))],
+        relations=FakeRelationRepository(
+            [
+                (
+                    "requested_by",
+                    _actor_edge(
+                        source_node_id=node_id,
+                        target_node_id=(
+                            uuid.uuid4()
+                            if target_node_id is None
+                            else target_node_id
+                        ),
+                        assertion_text=assertion_text,
+                        target_display_name=target_display_name,
+                        target_attributes=target_attributes,
+                    ),
+                )
+            ]
+        ),
+    )
+    if purpose is not None:
+        uow.artifact_definitions.channel_purposes = {definition[1]: purpose}
+    return uow
+
+
+def _run_with_actor_vocabulary(uow, narrator=None):
+    """requested_by가 실린 어휘로 정의 순회 컴파일을 돌린다."""
+    return compile_definition_artifacts(
+        uow,
+        workspace_id=WORKSPACE,
+        vocabulary=ACTOR_VOCABULARY,
+        narrator=narrator,
+    )
+
+
+def _relation_block(uow):
+    """계류 변경안에서 관계 절 블록 하나를 꺼낸다."""
+    return next(
+        block
+        for block in _blocks(uow)
+        if block.block_kind == BLOCK_KIND_RELATION_SECTION
+    )
+
+
+def test_relation_narration_gets_named_edges_and_hints_with_exposure() -> None:
+    """관계 절은 노출을 적용한 간선 줄과 원문 힌트를 갈라 넘긴다."""
+    uow = _actor_uow(purpose="voc.request_status_tracking")
+    narrator = _FakeNarrator()
+
+    _run_with_actor_vocabulary(uow, narrator)
+
+    request = next(
+        item
+        for item in narrator.requests
+        if item.block_kind == BLOCK_KIND_RELATION_SECTION
+    )
+    assert request.edges == ("기능 요청 A → requested_by → 팀원A (neo@x.com)",)
+    assert request.hints == ("커넥터 있어?",)
+    assert request.statements == ()
+
+
+def test_multiline_assertion_stays_a_single_hint() -> None:
+    """여러 줄 원문도 힌트 하나로 접혀 사실 입력을 늘리지 않는다."""
+    uow = _actor_uow(
+        purpose="voc.request_status_tracking",
+        assertion_text="첫 줄\n둘째 줄",
+    )
+    narrator = _FakeNarrator()
+
+    _run_with_actor_vocabulary(uow, narrator)
+
+    request = next(
+        item
+        for item in narrator.requests
+        if item.block_kind == BLOCK_KIND_RELATION_SECTION
+    )
+    assert request.edges == (
+        "기능 요청 A → requested_by → 팀원A (neo@x.com)",
+    )
+    assert request.hints == ("첫 줄 둘째 줄",)
+
+
+def test_anonymous_exposure_hides_actor_name() -> None:
+    """anonymous 노출은 행위자 이름을 역할 표기로 덮는다.
+
+    도메인 preset에 anonymous를 걸어 둔 자리가 아직 없어 컴파일 경로로는
+    닿지 않는다. 서식 자체가 노출 수준을 지키는지만 직접 본다.
+    """
+    edge = _actor_edge(
+        source_node_id=uuid.uuid4(), target_node_id=uuid.uuid4()
+    )
+
+    line = _actor_edge_line("anonymous")(edge, "requested_by")
+
+    assert line == "기능 요청 A → requested_by → 고객"
+
+
+def test_relation_block_hash_differs_by_exposure() -> None:
+    """노출 수준이 다르면 같은 그래프라도 관계 블록 지문이 갈린다."""
+    named = _actor_uow(purpose=None)
+    with_email = _actor_uow(purpose="voc.request_status_tracking")
+
+    _run_with_actor_vocabulary(named)
+    _run_with_actor_vocabulary(with_email)
+
+    assert "팀원A (neo@x.com)" not in _relation_block(named).body
+    assert block_content_hash(_relation_block(named)) != block_content_hash(
+        _relation_block(with_email)
+    )
+
+
+def _relation_request(narrator):
+    """서술 요청 가운데 관계 절 것 하나를 꺼낸다."""
+    return next(
+        item
+        for item in narrator.requests
+        if item.block_kind == BLOCK_KIND_RELATION_SECTION
+    )
+
+
+@pytest.mark.parametrize(
+    "target_attributes",
+    [None, {}],
+    ids=["actor", "non_actor"],
+)
+def test_multiline_target_name_stays_one_edge_line(
+    target_attributes: dict | None,
+) -> None:
+    """도착 쪽 이름에 줄바꿈이 있어도 간선 줄은 하나로 남는다.
+
+    본문은 줄 단위로 다시 갈리므로, 이름의 줄바꿈이 남으면 없는 간선
+    줄이 하나 생기고 진짜 도착 노드가 사라진다.
+    """
+    uow = _actor_uow(
+        purpose=None,
+        target_display_name="제품\n관리",
+        target_attributes=target_attributes,
+    )
+    narrator = _FakeNarrator()
+
+    _run_with_actor_vocabulary(uow, narrator)
+
+    assert _relation_request(narrator).edges == (
+        "기능 요청 A → requested_by → 제품 관리",
+    )
+    assert _relation_block(uow).body.split("\n") == [
+        "기능 요청 A → requested_by → 제품 관리",
+        "  ↳ 커넥터 있어?",
+    ]
+
+
+@pytest.mark.parametrize(
+    "target_attributes",
+    [None, {}],
+    ids=["actor", "non_actor"],
+)
+def test_empty_target_name_falls_back_to_the_node_id(
+    target_attributes: dict | None,
+) -> None:
+    """도착 쪽 이름이 없으면 노드 식별자로 대신한다."""
+    target_node_id = uuid.uuid4()
+    uow = _actor_uow(
+        purpose=None,
+        target_node_id=target_node_id,
+        target_display_name=None,
+        target_attributes=target_attributes,
+    )
+    narrator = _FakeNarrator()
+
+    _run_with_actor_vocabulary(uow, narrator)
+
+    assert _relation_request(narrator).edges == (
+        f"기능 요청 A → requested_by → {target_node_id}",
+    )

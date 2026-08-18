@@ -24,6 +24,9 @@ from catchup.db.models import KnowledgeMutationProposal as ProposalRow
 from catchup.db.models import KnowledgeNode as NodeRow
 from catchup.db.models import KnowledgeNodeAlias as AliasRow
 from catchup.db.models import Workspace
+from catchup.knowledge_maintenance.adapters.postgres.repositories import (
+    SqlAlchemyKnowledgeNodeRepository,
+)
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
@@ -470,3 +473,84 @@ def test_promoted_singleton_carries_claims_into_read_path(
     assert as_of.subject.node_id == node_id
     assert [claim.claim_id for claim in as_of.claims] == [claim_id]
     assert as_of.claims[0].value == "2026-09"
+
+
+def test_actor_key_lookup_and_attribute_update(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """행위자 노드는 attributes에 쌓인 키로 다시 찾힌다."""
+    actor = {
+        "actor": {
+            "emails": ["neo@x.com"],
+            "external_keys": ["ext-1"],
+            "unified_ids": [],
+            "source_entity_type": "channel_talk_user",
+        }
+    }
+    with session_factory() as session:
+        repo = SqlAlchemyKnowledgeNodeRepository(session)
+        node = repo.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="customer",
+            canonical_key=f"channel_talk:customer:email:{uuid.uuid4()}@x.com",
+            display_name="팀원A",
+            attributes=actor,
+        )
+
+        by_email = repo.find_entity_by_actor_key(
+            workspace_id=workspace_id,
+            entity_type="customer",
+            key_kind="emails",
+            value="neo@x.com",
+        )
+        assert by_email is not None and by_email.id == node.id
+
+        by_key = repo.find_entity_by_actor_key(
+            workspace_id=workspace_id,
+            entity_type="customer",
+            key_kind="external_keys",
+            value="ext-1",
+        )
+        assert by_key is not None and by_key.id == node.id
+
+        assert (
+            repo.find_entity_by_actor_key(
+                workspace_id=workspace_id,
+                entity_type="customer",
+                key_kind="external_keys",
+                value="ext-9",
+            )
+            is None
+        )
+
+        grown = dict(actor["actor"]) | {"external_keys": ["ext-1", "ext-2"]}
+        updated = repo.set_entity_attributes(
+            workspace_id=workspace_id,
+            node_id=node.id,
+            attributes={"actor": grown},
+        )
+        assert updated.attributes["actor"]["external_keys"] == [
+            "ext-1",
+            "ext-2",
+        ]
+
+        rebound = repo.find_entity_by_actor_key(
+            workspace_id=workspace_id,
+            entity_type="customer",
+            key_kind="external_keys",
+            value="ext-2",
+        )
+        assert rebound is not None and rebound.id == node.id
+
+        # 같은 키라도 다른 workspace에서는 보이지 않아야 한다. 행위자
+        # 키는 workspace마다 다른 사람을 가리킬 수 있다.
+        assert (
+            repo.find_entity_by_actor_key(
+                workspace_id=workspace_id + 100_000,
+                entity_type="customer",
+                key_kind="emails",
+                value="neo@x.com",
+            )
+            is None
+        )

@@ -193,6 +193,18 @@ class _Graph:
             )
             session.commit()
 
+    def set_node_attributes(
+        self,
+        node_id: uuid.UUID,
+        attributes: dict[str, object],
+    ) -> None:
+        """노드에 attributes를 걸어 둔다."""
+        with self.session_factory() as session:
+            node = session.get(KnowledgeNode, node_id)
+            assert node is not None
+            node.attributes = attributes
+            session.commit()
+
     def add_candidate(self, *, resolved_node_id: uuid.UUID | None) -> uuid.UUID:
         """entity 후보 한 건을 넣고 그 식별자를 돌려준다."""
         candidate_id = uuid.uuid4()
@@ -534,6 +546,37 @@ def test_display_name_follows_the_resolved_endpoint(
     assert [
         (edge.target_node_id, edge.target_display_name) for edge in edges
     ] == [(graph.node_b, "노드 B")]
+
+
+def test_endpoint_attributes_come_back(
+    graph: _Graph,
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """양 끝점의 attributes가 간선과 함께 나온다.
+
+    노출 수준을 적용하려면 이름만으로는 모자라고 행위자 키·이메일이
+    필요하다. 이름과 함께 한 번에 캐야 걸음마다 왕복이 곱절이 되지
+    않는다.
+    """
+    graph.set_node_attributes(
+        graph.node_b, {"actor": {"emails": ["hyuk@example.com"]}}
+    )
+    graph.add_relation(
+        source_node_id=graph.node_a, target_node_id=graph.node_b
+    )
+
+    with uow_factory() as uow:
+        edges = uow.relations.find_edges(
+            node_ids=[graph.node_a],
+            relation_type=RELATION_TYPE,
+            direction=DIRECTION_OUT,
+            now=NOW,
+        )
+
+    assert edges[0].target_attributes["actor"]["emails"] == [
+        "hyuk@example.com"
+    ]
+    assert edges[0].source_attributes == {}
 
 
 def test_rejected_relation_excluded(
