@@ -315,6 +315,10 @@ def _load_channel_admin_ids(
     path="/knowledge-maintenance-settings",
     response_model=TestKnowledgeMaintenanceSettingListResponse,
     dependencies=[Depends(require_admin_user)],
+    description=(
+        "채널톡 자격증명별 위키 지식 수집 설정 목록을 조회한다. "
+        "플랫폼 관리자만 할 수 있다."
+    ),
 )
 def list_knowledge_maintenance_settings(
     context: MemberContext = Depends(resolve_member_workspace),
@@ -335,6 +339,11 @@ def list_knowledge_maintenance_settings(
     path="/knowledge-maintenance-settings/{channel_talk_credential_id}",
     response_model=TestKnowledgeMaintenanceSettingResponse,
     dependencies=[Depends(require_admin_user)],
+    description=(
+        "채널톡 자격증명 하나의 위키 지식 수집 설정"
+        "(활성 여부·실행 기준 시각·주기)을 저장한다. "
+        "플랫폼 관리자만 할 수 있다."
+    ),
 )
 def update_knowledge_maintenance_setting(
     channel_talk_credential_id: int,
@@ -392,7 +401,7 @@ def update_knowledge_maintenance_setting(
     path="/channels",
     response_model=ChannelResponse,
     status_code=201,
-    description="위키 채널을 만들고 생성자를 그 채널의 관리자로 세운다.",
+    description="위키 채널을 만든다. 생성자가 채널 관리자가 된다.",
 )
 def create_channel(
     request: ChannelCreateRequest,
@@ -443,7 +452,10 @@ def create_channel(
     path="/channels/onboarding",
     response_model=ChannelOnboardingResponse,
     status_code=201,
-    description="preset 선택으로 채널·관리자·목적·정의·폴더·seed 어휘를 만든다.",
+    description=(
+        "preset 선택으로 채널·채널 관리자·목적·문서 종류별 정의와 폴더·"
+        "seed 어휘를 한 번에 만든다."
+    ),
 )
 def onboard_channel(
     request: ChannelOnboardingRequest,
@@ -612,7 +624,9 @@ def onboard_channel(
 @router.get(
     path="/channels",
     response_model=ChannelListResponse,
-    description="이 workspace의 채널을 폴더·문서 수와 함께 조회한다.",
+    description=(
+        "워크스페이스의 채널 목록을 폴더·목적·정의·문서 수와 함께 조회한다."
+    ),
 )
 def list_channels(
     context: MemberContext = Depends(resolve_member_workspace),
@@ -683,7 +697,10 @@ def list_channels(
 @router.get(
     path="/definition-presets",
     response_model=DefinitionPresetsResponse,
-    description="온보딩이 고를 도메인·목적·문서 종류·문체를 조회한다.",
+    description=(
+        "온보딩에서 고를 수 있는 도메인·목적·문서 종류·문체 preset 목록을 "
+        "조회한다."
+    ),
 )
 def list_definition_presets(
     context: MemberContext = Depends(resolve_member_workspace),
@@ -731,7 +748,7 @@ def list_definition_presets(
 @router.patch(
     path="/channels/{channel_id}",
     response_model=ChannelResponse,
-    description="채널 이름을 바꾼다. 그 채널의 관리자만 할 수 있다.",
+    description="채널 이름을 바꾼다. 채널 관리자만 할 수 있다.",
 )
 def rename_channel(
     channel_id: uuid.UUID,
@@ -772,7 +789,7 @@ def rename_channel(
     path="/channels/{channel_id}/folders",
     response_model=FolderResponse,
     status_code=201,
-    description="채널 바로 아래에 폴더를 만든다. 관리자만 할 수 있다.",
+    description="채널 바로 아래에 폴더를 만든다. 채널 관리자만 할 수 있다.",
 )
 def create_folder(
     channel_id: uuid.UUID,
@@ -861,7 +878,10 @@ def rename_folder(
 @router.delete(
     path="/channels/{channel_id}/folders/{folder_id}",
     status_code=204,
-    description="폴더를 지운다. 채널 관리자만 할 수 있다.",
+    description=(
+        "폴더를 삭제한다. 폴더 안 문서와 정의는 채널 루트로 옮겨진다. "
+        "채널 관리자만 할 수 있다."
+    ),
 )
 def delete_folder(
     channel_id: uuid.UUID,
@@ -919,20 +939,41 @@ def _to_list_item(
 @router.get(
     path="/artifacts",
     response_model=ArtifactListResponse,
-    description="이 workspace의 문서를 상태·담당자·즐겨찾기와 함께 조회한다.",
+    description=(
+        "워크스페이스의 문서 목록을 상태·담당자·즐겨찾기 여부와 함께 "
+        "조회한다."
+    ),
 )
 def list_artifacts(
-    channel_id: uuid.UUID | None = Query(None),
-    folder_id: uuid.UUID | None = Query(None),
-    kind: str | None = Query(None),
+    channel_id: uuid.UUID | None = Query(
+        None, description="해당 채널의 문서만 조회한다."
+    ),
+    folder_id: uuid.UUID | None = Query(
+        None, description="해당 폴더의 문서만 조회한다."
+    ),
+    kind: str | None = Query(None, description="해당 문서 종류만 조회한다."),
     status_filter: (
         Literal["pending_review", "published", "no_revision"] | None
-    ) = Query(None, alias="status"),
-    owner_user_id: int | None = Query(None),
-    created_after: datetime | None = Query(None),
-    created_before: datetime | None = Query(None),
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
+    ) = Query(
+        None,
+        alias="status",
+        description=(
+            "파생 상태로 거른다(pending_review·published·no_revision)."
+        ),
+    ),
+    owner_user_id: int | None = Query(
+        None, description="해당 사용자가 담당자인 문서만 조회한다."
+    ),
+    created_after: datetime | None = Query(
+        None, description="해당 시각 이후에 만들어진 문서만 조회한다."
+    ),
+    created_before: datetime | None = Query(
+        None, description="해당 시각 이전에 만들어진 문서만 조회한다."
+    ),
+    limit: int = Query(
+        50, ge=1, le=200, description="한 페이지에 담을 문서 수"
+    ),
+    offset: int = Query(0, ge=0, description="건너뛸 문서 수"),
     context: MemberContext = Depends(resolve_member_workspace),
     db: Session = Depends(get_db),
 ) -> ArtifactListResponse:
@@ -980,7 +1021,9 @@ def list_artifacts(
 @router.get(
     path="/favorites",
     response_model=FavoriteListResponse,
-    description="이 workspace에서 즐겨찾기한 문서를 최근에 담은 순으로 조회한다.",
+    description=(
+        "사용자가 즐겨찾기한 문서 목록을 최근 등록 순으로 조회한다."
+    ),
 )
 def list_favorites(
     context: MemberContext = Depends(resolve_member_workspace),
@@ -1016,7 +1059,10 @@ def list_favorites(
 @router.put(
     path="/favorites/{artifact_id}",
     response_model=FavoriteResponse,
-    description="문서를 즐겨찾기에 담는다. 이미 담겨 있어도 같은 결과다.",
+    description=(
+        "문서를 즐겨찾기에 등록한다. 이미 등록돼 있으면 그대로 200을 "
+        "돌려준다."
+    ),
 )
 def add_favorite(
     artifact_id: uuid.UUID,
@@ -1053,7 +1099,9 @@ def add_favorite(
 @router.delete(
     path="/favorites/{artifact_id}",
     status_code=204,
-    description="문서를 즐겨찾기에서 뺀다. 담겨 있지 않아도 같은 결과다.",
+    description=(
+        "문서를 즐겨찾기에서 해제한다. 등록돼 있지 않아도 204를 돌려준다."
+    ),
 )
 def remove_favorite(
     artifact_id: uuid.UUID,
@@ -1079,7 +1127,9 @@ def remove_favorite(
 @router.get(
     path="/artifacts/{artifact_id}",
     response_model=ArtifactDocumentResponse,
-    description="발행된 문서의 최신 판을 산문·근거와 함께 조회한다.",
+    description=(
+        "발행된 문서의 최신 revision을 블록·산문·근거 인용과 함께 조회한다."
+    ),
 )
 def get_artifact_document(
     artifact_id: uuid.UUID,
@@ -1156,7 +1206,10 @@ def get_artifact_document(
 @router.patch(
     path="/artifacts/{artifact_id}",
     response_model=ArtifactLocationResponse,
-    description="문서를 같은 채널 안의 다른 폴더로 옮긴다. 관리자 또는 담당자만 할 수 있다.",
+    description=(
+        "문서를 같은 채널의 다른 폴더로 옮기거나 채널 루트로 꺼낸다. "
+        "채널 관리자 또는 문서 담당자만 할 수 있다."
+    ),
 )
 def move_artifact(
     artifact_id: uuid.UUID,
@@ -1240,7 +1293,10 @@ def move_artifact(
     path="/artifacts/{artifact_id}/owners/{user_id}",
     response_model=ArtifactOwnerResponse,
     status_code=201,
-    description="문서 담당자를 지정한다. 관리자 또는 그 문서 담당자만 할 수 있다.",
+    description=(
+        "문서 담당자를 지정한다. "
+        "채널 관리자 또는 기존 문서 담당자만 할 수 있다."
+    ),
 )
 def assign_artifact_owner(
     artifact_id: uuid.UUID,
@@ -1317,7 +1373,7 @@ def assign_artifact_owner(
 @router.delete(
     path="/artifacts/{artifact_id}/owners/{user_id}",
     status_code=204,
-    description="문서 담당자를 해제한다. 관리자만 할 수 있다.",
+    description="문서 담당자를 해제한다. 채널 관리자만 할 수 있다.",
 )
 def remove_artifact_owner(
     artifact_id: uuid.UUID,
@@ -1387,7 +1443,7 @@ def remove_artifact_owner(
     path="/channels/{channel_id}/admins/{user_id}",
     response_model=ChannelAdminResponse,
     status_code=201,
-    description="채널 관리자를 추가 지정한다. 그 채널의 기존 관리자만 할 수 있다.",
+    description="채널 관리자를 추가한다. 기존 채널 관리자만 할 수 있다.",
 )
 def assign_channel_admin(
     channel_id: uuid.UUID,

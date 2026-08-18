@@ -280,27 +280,34 @@ def _queue_artifact_ids(
 @router.get(
     path="/queue",
     response_model=QueuePageResponse,
-    description="검토 대기 중인 위키 문서 변경안을 오래된 순으로 조회한다.",
+    description=(
+        "검토 대기 중인 문서 변경안 목록을 조회한다. "
+        "정렬은 created_at 오름차순이다."
+    ),
 )
 @audit_log(action=KnowledgeReviewAction.LIST)
 def list_queue(
     contains_conflict: bool | None = Query(
-        None, description="충돌 여부로 거른다. 생략하면 전부 본다."
+        None,
+        description="다툼(contested) 블록 유무로 거른다. 생략하면 전부 조회한다.",
     ),
     channel_id: uuid.UUID | None = Query(
-        None, description="이 채널의 문서 안건만 본다."
+        None, description="해당 채널 문서의 변경안만 조회한다."
     ),
     owner_user_id: int | None = Query(
-        None, description="이 사용자가 담당자인 문서 안건만 본다."
+        None,
+        description="해당 사용자가 담당자인 문서의 변경안만 조회한다.",
     ),
     created_after: datetime | None = Query(
-        None, description="이 시각 이후 만들어진 안건만 본다."
+        None, description="해당 시각 이후에 만들어진 변경안만 조회한다."
     ),
     created_before: datetime | None = Query(
-        None, description="이 시각 이전 만들어진 안건만 본다."
+        None, description="해당 시각 이전에 만들어진 변경안만 조회한다."
     ),
-    limit: int = Query(50, ge=1, le=200, description="한 쪽에 담을 안건 수"),
-    offset: int = Query(0, ge=0, description="건너뛸 안건 수"),
+    limit: int = Query(
+        50, ge=1, le=200, description="한 페이지에 담을 변경안 수"
+    ),
+    offset: int = Query(0, ge=0, description="건너뛸 변경안 수"),
     context: ReviewerContext = Depends(resolve_member_reviewer_context),
     uow_factory: ReviewUowFactory = Depends(get_member_review_uow_factory),
     db: Session = Depends(get_db),
@@ -370,7 +377,10 @@ def list_queue(
 @router.get(
     path="/queue/{proposal_id}",
     response_model=ProposalDetailResponse,
-    description="변경안 본문·근거 장부와 이 대상에 걸린 충돌을 조회한다.",
+    description=(
+        "문서 변경안 하나를 블록·근거·발행판 대비 변경 목록·충돌과 함께 "
+        "조회한다."
+    ),
 )
 @audit_log(action=KnowledgeReviewAction.DETAIL)
 def get_queue_item(
@@ -450,7 +460,11 @@ def get_queue_item(
 @router.post(
     path="/artifacts/{proposal_id}/approve",
     response_model=DecisionResponse,
-    description="문서 변경안을 승인해 새 판을 발행한다.",
+    description=(
+        "문서 변경안 전체를 승인해 새 revision을 발행한다. "
+        "블록 판정이 시작된 변경안에는 쓸 수 없다. "
+        "문서 담당자만 할 수 있다."
+    ),
 )
 @audit_log(
     action=KnowledgeReviewAction.APPROVE,
@@ -500,7 +514,10 @@ def approve_artifact(
 @router.post(
     path="/artifacts/{proposal_id}/reject",
     response_model=DecisionResponse,
-    description="문서 변경안을 사유와 함께 반려한다.",
+    description=(
+        "문서 변경안 전체를 사유와 함께 반려한다. "
+        "문서 담당자만 할 수 있다."
+    ),
 )
 @audit_log(
     action=KnowledgeReviewAction.REJECT,
@@ -555,7 +572,10 @@ def reject_artifact(
 @router.put(
     path="/queue/{proposal_id}/blocks/{block_index}/verdict",
     response_model=BlockVerdictResponse,
-    description="변경안 본문 블록 하나에 승인·반려를 기록한다.",
+    description=(
+        "변경안의 블록 하나에 승인 또는 반려를 기록한다. "
+        "문서 담당자만 할 수 있다."
+    ),
 )
 @audit_log(
     action=KnowledgeReviewAction.BLOCK_VERDICT,
@@ -607,7 +627,12 @@ def put_block_verdict(
 @router.post(
     path="/queue/{proposal_id}/publish",
     response_model=PublishResponse,
-    description="블록 결정을 모아 변경안을 확정하고 새 판을 발행한다.",
+    description=(
+        "블록 판정을 마감한다. 승인 블록으로 새 revision을 발행하고, "
+        "전부 반려면 변경안을 반려로 끝낸다. "
+        "undecided로 미판정 블록을 일괄 승인 또는 반려할 수 있다. "
+        "문서 담당자만 할 수 있다."
+    ),
 )
 @audit_log(
     action=KnowledgeReviewAction.PUBLISH,
