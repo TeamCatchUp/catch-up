@@ -292,15 +292,26 @@ class BlockVerdictRequest(BaseModel):
 
 
 class PublishRequest(BaseModel):
-    """발행이 딛고 선 기준 판을 담는다.
+    """발행이 딛고 선 기준 판과 미결정 블록 처리 방법을 담는다.
 
     없음(null)은 "아직 판이 없는 문서"라는 뜻이지 생략이 아니다. 그래서
-    기본값을 두지 않고 명시를 요구한다 — 빠뜨린 요청을 "판 없음"으로
-    읽어 주면 낙관적 잠금이 조용히 꺼진다. 값이 변경안의 기준과 다르면
-    발행은 거부된다.
+    기본값을 두지 않고 명시를 요구한다. 빠뜨린 요청을 "판 없음"으로 읽어
+    주면 낙관적 잠금이 조용히 꺼진다. 값이 변경안의 기준과 다르면 발행은
+    거부된다.
+
+    undecided는 아직 결정이 없는 블록만 한 번에 처리한다. 이미 결정이
+    있는 블록은 그대로 둔다. 보내지 않으면 미결정 블록이 하나라도 있을 때
+    발행이 거부된다.
+
+    Attributes:
+        base_revision_id: 클라이언트가 본 기준 판을 가리킨다.
+        undecided: 미결정 블록에 일괄로 내릴 결정을 나타낸다.
+        rejection_reason: 일괄 반려의 사유를 담는다. reject일 때 필요하다.
     """
 
     base_revision_id: uuid.UUID | None
+    undecided: Literal["approve", "reject"] | None = None
+    rejection_reason: str | None = None
 
 
 class PublishResponse(BaseModel):

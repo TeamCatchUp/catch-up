@@ -61,14 +61,19 @@ PROPOSAL_STATUS_PENDING = "pending"
 BLOCK_VERDICT_APPROVED = "approved"
 BLOCK_VERDICT_REJECTED = "rejected"
 
+# 미판정 블록을 한 번에 처리하는 방법이다. 발행 요청이 이 값을 실어 보내면
+# 아직 결정이 없는 블록에만 같은 결정을 적는다.
+UNDECIDED_APPROVE = "approve"
+UNDECIDED_REJECT = "reject"
+
 PUBLISH_VERDICT_APPROVED = "approved"
 PUBLISH_VERDICT_REJECTED = "rejected"
 
 # 거절 사유를 가르는 코드다. 호출자는 이 값으로 응답을 정한다.
-CODE_NOT_FOUND = "NOT_FOUND"
+CODE_NOT_FOUND = "PROPOSAL_NOT_FOUND"
 CODE_ALREADY_DECIDED = "ALREADY_DECIDED"
 CODE_UNDECIDED_BLOCKS = "UNDECIDED_BLOCKS"
-CODE_STALE_BASE = "STALE_BASE"
+CODE_STALE_BASE = "STALE_BASE_REVISION"
 CODE_STALE_BLOCK = "STALE_BLOCK"
 CODE_CONFLICT_RACE = "CONFLICT_RACE"
 CODE_INVALID = "INVALID"
@@ -203,6 +208,8 @@ def publish_artifact_proposal(
     proposal_id: uuid.UUID,
     base_revision_id: uuid.UUID | None,
     reviewer: str,
+    undecided: str | None = None,
+    rejection_reason: str | None = None,
     now: datetime | None = None,
 ) -> PublishResult:
     """블록 결정을 모아 변경안을 확정하고 그 결과를 돌려준다.
@@ -211,10 +218,16 @@ def publish_artifact_proposal(
     승인으로 끝맺는다. 전 블록이 반려됐으면 판을 만들지 않고 블록 사유를
     합성해 반려로 끝맺는다.
 
+    `undecided`를 주면 아직 결정이 없는 블록에 그 결정을 먼저 적고 발행을
+    이어 간다. approve면 일괄 승인, reject면 일괄 반려이고 반려는
+    `rejection_reason`이 있어야 한다. 이미 결정이 있는 블록은 건드리지
+    않는다.
+
     Raises:
         PublishError: 발행을 받아들일 수 없을 때 던진다. code는
-            NOT_FOUND·ALREADY_DECIDED·UNDECIDED_BLOCKS·STALE_BASE·
-            STALE_BLOCK·CONFLICT_RACE·INVALID 중 하나다.
+            PROPOSAL_NOT_FOUND·ALREADY_DECIDED·UNDECIDED_BLOCKS·
+            STALE_BASE_REVISION·STALE_BLOCK·CONFLICT_RACE·INVALID 중
+            하나다.
     """
     if not reviewer.strip():
         # 누가 발행했는지 없는 확정은 감사 기록이 되지 못한다.
@@ -232,6 +245,8 @@ def publish_artifact_proposal(
             proposal_id=proposal_id,
             base_revision_id=base_revision_id,
             reviewer=reviewer,
+            undecided=undecided,
+            rejection_reason=rejection_reason,
             decided_at=decided_at,
             resolved=resolved,
         )
@@ -257,6 +272,8 @@ def _publish_in_transaction(
     proposal_id: uuid.UUID,
     base_revision_id: uuid.UUID | None,
     reviewer: str,
+    undecided: str | None,
+    rejection_reason: str | None,
     decided_at: datetime,
     resolved: list[uuid.UUID],
 ) -> PublishResult:
@@ -291,6 +308,16 @@ def _publish_in_transaction(
             raise PublishError(
                 CODE_STALE_BASE,
                 f"변경안 {proposal_id}의 기준 판이 요청과 다르다",
+            )
+
+        if undecided is not None:
+            _record_undecided(
+                uow,
+                proposal,
+                undecided=undecided,
+                rejection_reason=rejection_reason,
+                reviewer=reviewer,
+                now=decided_at,
             )
 
         verdicts = _verdicts_by_index(uow, proposal)
@@ -413,6 +440,71 @@ def _publish_in_transaction(
         contradictions_resolved=len(contested),
         claims_accepted=claims_accepted,
     )
+
+
+def _record_undecided(
+    uow: ArtifactPublishUnitOfWork,
+    proposal: StoredArtifactProposal,
+    *,
+    undecided: str,
+    rejection_reason: str | None,
+    reviewer: str,
+    now: datetime,
+) -> None:
+    """아직 결정이 없는 블록에 일괄 결정을 기록한다.
+
+    이미 결정된 블록은 건드리지 않는다. 사람의 결정은 불변이다. 다툼
+    (contested) 블록은 승자를 골라야 하므로 approve로 일괄 승인할 수 없다.
+
+    Raises:
+        PublishError: undecided 값이 approve·reject가 아니면 INVALID,
+            reject인데 사유가 없으면 INVALID, approve인데 다툼 블록이
+            미결정이면 UNDECIDED_BLOCKS로 던진다.
+    """
+    if undecided not in (UNDECIDED_APPROVE, UNDECIDED_REJECT):
+        raise PublishError(
+            CODE_INVALID, "undecided는 approve 또는 reject여야 한다"
+        )
+    if undecided == UNDECIDED_REJECT and not (rejection_reason or "").strip():
+        raise PublishError(CODE_INVALID, "일괄 반려에는 사유가 필요하다")
+    decided = {
+        verdict.block_index
+        for verdict in uow.block_verdicts.list_for_proposal(
+            proposal_id=proposal.id
+        )
+    }
+    missing = [
+        index
+        for index in range(len(proposal.blocks))
+        if index not in decided
+    ]
+    if undecided == UNDECIDED_APPROVE:
+        contested = tuple(
+            index
+            for index in missing
+            if proposal.blocks[index].block_kind == BLOCK_KIND_CONTESTED
+        )
+        if contested:
+            raise PublishError(
+                CODE_UNDECIDED_BLOCKS,
+                "다툼 블록은 승자를 골라야 한다",
+                undecided=contested,
+            )
+    approving = undecided == UNDECIDED_APPROVE
+    for index in missing:
+        block = proposal.blocks[index]
+        uow.block_verdicts.upsert_verdict(
+            proposal_id=proposal.id,
+            block_index=index,
+            block_content_hash=block_content_hash(block),
+            verdict=(
+                BLOCK_VERDICT_APPROVED if approving else BLOCK_VERDICT_REJECTED
+            ),
+            rejection_reason=None if approving else rejection_reason,
+            chosen_winner_claim_id=None,
+            reviewer=reviewer,
+            reviewed_at=now,
+        )
 
 
 def _verdicts_by_index(

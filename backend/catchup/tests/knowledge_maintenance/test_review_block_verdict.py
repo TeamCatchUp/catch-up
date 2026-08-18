@@ -291,7 +291,7 @@ def test_unknown_proposal_is_not_found() -> None:
     with pytest.raises(BlockVerdictError) as error:
         _approve(uow, uuid.uuid4(), block)
 
-    assert error.value.code == "NOT_FOUND"
+    assert error.value.code == "PROPOSAL_NOT_FOUND"
     assert uow.committed is False
 
 

@@ -123,7 +123,7 @@ router = APIRouter(
 # 준 코드를 그대로 응답 code로 쓰되, 문구는 여기서 정한다 — 예외 문자열은
 # 변경안 식별자와 저장소 사정을 담고 있어 그대로 내보낼 수 없다.
 _BLOCK_VERDICT_ERRORS: dict[str, tuple[int, str]] = {
-    "NOT_FOUND": (404, "변경안을 찾을 수 없습니다."),
+    "PROPOSAL_NOT_FOUND": (404, "변경안을 찾을 수 없습니다."),
     "ALREADY_DECIDED": (409, "이미 결정된 변경안입니다."),
     "STALE_BLOCK": (409, "블록 본문이 바뀌었습니다. 다시 읽어 주세요."),
     "INVALID": (422, "블록 결정 요청이 올바르지 않습니다."),
@@ -144,10 +144,13 @@ _ARTIFACT_REVIEW_ERRORS: dict[str, tuple[int, str]] = {
 }
 
 _PUBLISH_ERRORS: dict[str, tuple[int, str]] = {
-    "NOT_FOUND": (404, "변경안을 찾을 수 없습니다."),
+    "PROPOSAL_NOT_FOUND": (404, "변경안을 찾을 수 없습니다."),
     "ALREADY_DECIDED": (409, "이미 결정된 변경안입니다."),
     "UNDECIDED_BLOCKS": (409, "아직 결정하지 않은 블록이 있습니다."),
-    "STALE_BASE": (409, "문서가 새 판으로 넘어가 이 변경안은 낡았습니다."),
+    "STALE_BASE_REVISION": (
+        409,
+        "문서가 새 판으로 넘어가 이 변경안은 낡았습니다.",
+    ),
     "STALE_BLOCK": (409, "블록 본문이 결정 시점과 달라졌습니다."),
     "CONFLICT_RACE": (409, "모순 안건이 먼저 결정돼 발행할 수 없습니다."),
     "INVALID": (422, "발행 요청이 올바르지 않습니다."),
@@ -164,8 +167,6 @@ def _require_decidable_proposal(
     db: Session,
     context: ReviewerContext,
     proposal_id: uuid.UUID,
-    *,
-    not_found_code: str = "PROPOSAL_NOT_FOUND",
 ) -> StoredArtifactProposal:
     """변경안을 읽고 담당자·폴백 판정을 통과시킨다.
 
@@ -173,9 +174,9 @@ def _require_decidable_proposal(
     UoW의 내부 세션을 꺼내 쓰면 저장소 경계가 무너지고, 인가 조회가
     knowledge_maintenance 포트에 얹혀 표면마다 따라다니게 된다.
 
-    없음을 알리는 코드는 호출자가 정한다. 블록 결정·발행은 서비스가 쓰던
-    NOT_FOUND를 이미 소비자와 약속했고, 인가를 앞에 끼워 넣었다는 이유로
-    그 코드가 바뀌면 화면이 깨진다.
+    없음을 알리는 코드는 모든 라우트가 PROPOSAL_NOT_FOUND 하나다. 같은
+    "변경안이 없다"를 라우트마다 다른 이름으로 알리면 소비자가 코드를
+    라우트별로 갈라 다뤄야 한다.
 
     Raises:
         HTTPException: 변경안이 없으면 404, 이 문서의 검수 권한이 없으면
@@ -188,7 +189,7 @@ def _require_decidable_proposal(
         # 여기서 404가 된다 — 존재 여부를 떠볼 자리가 없다.
         raise review_error(
             404,
-            code=not_found_code,
+            code="PROPOSAL_NOT_FOUND",
             message="변경안을 찾을 수 없습니다.",
         )
     if not can_decide_artifact(
@@ -572,9 +573,7 @@ def put_block_verdict(
             403, 이미 결정됐거나 본문이 바뀌었으면 409, 보낸 값 자체가
             틀렸으면 422를 던진다.
     """
-    _require_decidable_proposal(
-        uow_factory, db, context, proposal_id, not_found_code="NOT_FOUND"
-    )
+    _require_decidable_proposal(uow_factory, db, context, proposal_id)
     try:
         stored = upsert_block_verdict(
             uow_factory(),
@@ -623,9 +622,7 @@ def publish_proposal(
             403, 미결정·낡음·경합이면 409, 보낸 값이나 조립 결과가 계약을
             어기면 422를 던진다.
     """
-    _require_decidable_proposal(
-        uow_factory, db, context, proposal_id, not_found_code="NOT_FOUND"
-    )
+    _require_decidable_proposal(uow_factory, db, context, proposal_id)
     try:
         result = publish_artifact_proposal(
             uow_factory(),
@@ -633,6 +630,8 @@ def publish_proposal(
             proposal_id=proposal_id,
             base_revision_id=payload.base_revision_id,
             reviewer=context.reviewer,
+            undecided=payload.undecided,
+            rejection_reason=payload.rejection_reason,
         )
     except PublishError as error:
         status_code, message = _PUBLISH_ERRORS.get(

@@ -2628,7 +2628,7 @@ def test_block_verdict_missing_proposal_returns_404(
         )
 
     assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "NOT_FOUND"
+    assert response.json()["detail"]["code"] == "PROPOSAL_NOT_FOUND"
 
 
 def test_block_verdict_audit_records_block_index(
@@ -2776,7 +2776,7 @@ def test_publish_stale_base_returns_409(
     session_factory: Callable[[], Session],
     workspace_ids: tuple[int, int],
 ) -> None:
-    """클라이언트가 본 기준 판이 다르면 409 STALE_BASE다."""
+    """클라이언트가 본 기준 판이 다르면 409 STALE_BASE_REVISION이다."""
     workspace_id, _ = workspace_ids
     proposal_id, blocks = _seed_two_block_proposal(
         session_factory,
@@ -2799,7 +2799,7 @@ def test_publish_stale_base_returns_409(
         )
 
     assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "STALE_BASE"
+    assert response.json()["detail"]["code"] == "STALE_BASE_REVISION"
 
 
 def test_publish_audit_records_proposal_id(
@@ -2877,6 +2877,46 @@ def test_publish_invalid_returns_422(
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "INVALID"
     assert "조립한 본문이" not in response.text
+
+
+def test_publish_passes_undecided_to_the_service(
+    app: FastAPI, client: TestClient, reviewer: User
+) -> None:
+    """body의 일괄 결정 값이 발행 서비스 인자로 그대로 넘어간다."""
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(proposal=_proposal(proposal_id=proposal_id))
+    )
+    result = PublishResult(
+        proposal_id=proposal_id,
+        verdict="rejected",
+        revision_id=None,
+        revision_number=None,
+        blocks_published=0,
+        blocks_rejected=2,
+        contradictions_resolved=0,
+        claims_accepted=0,
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.publish_artifact_proposal",
+        return_value=result,
+    ) as service:
+        response = client.post(
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+            json={
+                "base_revision_id": None,
+                "undecided": "reject",
+                "rejection_reason": "이번 판에는 싣지 않는다",
+            },
+        )
+
+    assert response.status_code == 200
+    assert service.call_args.kwargs["undecided"] == "reject"
+    assert (
+        service.call_args.kwargs["rejection_reason"]
+        == "이번 판에는 싣지 않는다"
+    )
 
 
 def test_approve_after_block_verdict_is_blocked_and_publish_works(
@@ -3126,7 +3166,7 @@ def test_block_verdict_hides_other_workspace_proposal(
         )
 
     assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "NOT_FOUND"
+    assert response.json()["detail"]["code"] == "PROPOSAL_NOT_FOUND"
     with KnowledgeMaintenanceUnitOfWork(
         session_factory, workspace_id=second
     ) as uow:
@@ -3161,7 +3201,7 @@ def test_publish_hides_other_workspace_proposal(
         )
 
     assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "NOT_FOUND"
+    assert response.json()["detail"]["code"] == "PROPOSAL_NOT_FOUND"
     with KnowledgeMaintenanceUnitOfWork(
         session_factory, workspace_id=second
     ) as uow:
