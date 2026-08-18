@@ -127,7 +127,7 @@ export const WIKI_TONE_STYLE_OPTIONS: readonly WikiToneStyleOption[] = [
   },
 ];
 
-export const CHANNEL_FIELD_LABEL = '어떤 채널로 들어오는 문의를 감지할까요?';
+export const CHANNEL_FIELD_LABEL = '어떤 채널톡 채널의 문의를 감지할까요?';
 /** 명세의 수집 범위 오해 방지 카피 */
 export const CHANNEL_FIELD_CAPTION = '선택한 채널의 고객 상담만 읽어요. 팀챗 등 내부 대화는 읽지 않아요.';
 export const CHANNEL_PICKER_PLACEHOLDER = '채널톡 내 채널을 선택해주세요';

@@ -46,7 +46,7 @@ const meta = {
         '표는 2셀 구조다: 문서 열(fill, min-w 220) + 메타 셀(고정 428). 바깥 gap 36 = gap-9, 메타 안 gap 16 = gap-4 — gap이 달라 한 층 grid로 펼 수 없다.',
         '메타 셀은 grid-cols-[140px_160px_96px]이고 헤더·행이 DASHBOARD_DOCUMENT_META_GRID 상수를 공유한다. 1040 검산: 6+564+36+140+16+160+16+96+6.',
         '행 셸 시각 분리 약속 이행: rounded-lg는 행 버튼만 갖고 DASHBOARD_DOCUMENT_TABLE_SHELL은 레이아웃만 갖는다(헤더가 함께 쓴다).',
-        'breadcrumb 마디 max-w 80 신설(시안 Text Button max-width) — 초과분은 라벨 truncate. 폭 흡수는 문서 열 하나뿐이고 행 높이 65는 결과값.',
+        'breadcrumb 마디 max-w 150(시안 Text Button 150×28 실측, 8/17 재확인) — 초과분은 라벨 truncate. 폭 흡수는 문서 열 하나뿐이고 행 높이 65는 결과값.',
       ],
     }),
   },
@@ -160,10 +160,10 @@ export const LongTitleInNarrowSlot: Story = {
     await expect(heading.scrollWidth).toBeGreaterThan(heading.clientWidth);
     await expect(heading.getClientRects()).toHaveLength(1);
 
-    // breadcrumb 마디는 80 상한을 지키고 초과분은 라벨이 잘린다.
+    // breadcrumb 마디는 150 상한을 지키고 초과분은 라벨이 잘린다.
     const crumbLabel = canvas.getByText('아주 길게 늘어난 채널 이름 표본');
     const crumb = crumbLabel.parentElement!;
-    await expect(crumb.getBoundingClientRect().width).toBeLessThanOrEqual(80);
+    await expect(crumb.getBoundingClientRect().width).toBeLessThanOrEqual(150);
     await expect(crumbLabel.scrollWidth).toBeGreaterThan(crumbLabel.clientWidth);
   },
 };

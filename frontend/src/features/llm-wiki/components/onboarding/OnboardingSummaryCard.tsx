@@ -30,8 +30,8 @@ export default function OnboardingSummaryCard({ sections }: OnboardingSummaryCar
 
             <dl className="flex flex-col gap-4">
               {section.rows.map((row) => (
-                <div key={row.label} className="flex items-start">
-                  <dt className="text-body-small text-text-normal-alternative w-33 shrink-0 pt-1">{row.label}</dt>
+                <div key={row.label} className="flex items-start gap-13">
+                  <dt className="text-body-small text-text-normal-alternative w-20 shrink-0 pt-1">{row.label}</dt>
                   <dd className="flex min-w-0 flex-wrap items-center gap-3">
                     {row.values.map((value) =>
                       row.variant === 'badge' ? (

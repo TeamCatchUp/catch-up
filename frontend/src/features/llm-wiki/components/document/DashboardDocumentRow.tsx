@@ -63,8 +63,8 @@ export default function DashboardDocumentRow({ document, onClick }: DashboardDoc
                 return (
                   <Fragment key={`${crumb.kind}-${crumb.label}`}>
                     {index > 0 && <IconArrowRight aria-hidden className="text-icon-normal-neutral size-5 shrink-0" />}
-                    {/* breadcrumb 마디 — 시안이 마디 폭을 80으로 상한 */}
-                    <span className="flex max-w-20 min-w-0 items-center gap-1 rounded-full px-1.5 py-1">
+                    {/* breadcrumb 마디 — 시안이 마디 폭을 150으로 상한 */}
+                    <span className="flex max-w-37.5 min-w-0 items-center gap-1 rounded-full px-1.5 py-1">
                       {CrumbIcon && <CrumbIcon aria-hidden className="text-icon-normal-neutral size-5 shrink-0" />}
                       <span className="text-body-xsmall text-text-normal-neutral min-w-0 flex-1 truncate">
                         {crumb.label}
