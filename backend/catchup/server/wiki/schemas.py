@@ -330,8 +330,8 @@ class ArtifactListItemResponse(BaseModel):
     값이 갈린다.
 
     status는 컬럼이 아니라 계류 제안 수와 최신 판에서 계산한 값이다. 계류
-    제안이 있으면 그것이 먼저다 — 발행본이 있어도 사람이 볼 일이 남아 있는
-    쪽을 먼저 알려야 한다.
+    제안이 있으면 그것이 먼저다. 발행본이 있어도 사람이 볼 일이 남아 있는
+    쪽을 먼저 알려야 하기 때문이다.
     """
 
     artifact_id: str
@@ -363,8 +363,8 @@ class ArtifactListResponse(BaseModel):
 class ArtifactMoveRequest(BaseModel):
     """문서를 옮길 폴더를 담는다.
 
-    folder_id가 None이면 채널 루트로 올린다. 채널은 여기서 바꾸지 않는다 —
-    채널 이동은 정의·담당자·관리자 판정이 함께 따라와야 하는 조작이라
+    folder_id가 None이면 채널 루트로 올린다. 채널은 여기서 바꾸지 않는다.
+    채널 이동은 정의·담당자·관리자 판정이 함께 따라와야 하는 조작이라,
     폴더 이동과 같은 문에 두지 않는다.
     """
 
