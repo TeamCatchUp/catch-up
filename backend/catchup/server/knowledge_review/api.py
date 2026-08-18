@@ -14,11 +14,15 @@ debug 라우터와 달리 인증과 검토자 권한을 요구하고, 결정 저
 운영 도구를 인증 표면에 노출하지 않으려는 것이며, 그 경로는 debug 라우터와
 `catchup/evaluation/`의 CLI 러너가 담당한다.
 
-인가는 두 겹이다. 의존성이 "검수 표면에 설 자격"을 보고, 대상이 정해지는
+인가는 두 겹이다. 의존성이 "이 표면에 설 자격"을 보고, 대상이 정해지는
 핸들러가 "이 문서를 결정할 수 있는가"를 다시 본다. 문서마다 담당자가 다르니
 자격 하나로는 부족하고, 그렇다고 판정을 서비스로 내리면 CLI·debug 표면까지
-같은 인가를 지게 된다. 다만 두 번째 겹은 결정 경로에만 선다. 열람은 첫 겹만
-통과하면 열리고, 결정할 수 있는지는 응답의 can_review로 알린다.
+같은 인가를 지게 된다.
+
+첫 겹은 경로에 따라 갈린다. 큐 목록과 상세는 workspace 구성원이면 열리고,
+판정 경로(블록 결정·발행·승인·반려)만 위키 역할을 요구한다. 역할이 없는
+구성원에게는 목록이 그대로 나가되 can_review가 false로 실린다. 두 번째 겹은
+결정 경로에만 선다.
 
 불변식은 전부 서비스가 지킨다. 이 라우터는 컨텍스트를 확정하고 서비스를
 부르고 예외를 상태 코드로 옮기는 껍데기이며, 결정 규칙을 스스로 갖지
@@ -89,7 +93,9 @@ from catchup.knowledge_maintenance.services.review_block_verdict import (
 )
 from catchup.server.knowledge_review.dependencies import ReviewerContext
 from catchup.server.knowledge_review.dependencies import ReviewUowFactory
+from catchup.server.knowledge_review.dependencies import get_member_review_uow_factory
 from catchup.server.knowledge_review.dependencies import get_review_uow_factory
+from catchup.server.knowledge_review.dependencies import resolve_member_reviewer_context
 from catchup.server.knowledge_review.dependencies import resolve_reviewer_workspace
 from catchup.server.knowledge_review.schemas import ArtifactRefResponse
 from catchup.server.knowledge_review.schemas import BaseBlockResponse
@@ -295,11 +301,14 @@ def list_queue(
     ),
     limit: int = Query(50, ge=1, le=200, description="한 쪽에 담을 안건 수"),
     offset: int = Query(0, ge=0, description="건너뛸 안건 수"),
-    context: ReviewerContext = Depends(resolve_reviewer_workspace),
-    uow_factory: ReviewUowFactory = Depends(get_review_uow_factory),
+    context: ReviewerContext = Depends(resolve_member_reviewer_context),
+    uow_factory: ReviewUowFactory = Depends(get_member_review_uow_factory),
     db: Session = Depends(get_db),
 ) -> QueuePageResponse:
     """검토 큐 한 페이지를 문서 위치·담당자·결정 가능 여부와 함께 돌려준다.
+
+    목록은 workspace 구성원이면 누구나 연다. 역할이 없는 사람에게도 같은
+    페이지가 나가고, 줄마다 can_review가 false로 실린다.
 
     위치와 담당자 조회는 페이지에 실린 문서 id로 한 번씩만 나간다. 줄마다
     조회하면 한 쪽에 문서 수만큼 질의가 붙는다.
@@ -366,8 +375,8 @@ def list_queue(
 @audit_log(action=KnowledgeReviewAction.DETAIL)
 def get_queue_item(
     proposal_id: uuid.UUID,
-    context: ReviewerContext = Depends(resolve_reviewer_workspace),
-    uow_factory: ReviewUowFactory = Depends(get_review_uow_factory),
+    context: ReviewerContext = Depends(resolve_member_reviewer_context),
+    uow_factory: ReviewUowFactory = Depends(get_member_review_uow_factory),
     db: Session = Depends(get_db),
 ) -> ProposalDetailResponse:
     """변경안 하나를 충돌 목록·블록 결정과 함께 돌려준다.
@@ -377,8 +386,8 @@ def get_queue_item(
     켜졌는데 목록이 비는 것은 그 안건이 이미 결정돼 계류 목록에서 빠진
     경우이며, 그때도 표시는 본문에 다툼 블록이 있다는 사실 그대로다.
 
-    상세는 결정 권한이 없어도 열린다. 결정 가능 여부는 can_review로 실어
-    보내고, 결정 경로는 저마다 같은 판정을 다시 한다.
+    상세는 workspace 구성원이면 역할이 없어도 열린다. 결정 가능 여부는
+    can_review로 실어 보내고, 결정 경로는 저마다 같은 판정을 다시 한다.
 
     발행판은 문서마다 한 번만 읽는다. base_blocks와 block_changes가 같은
     한 벌에서 나와야 소비자가 두 값을 짝지어 볼 수 있다.
