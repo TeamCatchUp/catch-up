@@ -392,7 +392,14 @@ _VOC_SEED = ExtractionVocabulary(
 
 
 def _feature_request_status_spec() -> SelectionSpec:
-    """기능 요청 하나를 문서 한 편으로 잡는 규칙을 만든다."""
+    """기능 요청 하나를 문서 한 편으로 잡는 규칙을 만든다.
+
+    접수 횟수(request_count)·우선도(request_priority)는 "많이 들어온
+    요구"를 보려는 목적의 근거라 문서 안에 남긴다. 선택 규칙에 없는
+    절은 컴파일이 버리므로, 여기서 빠지면 그 목적이 가리킬 숫자가
+    문서에 하나도 없게 된다. 나중에 집계 뷰가 생기면 그쪽으로 옮길 수
+    있다.
+    """
     return SelectionSpec(
         entity_types=("feature_request",),
         relation_paths=(
@@ -403,6 +410,8 @@ def _feature_request_status_spec() -> SelectionSpec:
         ),
         predicate_sections=(
             "request_status",
+            "request_priority",
+            "request_count",
             "first_reported_at",
             "last_reported_at",
             "usage_context",

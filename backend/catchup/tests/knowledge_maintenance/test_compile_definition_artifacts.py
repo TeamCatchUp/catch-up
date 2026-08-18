@@ -61,7 +61,12 @@ from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.artifact import validate_blocks
 from catchup.knowledge_maintenance.domain.artifact_definition import MAX_NODES_PER_STEP
+from catchup.knowledge_maintenance.domain.artifact_definition import (
+    serialize_selection_spec,
+)
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
+from catchup.knowledge_maintenance.domain.preset_catalog import PRESET_DOMAINS
+from catchup.knowledge_maintenance.domain.preset_catalog import find_kind_by_name
 from catchup.knowledge_maintenance.ports.relations import StoredRelationEdge
 from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
     compile_definition_artifacts,
@@ -428,6 +433,60 @@ def test_empty_predicate_sections_drops_claim_sections() -> None:
     row = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]
     assert [block.block_kind for block in row["blocks"]] == [
         BLOCK_KIND_RELATION_SECTION
+    ]
+
+
+def test_preset_feature_request_kind_compiles_request_count_section() -> None:
+    """preset 양식으로 만든 정의가 접수 횟수 절을 문서에 싣는다.
+
+    선택 규칙에 없는 predicate의 claim은 컴파일이 버리고, 산문 쪽은
+    문서에 없는 숫자를 지어내지 못한다. 그래서 "많이 들어온 요구"라는
+    목적의 근거는 이 절이 서는지로만 확인된다.
+    """
+    preset_kind = find_kind_by_name("feature_request_status")
+    assert preset_kind is not None
+    voc = next(domain for domain in PRESET_DOMAINS if domain.id == "voc")
+    vocabulary = voc.seed_vocabulary.model_copy(update={"snapshot_id": "7"})
+    node_id = uuid.uuid4()
+    claim = StoredClaimCandidate(
+        id=uuid.uuid4(),
+        subject_entity_candidate_id=None,
+        subject_node_id=node_id,
+        subject_resolved_node_id=None,
+        predicate="request_count",
+        value_type="number",
+        value=37,
+        statement="같은 요구가 37건 접수됐다",
+        observed_at=NOW,
+        valid_from=None,
+        valid_to=None,
+        citation_verified=True,
+    )
+    uow = FakeDefinitionUnitOfWork(
+        definitions=[
+            _definition_row(
+                kind=preset_kind.kind,
+                spec=serialize_selection_spec(preset_kind.spec_template()),
+            )
+        ],
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[claim],
+    )
+
+    compile_definition_artifacts(
+        uow, workspace_id=WORKSPACE, vocabulary=vocabulary
+    )
+
+    row = _pending_by_title(uow)[f"{preset_kind.kind}: 요청 A"]
+    counts = [
+        block
+        for block in row["blocks"]
+        if block.block_kind == BLOCK_KIND_CLAIM_SECTION
+        and block.heading == "request_count"
+    ]
+    assert len(counts) == 1
+    assert [source.statement for source in counts[0].sources] == [
+        "같은 요구가 37건 접수됐다"
     ]
 
 

@@ -300,6 +300,8 @@ def test_feature_request_kind_selects_template_sections() -> None:
     spec = preset_kind.spec_template()
     assert spec.predicate_sections == (
         "request_status",
+        "request_priority",
+        "request_count",
         "first_reported_at",
         "last_reported_at",
         "usage_context",
@@ -308,6 +310,25 @@ def test_feature_request_kind_selects_template_sections() -> None:
         "support_status",
         "workaround",
     )
+
+
+def test_top_requests_purpose_keeps_request_count_in_its_recommended_kind() -> (
+    None
+):
+    """많이 들어온 요구를 보는 목적이 접수 횟수를 근거로 남긴다.
+
+    목적과 문서 종류의 짝을 함께 본다. 종류의 절 목록만 보면, 목적이
+    가리키는 종류가 바뀌었을 때 목적이 근거 없는 문서를 받게 되는 것을
+    놓친다.
+    """
+    found = find_purpose("voc.top_requests")
+    assert found is not None
+    _, purpose = found
+    preset_kind = find_kind_by_name(purpose.recommended_kind)
+    assert preset_kind is not None
+    sections = preset_kind.spec_template().predicate_sections
+    assert sections is not None
+    assert "request_count" in sections
 
 
 def test_styles_are_the_three_presets_plus_custom() -> None:
