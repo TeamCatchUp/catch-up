@@ -3,7 +3,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-import DocumentStatusBadge from '@/features/llm-wiki/components/document/DocumentStatusBadge';
 import WikiPageHeader from '@/features/llm-wiki/components/header/WikiPageHeader';
 import ChangeSummaryCard from '@/features/llm-wiki/components/review-queue/ChangeSummaryCard';
 import BlockDiffSection from '@/features/llm-wiki/components/review-queue/diff/BlockDiffSection';
@@ -212,7 +211,6 @@ export default function Page() {
         <WikiPageHeader
           variant="detail"
           breadcrumbs={breadcrumbs}
-          badge={<DocumentStatusBadge status="pending_review" size="sm" />}
           actions={
             <>
               <Button

@@ -8,7 +8,6 @@ import IconKebabHorizontal from '@/public/icons/icon/kebab_horizontal.svg';
 import { Button } from '@/shared/components/ui/button';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
-import DocumentStatusBadge from '../document/DocumentStatusBadge';
 import WikiPageHeader from './WikiPageHeader';
 
 /** 우측 액션 슬롯의 ⋯ 트리거. 메뉴 내용 시안이 없어 열지 않는다. */
@@ -80,7 +79,7 @@ const meta = {
         'breadcrumb는 전부 props 주입이고 기존 DocumentBreadcrumb 계약(kind + label)을 그대로 쓴다 — 공유 파일 llmWikiModel.ts는 건드리지 않았다.',
         '마지막 마디가 현재 페이지다. 버튼이 아니고 aria-current="page"를 갖는다 — 클릭 대상이 아니라는 사실을 시각(색)이 아니라 마크업으로도 남긴다.',
         '우측 슬롯 내용물은 전부 소비처 몫이다. ⋯ 메뉴 항목 시안이 없어 트리거만 두고 DropdownMenu를 붙이지 않았다.',
-        '검토큐 태그는 상태 배지 워크스트림의 DocumentStatusBadge(size="sm")다 — 헤더는 자리(현재 마디 옆, gap 8)만 정하고 내용을 모른다. 8/10 통합 전에는 이 폴더의 ReviewNeededTag였다. [8/18 재실측] 시안 태그 문구가 "검토 필요"→"검토 대기"로 교체됨(같은 Tag type=purple, 기하 동일) — 스토리를 status="pending_review"로 전환. 상태 배지 세션이 그 문구 통일을 근거로 needs_review preset을 제거해 문서 상태는 2종(reviewed·pending_review)이 됐다.',
+        '상태 태그 슬롯은 8/18 사용자 확정으로 제거됐다 — 검토큐의 모든 문서가 검토 대기 상태라 헤더 태그의 정보량이 0이다. 시안(검토큐 헤더의 Tag 인스턴스 18022:126778)에는 아직 있어 시안 갱신을 요청했다(#26). 태그 자체는 상태 배지 워크스트림의 DocumentStatusBadge 소관으로 존속한다(표 상태 열 등).',
         '로딩·빈·에러 헤더는 만들지 않는다(시안 없음, 감사 금지 목록).',
       ],
       tokenNotes: [
@@ -160,9 +159,6 @@ export const Channel: Story = {
 
     // 구분자는 마디 사이에만 그려진다 — nav 안 svg는 마디 아이콘 하나뿐이어야 한다.
     await expect(nav.querySelectorAll('svg')).toHaveLength(1);
-
-    // 배지 슬롯은 비어 있다 — 좌측 덩어리의 자식은 nav 하나뿐.
-    await expect(nav.parentElement?.children).toHaveLength(1);
   },
 };
 
@@ -221,7 +217,10 @@ export const Document: Story = {
   },
 };
 
-/** 검토큐 문서 — 3단 + "검토 대기" 태그 + 우측 2종. 태그 문구는 8/18 재실측 기준이다. */
+/**
+ * 검토큐 문서 — 3단 + 우측 2종. 시안의 "검토 대기" 태그(18022:126778)는 붙이지 않는다 —
+ * 검토큐의 모든 문서가 검토 대기 상태라 정보량이 0이다(8/18 사용자 확정, 시안 갱신 요청 #26).
+ */
 export const ReviewQueueDocument: Story = {
   args: {
     variant: 'detail',
@@ -231,25 +230,18 @@ export const ReviewQueueDocument: Story = {
       { kind: 'document', label: 'Update documentation content' },
     ],
     onBreadcrumbClick: fn(),
-    badge: <DocumentStatusBadge status="pending_review" size="sm" />,
     actions: <ReviewQueueActions />,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await expect(canvas.getByText('검토 대기')).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: '다음 문서' })).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: '이전 문서' })).toBeInTheDocument();
 
-    // shared Badge 기본이 rounded-full이라, 덮어쓰기를 놓치면 알약으로 조용히 되돌아간다.
-    const tag = canvas.getByText('검토 대기');
-    await expect(getComputedStyle(tag).borderRadius).toBe('6px');
+    // 상태 태그는 확정으로 제거됐다 — 되살아나면 정보량 0 결정이 뒤집힌 것이므로 여기서 잡는다.
+    await expect(canvas.queryByText('검토 대기')).toBeNull();
+    await expect(canvas.queryByText('검토 필요')).toBeNull();
 
-    // 아이콘 stroke가 하드코딩 hex로 재export되면 다크 모드에서만 어긋난다 — 속성을 직접 못박는다.
-    const tagIcon = tag.querySelector('svg path');
-    await expect(tagIcon).toHaveAttribute('stroke', 'currentColor');
-
-    // 배지가 있어도 헤더 높이는 그대로여야 한다(태그가 행을 밀지 않는다).
     await expect(getHeader(canvasElement).getBoundingClientRect().height).toBe(52);
   },
 };
@@ -263,7 +255,6 @@ export const LongTitleInNarrowSlot: Story = {
       { kind: 'folder', label: '폴더명' },
       { kind: 'document', label: NARROW_CURRENT_LABEL },
     ],
-    badge: <DocumentStatusBadge status="pending_review" size="sm" />,
     actions: <ReviewQueueActions />,
   },
   decorators: [
