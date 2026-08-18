@@ -54,6 +54,7 @@ from catchup.db.models import Channel
 from catchup.db.models import ChannelAdmin
 from catchup.db.models import KnowledgeArtifact
 from catchup.db.models import KnowledgeArtifactChangeProposal
+from catchup.db.models import KnowledgeArtifactRevision
 from catchup.db.models import KnowledgeNode
 from catchup.db.models import User
 from catchup.db.models import UserRole
@@ -1216,6 +1217,233 @@ def test_detail_relation_block_carries_relation_ids(
         "proposal_ids": [],
         "relation_ids": [str(relation_id)],
     }
+
+
+def _revision_blocks(
+    *, claim_id: uuid.UUID, body: str
+) -> tuple[ArtifactBlock, ...]:
+    """발행판에 저장할 블록 한 벌을 만든다."""
+    return (
+        ArtifactBlock(
+            block_kind=BLOCK_KIND_CLAIM_SECTION,
+            heading="속도 제한",
+            body=body,
+            claim_ids=(claim_id,),
+            proposal_ids=(),
+            ontology_version="v1",
+        ),
+    )
+
+
+def _seed_revision(
+    db: Session,
+    *,
+    workspace_id: int,
+    artifact_id: uuid.UUID,
+    blocks: tuple[ArtifactBlock, ...],
+) -> uuid.UUID:
+    """문서의 1판을 그 판을 낳은 승인된 변경안과 함께 넣는다.
+
+    판 행은 자기를 낳은 변경안을 가리켜야 하고, 그 변경안은 결정 저널
+    (검토자·결정 시각)이 채워진 승인 상태여야 한다. DB CHECK가 그것을
+    요구하므로 여기서도 같은 모양으로 넣는다.
+    """
+    source_proposal_id = uuid.uuid4()
+    db.add(
+        KnowledgeArtifactChangeProposal(
+            id=source_proposal_id,
+            workspace_id=workspace_id,
+            artifact_id=artifact_id,
+            blocks=serialize_blocks(blocks),
+            status="approved",
+            content_hash=blocks_content_hash(blocks),
+            idempotency_key=f"seed:{source_proposal_id}",
+            base_revision_id=None,
+            reviewed_at=AT,
+            reviewer="test:seed",
+        )
+    )
+    db.flush()
+    revision_id = uuid.uuid4()
+    db.add(
+        KnowledgeArtifactRevision(
+            id=revision_id,
+            workspace_id=workspace_id,
+            artifact_id=artifact_id,
+            revision_number=1,
+            blocks=serialize_blocks(blocks),
+            source_proposal_id=source_proposal_id,
+        )
+    )
+    db.flush()
+    return revision_id
+
+
+def _two_block_proposal(
+    *,
+    proposal_id: uuid.UUID,
+    artifact_id: uuid.UUID,
+    claim_id: uuid.UUID,
+    body: str,
+) -> StoredArtifactProposal:
+    """발행판 블록 하나를 고치고 블록 하나를 더한 변경안을 만든다."""
+    return StoredArtifactProposal(
+        id=proposal_id,
+        artifact_id=artifact_id,
+        subject_node_id=uuid.uuid4(),
+        title="오픈 API",
+        status="pending",
+        blocks=(
+            ArtifactBlock(
+                block_kind=BLOCK_KIND_CLAIM_SECTION,
+                heading="속도 제한",
+                body=body,
+                claim_ids=(claim_id,),
+                proposal_ids=(),
+                ontology_version="v1",
+            ),
+            ArtifactBlock(
+                block_kind=BLOCK_KIND_CLAIM_SECTION,
+                heading="담당",
+                body="담당은 플랫폼 팀이다",
+                claim_ids=(uuid.uuid4(),),
+                proposal_ids=(),
+                ontology_version="v1",
+            ),
+        ),
+        content_hash="hash",
+        base_revision_id=None,
+        rejection_reason=None,
+        origin="compiled",
+        created_at=AT,
+    )
+
+
+def test_detail_is_readable_by_member_without_document_role_but_can_review_false(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """워크스페이스 역할이 하나라도 있으면 200이고 can_review는 False다.
+
+    열람과 판정을 나눈다. 남의 채널 문서라도 검토자는 내용을 읽을 수
+    있어야 하고, 결정 버튼만 잠기면 된다.
+    """
+    workspace_id, _ = workspace_ids
+    outsider = _make_user(db, email="other-channel-admin@example.com")
+    _join(db, user=outsider, workspace_id=workspace_id)
+    own_channel_id = _make_channel(
+        db, workspace_id=workspace_id, created_by=outsider.id
+    )
+    _make_channel_admin(db, channel_id=own_channel_id, user=outsider)
+    other_channel_id = _make_channel(
+        db, workspace_id=workspace_id, created_by=outsider.id
+    )
+    artifact_id = _make_artifact(
+        db, workspace_id=workspace_id, channel_id=other_channel_id
+    )
+    owner = _make_user(db, email="detail-owner@example.com")
+    _join(db, user=owner, workspace_id=workspace_id)
+    _make_owner(db, artifact_id=artifact_id, user=owner)
+    as_user(outsider)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+
+    response = client.get(f"/api/v1/knowledge-review/queue/{proposal_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["can_review"] is False
+    assert [item["user_id"] for item in data["owners"]] == [owner.id]
+    assert data["artifact"]["channel_id"] == str(other_channel_id)
+
+
+def test_detail_embeds_base_blocks_and_block_changes(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    reviewer: User,
+    workspace_ids: tuple[int, int],
+) -> None:
+    """발행판이 있으면 base_blocks가 실리고 block_changes가 백엔드 계산으로 온다."""
+    workspace_id, _ = workspace_ids
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    claim_id = uuid.uuid4()
+    _seed_revision(
+        db,
+        workspace_id=workspace_id,
+        artifact_id=artifact_id,
+        blocks=_revision_blocks(claim_id=claim_id, body="rate_limit은 60이다"),
+    )
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_two_block_proposal(
+                proposal_id=proposal_id,
+                artifact_id=artifact_id,
+                claim_id=claim_id,
+                body="rate_limit은 120이다",
+            )
+        )
+    )
+
+    response = client.get(f"/api/v1/knowledge-review/queue/{proposal_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["can_review"] is True
+    assert [
+        (item["block_index"], item["body"]) for item in data["base_blocks"]
+    ] == [(0, "rate_limit은 60이다")]
+    assert data["block_changes"] == [
+        {"change": "modified", "block_index": 0, "base_block_index": 0},
+        {"change": "added", "block_index": 1, "base_block_index": None},
+    ]
+    assert data["blocks"][0]["change_reason"] == "산문 갱신"
+    assert data["blocks"][1]["change_reason"] == "새 섹션"
+    assert data["blocks"][0]["markdown"].startswith("## 속도 제한")
+
+
+def test_detail_without_revision_has_empty_base_blocks(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    reviewer: User,
+    workspace_ids: tuple[int, int],
+) -> None:
+    """발행판이 없는 문서는 base_blocks가 비고 모든 블록이 새 블록이다."""
+    workspace_id, _ = workspace_ids
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_two_block_proposal(
+                proposal_id=proposal_id,
+                artifact_id=artifact_id,
+                claim_id=uuid.uuid4(),
+                body="rate_limit은 120이다",
+            )
+        )
+    )
+
+    response = client.get(f"/api/v1/knowledge-review/queue/{proposal_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["base_blocks"] == []
+    assert [item["change"] for item in data["block_changes"]] == [
+        "added",
+        "added",
+    ]
 
 
 def test_detail_missing_proposal_returns_404(
@@ -2966,7 +3194,9 @@ def test_block_response_carries_the_narrative() -> None:
         narrative="이 요구는 아직 검토 중이다.",
     )
 
-    response = _to_block(block, block_index=0, verdict=None)
+    response = _to_block(
+        block, block_index=0, verdict=None, reason=None
+    )
 
     assert response.narrative == "이 요구는 아직 검토 중이다."
     assert response.sources[0].statement == "상태는 검토 중이다"
@@ -2984,4 +3214,9 @@ def test_block_response_without_narrative_is_none() -> None:
         ontology_version="v3",
     )
 
-    assert _to_block(block, block_index=0, verdict=None).narrative is None
+    assert (
+        _to_block(
+            block, block_index=0, verdict=None, reason=None
+        ).narrative
+        is None
+    )

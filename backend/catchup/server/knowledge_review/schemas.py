@@ -135,6 +135,13 @@ class BlockResponse(BaseModel):
     두지 않는 이유는 "후보가 없는 블록"과 "후보를 다투는 블록인데 후보가
     비었다"를 소비자가 구별할 수 있어야 하기 때문이다.
 
+    markdown은 이 블록을 화면에 그대로 그릴 수 있게 만든 조각이다. 산문이
+    있으면 산문을, 없으면 body를 본문으로 쓴다. 소비자가 제목과 본문을
+    다시 조립하지 않게 하려는 것이며, 정본은 heading·body·narrative다.
+
+    change_reason은 발행판과 견줘 이 블록이 왜 바뀌었는지를 한 줄로 쓴
+    것이다. 바뀌지 않은 블록과 발행판이 없어 견줄 것이 없는 경우는 없음이다.
+
     narrative는 블록을 읽는 사람을 위해 쓴 산문이다. 근거가 아니라 표현이라
     없을 수 있고(근거 인용이 없는 블록), 산문이 없던 옛 변경안도 그대로
     읽혀야 하므로 기본값을 없음으로 둔다. 검수자는 이 문장과 sources의
@@ -154,6 +161,41 @@ class BlockResponse(BaseModel):
     sources: list[BlockSourceResponse] = []
     variants: list[VariantResponse] | None = None
     verdict: BlockVerdictResponse | None = None
+    markdown: str
+    change_reason: str | None = None
+
+
+class BaseBlockResponse(BaseModel):
+    """지금 발행돼 있는 판의 블록 하나를 담는다.
+
+    검토자가 "지금 문서"와 "바뀔 문서"를 나란히 놓고 보게 하려는 재료다.
+    발행판 블록에는 결정을 내릴 자리가 없으므로 block_content_hash와
+    verdict를 싣지 않는다. 그 둘을 함께 실으면 소비자가 발행판 블록에도
+    결정 요청을 보낼 수 있다고 읽는다.
+    """
+
+    block_index: int
+    block_kind: str
+    heading: str
+    body: str
+    narrative: str | None = None
+    claim_ids: list[str] = []
+    relation_ids: list[str] = []
+    sources: list[BlockSourceResponse] = []
+
+
+class BlockChangeResponse(BaseModel):
+    """발행판과 견준 블록 하나의 변경을 담는다.
+
+    자리를 두 개로 나눠 싣는다. block_index는 변경안 blocks 안 자리이고
+    base_block_index는 base_blocks 안 자리다. 새로 생긴 블록은 발행판에
+    짝이 없어 base_block_index가 없음이고, 빠진 블록은 변경안에 짝이 없어
+    block_index가 없음이다.
+    """
+
+    change: Literal["added", "modified", "removed"]
+    block_index: int | None
+    base_block_index: int | None
 
 
 class ReadSetResponse(BaseModel):
@@ -200,6 +242,17 @@ class ProposalDetailResponse(BaseModel):
     그래도 표시가 켜졌는데 목록이 빌 수 있다. 다툼 블록이 가리킨 안건이
     먼저 판정되면 계류 목록에서 빠지기 때문이다. 빈 목록은 표시가 틀렸다는
     뜻이 아니라 그 안건이 이미 결정됐다는 뜻이다.
+
+    can_review는 이 사용자가 이 문서의 안건을 결정할 수 있는지를 나타낸다.
+    상세는 결정 권한이 없어도 열린다. 읽는 것과 정하는 것은 다른 일이고,
+    권한이 없다고 내용까지 가리면 검토자가 남의 채널 문서를 확인할 방법이
+    없어지기 때문이다. 이 값이 True여도 결정 경로는 같은 판정을 다시 하므로
+    화면 표시가 인가의 정본은 아니다.
+
+    base_blocks는 지금 발행돼 있는 판의 블록이고 block_changes는 그것과
+    견준 변경 목록이다. 아직 발행된 판이 없으면 base_blocks는 비고 변경안의
+    모든 블록이 added가 된다. 계산을 백엔드에서 하는 이유는 블록 짝짓기
+    규칙이 화면마다 달라지면 같은 안건이 소비자마다 다르게 보이기 때문이다.
     """
 
     proposal_id: str
@@ -209,7 +262,11 @@ class ProposalDetailResponse(BaseModel):
     created_at: datetime
     base_revision_id: str | None
     contains_conflict: bool
+    owners: list[OwnerResponse] = []
+    can_review: bool
     blocks: list[BlockResponse]
+    base_blocks: list[BaseBlockResponse] = []
+    block_changes: list[BlockChangeResponse] = []
     read_set: ReadSetResponse
     conflicts: list[ConflictResponse]
 

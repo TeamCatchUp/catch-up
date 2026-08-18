@@ -17,7 +17,8 @@ debug 라우터와 달리 인증과 검토자 권한을 요구하고, 결정 저
 인가는 두 겹이다. 의존성이 "검수 표면에 설 자격"을 보고, 대상이 정해지는
 핸들러가 "이 문서를 결정할 수 있는가"를 다시 본다. 문서마다 담당자가 다르니
 자격 하나로는 부족하고, 그렇다고 판정을 서비스로 내리면 CLI·debug 표면까지
-같은 인가를 지게 된다.
+같은 인가를 지게 된다. 다만 두 번째 겹은 결정 경로에만 선다. 열람은 첫 겹만
+통과하면 열리고, 결정할 수 있는지는 응답의 can_review로 알린다.
 
 불변식은 전부 서비스가 지킨다. 이 라우터는 컨텍스트를 확정하고 서비스를
 부르고 예외를 상태 코드로 옮기는 껍데기이며, 결정 규칙을 스스로 갖지
@@ -29,6 +30,7 @@ debug 라우터와 달리 인증과 검토자 권한을 요구하고, 결정 저
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
 
 from fastapi import APIRouter
@@ -46,6 +48,11 @@ from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.artifact import block_content_hash
+from catchup.knowledge_maintenance.domain.artifact import deserialize_blocks
+from catchup.knowledge_maintenance.domain.block_diff import BlockChange
+from catchup.knowledge_maintenance.domain.block_diff import block_markdown
+from catchup.knowledge_maintenance.domain.block_diff import change_reason
+from catchup.knowledge_maintenance.domain.block_diff import diff_blocks
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
 from catchup.knowledge_maintenance.ports.block_verdicts import StoredBlockVerdict
 from catchup.knowledge_maintenance.ports.mutation_proposals import (
@@ -85,6 +92,8 @@ from catchup.server.knowledge_review.dependencies import ReviewUowFactory
 from catchup.server.knowledge_review.dependencies import get_review_uow_factory
 from catchup.server.knowledge_review.dependencies import resolve_reviewer_workspace
 from catchup.server.knowledge_review.schemas import ArtifactRefResponse
+from catchup.server.knowledge_review.schemas import BaseBlockResponse
+from catchup.server.knowledge_review.schemas import BlockChangeResponse
 from catchup.server.knowledge_review.schemas import BlockResponse
 from catchup.server.knowledge_review.schemas import BlockSourceResponse
 from catchup.server.knowledge_review.schemas import BlockVerdictRequest
@@ -197,6 +206,32 @@ def _require_decidable_proposal(
             403,
             code="NOT_DOCUMENT_REVIEWER",
             message="이 문서의 검수 권한이 없습니다.",
+        )
+    return proposal
+
+
+def _load_proposal_for_view(
+    uow_factory: ReviewUowFactory,
+    proposal_id: uuid.UUID,
+) -> StoredArtifactProposal:
+    """열람용으로 변경안을 읽는다. 담당자 게이트를 두지 않는다.
+
+    검수 표면에 설 자격은 의존성이 이미 봤다. 그 위에 문서별 담당자
+    게이트를 또 두면 남의 채널 문서는 내용조차 볼 수 없게 되는데, 검토는
+    보는 일과 정하는 일이 다르다. 그래서 여기서는 워크스페이스 경계만
+    지키고, 정할 수 있는지는 응답의 can_review로 따로 알린다.
+
+    Raises:
+        HTTPException: 이 workspace에 변경안이 없으면 404
+            PROPOSAL_NOT_FOUND를 던진다.
+    """
+    with uow_factory() as uow:
+        proposal = uow.artifacts.get_proposal(proposal_id=proposal_id)
+    if proposal is None:
+        raise review_error(
+            404,
+            code="PROPOSAL_NOT_FOUND",
+            message="변경안을 찾을 수 없습니다.",
         )
     return proposal
 
@@ -341,13 +376,36 @@ def get_queue_item(
     켜졌는데 목록이 비는 것은 그 안건이 이미 결정돼 계류 목록에서 빠진
     경우이며, 그때도 표시는 본문에 다툼 블록이 있다는 사실 그대로다.
 
+    상세는 결정 권한이 없어도 열린다. 결정 가능 여부는 can_review로 실어
+    보내고, 결정 경로는 저마다 같은 판정을 다시 한다.
+
+    발행판은 문서마다 한 번만 읽는다. base_blocks와 block_changes가 같은
+    한 벌에서 나와야 소비자가 두 값을 짝지어 볼 수 있다.
+
     Raises:
-        HTTPException: 이 workspace에 그 변경안이 없으면 404, 이 문서의
-            검수 권한이 없으면 403을 던진다.
+        HTTPException: 이 workspace에 그 변경안이 없으면 404를 던진다.
     """
-    proposal = _require_decidable_proposal(
-        uow_factory, db, context, proposal_id
+    proposal = _load_proposal_for_view(uow_factory, proposal_id)
+    channel_id, folder_id = wiki_queries.get_artifact_locations(
+        db, artifact_ids=[proposal.artifact_id]
+    ).get(proposal.artifact_id, (None, None))
+    owners = owners_by_artifact(db, [proposal.artifact_id])[
+        proposal.artifact_id
+    ]
+    can_review = can_decide_artifact(
+        context.roles,
+        artifact_channel_id=channel_id,
+        artifact_id=proposal.artifact_id,
+        owner_user_ids=frozenset(owner.user_id for owner in owners),
+        user_id=context.user.id,
     )
+    revision = wiki_queries.get_latest_revision(
+        db, artifact_id=proposal.artifact_id, workspace_id=context.workspace_id
+    )
+    base_blocks = (
+        () if revision is None else deserialize_blocks(revision.blocks)
+    )
+    changes = diff_blocks(base_blocks, proposal.blocks)
     with uow_factory() as uow:
         verdicts = uow.block_verdicts.list_for_proposal(
             proposal_id=proposal_id,
@@ -366,7 +424,17 @@ def get_queue_item(
         for item in contradictions
         if item.id in contested_ids
     ]
-    return _to_detail(proposal, conflicts=conflicts, verdicts=verdicts)
+    return _to_detail(
+        proposal,
+        conflicts=conflicts,
+        verdicts=verdicts,
+        channel_id=channel_id,
+        folder_id=folder_id,
+        owners=owners,
+        can_review=can_review,
+        base_blocks=base_blocks,
+        changes=changes,
+    )
 
 
 @router.post(
@@ -732,12 +800,15 @@ def _to_block(
     *,
     block_index: int,
     verdict: StoredBlockVerdict | None,
+    reason: str | None,
 ) -> BlockResponse:
     """블록 하나를 상세 응답의 블록으로 옮긴다.
 
     다툼 블록은 후보(variants)만 싣고 블록 자체의 sources는 비운다. 같은
     인용이 두 자리에 나오면 소비자가 어느 쪽을 정본으로 삼을지 알 수 없고,
     후보별로 갈린 근거가 한 덩어리로 뭉쳐 보인다.
+
+    reason은 발행판과 견준 변경 사유다. 바뀌지 않은 블록은 없음으로 받는다.
     """
     contested = block.block_kind == BLOCK_KIND_CONTESTED
     return BlockResponse(
@@ -765,6 +836,28 @@ def _to_block(
             else None
         ),
         verdict=None if verdict is None else _to_block_verdict(verdict),
+        markdown=block_markdown(block),
+        change_reason=reason,
+    )
+
+
+def _to_base_block(
+    block: ArtifactBlock, *, block_index: int
+) -> BaseBlockResponse:
+    """발행판 블록 하나를 상세 응답의 발행판 블록으로 옮긴다.
+
+    다툼 블록을 따로 다루지 않는다. 발행판에는 이미 승자가 정해진 문장만
+    남으므로 후보를 나열할 자리가 없다.
+    """
+    return BaseBlockResponse(
+        block_index=block_index,
+        block_kind=block.block_kind,
+        heading=block.heading,
+        body=block.body,
+        narrative=block.narrative,
+        claim_ids=[str(claim_id) for claim_id in block.claim_ids],
+        relation_ids=[str(item) for item in block.relation_ids],
+        sources=_to_sources(block.sources),
     )
 
 
@@ -773,10 +866,27 @@ def _to_detail(
     *,
     conflicts: list[ConflictResponse],
     verdicts: tuple[StoredBlockVerdict, ...],
+    channel_id: uuid.UUID | None,
+    folder_id: uuid.UUID | None,
+    owners: list[OwnerResponse],
+    can_review: bool,
+    base_blocks: Sequence[ArtifactBlock],
+    changes: tuple[BlockChange, ...],
 ) -> ProposalDetailResponse:
-    """변경안 하나를 상세 응답으로 옮긴다."""
+    """변경안 하나를 상세 응답으로 옮긴다.
+
+    변경 사유는 블록 자리로 짚어 붙인다. changes에는 바뀐 블록만 들어
+    있으므로, 목록에 없는 자리의 블록은 사유가 없음이 된다.
+    """
     contains_conflict = _has_contested(proposal)
     by_index = {verdict.block_index: verdict for verdict in verdicts}
+    reasons = {
+        change.block_index: change_reason(
+            change, base=base_blocks, proposed=proposal.blocks
+        )
+        for change in changes
+        if change.block_index is not None
+    }
     claim_ids: dict[str, None] = {}
     proposal_ids: dict[str, None] = {}
     relation_ids: dict[str, None] = {}
@@ -793,13 +903,17 @@ def _to_detail(
                 block,
                 block_index=index,
                 verdict=by_index.get(index),
+                reason=reasons.get(index),
             )
         )
     return ProposalDetailResponse(
         proposal_id=str(proposal.id),
         status=proposal.status,
         artifact=ArtifactRefResponse(
-            id=str(proposal.artifact_id), title=proposal.title
+            id=str(proposal.artifact_id),
+            title=proposal.title,
+            channel_id=str(channel_id) if channel_id else None,
+            folder_id=str(folder_id) if folder_id else None,
         ),
         origin=proposal.origin,
         created_at=proposal.created_at,
@@ -809,7 +923,21 @@ def _to_detail(
             else str(proposal.base_revision_id)
         ),
         contains_conflict=contains_conflict,
+        owners=owners,
+        can_review=can_review,
         blocks=blocks,
+        base_blocks=[
+            _to_base_block(block, block_index=index)
+            for index, block in enumerate(base_blocks)
+        ],
+        block_changes=[
+            BlockChangeResponse(
+                change=change.change,
+                block_index=change.block_index,
+                base_block_index=change.base_block_index,
+            )
+            for change in changes
+        ],
         read_set=ReadSetResponse(
             claim_ids=list(claim_ids),
             proposal_ids=list(proposal_ids),
