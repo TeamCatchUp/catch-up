@@ -35,11 +35,11 @@ interface NavTreeProps {
   className?: string;
 }
 
-/** 탐색형 들여쓰기 단위 */
-const INTERACTIVE_INDENT_PX = 20;
-
 /** 표시형 들여쓰기 단위 */
 const STATIC_INDENT_PX = 16;
+
+/** 이 depth부터 라벨 앞에 점 슬롯이 하나 더 붙는다 (시안 type=sub menu_depth2) */
+const DOT_DEPTH = 2;
 
 /** 행 hover·포커스에서만 나타나는 행 액션 버튼. 동작은 소비처 핸들러가 안다. */
 function RowActionButton({
@@ -126,93 +126,102 @@ export default function NavTree({
       );
     }
 
+    /*
+     * 들여쓰기가 행을 밀지 않는다 — 배경은 depth와 무관하게 같은 폭이다(시안 18580:80747).
+     * depth2는 점 슬롯이 하나 더 붙어 그만큼 더 들어가고 간격도 좁다.
+     */
+    const hasDot = depth >= DOT_DEPTH;
+
     return (
-      <div style={{ paddingInlineStart: depth * INTERACTIVE_INDENT_PX }}>
-        <div
-          data-slot="nav-tree-row"
-          className={cn(
-            'group flex h-9 items-center gap-3 rounded-lg px-2.5 py-1.5 transition-colors',
-            // 행이 버튼이 아니라서 pressed는 내부 버튼의 :active를 has()로 받는다.
-            'hover:bg-fill-normal-interaction-hover has-[button:active]:bg-fill-normal-interaction-pressed',
-            // 메뉴가 열려 있는 동안은 마우스가 떠나도 hover 상태를 유지한다.
-            menuOpen && 'bg-fill-normal-interaction-hover',
-            // 선택 상태에서는 중립 hover 대신 primary hover_assistive가 덮는다.
-            isActive && 'bg-fill-primary-normal-neutral hover:bg-fill-primary-normal-interaction-hover-assistive',
-          )}
+      <div
+        data-slot="nav-tree-row"
+        className={cn(
+          'group flex h-9 items-center rounded-lg py-1.5 pr-2.5 transition-colors',
+          depth === 0 ? 'pl-2.5' : 'pl-5',
+          hasDot ? 'gap-2' : 'gap-3',
+          // 행이 버튼이 아니라서 pressed는 내부 버튼의 :active를 has()로 받는다.
+          'hover:bg-fill-normal-interaction-hover has-[button:active]:bg-fill-normal-interaction-pressed',
+          // 메뉴가 열려 있는 동안은 마우스가 떠나도 hover 상태를 유지한다.
+          menuOpen && 'bg-fill-normal-interaction-hover',
+          // 선택 상태에서는 중립 hover 대신 primary hover_assistive가 덮는다.
+          isActive && 'bg-fill-primary-normal-neutral hover:bg-fill-primary-normal-interaction-hover-assistive',
+        )}
+      >
+        {hasDot && (
+          <span className="flex size-5.5 shrink-0 items-center justify-center">
+            <span aria-hidden className="border-icon-normal-assistive size-1.5 rounded-full border-[1.5px]" />
+          </span>
+        )}
+
+        {/* 캐럿 대상 행은 Icon 유무와 무관하게 슬롯을 예약한다 — 없으면 hover에 라벨이 밀린다 */}
+        {(hasChildren || node.Icon) && (
+          <span className="relative flex size-5.5 shrink-0 items-center justify-center">
+            {node.Icon && (
+              <node.Icon
+                aria-hidden
+                className={cn(
+                  'size-5.5',
+                  isActive ? 'text-icon-primary-normal' : 'text-icon-normal-neutral',
+                  hasChildren && 'group-focus-within:hidden group-hover:hidden',
+                )}
+              />
+            )}
+            {hasChildren && (
+              <button
+                type="button"
+                aria-label={`${node.label} ${expanded ? '접기' : '펼치기'}`}
+                aria-expanded={expanded}
+                onClick={() => toggle(node.id)}
+                className={cn(
+                  'hover:bg-fill-normal-interaction-hover absolute hidden size-5.5 cursor-pointer items-center justify-center rounded-full group-focus-within:flex group-hover:flex',
+                  isActive ? 'text-icon-primary-normal' : 'text-icon-normal-neutral',
+                )}
+              >
+                <IconArrowRight2 aria-hidden className={cn('size-4.5 transition-transform', expanded && 'rotate-90')} />
+              </button>
+            )}
+          </span>
+        )}
+
+        <button
+          type="button"
+          aria-current={isActive ? 'page' : undefined}
+          onClick={() => onNodeClick(node.id)}
+          // 라벨 span이 flex 아이템이어야 truncate가 동작한다 — 인라인이면 overflow가 무시된다
+          className="flex min-w-0 flex-1 cursor-pointer"
         >
-          {/* 캐럿 대상 행은 Icon 유무와 무관하게 슬롯을 예약한다 — 없으면 hover에 라벨이 밀린다 */}
-          {(hasChildren || node.Icon) && (
-            <span className="relative flex size-5.5 shrink-0 items-center justify-center">
-              {node.Icon && (
-                <node.Icon
-                  aria-hidden
-                  className={cn(
-                    'size-5.5',
-                    isActive ? 'text-icon-primary-normal' : 'text-icon-normal-neutral',
-                    hasChildren && 'group-focus-within:hidden group-hover:hidden',
-                  )}
-                />
-              )}
-              {hasChildren && (
-                <button
-                  type="button"
-                  aria-label={`${node.label} ${expanded ? '접기' : '펼치기'}`}
-                  aria-expanded={expanded}
-                  onClick={() => toggle(node.id)}
-                  className={cn(
-                    'hover:bg-fill-normal-interaction-hover absolute hidden size-5.5 cursor-pointer items-center justify-center rounded-full group-focus-within:flex group-hover:flex',
-                    isActive ? 'text-icon-primary-normal' : 'text-icon-normal-neutral',
-                  )}
-                >
-                  <IconArrowRight2
-                    aria-hidden
-                    className={cn('size-4.5 transition-transform', expanded && 'rotate-90')}
-                  />
-                </button>
-              )}
-            </span>
-          )}
+          {label}
+        </button>
 
-          <button
-            type="button"
-            aria-current={isActive ? 'page' : undefined}
-            onClick={() => onNodeClick(node.id)}
-            // 라벨 span이 flex 아이템이어야 truncate가 동작한다 — 인라인이면 overflow가 무시된다
-            className="flex min-w-0 flex-1 cursor-pointer"
+        {/*
+         * 액션은 오버레이가 아니라 in-flow다. hover만 걸면 키보드로 도달할 수 없어 focus-within을
+         * 함께 본다. 메뉴가 열린 동안 숨기면 앵커가 0×0이 되어 팝오버가 좌상단으로 튄다.
+         */}
+        {(onNodeMore || (onNodeAdd && node.canAddChild)) && (
+          <div
+            className={cn(
+              'shrink-0 items-center gap-0.5 group-focus-within:flex group-hover:flex',
+              menuOpen ? 'flex' : 'hidden',
+            )}
           >
-            {label}
-          </button>
-
-          {/*
-           * 액션은 오버레이가 아니라 in-flow다. hover만 걸면 키보드로 도달할 수 없어 focus-within을
-           * 함께 본다. 메뉴가 열린 동안 숨기면 앵커가 0×0이 되어 팝오버가 좌상단으로 튄다.
-           */}
-          {(onNodeMore || (onNodeAdd && node.canAddChild)) && (
-            <div
-              className={cn(
-                'shrink-0 items-center gap-0.5 group-focus-within:flex group-hover:flex',
-                menuOpen ? 'flex' : 'hidden',
-              )}
-            >
-              {onNodeMore && (
-                <RowActionButton
-                  label={`${node.label} 추가 작업`}
-                  Icon={IconMore}
-                  active={menuOpen && openActionMenu?.kind === 'more'}
-                  onClick={(trigger) => onNodeMore(node.id, trigger)}
-                />
-              )}
-              {onNodeAdd && node.canAddChild && (
-                <RowActionButton
-                  label={`${node.label} 하위 페이지 추가`}
-                  Icon={IconAdd}
-                  active={menuOpen && openActionMenu?.kind === 'add'}
-                  onClick={(trigger) => onNodeAdd(node.id, trigger)}
-                />
-              )}
-            </div>
-          )}
-        </div>
+            {onNodeMore && (
+              <RowActionButton
+                label={`${node.label} 추가 작업`}
+                Icon={IconMore}
+                active={menuOpen && openActionMenu?.kind === 'more'}
+                onClick={(trigger) => onNodeMore(node.id, trigger)}
+              />
+            )}
+            {onNodeAdd && node.canAddChild && (
+              <RowActionButton
+                label={`${node.label} 하위 페이지 추가`}
+                Icon={IconAdd}
+                active={menuOpen && openActionMenu?.kind === 'add'}
+                onClick={(trigger) => onNodeAdd(node.id, trigger)}
+              />
+            )}
+          </div>
+        )}
       </div>
     );
   };
@@ -223,7 +232,7 @@ export default function NavTree({
     const expanded = isStatic || expandedIds.has(node.id);
 
     return (
-      <li key={node.id} className={cn(isStatic && 'flex flex-col gap-2')}>
+      <li key={node.id} className={cn('flex flex-col', isStatic ? 'gap-2' : 'gap-0.5')}>
         {renderRow(node, depth, hasChildren, expanded)}
         {hasChildren && expanded ? renderList(node.children ?? [], depth + 1) : null}
       </li>
@@ -232,7 +241,9 @@ export default function NavTree({
 
   const renderList = (items: readonly NavTreeNode[], depth: number) => (
     // 표시형만 행 간격을 벌린다 — 탐색형은 행이 붙어 있다
-    <ul className={cn(isStatic && 'flex flex-col gap-2')}>{items.map((node) => renderNode(node, depth))}</ul>
+    <ul className={cn('flex flex-col', isStatic ? 'gap-2' : 'gap-0.5')}>
+      {items.map((node) => renderNode(node, depth))}
+    </ul>
   );
 
   return <div className={className}>{renderList(nodes, 0)}</div>;

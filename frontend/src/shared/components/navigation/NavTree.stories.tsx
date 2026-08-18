@@ -70,8 +70,10 @@ const meta = {
         '도메인 무지 컴포넌트다. 채널/폴더/문서라는 의미는 소비처가 Icon·label·canAddChild로 주입한다.',
       ],
       layoutNotes: [
-        '탐색형 행은 Figma SNB/menu 인스턴스와 형상이 같다(h 36, px 10, gap 12, radius 8, 아이콘 슬롯 22).',
-        '들여쓰기 단위가 모드마다 다르다 — 탐색형 20px(depth x = 0/20/40), 표시형 16px(depth x = 0/16).',
+        '탐색형 행은 Figma SNB/menu 인스턴스와 형상이 같다(h 36, radius 8, 아이콘 슬롯 22, 행 간격 2).',
+        '탐색형 들여쓰기는 행을 밀지 않는다 — 배경은 전 depth가 같은 폭이고, 행 자신의 padding-left가 depth0 10 / depth1·2 20이다(18594:50696).',
+        'depth2만 라벨 앞에 6px 점 슬롯(22w)이 하나 더 붙고 그래서 gap이 12가 아니라 8이다.',
+        '표시형 들여쓰기는 여전히 16px 단위로 행 자체를 민다(depth x = 0/16).',
         '표시형은 행 높이 28에 행 간격 8이고, depth > 0 행 앞에 arrow_right2 연결자가 붙는다.',
         '행 액션은 오버레이가 아니라 in-flow다 — 나타나면 라벨 폭이 줄어든다(Figma 채널 라벨 170 → 112). 액션 버튼 22×22, 그룹 gap 2.',
       ],
@@ -128,11 +130,29 @@ export const Interactive: Story = {
     const folder = canvas.getByRole('button', { name: '폴더명 text text text t 1' });
     const file = canvas.getByRole('button', { name: '파일명texttexttext 1' });
 
-    // depth마다 한 단계씩 들여쓴다
-    await expect(left(rowOf(folder)) - left(rowOf(channel))).toBe(20);
-    await expect(left(rowOf(file)) - left(rowOf(channel))).toBe(40);
-    // 들여쓴 행은 오른쪽 끝이 밀리지 않는다 — 폭이 줄어들 뿐이다
-    await expect(rowOf(folder).getBoundingClientRect().right).toBe(rowOf(channel).getBoundingClientRect().right);
+    /*
+     * 배경은 depth와 무관하게 같은 자리다 — 들여쓰기는 행 내부 패딩과 점 슬롯이 만든다
+     * (시안 18580:80747의 Depth 2 List가 x=0, 224w).
+     */
+    for (const row of [rowOf(folder), rowOf(file)]) {
+      await expect(left(row)).toBe(left(rowOf(channel)));
+      await expect(row.getBoundingClientRect().right).toBe(rowOf(channel).getBoundingClientRect().right);
+    }
+
+    // 들여쓰기는 라벨 위치로 드러난다: depth0 10 / depth1 20 / depth2 20 + (점 22 + gap 8)
+    const iconLeft = (labelButton: Element) => left(rowOf(labelButton).querySelector('span:has(> svg)')!);
+    await expect(iconLeft(folder) - left(rowOf(folder))).toBe(20);
+    await expect(iconLeft(channel) - left(rowOf(channel))).toBe(10);
+    await expect(iconLeft(file) - left(rowOf(file))).toBe(50);
+
+    // depth2에만 라벨 앞 점이 붙는다
+    await expect(rowOf(file).querySelectorAll('span[aria-hidden]')).toHaveLength(1);
+    await expect(rowOf(folder).querySelectorAll('span[aria-hidden]')).toHaveLength(0);
+
+    // 행끼리는 2로 떨어진다
+    await expect(
+      Math.round(rowOf(folder).getBoundingClientRect().top - rowOf(channel).getBoundingClientRect().bottom),
+    ).toBe(2);
 
     // 행 본문 클릭은 이동만 한다 — 더 이상 접히지 않는다
     await userEvent.click(channel);
