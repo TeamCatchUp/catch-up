@@ -453,6 +453,43 @@ def test_channel_list_carries_folders_and_document_count(
     assert [folder["name"] for folder in mine[0]["folders"]] == ["요구사항"]
 
 
+def test_channel_list_carries_purposes_and_definitions(
+    client: TestClient, db: Session, member: User, workspace_ids: tuple[int, int]
+) -> None:
+    """온보딩으로 만든 채널은 목록에서 목적 preset과 정의 요약을 함께 싣는다."""
+    name = f"온보딩-{uuid.uuid4().hex[:8]}"
+    created = client.post(
+        "/api/v1/wiki/channels/onboarding",
+        json={
+            "name": name,
+            "domain_preset": "voc",
+            "purpose_presets": ["voc.top_requests", "voc.faq_consistency"],
+            "kinds": ["feature_request_status", "faq_answer"],
+            "style_preset": "style.wiki_standard",
+        },
+    )
+    assert created.status_code == 201, created.json()
+    channel_id = created.json()["channel"]["id"]
+
+    listed = client.get("/api/v1/wiki/channels")
+
+    assert listed.status_code == 200
+    mine = [
+        item for item in listed.json()["channels"] if item["id"] == channel_id
+    ]
+    assert len(mine) == 1
+    assert mine[0]["purpose_presets"] == [
+        "voc.top_requests",
+        "voc.faq_consistency",
+    ]
+    definitions = {item["kind"]: item for item in mine[0]["definitions"]}
+    assert set(definitions) == {"feature_request_status", "faq_answer"}
+    assert definitions["feature_request_status"]["folder_id"] is not None
+    assert definitions["faq_answer"]["purpose_presets"] == [
+        "voc.faq_consistency"
+    ]
+
+
 def test_channel_of_other_workspace_is_not_found(
     client: TestClient, db: Session, member: User, workspace_ids: tuple[int, int]
 ) -> None:

@@ -64,16 +64,22 @@ class ChannelOnboardingRequest(BaseModel):
     """온보딩 위자드 1단계의 선택 결과를 담는다.
 
     고르는 것은 preset id뿐이다. 선택 규칙을 직접 실어 보낼 자리는 두지
-    않는다 — raw spec 입구가 열리면 카탈로그가 규칙의 유일한 출처라는
+    않는다. raw spec 입구가 열리면 카탈로그가 규칙의 유일한 출처라는
     약속이 깨진다.
+
+    목적과 문서 종류는 여러 개를 고를 수 있다. 한 채널이 여러 목적을 함께
+    갖는 것이 보통이고, 목적마다 필요한 문서 종류가 다르다. 둘 다 최소
+    하나는 있어야 한다. 목적이 없으면 문서를 왜 만드는지가 비고, 문서
+    종류가 없으면 만들 문서가 없다.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=20)
-    purpose_preset: str
+    domain_preset: str
+    purpose_presets: list[str] = Field(min_length=1)
+    kinds: list[str] = Field(min_length=1)
     style_preset: str
-    kind: str
 
 
 class ChannelRenameRequest(BaseModel):
@@ -111,6 +117,20 @@ class ChannelResponse(BaseModel):
     workspace_id: int
 
 
+class DefinitionSummaryResponse(BaseModel):
+    """채널 안 정의 하나를 요약해 담는다.
+
+    문서 종류(kind)와 그 종류의 문서가 놓일 폴더, 그리고 이 정의가 맡은
+    목적 preset들을 싣는다. folder_id가 None이면 폴더 없이 채널 바로 아래
+    놓이는 정의다.
+    """
+
+    definition_id: str
+    kind: str
+    folder_id: str | None
+    purpose_presets: list[str] = []
+
+
 class ChannelOnboardingResponse(BaseModel):
     """만들어진 채널·정의와 어휘 발행 결과를 담는다.
 
@@ -119,11 +139,11 @@ class ChannelOnboardingResponse(BaseModel):
     """
 
     channel: ChannelResponse
-    definition_id: str
-    kind: str
-    purpose_preset: str
+    domain_preset: str
+    purpose_presets: list[str]
     style_preset: str
     vocabulary_version: str | None
+    definitions: list[DefinitionSummaryResponse]
 
 
 class FolderResponse(BaseModel):
@@ -148,6 +168,8 @@ class ChannelListItemResponse(BaseModel):
     is_admin: bool
     document_count: int
     folders: list[FolderResponse]
+    purpose_presets: list[str] = []
+    definitions: list[DefinitionSummaryResponse] = []
 
 
 class ChannelListResponse(BaseModel):

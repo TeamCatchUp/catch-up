@@ -235,9 +235,10 @@ def test_creates_channel_admin_definition_and_vocabulary(
         _ONBOARDING_PATH,
         json={
             "name": "VOC 현황",
-            "purpose_preset": "voc.request_status_tracking",
+            "domain_preset": "voc",
+            "purpose_presets": ["voc.request_status_tracking"],
+            "kinds": ["feature_request_status"],
             "style_preset": "style.report_summary",
-            "kind": "feature_request_status",
         },
     )
     assert response.status_code == 201
@@ -245,7 +246,9 @@ def test_creates_channel_admin_definition_and_vocabulary(
     channel_id = uuid.UUID(body["channel"]["id"])
 
     channel = db.get(Channel, channel_id)
-    assert channel.purpose_preset == "voc.request_status_tracking"
+    assert wiki_queries.list_channel_purposes(db, channel_id=channel_id) == [
+        "voc.request_status_tracking"
+    ]
     assert channel.style_preset == "style.report_summary"
     assert wiki_queries.list_channel_admin_ids(db, channel_id) == [member.id]
 
@@ -271,63 +274,103 @@ def test_name_over_twenty_characters_is_rejected(
         _ONBOARDING_PATH,
         json={
             "name": "가" * 21,
-            "purpose_preset": "voc.top_requests",
+            "domain_preset": "voc",
+            "purpose_presets": ["voc.top_requests"],
+            "kinds": ["feature_request_status"],
             "style_preset": "style.report_summary",
-            "kind": "feature_request_status",
         },
     )
     assert response.status_code == 422
 
 
-def test_unknown_purpose_is_four_hundred(
+def test_unknown_purpose_is_unprocessable(
     client: TestClient, member: User
 ) -> None:
-    """카탈로그에서 내려간 목적 id는 400이다."""
+    """카탈로그에 없는 목적 id는 422다."""
     response = client.post(
         _ONBOARDING_PATH,
         json={
             "name": "잘못된 목적",
-            "purpose_preset": "voc.churn_signals",
+            "domain_preset": "voc",
+            "purpose_presets": ["voc.churn_signals"],
+            "kinds": ["feature_request_status"],
             "style_preset": "style.report_summary",
-            "kind": "feature_request_status",
         },
     )
-    assert response.status_code == 400
-    assert response.json()["detail"]["code"] == "UNKNOWN_PURPOSE_PRESET"
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "UNKNOWN_PURPOSE"
 
 
-def test_unknown_style_is_four_hundred(
+def test_unknown_domain_is_unprocessable(
     client: TestClient, member: User
 ) -> None:
-    """카탈로그에서 내려간 문체 id는 400이다."""
+    """카탈로그에 없는 도메인 id는 422다."""
+    response = client.post(
+        _ONBOARDING_PATH,
+        json={
+            "name": "잘못된 도메인",
+            "domain_preset": "nope",
+            "purpose_presets": ["voc.top_requests"],
+            "kinds": ["feature_request_status"],
+            "style_preset": "style.report_summary",
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "UNKNOWN_DOMAIN"
+
+
+def test_purpose_of_another_domain_is_unprocessable(
+    client: TestClient, member: User
+) -> None:
+    """고른 도메인에 속하지 않는 목적 id는 422다."""
+    response = client.post(
+        _ONBOARDING_PATH,
+        json={
+            "name": "도메인 밖 목적",
+            "domain_preset": "product",
+            "purpose_presets": ["voc.top_requests"],
+            "kinds": ["request_priority_board"],
+            "style_preset": "style.report_summary",
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "UNKNOWN_PURPOSE"
+
+
+def test_unknown_style_is_unprocessable(
+    client: TestClient, member: User
+) -> None:
+    """카탈로그에 없는 문체 id는 422다."""
     response = client.post(
         _ONBOARDING_PATH,
         json={
             "name": "잘못된 문체",
-            "purpose_preset": "voc.top_requests",
+            "domain_preset": "voc",
+            "purpose_presets": ["voc.top_requests"],
+            "kinds": ["feature_request_status"],
             "style_preset": "style.faq",
-            "kind": "feature_request_status",
         },
     )
-    assert response.status_code == 400
-    assert response.json()["detail"]["code"] == "UNKNOWN_STYLE_PRESET"
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "UNKNOWN_STYLE"
 
 
-def test_kind_from_another_domain_is_four_hundred(
+def test_kind_from_another_domain_is_unprocessable(
     client: TestClient, member: User
 ) -> None:
-    """카탈로그에서 내려간 kind는 400이다."""
+    """고른 도메인에 없는 문서 종류는 422다."""
     response = client.post(
         _ONBOARDING_PATH,
         json={
             "name": "도메인 밖 kind",
-            "purpose_preset": "voc.top_requests",
+            "domain_preset": "voc",
+            "purpose_presets": ["voc.top_requests"],
+            "kinds": ["request_priority_board"],
             "style_preset": "style.report_summary",
-            "kind": "request_priority_board",
         },
     )
-    assert response.status_code == 400
-    assert response.json()["detail"]["code"] == "UNKNOWN_KIND_PRESET"
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "UNKNOWN_KIND"
 
 
 def test_duplicate_channel_name_is_four_hundred_nine(
@@ -339,9 +382,10 @@ def test_duplicate_channel_name_is_four_hundred_nine(
     """같은 workspace에 같은 이름이 있으면 409다."""
     payload = {
         "name": "중복 이름",
-        "purpose_preset": "voc.top_requests",
+        "domain_preset": "voc",
+        "purpose_presets": ["voc.top_requests"],
+        "kinds": ["feature_request_status"],
         "style_preset": "style.report_summary",
-        "kind": "feature_request_status",
     }
     assert client.post(_ONBOARDING_PATH, json=payload).status_code == 201
 
@@ -367,9 +411,10 @@ def test_definition_failure_rolls_back_the_channel(
                 _ONBOARDING_PATH,
                 json={
                     "name": "롤백 확인",
-                    "purpose_preset": "voc.top_requests",
+                    "domain_preset": "voc",
+                    "purpose_presets": ["voc.top_requests"],
+                    "kinds": ["feature_request_status"],
                     "style_preset": "style.report_summary",
-                    "kind": "feature_request_status",
                 },
             )
     db.rollback()
@@ -384,18 +429,20 @@ def test_second_onboarding_in_the_same_domain_reuses_vocabulary(
         _ONBOARDING_PATH,
         json={
             "name": "첫 위키",
-            "purpose_preset": "voc.top_requests",
+            "domain_preset": "voc",
+            "purpose_presets": ["voc.top_requests"],
+            "kinds": ["feature_request_status"],
             "style_preset": "style.report_summary",
-            "kind": "feature_request_status",
         },
     )
     second = client.post(
         _ONBOARDING_PATH,
         json={
             "name": "둘째 위키",
-            "purpose_preset": "voc.complaint_patterns",
+            "domain_preset": "voc",
+            "purpose_presets": ["voc.complaint_patterns"],
+            "kinds": ["complaint_topic_brief"],
             "style_preset": "style.support_guide",
-            "kind": "complaint_topic_brief",
         },
     )
     assert first.json()["vocabulary_version"] == "v1"
@@ -410,9 +457,120 @@ def test_requires_workspace_membership(
         _ONBOARDING_PATH,
         json={
             "name": "남의 workspace",
-            "purpose_preset": "voc.top_requests",
+            "domain_preset": "voc",
+            "purpose_presets": ["voc.top_requests"],
+            "kinds": ["feature_request_status"],
             "style_preset": "style.report_summary",
-            "kind": "feature_request_status",
         },
     )
     assert response.status_code == 403
+
+
+def test_onboarding_creates_definition_and_folder_per_kind(
+    client: TestClient,
+    member: User,
+    db: Session,
+    workspace_id: int,
+) -> None:
+    """kind마다 정의 하나와 kind 라벨 이름의 폴더 하나가 생기고 정의가 그 폴더를 가리킨다."""
+    response = client.post(
+        _ONBOARDING_PATH,
+        json={
+            "name": "VOC",
+            "domain_preset": "voc",
+            "purpose_presets": ["voc.top_requests", "voc.faq_consistency"],
+            "kinds": ["feature_request_status", "faq_answer"],
+            "style_preset": "style.wiki_standard",
+        },
+    )
+    assert response.status_code == 201, response.json()
+    body = response.json()
+    channel_id = uuid.UUID(body["channel"]["id"])
+    assert body["purpose_presets"] == [
+        "voc.top_requests",
+        "voc.faq_consistency",
+    ]
+    kinds = {item["kind"]: item for item in body["definitions"]}
+    assert set(kinds) == {"feature_request_status", "faq_answer"}
+    folders = {
+        folder.name: folder
+        for folder in wiki_queries.list_folders(db, workspace_id)
+        if folder.channel_id == channel_id
+    }
+    assert set(folders) == {"기능 요청 문서", "자주 묻는 질문 문서"}
+    assert kinds["feature_request_status"]["folder_id"] == str(
+        folders["기능 요청 문서"].id
+    )
+    assert kinds["feature_request_status"]["purpose_presets"] == [
+        "voc.top_requests"
+    ]
+    assert kinds["faq_answer"]["purpose_presets"] == ["voc.faq_consistency"]
+    assert wiki_queries.list_channel_purposes(db, channel_id=channel_id) == [
+        "voc.top_requests",
+        "voc.faq_consistency",
+    ]
+
+
+def test_onboarding_rejects_unknown_kind_and_empty_lists(
+    client: TestClient, member: User
+) -> None:
+    """모르는 kind와 빈 목록은 둘 다 422다."""
+    unknown_kind = client.post(
+        _ONBOARDING_PATH,
+        json={
+            "name": "x",
+            "domain_preset": "voc",
+            "purpose_presets": ["voc.top_requests"],
+            "kinds": ["nope"],
+            "style_preset": "style.wiki_standard",
+        },
+    )
+    assert (
+        unknown_kind.status_code,
+        unknown_kind.json()["detail"]["code"],
+    ) == (422, "UNKNOWN_KIND")
+
+    empty_purposes = client.post(
+        _ONBOARDING_PATH,
+        json={
+            "name": "x",
+            "domain_preset": "voc",
+            "purpose_presets": [],
+            "kinds": ["feature_request_status"],
+            "style_preset": "style.wiki_standard",
+        },
+    )
+    assert empty_purposes.status_code == 422
+
+
+def test_repeated_kind_makes_one_definition(
+    client: TestClient,
+    member: User,
+    db: Session,
+    workspace_id: int,
+) -> None:
+    """같은 kind를 두 번 골라도 정의와 폴더는 하나씩이다."""
+    response = client.post(
+        _ONBOARDING_PATH,
+        json={
+            "name": f"중복 kind-{uuid.uuid4().hex[:6]}",
+            "domain_preset": "voc",
+            "purpose_presets": ["voc.top_requests"],
+            "kinds": ["feature_request_status", "feature_request_status"],
+            "style_preset": "style.wiki_standard",
+        },
+    )
+
+    assert response.status_code == 201, response.json()
+    channel_id = uuid.UUID(response.json()["channel"]["id"])
+    assert len(response.json()["definitions"]) == 1
+    assert (
+        len(
+            [
+                folder
+                for folder in wiki_queries.list_folders(db, workspace_id)
+                if folder.channel_id == channel_id
+            ]
+        )
+        == 1
+    )

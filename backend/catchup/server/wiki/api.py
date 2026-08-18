@@ -85,6 +85,7 @@ from catchup.server.wiki.schemas import ChannelOnboardingResponse
 from catchup.server.wiki.schemas import ChannelRenameRequest
 from catchup.server.wiki.schemas import ChannelResponse
 from catchup.server.wiki.schemas import DefinitionPresetsResponse
+from catchup.server.wiki.schemas import DefinitionSummaryResponse
 from catchup.server.wiki.schemas import FolderCreateRequest
 from catchup.server.wiki.schemas import FolderRenameRequest
 from catchup.server.wiki.schemas import FolderResponse
@@ -109,6 +110,22 @@ _FOLDER_NAME_CONSTRAINT = "uq_channel_folders_channel_name"
 _ARTIFACT_FOLDER_CONSTRAINT = "fk_knowledge_artifacts_folder"
 _OWNER_PK_CONSTRAINT = "artifact_owners_pkey"
 _ADMIN_PK_CONSTRAINT = "channel_admins_pkey"
+
+
+def _purposes_for_kind(purpose_ids: list[str], kind: str) -> list[str]:
+    """채널의 목적 preset 중 이 문서 종류를 권하는 것만 골라 돌려준다.
+
+    정의 행에는 목적 preset id를 저장하지 않는다. 목적과 문서 종류의 짝은
+    카탈로그가 이미 알고 있어(`PresetPurpose.recommended_kind`), 저장해 두면
+    카탈로그가 바뀔 때 두 값이 어긋난다. 그래서 읽을 때 계산한다.
+    """
+    matched = []
+    for purpose_id in purpose_ids:
+        found = find_purpose(purpose_id)
+        if found is not None and found[1].recommended_kind == kind:
+            matched.append(purpose_id)
+
+    return matched
 
 
 def _violates(error: IntegrityError, constraint: str) -> bool:
@@ -385,57 +402,78 @@ def create_channel(
     path="/channels/onboarding",
     response_model=ChannelOnboardingResponse,
     status_code=201,
-    description="preset 선택 하나로 채널·관리자·정의·seed 어휘를 만든다.",
+    description="preset 선택으로 채널·관리자·목적·정의·폴더·seed 어휘를 만든다.",
 )
 def onboard_channel(
     request: ChannelOnboardingRequest,
     context: MemberContext = Depends(resolve_member_workspace),
     db: Session = Depends(get_db),
 ) -> ChannelOnboardingResponse:
-    """preset 선택으로 채널·관리자·정의·seed 어휘를 한 번에 만든다.
+    """preset 선택으로 채널·관리자·목적·정의·폴더·seed 어휘를 한 번에 만든다.
 
-    네 가지가 한 트랜잭션이다. 나뉘면 관리자 없는 채널이나 정의 없는
-    채널이 남아, 온보딩을 끝낸 사람이 아무것도 못 하는 자리가 생긴다.
+    전부 한 트랜잭션이다. 나뉘면 관리자 없는 채널이나 정의 없는 채널이
+    남아, 온보딩을 끝낸 사람이 아무것도 못 하는 자리가 생긴다.
+
+    고른 문서 종류마다 정의 하나와 폴더 하나를 만든다. 폴더 이름은 그
+    종류의 라벨을 그대로 쓴다. 같은 이름의 폴더가 이미 있으면 새로 만들지
+    않고 그것을 다시 쓴다. (channel_id, name)이 UNIQUE라 두 번 만들면
+    INSERT가 막힌다.
 
     정의를 만들 때 어휘를 검증하지 않는다. 선택 규칙이 가리키는 이름이
-    아직 사전에 없어도 정의는 그대로 선다 — 검증은 컴파일 시점의 일이고,
+    아직 사전에 없어도 정의는 그대로 선다. 검증은 컴파일 시점의 일이고,
     그때의 skip과 경고가 아직 안 모인 이름을 기다려 준다. 입구에서 막으면
     어휘가 자라기 전에는 채널을 세울 수 없다.
 
     Raises:
-        HTTPException: 카탈로그에 없는 preset이면 400, 같은 workspace에
+        HTTPException: 카탈로그에 없는 preset이면 422, 같은 workspace에
             같은 이름의 채널이 있으면 409를 던진다.
     """
-    found = find_purpose(request.purpose_preset)
-    if found is None:
+    domain = next(
+        (item for item in PRESET_DOMAINS if item.id == request.domain_preset),
+        None,
+    )
+    if domain is None:
         raise review_error(
-            400,
-            code="UNKNOWN_PURPOSE_PRESET",
-            message="카탈로그에 없는 목적 preset입니다.",
+            422,
+            code="UNKNOWN_DOMAIN",
+            message="카탈로그에 없는 도메인 preset입니다.",
         )
-    domain, _purpose = found
+
+    purposes = []
+    for purpose_id in request.purpose_presets:
+        found = find_purpose(purpose_id)
+        if found is None or found[0].id != domain.id:
+            raise review_error(
+                422,
+                code="UNKNOWN_PURPOSE",
+                message="이 도메인에 없는 목적 preset입니다.",
+            )
+        purposes.append(found[1])
 
     if find_style(request.style_preset) is None:
         raise review_error(
-            400,
-            code="UNKNOWN_STYLE_PRESET",
+            422,
+            code="UNKNOWN_STYLE",
             message="카탈로그에 없는 문체 preset입니다.",
         )
 
-    preset_kind = find_kind(domain, request.kind)
-    if preset_kind is None:
-        raise review_error(
-            400,
-            code="UNKNOWN_KIND_PRESET",
-            message="이 목적의 도메인에 없는 문서 종류입니다.",
-        )
+    preset_kinds = []
+    # 같은 종류를 두 번 골라도 정의는 하나다. 고른 순서는 그대로 둔다.
+    for kind in dict.fromkeys(request.kinds):
+        preset_kind = find_kind(domain, kind)
+        if preset_kind is None:
+            raise review_error(
+                422,
+                code="UNKNOWN_KIND",
+                message="이 도메인에 없는 문서 종류입니다.",
+            )
+        preset_kinds.append(preset_kind)
 
     channel = wiki_queries.add_channel(
         db,
         workspace_id=context.workspace_id,
         name=request.name,
         created_by=context.user.id,
-        purpose_preset=request.purpose_preset,
         style_preset=request.style_preset,
     )
     try:
@@ -446,16 +484,49 @@ def onboard_channel(
             user_id=context.user.id,
             granted_by=context.user.id,
         )
-        definition = wiki_queries.add_artifact_definition(
+        wiki_queries.add_channel_purposes(
             db,
-            workspace_id=context.workspace_id,
             channel_id=channel.id,
-            kind=preset_kind.kind,
-            selection_spec=serialize_selection_spec(
-                preset_kind.spec_template()
-            ),
-            created_by=context.user.id,
+            purpose_presets=[purpose.id for purpose in purposes],
         )
+        created = []
+        for preset_kind in preset_kinds:
+            folder = wiki_queries.get_folder_by_name(
+                db, channel_id=channel.id, name=preset_kind.label
+            )
+            if folder is None:
+                folder = wiki_queries.add_folder(
+                    db,
+                    workspace_id=context.workspace_id,
+                    channel_id=channel.id,
+                    name=preset_kind.label,
+                )
+                db.flush()
+            kind_purposes = [
+                purpose
+                for purpose in purposes
+                if purpose.recommended_kind == preset_kind.kind
+            ]
+            purpose_text = (
+                " ".join(
+                    f"이 문서의 목적은 '{purpose.label}'이다."
+                    for purpose in kind_purposes
+                )
+                or None
+            )
+            definition = wiki_queries.add_artifact_definition(
+                db,
+                workspace_id=context.workspace_id,
+                channel_id=channel.id,
+                kind=preset_kind.kind,
+                selection_spec=serialize_selection_spec(
+                    preset_kind.spec_template()
+                ),
+                created_by=context.user.id,
+                folder_id=folder.id,
+                purpose=purpose_text,
+            )
+            created.append((definition, folder, kind_purposes))
         db.flush()
         vocabulary_version = install_seed_vocabulary(
             SessionBoundOntologyUnitOfWork(db),
@@ -480,11 +551,19 @@ def onboard_channel(
             name=channel.name,
             workspace_id=channel.workspace_id,
         ),
-        definition_id=str(definition.id),
-        kind=definition.kind,
-        purpose_preset=request.purpose_preset,
+        domain_preset=domain.id,
+        purpose_presets=[purpose.id for purpose in purposes],
         style_preset=request.style_preset,
         vocabulary_version=vocabulary_version,
+        definitions=[
+            DefinitionSummaryResponse(
+                definition_id=str(definition.id),
+                kind=definition.kind,
+                folder_id=str(folder.id),
+                purpose_presets=[purpose.id for purpose in kind_purposes],
+            )
+            for definition, folder, kind_purposes in created
+        ],
     )
 
 
@@ -521,6 +600,12 @@ def list_channels(
     counts = wiki_queries.count_artifacts_by_channel(
         db, context.workspace_id
     )
+    purposes = wiki_queries.list_channel_purposes_by_workspace(
+        db, context.workspace_id
+    )
+    definitions = wiki_queries.list_definitions_by_workspace(
+        db, context.workspace_id
+    )
 
     return ChannelListResponse(
         channels=[
@@ -531,6 +616,22 @@ def list_channels(
                 is_admin=channel.id in roles.admin_channel_ids,
                 document_count=counts.get(channel.id, 0),
                 folders=folders.get(channel.id, []),
+                purpose_presets=purposes.get(channel.id, []),
+                definitions=[
+                    DefinitionSummaryResponse(
+                        definition_id=str(definition.id),
+                        kind=definition.kind,
+                        folder_id=(
+                            str(definition.folder_id)
+                            if definition.folder_id is not None
+                            else None
+                        ),
+                        purpose_presets=_purposes_for_kind(
+                            purposes.get(channel.id, []), definition.kind
+                        ),
+                    )
+                    for definition in definitions.get(channel.id, [])
+                ],
             )
             for channel in channels
         ]
