@@ -22,6 +22,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
 from catchup.configs.config import settings
+from catchup.db.models import Company
+from catchup.db.models import CompanySize
 from catchup.db.models import KnowledgeArtifact
 from catchup.db.models import KnowledgeNode as NodeRow
 from catchup.db.models import Workspace
@@ -56,18 +58,6 @@ def engine() -> Iterator[Engine]:
     engine.dispose()
 
 
-@pytest.fixture(scope="module")
-def workspace_id(engine: Engine) -> int:
-    with engine.connect() as connection:
-        found = connection.execute(
-            select(Workspace.id).order_by(Workspace.id).limit(1)
-        ).scalar()
-
-    if found is None:
-        pytest.skip("workspace가 없어 통합 테스트를 건너뛴다.")
-    return found
-
-
 @pytest.fixture
 def session_factory(engine: Engine) -> Iterator[Callable[[], Session]]:
     connection = engine.connect()
@@ -81,6 +71,28 @@ def session_factory(engine: Engine) -> Iterator[Callable[[], Session]]:
 
     transaction.rollback()
     connection.close()
+
+
+@pytest.fixture
+def workspace_id(session_factory: Callable[[], Session]) -> int:
+    """이 테스트만 쓰는 빈 workspace를 테스트 transaction 안에 만든다.
+
+    개발 DB에 이미 있는 workspace를 골라 쓰면 남아 있던 노드가 함께 읽혀
+    노드 목록을 그대로 비교하는 단언이 깨진다. 여기서 만든 workspace는
+    테스트가 끝날 때 transaction과 함께 되감긴다.
+    """
+    with session_factory() as session:
+        company = Company(
+            name=f"co-{uuid.uuid4().hex[:8]}", size=CompanySize.SMALL
+        )
+        session.add(company)
+        session.flush()
+        workspace = Workspace(
+            name=f"ws-{uuid.uuid4().hex[:8]}", company_id=company.id
+        )
+        session.add(workspace)
+        session.commit()
+        return workspace.id
 
 
 @pytest.fixture
