@@ -157,7 +157,14 @@ export default function NavTree({
       >
         {hasDot && (
           <span className="flex size-5.5 shrink-0 items-center justify-center">
-            <span aria-hidden className="border-icon-normal-assistive size-1.5 rounded-full border-[1.5px]" />
+            {/* 선택 행에서는 점도 파랑이다 — 라벨(#005eeb)보다 옅은 blue-40이다 */}
+            <span
+              aria-hidden
+              className={cn(
+                'size-1.5 rounded-full border-[1.5px]',
+                isActive ? 'border-icon-primary-assistive' : 'border-icon-normal-assistive',
+              )}
+            />
           </span>
         )}
 

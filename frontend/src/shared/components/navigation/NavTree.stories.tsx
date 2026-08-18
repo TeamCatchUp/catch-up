@@ -145,9 +145,11 @@ export const Interactive: Story = {
     await expect(iconLeft(channel) - left(rowOf(channel))).toBe(10);
     await expect(iconLeft(file) - left(rowOf(file))).toBe(50);
 
-    // depth2에만 라벨 앞 점이 붙는다
+    // depth2에만 라벨 앞 점이 붙는다. 이 스토리는 file-1이 선택 행이라 점도 파랑이다
+    const dot = rowOf(file).querySelector('span[aria-hidden]')!;
     await expect(rowOf(file).querySelectorAll('span[aria-hidden]')).toHaveLength(1);
     await expect(rowOf(folder).querySelectorAll('span[aria-hidden]')).toHaveLength(0);
+    await expect(getComputedStyle(dot).borderTopColor).toBe('rgb(51, 133, 255)');
 
     // 행끼리는 2로 떨어진다
     await expect(
