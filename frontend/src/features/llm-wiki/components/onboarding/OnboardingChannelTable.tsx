@@ -29,11 +29,15 @@ export default function OnboardingChannelTable({
     <div className="overflow-x-auto">
       <table role="table" className="border-line-normal-neutral block min-w-fit overflow-hidden rounded-xl border">
         <thead role="rowgroup" className="block">
-          <tr role="row" className={cn(ONBOARDING_CHANNEL_TABLE_GRID, 'border-line-normal-neutral border-b py-3')}>
-            <th role="columnheader" className="text-label-xsmall text-text-normal-alternative text-left font-normal">
+          <tr role="row" className={cn(ONBOARDING_CHANNEL_TABLE_GRID, 'border-line-normal-neutral h-9 border-b')}>
+            {/* 머리글은 아이콘 자리(22+12)만큼 들여써 행의 채널명과 x가 맞는다 */}
+            <th
+              role="columnheader"
+              className="text-body-xsmall text-text-normal-alternative pl-8.5 text-left font-medium"
+            >
               {headers.name}
             </th>
-            <th role="columnheader" className="text-label-xsmall text-text-normal-alternative text-right font-normal">
+            <th role="columnheader" className="text-body-xsmall text-text-normal-alternative text-right font-medium">
               {headers.lastModified}
             </th>
           </tr>
@@ -43,7 +47,7 @@ export default function OnboardingChannelTable({
             <tr key={row.channel.id} role="row" className={cn(ONBOARDING_CHANNEL_TABLE_GRID, 'py-3')}>
               <td role="cell" className="flex min-w-0 items-center gap-3">
                 <IconTagChannel className="text-icon-normal-neutral size-5.5 shrink-0" />
-                <span className="text-body-small text-text-normal-normal truncate">{row.channel.name}</span>
+                <span className="text-body-small text-text-normal-neutral truncate">{row.channel.name}</span>
               </td>
               <td role="cell" className="text-body-small text-text-normal-alternative text-right">
                 {row.lastModifiedLabel}

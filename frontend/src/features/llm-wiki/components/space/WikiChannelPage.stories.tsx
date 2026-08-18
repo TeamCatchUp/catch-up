@@ -40,7 +40,8 @@ const meta = {
       ],
       dataNotes: [
         '채널 mock은 ChannelListItemResponse 정합(WikiChannelListItem 소비) — 폴더 행의 담당자·상태·최근 활동과 작성자는 목록 API 미동봉(협상 대상, 감사 8/13 부록).',
-        '상단 200px 영역은 콘텐츠 미정(사진 가능성) — 시각 없이 빈 슬롯만 둔다. 페이지 크기 옵션 목록은 미도시라 정적 표시가 기본이다.',
+        '상단 200px 커버는 바탕색만 시안값이고 콘텐츠는 미정(사진 가능성) — 안은 비워 둔다. 페이지 크기 옵션 목록은 미도시라 정적 표시가 기본이다.',
+        '헤더 우측 kebab 버튼은 두 시안에 있으나 동작 정의가 없어 렌더하지 않는다(actions 슬롯 비움) — 디자이너 질문.',
         '빈 채널·로딩·에러 스토리는 만들지 않는다 — 디자인 MISSING 유지.',
       ],
       tokenNotes: [
@@ -70,10 +71,16 @@ export const Default: Story = {
     await expect(canvas.getByText('작성자')).toBeInTheDocument();
     await expect(canvas.getByText('팀원G')).toBeInTheDocument();
 
-    // 상단 콘텐츠 미정 영역(200) + py(36)만큼 제목 블록이 헤더에서 떨어진다.
+    // 상단 커버(200) + py(36)만큼 제목 블록이 헤더에서 떨어진다.
     const banner = canvas.getByRole('banner');
     const titleRow = canvas.getByRole('heading', { level: 1 }).parentElement!;
     await expect(titleRow.getBoundingClientRect().top - banner.getBoundingClientRect().bottom).toBeCloseTo(236, 0);
+
+    // 커버는 콘텐츠가 비어도 시안의 바탕색을 갖는다 — 투명이면 200px 공백으로 보인다.
+    const cover = canvasElement.querySelector('header + div[aria-hidden]') as HTMLElement;
+    await expect(cover.getBoundingClientRect().height).toBe(200);
+    await expect(getComputedStyle(cover).backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
+    await expect(cover).toBeEmptyDOMElement();
 
     // 표: 헤더 라벨과 폴더 행 4개.
     await expect(canvas.getByText('문서')).toBeInTheDocument();

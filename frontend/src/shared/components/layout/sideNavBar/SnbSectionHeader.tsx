@@ -32,9 +32,13 @@ export function SnbSectionAction({
       aria-label={label}
       aria-expanded={active || undefined}
       onClick={(event) => onClick(event.currentTarget)}
+      /*
+       * DS Icon button(392:1887)의 상태 fill이다 — hover 10%, 메뉴 열림 12%.
+       * 토큰 이름과 한 칸씩 어긋나 보이지만 22px 원에서 6%는 거의 보이지 않는다.
+       */
       className={cn(
-        'text-icon-normal-neutral hover:bg-fill-normal-interaction-hover flex size-5.5 shrink-0 cursor-pointer items-center justify-center rounded-full',
-        active && 'bg-fill-normal-interaction-pressed',
+        'text-icon-normal-neutral flex size-5.5 shrink-0 cursor-pointer items-center justify-center rounded-full',
+        active ? 'bg-fill-normal-interaction-pressed-hover' : 'hover:bg-fill-normal-interaction-pressed',
       )}
     >
       <Icon aria-hidden className="size-4.5" />
@@ -79,10 +83,7 @@ export default function SnbSectionHeader({
    * 셰브런·액션은 hover·focus에서만 나타난다. 평소에는 라벨만 남는다.
    * 메뉴가 열린 동안 숨기면 앵커가 0×0이 되어 팝오버가 좌상단으로 튄다.
    */
-  const revealClass = cn(
-    'group-focus-within/header:flex group-hover/header:flex',
-    actionsOpen ? 'flex' : 'hidden',
-  );
+  const revealClass = cn('group-focus-within/header:flex group-hover/header:flex', actionsOpen ? 'flex' : 'hidden');
 
   const labelContent = (
     <>
@@ -107,7 +108,7 @@ export default function SnbSectionHeader({
           aria-expanded={expanded}
           onClick={onToggleCollapse}
           className={cn(
-            'text-icon-normal-neutral hover:bg-fill-normal-interaction-hover size-4.5 shrink-0 cursor-pointer items-center justify-center rounded-full',
+            'text-icon-normal-alternative hover:bg-fill-normal-interaction-pressed size-4.5 shrink-0 cursor-pointer items-center justify-center rounded-full',
             revealClass,
           )}
         >
@@ -124,7 +125,7 @@ export default function SnbSectionHeader({
         className={cn(leadClass, 'cursor-pointer')}
       >
         {labelContent}
-        <ChevronIcon aria-hidden className={cn('text-icon-normal-neutral size-4.5 shrink-0', revealClass)} />
+        <ChevronIcon aria-hidden className={cn('text-icon-normal-alternative size-4.5 shrink-0', revealClass)} />
       </button>
     );
   } else if (onClick) {
@@ -142,8 +143,9 @@ export default function SnbSectionHeader({
       data-slot="snb-section-header"
       className={cn(
         'group/header flex h-7.5 items-center gap-0.5 rounded-lg px-2.5',
+        // 행과 달리 머리글 hover는 알파 오버레이가 아니라 Fill/Normal/Strong 단색이다
         (collapsible || onClick) &&
-          'hover:bg-fill-normal-interaction-hover has-[button:active]:bg-fill-normal-interaction-pressed transition-colors',
+          'hover:bg-fill-normal-strong has-[button:active]:bg-fill-normal-interaction-pressed transition-colors',
         className,
       )}
     >

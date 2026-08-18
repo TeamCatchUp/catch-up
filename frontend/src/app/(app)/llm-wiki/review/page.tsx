@@ -3,7 +3,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-import DocumentStatusBadge from '@/features/llm-wiki/components/document/DocumentStatusBadge';
 import WikiPageHeader from '@/features/llm-wiki/components/header/WikiPageHeader';
 import ChangeSummaryCard from '@/features/llm-wiki/components/review-queue/ChangeSummaryCard';
 import BlockDiffSection from '@/features/llm-wiki/components/review-queue/diff/BlockDiffSection';
@@ -39,6 +38,7 @@ import IconCalendarClock from '@/public/icons/icon/calendar_clock.svg';
 import IconPerson from '@/public/icons/icon/person.svg';
 import IconPersonFilled from '@/public/icons/icon/person_filled.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
+import IconWikiChannelFilled from '@/public/icons/icon/wiki_channel_filled.svg';
 import { Avatar } from '@/shared/components/ui/avatar';
 import { Button } from '@/shared/components/ui/button';
 
@@ -76,10 +76,9 @@ const CHANGE_SUMMARY_MOCK = {
   affectedDocumentsLabel: '영향 문서 2건',
 };
 
-/** 참여자 카드 mock — 참여자 API·fixture가 없어 페이지 로컬 데이터다 */
+/** 담당자 카드 mock — 담당자 API·fixture가 없어 페이지 로컬 데이터다 */
 const PARTICIPANTS_MOCK: readonly ReviewParticipant[] = [
   { id: 'participant-author', name: '직원10', description: '1일 전 수정', editing: false, role: '작성자' },
-  { id: 'participant-reviewer', name: '팀원F', description: '현재 수정 중', editing: true, role: '리뷰어' },
 ];
 const PARTICIPANT_STACK_MOCK = Array.from({ length: 6 }, () => ({ src: null }));
 
@@ -151,7 +150,7 @@ export default function Page() {
       label: '대상 채널',
       Icon: IconWikiChannel,
       searchPlaceholder: '부서명 검색',
-      OptionIcon: IconWikiChannel,
+      OptionIcon: IconWikiChannelFilled,
       options: REVIEW_QUEUE_CHANNEL_OPTIONS,
       selectedOptionIds: channelIds,
     },
@@ -212,7 +211,6 @@ export default function Page() {
         <WikiPageHeader
           variant="detail"
           breadcrumbs={breadcrumbs}
-          badge={<DocumentStatusBadge status="pending_review" size="sm" />}
           actions={
             <>
               <Button
@@ -267,7 +265,7 @@ export default function Page() {
         <ReviewPublishBar onPublish={handlePublish} />
       </div>
 
-      {/* 우측 — 문서 위치·참여자 */}
+      {/* 우측 — 문서 위치·담당자 */}
       <aside className="border-line-normal-neutral flex w-87.5 shrink-0 flex-col overflow-y-auto border-l">
         <DocumentLocationCard breadcrumbs={REVIEW_TARGET_DOCUMENT.breadcrumbs} />
         <ReviewParticipantsCard participants={PARTICIPANTS_MOCK} stackAvatars={PARTICIPANT_STACK_MOCK} />

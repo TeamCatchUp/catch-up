@@ -35,7 +35,7 @@ const meta = {
         nodeId: '17595:148922',
       },
       viewport: { width: 1200, height: 1571 },
-      states: ['default', 'stat-card-filters-table', 'narrow-viewport'],
+      states: ['default', 'stat-card-filters-table', 'empty-table', 'empty-by-filter', 'narrow-viewport'],
       reuseNotes: [
         'WikiPageHeader(main)·ReviewStatCard·DashboardDocumentTableHeader·DashboardDocumentRow·WikiSpaceTableFooter를 조립만 한다 — 전부 무수정 소비. 푸터는 채널·폴더 세션 파일이라 소비만 하고 손대지 않았다.',
         '필터 칩은 shared Chip(variant=square)이다 — 미선택 토큰(흰 배경·Line/Normal/Neutral·Text/Normal/Normal)과 선택 토큰(Fill/Primary/Normal/Assistive·Line/Primary/Normal·Text/Primary/Normal)이 시안과 그대로 일치해 새 칩을 만들지 않았다. 시안 gap 8·padding 10만 className으로 덮는다.',
@@ -44,7 +44,7 @@ const meta = {
       ],
       dataNotes: [
         '지표·문서 목록은 전부 fixture다(REVIEW_STAT_CARD_FIXTURES·DOCUMENT_ROW_FIXTURES). 페이지는 API를 부르지 않는다 — Mock 앱 푸시 원칙대로 실 API 도착 시 픽스처 자리만 교체한다.',
-        '로딩·빈 목록·에러 스토리는 만들지 않는다 — 디자인 MISSING(감사 §7 금지 목록). 로딩·에러가 없는 것이 이 단계의 정상이다.',
+        '빈 목록은 8/14 시안(18234:49957) 도착으로 구현했다 — 헤더는 남고 행 자리에 안내가 들어간다. 필터 결과 0건도 같은 안내를 쓴다(시안이 하나뿐이라 문구를 가르지 않는다). 로딩·에러는 여전히 MISSING이라 만들지 않는다.',
         '지표 카드를 누르면 아래 표에 같은 이름의 필터가 걸린다(사용자 확정 8/14). 매핑과 술어는 순수 모듈 dashboardFilters가 갖고 unit이 지킨다 — 카드·드롭다운이 같은 필터 자리를 놓고 서로를 덮어쓴다.',
         '필터 축은 한 번에 하나만 걸린다. 축을 겹쳐 거는 계약은 시안에 없어 만들지 않았고, 해제 경로는 시안에 있는 "필터 초기화"뿐이다.',
         '검색은 제목 대조다 — 본문·태그 검색은 계약이 없다. 시안이 검색창을 그려 둔 이상 죽은 입력으로 두지 않는 선에서 최소로 붙였다.',
@@ -102,7 +102,8 @@ export const Default: Story = {
     await expect(sortChip).toHaveAttribute('data-selected', 'true');
     await expect(getComputedStyle(sortChip).backgroundColor).not.toBe(getComputedStyle(assigneeChip).backgroundColor);
 
-    await userEvent.click(canvas.getByText('결제 승인 실패 시 재시도 정책'));
+    // 행 클릭은 오버레이 버튼(접근명=제목)으로 흐른다 — 제목 텍스트는 오버레이 아래라 직접 못 누른다.
+    await userEvent.click(canvas.getByRole('button', { name: '결제 승인 실패 시 재시도 정책' }));
     await expect(args.onDocumentClick).toHaveBeenCalledWith('doc-payment-retry');
   },
 };
@@ -111,7 +112,8 @@ export const Default: Story = {
 export const StatCardFiltersTable: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const rowCount = () => canvas.getAllByRole('button').filter((el) => el.querySelector('.text-heading-small')).length;
+    // 행 제목만 .text-heading-small.truncate를 쓴다 — 행이 오버레이 버튼 구조로 바뀌어 버튼 내부 조회로는 못 센다.
+    const rowCount = () => canvasElement.querySelectorAll('.text-heading-small.truncate').length;
 
     const before = rowCount();
     const statsGrid = canvasElement.querySelector('div.grid') as HTMLElement;
@@ -135,6 +137,30 @@ export const StatCardFiltersTable: Story = {
     await userEvent.click(canvas.getByRole('button', { name: /필터 초기화/ }));
     await expect(canvas.getByRole('button', { name: '상태' })).toHaveAttribute('data-selected', 'false');
     await expect(rowCount()).toBe(before);
+  },
+};
+
+/** 문서가 없을 때. 헤더는 남고 행 자리에 안내가 들어간다(8/14 시안 도착분). */
+export const EmptyTable: Story = {
+  args: { documents: [] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByText('문서가 없어요')).toBeInTheDocument();
+    // 헤더는 그대로 남는다 — 빈 상태가 표를 통째로 지우지 않는다.
+    await expect(canvas.getByText('최근 활동')).toBeInTheDocument();
+  },
+};
+
+/** 필터 결과가 0건일 때도 같은 안내를 쓴다 — 시안이 하나뿐이라 문구를 가르지 않는다. */
+export const EmptyByFilter: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.type(canvas.getByPlaceholderText('검색어를 입력하세요.'), '존재하지않는문서제목');
+
+    await expect(await canvas.findByText('문서가 없어요')).toBeInTheDocument();
+    await expect(canvas.queryByText('결제 승인 실패 시 재시도 정책')).toBeNull();
   },
 };
 

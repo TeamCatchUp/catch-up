@@ -176,6 +176,17 @@ export const RestingHidesAffordances: Story = {
 
     revealActions(canvasElement);
     await expect(canvas.getByRole('button', { name: '프로젝트 추가' })).toBeInTheDocument();
+
+    /*
+     * 시안 18508:134948 실측. 셰브런은 액션 버튼(Icon/Normal/Neutral #6d7882)보다
+     * 옅은 Icon/Normal/Alternative(#b1b8be)다 — 같은 회색으로 뭉뚱그리기 쉬운 지점이다.
+     */
+    const header = canvasElement.querySelector('[data-slot="snb-section-header"]')!;
+    const chevron = header.querySelector('button svg')!;
+    await expect(getComputedStyle(chevron).color).toBe('rgb(177, 184, 190)');
+    await expect(getComputedStyle(canvas.getByRole('button', { name: '프로젝트 추가' })).color).toBe(
+      'rgb(109, 120, 130)',
+    );
   },
 };
 

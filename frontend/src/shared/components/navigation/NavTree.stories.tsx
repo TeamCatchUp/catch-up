@@ -70,8 +70,10 @@ const meta = {
         '도메인 무지 컴포넌트다. 채널/폴더/문서라는 의미는 소비처가 Icon·label·canAddChild로 주입한다.',
       ],
       layoutNotes: [
-        '탐색형 행은 Figma SNB/menu 인스턴스와 형상이 같다(h 36, px 10, gap 12, radius 8, 아이콘 슬롯 22).',
-        '들여쓰기 단위가 모드마다 다르다 — 탐색형 20px(depth x = 0/20/40), 표시형 16px(depth x = 0/16).',
+        '탐색형 행은 Figma SNB/menu 인스턴스와 형상이 같다(h 36, radius 8, 아이콘 슬롯 22, 행 간격 2).',
+        '탐색형 들여쓰기는 행을 밀지 않는다 — 배경은 전 depth가 같은 폭이고, 행 자신의 padding-left가 depth0 10 / depth1·2 20이다(18594:50696).',
+        'depth2만 라벨 앞에 6px 점 슬롯(22w)이 하나 더 붙고 그래서 gap이 12가 아니라 8이다.',
+        '표시형 들여쓰기는 여전히 16px 단위로 행 자체를 민다(depth x = 0/16).',
         '표시형은 행 높이 28에 행 간격 8이고, depth > 0 행 앞에 arrow_right2 연결자가 붙는다.',
         '행 액션은 오버레이가 아니라 in-flow다 — 나타나면 라벨 폭이 줄어든다(Figma 채널 라벨 170 → 112). 액션 버튼 22×22, 그룹 gap 2.',
       ],
@@ -128,11 +130,31 @@ export const Interactive: Story = {
     const folder = canvas.getByRole('button', { name: '폴더명 text text text t 1' });
     const file = canvas.getByRole('button', { name: '파일명texttexttext 1' });
 
-    // depth마다 한 단계씩 들여쓴다
-    await expect(left(rowOf(folder)) - left(rowOf(channel))).toBe(20);
-    await expect(left(rowOf(file)) - left(rowOf(channel))).toBe(40);
-    // 들여쓴 행은 오른쪽 끝이 밀리지 않는다 — 폭이 줄어들 뿐이다
-    await expect(rowOf(folder).getBoundingClientRect().right).toBe(rowOf(channel).getBoundingClientRect().right);
+    /*
+     * 배경은 depth와 무관하게 같은 자리다 — 들여쓰기는 행 내부 패딩과 점 슬롯이 만든다
+     * (시안 18580:80747의 Depth 2 List가 x=0, 224w).
+     */
+    for (const row of [rowOf(folder), rowOf(file)]) {
+      await expect(left(row)).toBe(left(rowOf(channel)));
+      await expect(row.getBoundingClientRect().right).toBe(rowOf(channel).getBoundingClientRect().right);
+    }
+
+    // 들여쓰기는 라벨 위치로 드러난다: depth0 10 / depth1 20 / depth2 20 + (점 22 + gap 8)
+    const iconLeft = (labelButton: Element) => left(rowOf(labelButton).querySelector('span:has(> svg)')!);
+    await expect(iconLeft(folder) - left(rowOf(folder))).toBe(20);
+    await expect(iconLeft(channel) - left(rowOf(channel))).toBe(10);
+    await expect(iconLeft(file) - left(rowOf(file))).toBe(50);
+
+    // depth2에만 라벨 앞 점이 붙는다. 이 스토리는 file-1이 선택 행이라 점도 파랑이다
+    const dot = rowOf(file).querySelector('span[aria-hidden]')!;
+    await expect(rowOf(file).querySelectorAll('span[aria-hidden]')).toHaveLength(1);
+    await expect(rowOf(folder).querySelectorAll('span[aria-hidden]')).toHaveLength(0);
+    await expect(getComputedStyle(dot).borderTopColor).toBe('rgb(51, 133, 255)');
+
+    // 행끼리는 2로 떨어진다
+    await expect(
+      Math.round(rowOf(folder).getBoundingClientRect().top - rowOf(channel).getBoundingClientRect().bottom),
+    ).toBe(2);
 
     // 행 본문 클릭은 이동만 한다 — 더 이상 접히지 않는다
     await userEvent.click(channel);
@@ -147,6 +169,12 @@ export const Interactive: Story = {
     await userEvent.click(collapse);
     await expect(canvas.queryByRole('button', { name: '파일명texttexttext 1' })).toBeNull();
 
+    /*
+     * 마우스로 누르면 캐럿이 다시 숨는다 — 어포던스가 hover·focus-visible에만 걸려 있기
+     * 때문이다. 실제 브라우저에서는 마우스가 행 위에 남아 :hover가 유지하지만
+     * userEvent.click은 CSS :hover를 켜지 못해서 여기서만 다시 포커스를 준다.
+     */
+    channel.focus();
     const expand = canvas.getByRole('button', { name: '채널명 text text text text 1 펼치기' });
     await expect(expand).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(expand);
@@ -164,6 +192,8 @@ export const ActiveHighlight: Story = {
     activeId: 'folder-1',
     defaultExpandedIds: ['channel-1'],
     onNodeClick: fn(),
+    onNodeMore: fn(),
+    onNodeAdd: fn(),
   },
   render: (args) => (
     <Frame>
@@ -184,6 +214,18 @@ export const ActiveHighlight: Story = {
     // 선택 상태는 primary 계열이다
     const active = canvas.getByRole('button', { name: '폴더명 text text text t 1' });
     await expect(rowOf(active)).toHaveClass('bg-fill-primary-normal-neutral');
+    await expect(getComputedStyle(active.querySelector('span')!).color).toBe('rgb(0, 94, 235)');
+
+    /*
+     * 선택 행의 액션은 파랑이다 — 시안 Selected_hover가 Icon only(Blue)를 쓴다.
+     * 캐럿만 파랑이고 ⋯·+는 회색으로 갈리면 같은 행 안에서 색이 어긋난다.
+     */
+    active.focus();
+    const activeMore = canvas.getByRole('button', { name: '폴더명 text text text t 1 추가 작업' });
+    await expect(getComputedStyle(activeMore.querySelector('svg path')!).fill).toBe('rgb(0, 102, 255)');
+
+    // 시안에 Selected_pressed가 없다 — 선택 행에 중립 pressed를 걸지 않는다
+    await expect(rowOf(active)).not.toHaveClass('has-[button:active]:bg-fill-normal-interaction-pressed');
     await expect(active.querySelector('span')).toHaveClass('text-text-primary-normal');
   },
 };
@@ -270,12 +312,25 @@ export const RowActionsMenuOpen: Story = {
      * 열린 행의 액션은 hover·포커스 없이도 살아 있어야 한다. 숨으면 앵커가 0×0이 되어
      * 소비처의 팝오버가 좌상단으로 튄다.
      */
-    const more = canvas.getByRole('button', { name: '채널명 text text text text 1 더보기' });
+    const more = canvas.getByRole('button', { name: '채널명 text text text text 1 추가 작업' });
     await expect(Math.round(more.getBoundingClientRect().width)).toBe(22);
     await expect(more).toHaveAttribute('aria-expanded', 'true');
 
+    /*
+     * 메뉴가 열린 버튼은 DS Icon button의 Pressed(12%)다 — hover(10%)보다 한 단계 진하다.
+     * 토큰이 srgb 표기로 계산돼 나와서 알파만 본다.
+     */
+    await expect(getComputedStyle(more).backgroundColor).toMatch(/0\.12/);
+    const add = canvas.getByRole('button', { name: '채널명 text text text text 1 하위 페이지 추가' });
+    await expect(getComputedStyle(add).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+
+    // 아이콘 자산이 currentColor여야 토큰 클래스가 먹는다 — 하드코드 fill이면 여기서 걸린다
+    for (const button of [more, add]) {
+      await expect(getComputedStyle(button.querySelector('svg path')!).fill).toBe('rgb(109, 120, 130)');
+    }
+
     // 다른 행은 그대로 숨어 있다
-    await expect(canvas.queryByRole('button', { name: '폴더명 text text text t 2 더보기' })).toBeNull();
+    await expect(canvas.queryByRole('button', { name: '폴더명 text text text t 2 추가 작업' })).toBeNull();
   },
 };
 
@@ -299,13 +354,13 @@ export const RowActions: Story = {
     const canvas = within(canvasElement);
 
     // 아무 행도 hover·포커스 상태가 아니면 액션은 보이지 않는다
-    await expect(canvas.queryByRole('button', { name: '채널명 text text text text 1 더보기' })).toBeNull();
+    await expect(canvas.queryByRole('button', { name: '채널명 text text text text 1 추가 작업' })).toBeNull();
 
     const channel = canvas.getByRole('button', { name: '채널명 text text text text 1' });
     channel.focus();
 
-    const more = canvas.getByRole('button', { name: '채널명 text text text text 1 더보기' });
-    const add = canvas.getByRole('button', { name: '채널명 text text text text 1 하위 추가' });
+    const more = canvas.getByRole('button', { name: '채널명 text text text text 1 추가 작업' });
+    const add = canvas.getByRole('button', { name: '채널명 text text text text 1 하위 페이지 추가' });
 
     // 액션 버튼 크기와 그룹 간격
     await expect(Math.round(more.getBoundingClientRect().width)).toBe(22);
@@ -323,12 +378,12 @@ export const RowActions: Story = {
     // 하위를 가질 수 없는 행은 ⋯만 갖는다
     const file = canvas.getByRole('button', { name: '파일명texttexttext 1' });
     file.focus();
-    await expect(canvas.getByRole('button', { name: '파일명texttexttext 1 더보기' })).toBeInTheDocument();
-    await expect(canvas.queryByRole('button', { name: '파일명texttexttext 1 하위 추가' })).toBeNull();
+    await expect(canvas.getByRole('button', { name: '파일명texttexttext 1 추가 작업' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: '파일명texttexttext 1 하위 페이지 추가' })).toBeNull();
 
     // 액션 클릭은 이동도 토글도 건드리지 않는다.
     // 두 번째 인자는 눌린 버튼 자신이다 — 소비처가 메뉴를 이 위치에 붙인다
-    const moreButton = canvas.getByRole('button', { name: '파일명texttexttext 1 더보기' });
+    const moreButton = canvas.getByRole('button', { name: '파일명texttexttext 1 추가 작업' });
     await userEvent.click(moreButton);
     await expect(args.onNodeMore).toHaveBeenCalledWith('file-1', moreButton);
     await expect(args.onNodeClick).not.toHaveBeenCalled();
@@ -336,7 +391,7 @@ export const RowActions: Story = {
     // 하위 추가는 canAddChild 행에서만 불린다
     const folder = canvas.getByRole('button', { name: '폴더명 text text text t 2' });
     folder.focus();
-    const addButton = canvas.getByRole('button', { name: '폴더명 text text text t 2 하위 추가' });
+    const addButton = canvas.getByRole('button', { name: '폴더명 text text text t 2 하위 페이지 추가' });
     await userEvent.click(addButton);
     await expect(args.onNodeAdd).toHaveBeenCalledWith('folder-2', addButton);
   },

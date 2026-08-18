@@ -6,6 +6,7 @@ import IconCalendarClock from '@/public/icons/icon/calendar_clock.svg';
 import IconPerson from '@/public/icons/icon/person.svg';
 import IconPersonFilled from '@/public/icons/icon/person_filled.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
+import IconWikiChannelFilled from '@/public/icons/icon/wiki_channel_filled.svg';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
 import { REVIEW_QUEUE_ASSIGNEE_OPTIONS, REVIEW_QUEUE_CHANNEL_OPTIONS } from '../../fixtures/llmWikiFixtures';
@@ -18,7 +19,7 @@ const SECTIONS: readonly ReviewQueueFilterSection[] = [
     label: '대상 채널',
     Icon: IconWikiChannel,
     searchPlaceholder: '부서명 검색',
-    OptionIcon: IconWikiChannel,
+    OptionIcon: IconWikiChannelFilled,
     options: REVIEW_QUEUE_CHANNEL_OPTIONS,
   },
   {
@@ -77,14 +78,14 @@ const meta = {
       ],
       tokenNotes: [
         '카드: Fill/Normal/Normal 흰 배경 + Line/Normal/Normal 테두리(래퍼 기본값), radius 12 = rounded-xl — 래퍼 기본 16(rounded-2xl)을 시안값으로 덮는다.',
-        '축 행: 라벨 body(md)/small #33363D, 좌측 아이콘 24 #464C53 = text-icon-normal-normal, 화살표 24 #B1B8BE = text-icon-normal-alternative.',
+        '축 행: 라벨 body(md)/small #33363D, 좌측 아이콘 20 #464C53 = text-icon-normal-normal, 화살표 20 #B1B8BE = text-icon-normal-alternative(8/17 재실측 — 구 24는 오측).',
         '현재값 요약: body(md)/xsmall 13 #6D7882 = text-text-normal-alternative, max-w 78 = max-w-19.5 truncate.',
         '트리거 열림: Fill/Normal/interaction/Pressed(10% 알파) + Line/Normal/Strong #DBDCDF — data-[state=open]으로 표현. 필터링 중 글리프 #0066FF = text-icon-primary-normal(currentColor 전환).',
         '항목 하이라이트·선택 채움 모두 Fill/Normal/interaction/Hover(6% 알파) = bg-fill-normal-interaction-hover.',
       ],
       layoutNotes: [
-        '고정 치수: 트리거 36(컨트롤)·아이콘 24·1차 카드 폭 250(w-62.5)·옵션 카드 폭 200(w-50) — 전부 시안 fixed.',
-        '항목 높이 40은 결과값(패딩 8+아이콘 24+8) — h-* 금지. 항목 레벨의 폭 흡수는 라벨 하나(min-w-0 flex-1), 현재값·아이콘·화살표는 shrink-0.',
+        '고정 치수: 트리거 36(컨트롤)·트리거 글리프 24·축 행 글리프 20·1차 카드 폭 250(w-62.5)·옵션 카드 폭 200(w-50) — 전부 시안 fixed.',
+        '항목 높이 31은 결과값(패딩 4+텍스트 23) — h-* 금지. 공용 래퍼 기본이 py-2(40)라 py-1로 덮는다. 항목 레벨의 폭 흡수는 라벨 하나(min-w-0 flex-1), 현재값·아이콘·화살표는 shrink-0.',
         '1차 카드 폭이 250으로 늘며(구 200) 긴 라벨 흡수 여유가 커졌지만 truncate 계약은 유지한다.',
       ],
       interactionNotes: [

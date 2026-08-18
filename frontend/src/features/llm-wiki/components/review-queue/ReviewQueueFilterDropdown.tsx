@@ -90,10 +90,10 @@ export default function ReviewQueueFilterDropdown({
 
           return (
             <DropdownMenuSub key={id}>
-              {/* 항목 높이는 패딩+아이콘의 결과값이다 — h-*로 못박지 않는다. */}
-              <DropdownMenuSubTrigger className="gap-1">
+              {/* 항목 높이 31은 패딩 4+텍스트 23의 결과다 — 공용 래퍼 기본(py-2)이면 40이 된다 */}
+              <DropdownMenuSubTrigger className="gap-1 py-1">
                 <span className="flex min-w-0 flex-1 items-center gap-2.5">
-                  {Icon && <Icon aria-hidden className="text-icon-normal-normal size-6 shrink-0" />}
+                  {Icon && <Icon aria-hidden className="text-icon-normal-normal size-5 shrink-0" />}
                   <span className="min-w-0 flex-1 truncate">{label}</span>
                 </span>
                 {valueLabel && (
@@ -101,7 +101,7 @@ export default function ReviewQueueFilterDropdown({
                     {valueLabel}
                   </span>
                 )}
-                <IconArrowRight aria-hidden className="text-icon-normal-alternative size-6 shrink-0" />
+                <IconArrowRight aria-hidden className="text-icon-normal-alternative size-5 shrink-0" />
               </DropdownMenuSubTrigger>
 
               {searchPlaceholder ? (
@@ -123,7 +123,7 @@ export default function ReviewQueueFilterDropdown({
                     <DropdownMenuItem
                       key={option.id}
                       onSelect={() => onSelect?.(id, option.id)}
-                      className={cn(option.id === selectedOptionId && 'bg-fill-normal-interaction-hover')}
+                      className={cn('py-1', option.id === selectedOptionId && 'bg-fill-normal-interaction-hover')}
                     >
                       <span className="min-w-0 flex-1 truncate">{option.label}</span>
                     </DropdownMenuItem>

@@ -136,12 +136,18 @@ export const HomeExpanded: Story = {
       await expect(Math.round(box(nav.children[1]).height)).toBe(97);
     });
 
-    await step('트리 들여쓰기는 depth마다 20이다', async () => {
+    await step('트리 들여쓰기는 행이 아니라 행 안에서 일어난다', async () => {
       const rows = [...canvasElement.querySelectorAll('[data-slot="nav-tree-row"]')];
       const left = (el: Element) => el.getBoundingClientRect().left;
+      const iconLeft = (row: Element) => left(row.querySelector('span:has(> svg)')!);
 
-      await expect(left(rows[1]) - left(rows[0])).toBe(20);
-      await expect(left(rows[2]) - left(rows[0])).toBe(40);
+      // 배경은 전 depth가 같은 자리다 — 셸 안에서도 폭이 줄지 않는다
+      await expect(left(rows[1])).toBe(left(rows[0]));
+      await expect(left(rows[2])).toBe(left(rows[0]));
+      // 들여쓰기는 라벨 위치로 드러난다 (depth0 10 / depth1 20 / depth2 20 + 점 22 + gap 8)
+      await expect(iconLeft(rows[0]) - left(rows[0])).toBe(10);
+      await expect(iconLeft(rows[1]) - left(rows[1])).toBe(20);
+      await expect(iconLeft(rows[2]) - left(rows[2])).toBe(50);
     });
 
     await userEvent.click(canvas.getByRole('button', { name: '사이드바 접기' }));

@@ -3,13 +3,14 @@
 import { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 
-import IconAdd from '@/public/icons/icon/add_small.svg';
-import IconDashboard from '@/public/icons/icon/dashboard.svg';
-import IconEditPencil from '@/public/icons/icon/edit_pencil.svg';
+import IconAdd400 from '@/public/icons/icon/add_small_400.svg';
+import IconEditSquare from '@/public/icons/icon/edit_square.svg';
 import IconFile from '@/public/icons/icon/file.svg';
 import IconFolder from '@/public/icons/icon/folder.svg';
+import IconGrid from '@/public/icons/icon/grid.svg';
 import IconLink from '@/public/icons/icon/link.svg';
 import IconSearch300 from '@/public/icons/icon/search_300.svg';
+import IconSearch400 from '@/public/icons/icon/search_400.svg';
 import IconStar from '@/public/icons/icon/star.svg';
 import IconUpdate from '@/public/icons/icon/update.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
@@ -111,7 +112,7 @@ export default function WikiSideNav() {
         [{ id: 'favorite', label: '즐겨찾기', Icon: IconStar }],
         [
           { id: 'copy-link', label: '링크 복사', Icon: IconLink },
-          { id: 'rename', label: '이름 바꾸기', Icon: IconEditPencil },
+          { id: 'rename', label: '이름 바꾸기', Icon: IconEditSquare },
         ],
       ],
     };
@@ -164,11 +165,11 @@ export default function WikiSideNav() {
         }
         footer={<SnbRailFooter userName={user?.name ?? '이름없음'} onSettingsClick={goSettings} profileMenu={profileMenu} />}
       >
-        <SnbRailItem Icon={IconAdd} label="새 채팅" onClick={go('/')} />
+        <SnbRailItem Icon={IconAdd400} label="새 채팅" onClick={go('/')} />
         {/* 검색은 목적지가 정해지기 전까지 아무 동작도 하지 않는다 */}
-        <SnbRailItem Icon={IconSearch300} label="검색" />
+        <SnbRailItem Icon={IconSearch400} label="검색" />
         <SnbRailItem Icon={IconUpdate} label="요청됨" selected={isReview} onClick={go('/llm-wiki/review')} />
-        <SnbRailItem Icon={IconDashboard} label="위키 대시보드" selected={isDashboard} onClick={go('/llm-wiki')} />
+        <SnbRailItem Icon={IconGrid} label="위키 대시보드" selected={isDashboard} onClick={go('/llm-wiki')} />
         {/* 즐겨찾기·최근 위키는 갈 곳이 없다 */}
         <SnbRailItem Icon={IconStar} label="즐겨찾기" />
         <SnbRailItem Icon={IconFolder} label="최근 위키" />
@@ -189,7 +190,7 @@ export default function WikiSideNav() {
       primaryItems={
         <>
           <div className="flex flex-col">
-            <SnbNavRow Icon={IconAdd} label="새 채팅" iconOnDisc onClick={go('/')} />
+            <SnbNavRow Icon={IconAdd400} label="새 채팅" iconOnDisc onClick={go('/')} />
             <SnbNavRow Icon={IconSearch300} label="검색" />
             <SnbNavRow
               Icon={IconUpdate}
@@ -201,7 +202,7 @@ export default function WikiSideNav() {
           </div>
           <SnbTeamspaceCard name="Acme의 지식 허브" Icon={TEAMSPACE_ICON} />
           <div className="flex flex-col">
-            <SnbNavRow Icon={IconDashboard} label="위키 대시보드" selected={isDashboard} onClick={go('/llm-wiki')} />
+            <SnbNavRow Icon={IconGrid} label="위키 대시보드" selected={isDashboard} onClick={go('/llm-wiki')} />
           </div>
         </>
       }
@@ -234,8 +235,8 @@ export default function WikiSideNav() {
           actionsOpen={menu?.kind === 'section-add'}
           actions={
             <SnbSectionAction
-              label="채널 추가"
-              Icon={IconAdd}
+              label="추가하기"
+              Icon={IconAdd400}
               active={menu?.kind === 'section-add'}
               onClick={(anchor) => setMenu({ kind: 'section-add', anchor })}
             />

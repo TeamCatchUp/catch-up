@@ -49,8 +49,8 @@ export default function WikiFolderPage({
         onBreadcrumbClick={onBreadcrumbClick}
       />
 
-      {/* 상단 영역 — 콘텐츠 미정(사진 가능성)이라 시각을 넣지 않는다 */}
-      <div aria-hidden className="h-50 shrink-0" />
+      {/* 상단 커버 — 바탕만 시안값이고 콘텐츠는 미정이라 비워 둔다 */}
+      <div aria-hidden className="bg-fill-normal-strong h-50 shrink-0" />
 
       <div className="flex flex-col gap-9 px-20 py-9">
         <WikiSpaceTitleBlock
