@@ -3,9 +3,10 @@ import { Fragment } from 'react';
 import IconArrowRight from '@/public/icons/icon/arrow_right2.svg';
 import IconFileFilled from '@/public/icons/icon/file_filled.svg';
 import { Avatar } from '@/shared/components/ui/avatar';
+import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
-import type { DocumentRowData } from '../../types/llmWikiModel';
+import type { DocumentBreadcrumb, DocumentRowData } from '../../types/llmWikiModel';
 import { BREADCRUMB_ICON } from '../breadcrumbIcons';
 import DocumentStatusBadge from './DocumentStatusBadge';
 
@@ -33,18 +34,28 @@ export function DashboardDocumentTableHeader() {
 interface DashboardDocumentRowProps {
   document: DocumentRowData;
   onClick?: (id: string) => void;
+  onBreadcrumbClick?: (breadcrumb: DocumentBreadcrumb) => void;
 }
 
-export default function DashboardDocumentRow({ document, onClick }: DashboardDocumentRowProps) {
+export default function DashboardDocumentRow({ document, onClick, onBreadcrumbClick }: DashboardDocumentRowProps) {
   const { id, title, breadcrumbs, status, ownerName, ownerProfileImageUrl, lastActivityLabel } = document;
 
-  // hover 채움은 시안에 정의가 없어 발명하지 않는다.
+  // hover 채움은 시안에 없고 DS 중립 상호작용 토큰을 채택한 것이다(사용자 확정).
   return (
-    <button
-      type="button"
-      onClick={() => onClick?.(id)}
-      className={cn(DASHBOARD_DOCUMENT_TABLE_SHELL, 'w-full rounded-lg text-left')}
+    <div
+      className={cn(
+        DASHBOARD_DOCUMENT_TABLE_SHELL,
+        'hover:bg-fill-normal-interaction-hover relative w-full rounded-lg transition-colors',
+      )}
     >
+      {/* 행 전체 클릭 — 마디 버튼과의 중첩을 피해 오버레이로 분리한다 */}
+      <button
+        type="button"
+        aria-label={title}
+        onClick={() => onClick?.(id)}
+        className="absolute inset-0 rounded-lg"
+      />
+
       {/* 문서 열 — 이 행에서 폭을 흡수하는 유일한 슬롯 */}
       <span className="flex min-w-55 flex-1 items-center gap-4">
         <span className="bg-fill-normal-strong text-icon-normal-alternative flex shrink-0 rounded-lg p-2">
@@ -63,13 +74,18 @@ export default function DashboardDocumentRow({ document, onClick }: DashboardDoc
                 return (
                   <Fragment key={`${crumb.kind}-${crumb.label}`}>
                     {index > 0 && <IconArrowRight aria-hidden className="text-icon-normal-neutral size-5 shrink-0" />}
-                    {/* breadcrumb 마디 — 시안이 마디 폭을 150으로 상한 */}
-                    <span className="flex max-w-37.5 min-w-0 items-center gap-1 rounded-full px-1.5 py-1">
+                    {/* breadcrumb 마디 — 공용 Text Button, 시안이 마디 폭을 150으로 상한 */}
+                    <Button
+                      variant="text-secondary-mono"
+                      size="sm"
+                      onClick={() => onBreadcrumbClick?.(crumb)}
+                      className="relative max-w-37.5 min-w-0 shrink"
+                    >
                       {CrumbIcon && <CrumbIcon aria-hidden className="text-icon-normal-neutral size-5 shrink-0" />}
                       <span className="text-body-xsmall text-text-normal-neutral min-w-0 flex-1 truncate">
                         {crumb.label}
                       </span>
-                    </span>
+                    </Button>
                   </Fragment>
                 );
               })}
@@ -102,6 +118,6 @@ export default function DashboardDocumentRow({ document, onClick }: DashboardDoc
         {/* 최근 활동 열 — 우측 정렬 */}
         <span className="text-body-small text-text-normal-alternative truncate text-right">{lastActivityLabel}</span>
       </span>
-    </button>
+    </div>
   );
 }

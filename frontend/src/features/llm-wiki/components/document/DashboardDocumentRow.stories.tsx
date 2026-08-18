@@ -9,7 +9,7 @@ const meta = {
   title: 'Compositions/LLM Wiki/Document/DashboardDocumentRow',
   component: DashboardDocumentRow,
   tags: ['autodocs'],
-  args: { onClick: fn() },
+  args: { onClick: fn(), onBreadcrumbClick: fn() },
   parameters: {
     ...catchupParameters({
       level: 'composition',
@@ -24,11 +24,12 @@ const meta = {
         nodeId: '17606:149816',
       },
       viewport: { width: 1040, height: 240 },
-      states: ['default(reviewed)', 'pending-review', 'table-alignment', 'long-title-narrow-slot'],
+      states: ['default(reviewed)', 'pending-review', 'hover', 'table-alignment', 'long-title-narrow-slot'],
       reuseNotes: [
         '상태 배지는 DocumentStatusBadge를 그대로 쓴다 — 새 표 행의 배지(18122:60892)가 기존 md 규격(px-2 py-1·gap-2·아이콘 20)과 일치함을 재실측.',
         '담당자 아바타는 공용 Avatar(size small=25) + 시안 인스턴스 오버라이드(radius 12·line-assistive 링) — ReviewQueueRow와 같은 조합(중복 감사 #2의 DS 드리프트 기록 참조).',
         'file_filled·arrow_right2·wiki_channel·folder 에셋 재사용 — 신규 export 없음. 표 헤더는 같은 파일의 DashboardDocumentTableHeader로 제공.',
+        'breadcrumb 마디는 공용 Button(text-secondary-mono·sm) — 18539:60773 Text Button 실측(px 6/py 4·gap 4·radius full·높이 28)과 규격 일치. 라벨·아이콘 색은 실측값 유지로 오버라이드.',
       ],
       dataNotes: [
         '2026-08-13 재실측(대시보드 17595:148922): 태그 열이 소멸하고 담당자(아바타+이름) 열로 교체됐다 — tags·hasConflictIcon 계약 제거.',
@@ -40,6 +41,7 @@ const meta = {
         '제목 #33363D = text-text-normal-normal + heading(sb)/small 유지. 담당자명 #33363D + body(md)/small.',
         '아바타 링 #F4F4F5 = border-line-normal-assistive, radius 12 = rounded-xl(DS 원본 rounded-full과 갈리는 화면 인스턴스 값).',
         '최근 활동 #6D7882 = text-text-normal-alternative + body(md)/small, 우측 정렬(Figma textAlign RIGHT). 헤더 라벨도 같은 색·타이포.',
+        '행 hover는 DS 중립 상호작용 토큰 fill-normal-interaction-hover(#1E2124 6% 알파)다 — 시안에 hover 정의가 없어 채택한 값이고 사용자 확정분이다. 알파라 흰 배경 위에서 #F2F2F2로 합성되어 아이콘틀(#F7F7F8)이 묻히지 않고, 다크는 #F4F5F6 4%로 자동 전환된다. 같은 계열 ReviewQueueRow와 동일 조합.',
         'breadcrumb 마디: 라벨 #464C53 = text-text-normal-neutral body(md)/xsmall, 아이콘 #6D7882 = text-icon-normal-neutral — 기존 값 유지.',
       ],
       layoutNotes: [
@@ -47,6 +49,7 @@ const meta = {
         '메타 셀은 grid-cols-[140px_160px_96px]이고 헤더·행이 DASHBOARD_DOCUMENT_META_GRID 상수를 공유한다. 1040 검산: 6+564+36+140+16+160+16+96+6.',
         '행 셸 시각 분리 약속 이행: rounded-lg는 행 버튼만 갖고 DASHBOARD_DOCUMENT_TABLE_SHELL은 레이아웃만 갖는다(헤더가 함께 쓴다).',
         'breadcrumb 마디 max-w 150(시안 Text Button 150×28 실측, 8/17 재확인) — 초과분은 라벨 truncate. 폭 흡수는 문서 열 하나뿐이고 행 높이 65는 결과값.',
+        '행 클릭은 absolute inset-0 오버레이 버튼(접근명=제목) — 마디가 실버튼이 되면서 중첩 버튼을 피하는 구조. 마디 버튼은 relative로 오버레이 위에 뜬다.',
       ],
     }),
   },
@@ -71,13 +74,18 @@ export const Default: Story = {
     await expect(canvas.getByText('3시간 전')).toBeInTheDocument();
 
     // 선두 아이콘은 viewBox로 구분한다 — 색 비교와 달리 테마에 흔들리지 않는다.
-    const row = canvas.getByRole('button');
-    await expect(findIconSvg(row)).toHaveAttribute('viewBox', '0 0 18 18');
+    await expect(findIconSvg(canvasElement)).toHaveAttribute('viewBox', '0 0 18 18');
 
     // 고정폭 열이 살아 있는지 — 무너지면 행끼리 열이 어긋난다.
     await expect(canvas.getByText('3시간 전').getBoundingClientRect().width).toBe(96);
 
-    await userEvent.click(row);
+    // 마디 클릭은 마디 콜백만 부르고 행 이동을 유발하지 않는다.
+    await userEvent.click(canvas.getByRole('button', { name: '결제' }));
+    await expect(args.onBreadcrumbClick).toHaveBeenCalledWith({ kind: 'channel', label: '결제' });
+    await expect(args.onClick).not.toHaveBeenCalled();
+
+    // 행 클릭은 오버레이 버튼(접근명=제목)으로 흐른다.
+    await userEvent.click(canvas.getByRole('button', { name: '결제 승인 실패 시 재시도 정책' }));
     await expect(args.onClick).toHaveBeenCalledWith('doc-payment-retry');
   },
 };
@@ -92,6 +100,28 @@ export const PendingReview: Story = {
     await expect(canvas.getByText('직원10')).toBeInTheDocument();
     // 새 시안의 날짜형 표기도 같은 문자열 계약으로 흐른다.
     await expect(canvas.getByText('2024.12.12')).toBeInTheDocument();
+  },
+};
+
+/**
+ * 행 hover. 시안에 없는 상태라 DS 토큰 채택분이다.
+ * 합성 이벤트는 CSS :hover를 발동시키지 못해 계산된 색으로는 잴 수 없다 — 토큰이 걸려 있는지와
+ * 아이콘틀이 같은 색으로 묻히지 않는지를 대신 못박는다(실제 색 변화는 Storybook에서 눈으로 확인).
+ */
+export const Hover: Story = {
+  args: { document: createDocumentRow() },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const row = canvas.getByRole('button', { name: '결제 승인 실패 시 재시도 정책' }).parentElement!;
+
+    // 토큰이 빠지면 hover가 조용히 사라진다.
+    await expect(row.className).toContain('hover:bg-fill-normal-interaction-hover');
+    await expect(row.className).toContain('transition-colors');
+
+    // 아이콘틀은 자기 배경(Fill/Normal/Strong 솔리드)을 갖는다 — 행 채움과 같은 토큰이면 hover에서 묻힌다.
+    const iconBox = row.querySelector('.bg-fill-normal-strong') as HTMLElement;
+    await expect(iconBox).not.toBeNull();
+    await expect(iconBox.className).not.toContain('fill-normal-interaction-hover');
   },
 };
 
@@ -145,7 +175,8 @@ export const LongTitleInNarrowSlot: Story = {
   ],
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    const row = canvas.getByRole('button');
+    // 오버레이 버튼(접근명=제목)의 부모가 행 셸이다.
+    const row = canvas.getByRole('button', { name: args.document.title }).parentElement!;
     const slot = canvasElement.querySelector('div.w-200') as HTMLElement;
     const heading = canvas.getByText(args.document.title);
 
