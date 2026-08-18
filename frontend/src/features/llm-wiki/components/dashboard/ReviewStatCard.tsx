@@ -47,7 +47,11 @@ export default function ReviewStatCard({ stat, onClick }: ReviewStatCardProps) {
   if (!onClick) return <div className={shellClass}>{content}</div>;
 
   return (
-    <button type="button" onClick={() => onClick(stat.id)} className={`${shellClass} w-full cursor-pointer`}>
+    <button
+      type="button"
+      onClick={() => onClick(stat.id)}
+      className={`${shellClass} hover:bg-fill-normal-interaction-hover w-full cursor-pointer transition-colors`}
+    >
       {content}
     </button>
   );
