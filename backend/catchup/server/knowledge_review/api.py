@@ -617,11 +617,23 @@ def publish_proposal(
     소비자는 검토자를 어느 블록으로 데려가야 하는지 알 수 없어 목록을
     처음부터 다시 훑게 된다.
 
+    남은 블록을 일괄 반려하는데 사유가 비었으면 서비스에 닿기 전에 막는다.
+    단건 반려와 같은 상황이므로 같은 400 REASON_REQUIRED로 답해야 소비자가
+    입력만 고치면 되는 상황임을 알 수 있다.
+
     Raises:
-        HTTPException: 변경안이 없으면 404, 이 문서의 검수 권한이 없으면
-            403, 미결정·낡음·경합이면 409, 보낸 값이나 조립 결과가 계약을
-            어기면 422를 던진다.
+        HTTPException: 일괄 반려에 사유가 없으면 400, 변경안이 없으면 404,
+            이 문서의 검수 권한이 없으면 403, 미결정·낡음·경합이면 409,
+            보낸 값이나 조립 결과가 계약을 어기면 422를 던진다.
     """
+    if payload.undecided == "reject" and not (
+        payload.rejection_reason or ""
+    ).strip():
+        raise review_error(
+            400,
+            code="REASON_REQUIRED",
+            message="반려는 사유가 있어야 합니다.",
+        )
     _require_decidable_proposal(uow_factory, db, context, proposal_id)
     try:
         result = publish_artifact_proposal(

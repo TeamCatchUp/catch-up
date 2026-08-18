@@ -2919,6 +2919,54 @@ def test_publish_passes_undecided_to_the_service(
     )
 
 
+def test_publish_undecided_reject_without_reason_returns_400(
+    app: FastAPI, client: TestClient, reviewer: User
+) -> None:
+    """사유 없는 일괄 반려는 서비스에 닿기 전에 400 REASON_REQUIRED다."""
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(proposal=_proposal(proposal_id=proposal_id))
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.publish_artifact_proposal"
+    ) as service:
+        response = client.post(
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+            json={"base_revision_id": None, "undecided": "reject"},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "REASON_REQUIRED"
+    service.assert_not_called()
+
+
+def test_publish_undecided_reject_with_blank_reason_returns_400(
+    app: FastAPI, client: TestClient, reviewer: User
+) -> None:
+    """공백뿐인 사유도 사유가 없는 것과 같게 400으로 막는다."""
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(proposal=_proposal(proposal_id=proposal_id))
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.publish_artifact_proposal"
+    ) as service:
+        response = client.post(
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+            json={
+                "base_revision_id": None,
+                "undecided": "reject",
+                "rejection_reason": "   ",
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "REASON_REQUIRED"
+    service.assert_not_called()
+
+
 def test_approve_after_block_verdict_is_blocked_and_publish_works(
     app: FastAPI,
     client: TestClient,
