@@ -70,7 +70,7 @@ export const HomeCollapsedMenuCompositionTBD: Story = {
     // 닫힘에는 트리가 없다
     await expect(canvas.queryByText('위키')).toBeNull();
 
-    await step('Divider 위아래 간격이 다르다 — 눈으로는 놓치기 쉬워 값으로 고정한다', async () => {
+    await step('Divider 위아래 간격 12·12 — 눈으로는 놓치기 쉬워 값으로 고정한다', async () => {
       const nav = canvasElement.querySelector('nav')!;
       const divider = canvasElement.querySelector('[data-slot="side-nav-rail-divider"]')!;
       const switcherBox = divider.previousElementSibling!;
@@ -78,7 +78,7 @@ export const HomeCollapsedMenuCompositionTBD: Story = {
       const box = (el: Element) => el.getBoundingClientRect();
 
       await expect(Math.round(box(nav).width)).toBe(64);
-      await expect(Math.round(box(divider).top - box(switcherBox).bottom)).toBe(20);
+      await expect(Math.round(box(divider).top - box(switcherBox).bottom)).toBe(12);
       await expect(Math.round(box(itemList).top - box(divider).bottom)).toBe(12);
       await expect(Math.round(box(divider).width)).toBe(20);
       await expect(Math.round(box(itemList.children[0]).height)).toBe(57);

@@ -47,10 +47,10 @@ export default function SideNavRail({ spaceSwitcher, children, footer, onExpand,
       <div
         aria-hidden
         data-slot="side-nav-rail-divider"
-        className="bg-line-normal-neutral mt-5 mb-3 h-px w-5 shrink-0"
+        className="bg-line-normal-neutral mt-3 mb-3 h-px w-5 shrink-0"
       />
 
-      <div className="flex w-full flex-col items-center gap-2.5">{children}</div>
+      <div className="flex w-full flex-col items-center gap-2">{children}</div>
 
       <div className="mt-auto">{footer}</div>
     </nav>
