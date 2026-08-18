@@ -9,6 +9,7 @@ import { Button } from '@/shared/components/ui/button';
 
 import type { DocumentRowData, KnownDocumentStatus, ReviewStatCardData } from '../../types/llmWikiModel';
 import DashboardDocumentRow, { DashboardDocumentTableHeader } from '../document/DashboardDocumentRow';
+import DocumentTableEmptyState from '../document/states/DocumentTableEmptyState';
 import WikiPageHeader from '../header/WikiPageHeader';
 import type { ReviewQueueFilterOption } from '../review-queue/ReviewQueueFilterSearchPanel';
 import WikiSpaceTableFooter from '../space/WikiSpaceTableFooter';
@@ -153,11 +154,15 @@ export default function WikiDashboardPage({
           <div className="flex flex-col gap-8">
             <div className="flex flex-col">
               <DashboardDocumentTableHeader />
-              <div className="flex flex-col gap-1">
-                {visibleDocuments.map((document) => (
-                  <DashboardDocumentRow key={document.id} document={document} onClick={onDocumentClick} />
-                ))}
-              </div>
+              {visibleDocuments.length === 0 ? (
+                <DocumentTableEmptyState />
+              ) : (
+                <div className="flex flex-col gap-1">
+                  {visibleDocuments.map((document) => (
+                    <DashboardDocumentRow key={document.id} document={document} onClick={onDocumentClick} />
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* 시안 우측에 같은 컨트롤이 하나 더 있으나 레이어명이 "Page Size (중복?)"이라 렌더하지 않는다 */}
