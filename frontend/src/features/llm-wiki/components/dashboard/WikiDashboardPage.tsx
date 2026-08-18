@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 
-import IconDashboard from '@/public/icons/icon/dashboard.svg';
+import IconGrid from '@/public/icons/icon/grid.svg';
 import IconKebabHorizontal from '@/public/icons/icon/kebab_horizontal.svg';
 import { Button } from '@/shared/components/ui/button';
 
@@ -96,7 +96,7 @@ export default function WikiDashboardPage({
     <div className="flex flex-col">
       <WikiPageHeader
         variant="main"
-        icon={<IconDashboard />}
+        icon={<IconGrid />}
         title="대시보드"
         actions={
           <Button variant="icon-only-gray" size="md" aria-label="더보기" onClick={onMoreClick}>
