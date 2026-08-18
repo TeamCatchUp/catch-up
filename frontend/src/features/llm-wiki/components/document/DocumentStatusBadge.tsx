@@ -14,13 +14,12 @@ interface StatusPreset {
 }
 
 /**
- * 상태 → 라벨·색·아이콘. 확정된 3종만 담는다.
+ * 상태 → 라벨·색·아이콘. 확정된 2종만 담는다.
  * 여기 없는 status는 렌더하지 않는다 — 임의 배지를 발명하지 않는다.
  */
 const STATUS_PRESET: Partial<Record<KnownDocumentStatus, StatusPreset>> = {
   reviewed: { label: '검토 완료', variant: 'success', Icon: IconVerified },
   pending_review: { label: '검토 대기', variant: 'violet', Icon: IconDashCircle },
-  needs_review: { label: '검토 필요', variant: 'violet', Icon: IconDashCircle },
 };
 
 /** 색은 shared Badge 변형을 그대로 쓰고, 기하만 규격별로 덮는다. */

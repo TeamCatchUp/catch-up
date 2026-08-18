@@ -80,7 +80,7 @@ const meta = {
         'breadcrumb는 전부 props 주입이고 기존 DocumentBreadcrumb 계약(kind + label)을 그대로 쓴다 — 공유 파일 llmWikiModel.ts는 건드리지 않았다.',
         '마지막 마디가 현재 페이지다. 버튼이 아니고 aria-current="page"를 갖는다 — 클릭 대상이 아니라는 사실을 시각(색)이 아니라 마크업으로도 남긴다.',
         '우측 슬롯 내용물은 전부 소비처 몫이다. ⋯ 메뉴 항목 시안이 없어 트리거만 두고 DropdownMenu를 붙이지 않았다.',
-        '검토큐 태그는 상태 배지 워크스트림의 DocumentStatusBadge(size="sm")다 — 헤더는 자리(현재 마디 옆, gap 8)만 정하고 내용을 모른다. 8/10 통합 전에는 이 폴더의 ReviewNeededTag였다. [8/18 재실측] 시안 태그 문구가 "검토 필요"→"검토 대기"로 교체됨(같은 Tag type=purple, 기하 동일) — 스토리를 status="pending_review"로 전환. needs_review와의 관계는 상태 배지 워크스트림 질문(#19)으로 이관됨.',
+        '검토큐 태그는 상태 배지 워크스트림의 DocumentStatusBadge(size="sm")다 — 헤더는 자리(현재 마디 옆, gap 8)만 정하고 내용을 모른다. 8/10 통합 전에는 이 폴더의 ReviewNeededTag였다. [8/18 재실측] 시안 태그 문구가 "검토 필요"→"검토 대기"로 교체됨(같은 Tag type=purple, 기하 동일) — 스토리를 status="pending_review"로 전환. 상태 배지 세션이 그 문구 통일을 근거로 needs_review preset을 제거해 문서 상태는 2종(reviewed·pending_review)이 됐다.',
         '로딩·빈·에러 헤더는 만들지 않는다(시안 없음, 감사 금지 목록).',
       ],
       tokenNotes: [

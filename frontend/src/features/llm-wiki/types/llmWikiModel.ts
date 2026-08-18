@@ -12,9 +12,9 @@ export type ReviewItemType = KnownReviewItemType | (string & {});
 
 /**
  * [SPEC] 문서 상태. 백엔드에 대응 필드가 없고, 큐 행의 `status`(제안 판정)와 다른 축이다.
- * 확정된 셋 밖은 미정이라 열어둔다.
+ * 확정된 둘 밖은 미정이라 열어둔다.
  */
-export type KnownDocumentStatus = 'reviewed' | 'pending_review' | 'needs_review';
+export type KnownDocumentStatus = 'reviewed' | 'pending_review';
 export type DocumentStatus = KnownDocumentStatus | (string & {});
 
 // breadcrumb 종류. 아이콘이 정의된 것은 채널·폴더 2종뿐이라 나머지는 열어둔다
