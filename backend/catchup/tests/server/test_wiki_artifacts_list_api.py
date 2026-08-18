@@ -435,6 +435,26 @@ def test_move_artifact_to_folder_and_back(
     assert back.json()["folder_id"] is None
 
 
+def test_move_artifact_without_folder_id_key_is_422(
+    client, member, db, workspace_id, channel_id
+):
+    """folder_id 키를 빠뜨린 요청은 루트 이동으로 읽지 않고 거절한다.
+
+    값이 null인 것과 키가 없는 것은 다른 뜻이다. 키가 없으면 무엇을 원하는지
+    적히지 않은 요청이므로, 기본값으로 채워 문서를 옮기지 않는다.
+    """
+    artifact_id = _make_artifact(
+        db,
+        workspace_id=workspace_id,
+        title="빈 요청 문서",
+        channel_id=channel_id,
+    )
+
+    response = client.patch(f"/api/v1/wiki/artifacts/{artifact_id}", json={})
+
+    assert response.status_code == 422
+
+
 def test_move_artifact_to_other_channel_folder_is_mismatch(
     client, member, db, workspace_id, channel_id
 ):

@@ -366,11 +366,14 @@ class ArtifactMoveRequest(BaseModel):
     folder_id가 None이면 채널 루트로 올린다. 채널은 여기서 바꾸지 않는다.
     채널 이동은 정의·담당자·관리자 판정이 함께 따라와야 하는 조작이라,
     폴더 이동과 같은 문에 두지 않는다.
+
+    키는 필수이고 값만 null을 받는다. 기본값을 두면 키를 빠뜨린 요청이
+    "루트로 올려라"로 읽혀, 오타 하나가 조용히 문서를 옮긴다.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    folder_id: uuid.UUID | None = None
+    folder_id: uuid.UUID | None
 
 
 class ArtifactLocationResponse(BaseModel):
