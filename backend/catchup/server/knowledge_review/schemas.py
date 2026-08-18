@@ -17,16 +17,30 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from catchup.server.wiki.schemas import OwnerResponse
+
 
 class ArtifactRefResponse(BaseModel):
-    """큐 한 줄이 가리키는 문서를 담는다."""
+    """큐 한 줄이 가리키는 문서를 담는다.
+
+    문서가 놓인 자리(채널·폴더)를 함께 싣는다. 목록에서 "어디 문서인가"를
+    보여 주려면 필요한데, 없으면 화면이 문서마다 위치 조회를 한 번씩 더
+    한다. 미분류 문서는 둘 다 None이고, 채널 루트의 문서는 폴더만 None이다.
+    """
 
     id: str
     title: str | None
+    channel_id: str | None = None
+    folder_id: str | None = None
 
 
 class QueueItemResponse(BaseModel):
-    """검토 큐 한 줄을 담는다."""
+    """검토 큐 한 줄을 담는다.
+
+    can_review는 이 사용자가 이 문서의 안건을 결정할 수 있는지를 나타낸다.
+    목록에서 결정 버튼을 미리 잠그는 재료다. 이 값이 True여도 결정 경로는
+    같은 판정을 다시 하므로, 화면 표시가 인가의 정본은 아니다.
+    """
 
     proposal_id: str
     status: str
@@ -35,6 +49,8 @@ class QueueItemResponse(BaseModel):
     origin: str
     contains_conflict: bool
     created_at: datetime
+    owners: list[OwnerResponse] = []
+    can_review: bool
 
 
 class QueuePageResponse(BaseModel):

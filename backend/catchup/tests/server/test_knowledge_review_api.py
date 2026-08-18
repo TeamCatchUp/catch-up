@@ -926,17 +926,120 @@ def test_queue_returns_page_shape(
     assert returned == {
         "proposal_id": str(item.proposal_id),
         "status": "pending",
-        "artifact": {"id": str(item.artifact_id), "title": "오픈 API"},
+        "artifact": {
+            "id": str(item.artifact_id),
+            "title": "오픈 API",
+            "channel_id": None,
+            "folder_id": None,
+        },
         "summary": "속도 제한: rate_limit은 60이다",
         "origin": "compiled",
         "contains_conflict": True,
+        "owners": [],
+        "can_review": True,
     }
     assert service.call_args.kwargs == {
         "workspace_id": workspace_id,
         "contains_conflict": True,
+        "artifact_ids": None,
+        "created_after": None,
+        "created_before": None,
         "limit": 1,
         "offset": 2,
     }
+
+
+def test_queue_filters_narrow_artifact_ids(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    reviewer: User,
+    workspace_ids: tuple[int, int],
+) -> None:
+    """채널·담당자 조건은 문서 id 집합으로 바뀌어 서비스에 들어간다."""
+    workspace_id, _ = workspace_ids
+    channel_id = _make_channel(
+        db, workspace_id=workspace_id, created_by=reviewer.id
+    )
+    both = _make_artifact(
+        db, workspace_id=workspace_id, channel_id=channel_id
+    )
+    _make_artifact(db, workspace_id=workspace_id, channel_id=channel_id)
+    owner_only = _make_artifact(db, workspace_id=workspace_id)
+    _make_owner(db, artifact_id=both, user=reviewer)
+    _make_owner(db, artifact_id=owner_only, user=reviewer)
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
+    page = ReviewQueuePage(items=(), total=0)
+
+    with patch(
+        "catchup.server.knowledge_review.api.list_review_queue",
+        return_value=page,
+    ) as service:
+        response = client.get(
+            "/api/v1/knowledge-review/queue",
+            params={
+                "channel_id": str(channel_id),
+                "owner_user_id": reviewer.id,
+                "created_after": "2026-08-01T00:00:00+00:00",
+                "created_before": "2026-08-31T00:00:00+00:00",
+            },
+        )
+
+    assert response.status_code == 200
+    kwargs = service.call_args.kwargs
+    assert kwargs["artifact_ids"] == frozenset({both})
+    assert kwargs["created_after"] == datetime(
+        2026, 8, 1, tzinfo=timezone.utc
+    )
+    assert kwargs["created_before"] == datetime(
+        2026, 8, 31, tzinfo=timezone.utc
+    )
+
+
+def test_queue_carries_location_owners_and_can_review(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    reviewer: User,
+    workspace_ids: tuple[int, int],
+) -> None:
+    """항목마다 문서 위치·담당자·결정 가능 여부를 함께 싣는다."""
+    workspace_id, _ = workspace_ids
+    channel_id = _make_channel(
+        db, workspace_id=workspace_id, created_by=reviewer.id
+    )
+    artifact_id = _make_artifact(
+        db, workspace_id=workspace_id, channel_id=channel_id
+    )
+    other = _make_user(db, email="queue-owner@example.com")
+    _join(db, user=other, workspace_id=workspace_id)
+    _make_owner(db, artifact_id=artifact_id, user=other)
+    item = ReviewQueueItem(
+        proposal_id=uuid.uuid4(),
+        artifact_id=artifact_id,
+        title="오픈 API",
+        status="pending",
+        summary="속도 제한: rate_limit은 60이다",
+        origin="compiled",
+        contains_conflict=False,
+        created_at=AT,
+    )
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
+    page = ReviewQueuePage(items=(item,), total=1)
+
+    with patch(
+        "catchup.server.knowledge_review.api.list_review_queue",
+        return_value=page,
+    ):
+        response = client.get("/api/v1/knowledge-review/queue")
+
+    assert response.status_code == 200
+    returned = response.json()["items"][0]
+    assert returned["artifact"]["channel_id"] == str(channel_id)
+    assert returned["artifact"]["folder_id"] is None
+    assert [owner["user_id"] for owner in returned["owners"]] == [other.id]
+    # 담당자가 있는 문서는 담당자만 결정한다. 전역 관리자 폴백이 서지 않는다.
+    assert returned["can_review"] is False
 
 
 def test_queue_rejects_out_of_range_limit(

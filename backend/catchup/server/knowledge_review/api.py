@@ -29,6 +29,7 @@ debug 라우터와 달리 인증과 검토자 권한을 요구하고, 결정 저
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -100,7 +101,9 @@ from catchup.server.knowledge_review.schemas import ReadSetResponse
 from catchup.server.knowledge_review.schemas import RejectRequest
 from catchup.server.knowledge_review.schemas import VariantResponse
 from catchup.server.wiki.dependencies import review_error
+from catchup.server.wiki.owners import owners_by_artifact
 from catchup.server.wiki.roles import can_decide_artifact
+from catchup.server.wiki.schemas import OwnerResponse
 
 router = APIRouter(
     prefix="/api/v1/knowledge-review",
@@ -198,31 +201,121 @@ def _require_decidable_proposal(
     return proposal
 
 
+def _queue_artifact_ids(
+    db: Session,
+    *,
+    workspace_id: int,
+    channel_id: uuid.UUID | None,
+    owner_user_id: int | None,
+) -> frozenset[uuid.UUID] | None:
+    """채널·담당자 조건을 문서 id 집합 하나로 합친다.
+
+    둘 다 주면 교집합이다. 두 조건은 서로를 좁히는 관계이므로 합집합으로
+    보면 "이 채널에서 내가 맡은 문서"를 물었을 때 남의 문서까지 나온다.
+    둘 다 없으면 None을 돌려주어 서비스가 거르지 않게 한다. 조건은 있으나
+    맞는 문서가 없으면 빈 집합이고, 그때는 빈 페이지가 나온다.
+    """
+    if channel_id is None and owner_user_id is None:
+        return None
+
+    ids: frozenset[uuid.UUID] | None = None
+    if channel_id is not None:
+        ids = frozenset(
+            wiki_queries.list_artifact_ids_by_channel(
+                db, workspace_id=workspace_id, channel_id=channel_id
+            )
+        )
+    if owner_user_id is not None:
+        owned = frozenset(
+            wiki_queries.list_artifact_ids_by_owner(
+                db, workspace_id=workspace_id, user_id=owner_user_id
+            )
+        )
+        ids = owned if ids is None else ids & owned
+    return ids
+
+
 @router.get(
     path="/queue",
     response_model=QueuePageResponse,
-    description="검토 대기 중인 위키 문서 변경안을 충돌 우선으로 조회한다.",
+    description="검토 대기 중인 위키 문서 변경안을 오래된 순으로 조회한다.",
 )
 @audit_log(action=KnowledgeReviewAction.LIST)
 def list_queue(
     contains_conflict: bool | None = Query(
         None, description="충돌 여부로 거른다. 생략하면 전부 본다."
     ),
+    channel_id: uuid.UUID | None = Query(
+        None, description="이 채널의 문서 안건만 본다."
+    ),
+    owner_user_id: int | None = Query(
+        None, description="이 사용자가 담당자인 문서 안건만 본다."
+    ),
+    created_after: datetime | None = Query(
+        None, description="이 시각 이후 만들어진 안건만 본다."
+    ),
+    created_before: datetime | None = Query(
+        None, description="이 시각 이전 만들어진 안건만 본다."
+    ),
     limit: int = Query(50, ge=1, le=200, description="한 쪽에 담을 안건 수"),
     offset: int = Query(0, ge=0, description="건너뛸 안건 수"),
     context: ReviewerContext = Depends(resolve_reviewer_workspace),
     uow_factory: ReviewUowFactory = Depends(get_review_uow_factory),
+    db: Session = Depends(get_db),
 ) -> QueuePageResponse:
-    """검토 큐 한 페이지를 돌려준다."""
+    """검토 큐 한 페이지를 문서 위치·담당자·결정 가능 여부와 함께 돌려준다.
+
+    위치와 담당자 조회는 페이지에 실린 문서 id로 한 번씩만 나간다. 줄마다
+    조회하면 한 쪽에 문서 수만큼 질의가 붙는다.
+    """
     page = list_review_queue(
         uow_factory(),
         workspace_id=context.workspace_id,
         contains_conflict=contains_conflict,
+        artifact_ids=_queue_artifact_ids(
+            db,
+            workspace_id=context.workspace_id,
+            channel_id=channel_id,
+            owner_user_id=owner_user_id,
+        ),
+        created_after=created_after,
+        created_before=created_before,
         limit=limit,
         offset=offset,
     )
+
+    artifact_ids = [item.artifact_id for item in page.items]
+    locations = wiki_queries.get_artifact_locations(
+        db, artifact_ids=artifact_ids
+    )
+    owners = owners_by_artifact(db, artifact_ids)
+    items = []
+    for item in page.items:
+        # 저장소에 없는 문서는 미분류로 읽는다. 판정이 전역 관리자 폴백으로
+        # 가고, 채널 관리자에게 열리지 않는다.
+        artifact_channel_id, folder_id = locations.get(
+            item.artifact_id, (None, None)
+        )
+        artifact_owners = owners[item.artifact_id]
+        items.append(
+            _to_queue_item(
+                item,
+                channel_id=artifact_channel_id,
+                folder_id=folder_id,
+                owners=artifact_owners,
+                can_review=can_decide_artifact(
+                    context.roles,
+                    artifact_channel_id=artifact_channel_id,
+                    artifact_id=item.artifact_id,
+                    owner_user_ids=frozenset(
+                        owner.user_id for owner in artifact_owners
+                    ),
+                    user_id=context.user.id,
+                ),
+            )
+        )
     return QueuePageResponse(
-        items=[_to_queue_item(item) for item in page.items],
+        items=items,
         total=page.total,
         limit=limit,
         offset=offset,
@@ -551,18 +644,30 @@ def _artifact_review_error(
     )
 
 
-def _to_queue_item(item: ReviewQueueItem) -> QueueItemResponse:
-    """큐 한 줄을 응답으로 옮긴다."""
+def _to_queue_item(
+    item: ReviewQueueItem,
+    *,
+    channel_id: uuid.UUID | None,
+    folder_id: uuid.UUID | None,
+    owners: list[OwnerResponse],
+    can_review: bool,
+) -> QueueItemResponse:
+    """큐 한 줄을 문서 위치·담당자·결정 가능 여부와 함께 응답으로 옮긴다."""
     return QueueItemResponse(
         proposal_id=str(item.proposal_id),
         status=item.status,
         artifact=ArtifactRefResponse(
-            id=str(item.artifact_id), title=item.title
+            id=str(item.artifact_id),
+            title=item.title,
+            channel_id=str(channel_id) if channel_id else None,
+            folder_id=str(folder_id) if folder_id else None,
         ),
         summary=item.summary,
         origin=item.origin,
         contains_conflict=item.contains_conflict,
         created_at=item.created_at,
+        owners=owners,
+        can_review=can_review,
     )
 
 

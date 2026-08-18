@@ -1,16 +1,12 @@
 """검토를 기다리는 문서 변경안을 하나의 큐로 모아 읽는다.
 
-큐의 순서가 이 서비스의 계약이다. 충돌(모순)이 걸린 안건이 먼저이고 그
-안에서 오래된 것이 먼저다. 사람이 하루에 볼 수 있는 안건 수가 정해져
-있으므로, 답이 갈린 대상의 문서를 먼저 손에 잡히게 만드는 것이 목록의
-일이다.
+정렬은 created_at 오름차순 하나다. 오래 기다린 안건이 먼저 보인다. 충돌
+여부는 정렬에 쓰지 않고 contains_conflict 필드와 필터로만 드러낸다.
 
-자르기는 정렬 뒤에 한다. 저장소에서 미리 자르고 그 안에서 정렬하면 2쪽에
-있던 충돌 안건이 1쪽으로 올라오지 못한다 — 페이지 경계에서 계약이 조용히
-깨지는 셈이다. 그래서 이 서비스는 계류 중인 변경안을 전부 읽고 Python에서
-정렬·절단한다. MVP 규모(workspace당 계류 안건 수십~수백 건)에서 받아들일
-비용이며, 이 수가 커지면 충돌 표시를 SQL로 내려 정렬까지 DB에 맡기는 것이
-다음 수순이다.
+거르기와 자르기는 저장소가 아니라 이 서비스에서 한다. 계류 안건을 전부
+읽어 Python에서 거른 뒤 자른다. MVP 규모(workspace당 수십~수백 건)에서
+받아들일 비용이며, 이 수가 커지면 필터와 정렬을 SQL로 내리는 것이 다음
+수순이다.
 
 충돌 판정은 본문의 다툼(contested) 블록 유무로 한다. 컴파일러가 값이 갈린
 속성을 contested 블록으로 옮겨 적으므로, 그 블록이 있다는 것이 곧 "이
@@ -80,7 +76,7 @@ class ReviewQueueItem:
         summary: 본문에서 조립한 한 줄 요약을 담는다.
         origin: 변경안이 어디서 왔는지 나타낸다.
         contains_conflict: 이 문서의 대상에 계류 중인 모순이 걸려 있는지
-            나타낸다. 큐의 첫 정렬 기준이다.
+            나타낸다. 정렬에는 쓰지 않고 표시와 거르기에만 쓴다.
         created_at: 변경안이 올라온 시각을 나타낸다.
     """
 
@@ -112,14 +108,20 @@ def list_review_queue(
     *,
     workspace_id: int,
     contains_conflict: bool | None = None,
+    artifact_ids: frozenset[uuid.UUID] | None = None,
+    created_after: datetime | None = None,
+    created_before: datetime | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> ReviewQueuePage:
-    """계류 중인 변경안을 충돌 우선·오래된 순으로 한 페이지 읽는다.
+    """계류 중인 변경안을 오래된 순으로 한 페이지 읽는다.
 
-    `contains_conflict`를 주면 그 값과 같은 줄만 남긴다. total도 거른
-    뒤의 수다 — 거른 목록의 마지막 쪽을 세는 근거이므로 거르기 전 수를
-    주면 호출자가 빈 쪽을 요청하게 된다.
+    거르기 인자는 모두 생략 가능하고, 준 것만 차례로 좁힌다.
+    `artifact_ids`에 빈 집합을 주면 빈 페이지가 된다. 아무 문서도 고르지
+    않은 조건과 조건 없음을 같게 다루면 화면이 남의 문서를 보게 된다.
+
+    total도 거른 뒤의 수다. 거른 목록의 마지막 쪽을 세는 근거이므로
+    거르기 전 수를 주면 호출자가 빈 쪽을 요청하게 된다.
 
     Raises:
         ValueError: limit이나 offset이 음수일 때 던진다.
@@ -139,9 +141,14 @@ def list_review_queue(
             for item in items
             if item.contains_conflict is contains_conflict
         ]
-    # 충돌 우선, 그 안에서 오래된 순이다. sorted는 안정 정렬이라 시각까지
-    # 같은 줄은 저장소가 준 순서(created_at, id)를 그대로 지킨다.
-    items.sort(key=lambda item: (not item.contains_conflict, item.created_at))
+    if artifact_ids is not None:
+        items = [item for item in items if item.artifact_id in artifact_ids]
+    if created_after is not None:
+        items = [item for item in items if item.created_at >= created_after]
+    if created_before is not None:
+        items = [item for item in items if item.created_at <= created_before]
+    # 오래된 순 하나다. 시각이 같은 줄은 proposal_id로 갈라 순서를 고정한다.
+    items.sort(key=lambda item: (item.created_at, str(item.proposal_id)))
 
     total = len(items)
     page = tuple(items[offset : offset + limit])
