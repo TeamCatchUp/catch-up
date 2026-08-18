@@ -482,7 +482,8 @@ def onboard_channel(
         )
 
     purposes = []
-    for purpose_id in request.purpose_presets:
+    # 같은 목적을 두 번 골라도 목적은 하나다. 고른 순서는 그대로 둔다.
+    for purpose_id in dict.fromkeys(request.purpose_presets):
         found = find_purpose(purpose_id)
         if found is None or found[0].id != domain.id:
             raise review_error(

@@ -574,3 +574,34 @@ def test_repeated_kind_makes_one_definition(
         )
         == 1
     )
+
+
+def test_repeated_purpose_is_stored_once(
+    client: TestClient,
+    member: User,
+    db: Session,
+) -> None:
+    """같은 목적을 두 번 골라도 목적은 하나만 저장된다.
+
+    `channel_purposes`의 기본 키가 (channel_id, purpose_preset)이라 같은
+    목적을 두 번 넣으면 INSERT가 막혀 온보딩 전체가 500으로 끝난다.
+    """
+    response = client.post(
+        _ONBOARDING_PATH,
+        json={
+            "name": f"중복 목적-{uuid.uuid4().hex[:6]}",
+            "domain_preset": "voc",
+            "purpose_presets": ["voc.top_requests", "voc.top_requests"],
+            "kinds": ["feature_request_status"],
+            "style_preset": "style.wiki_standard",
+        },
+    )
+
+    assert response.status_code == 201, response.json()
+    body = response.json()
+    assert body["purpose_presets"] == ["voc.top_requests"]
+
+    channel_id = uuid.UUID(body["channel"]["id"])
+    assert wiki_queries.list_channel_purposes(db, channel_id=channel_id) == [
+        "voc.top_requests"
+    ]
