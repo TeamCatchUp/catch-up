@@ -77,6 +77,7 @@ const meta = {
       tokenNotes: [
         '검색창: Fill/Normal/Strong 배경, 포커스 테두리 1.5px Line/Primary/Normal #69A5FF = focus-within:border-line-primary-normal, radius 8, px 12 py 8.',
         '칩: 흰 배경 + Line/Normal/Strong #DBDCDF 테두리, h 37 = h-9.25, radius rounded(full), 라벨 body(md)/small max-w 150 = max-w-37.5.',
+        '선택 칩의 글리프는 Accent/Light Blue/Neutral #C4ECFE = text-accent-light-blue-neutral(다크 light-blue-70 자동) — 목록 행 글리프(Icon/Normal/Normal)와 갈린다. 픽셀 실측 근거(18112:47713·47865).',
         '행: h 40, radius 12 = rounded-xl, 글리프틀 34 = size-8.5(Fill/Normal/Strong + Line/Normal/Neutral 테두리 + p-1.5), 글리프 20.',
         '직책: body(md)/xsmall + Text/Normal/Assistive #B1B8BE, max-w 72 = max-w-18, min-w 30 = min-w-7.5.',
         '카드 그림자는 Shadow/Modal이고 코드 토큰 --shadow-modal(0 6px 25px rgba(0,0,0,0.28))과 값이 정확히 일치한다 — 1차 카드의 Shadow/Dropdown menu와 다른 토큰이다.',

@@ -77,7 +77,8 @@ export default function ReviewQueueFilterSearchPanel({
                     className="border-line-normal-strong bg-fill-normal-normal flex h-9.25 shrink-0 items-center gap-1 rounded-full border px-1.5 py-1.5"
                   >
                     <span className="flex min-w-0 items-center gap-1.5 px-1">
-                      <OptionIcon aria-hidden className="text-icon-normal-normal size-5 shrink-0" />
+                      {/* 선택된 칩의 글리프는 목록의 중립색과 달리 light blue다 */}
+                      <OptionIcon aria-hidden className="text-accent-light-blue-neutral size-5 shrink-0" />
                       <span className="text-body-small text-text-normal-normal max-w-37.5 truncate">
                         {option.label}
                       </span>
