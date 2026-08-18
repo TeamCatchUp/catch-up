@@ -17,12 +17,12 @@ interface ReviewParticipantsCardProps {
   stackAvatars: readonly AvatarGroupItem[];
 }
 
-/** 우측 패널의 "참여자" 카드 — 아바타 스택 헤더 + 참여자 행 목록. */
+/** 우측 패널의 "담당자" 카드 — 아바타 스택 헤더 + 담당자 행 목록. */
 export default function ReviewParticipantsCard({ participants, stackAvatars }: ReviewParticipantsCardProps) {
   return (
     <section className="flex flex-col gap-4 p-4">
       <div className="flex items-center gap-4">
-        <h3 className="text-body-small text-text-normal-alternative min-w-0 flex-1">참여자</h3>
+        <h3 className="text-body-small text-text-normal-alternative min-w-0 flex-1">담당자</h3>
         <AvatarGroup avatars={stackAvatars} size="small" />
       </div>
       {participants.map((participant) => (

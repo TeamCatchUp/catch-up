@@ -76,10 +76,9 @@ const CHANGE_SUMMARY_MOCK = {
   affectedDocumentsLabel: '영향 문서 2건',
 };
 
-/** 참여자 카드 mock — 참여자 API·fixture가 없어 페이지 로컬 데이터다 */
+/** 담당자 카드 mock — 담당자 API·fixture가 없어 페이지 로컬 데이터다 */
 const PARTICIPANTS_MOCK: readonly ReviewParticipant[] = [
   { id: 'participant-author', name: '직원10', description: '1일 전 수정', editing: false, role: '작성자' },
-  { id: 'participant-reviewer', name: '팀원F', description: '현재 수정 중', editing: true, role: '리뷰어' },
 ];
 const PARTICIPANT_STACK_MOCK = Array.from({ length: 6 }, () => ({ src: null }));
 
@@ -267,7 +266,7 @@ export default function Page() {
         <ReviewPublishBar onPublish={handlePublish} />
       </div>
 
-      {/* 우측 — 문서 위치·참여자 */}
+      {/* 우측 — 문서 위치·담당자 */}
       <aside className="border-line-normal-neutral flex w-87.5 shrink-0 flex-col overflow-y-auto border-l">
         <DocumentLocationCard breadcrumbs={REVIEW_TARGET_DOCUMENT.breadcrumbs} />
         <ReviewParticipantsCard participants={PARTICIPANTS_MOCK} stackAvatars={PARTICIPANT_STACK_MOCK} />
