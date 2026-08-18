@@ -114,7 +114,11 @@ def upsert_block_verdict(
     reviewed_at = datetime.now(UTC) if now is None else now
 
     with uow:
-        proposal = uow.artifacts.get_proposal(proposal_id=proposal_id)
+        # 일괄 발행과 같은 행을 잠근다. 두 경로가 이 행 하나를 두고 줄을
+        # 서야 한쪽의 미결정 판단이 다른 쪽 때문에 도중에 어긋나지 않는다.
+        proposal = uow.artifacts.get_proposal(
+            proposal_id=proposal_id, for_update=True
+        )
         if proposal is None:
             # 저장소가 workspace를 고정하므로, 남의 workspace 변경안도
             # 여기서는 없는 것과 같다.

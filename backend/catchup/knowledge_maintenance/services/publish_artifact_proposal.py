@@ -287,7 +287,11 @@ def _publish_in_transaction(
         PublishError: 발행을 받아들일 수 없을 때 던진다.
     """
     with uow:
-        proposal = uow.artifacts.get_proposal(proposal_id=proposal_id)
+        # 변경안 행을 잠그고 읽는다. 단건 판정도 같은 행을 잠그므로, 두
+        # 경로가 이 행 하나를 두고 줄을 선다.
+        proposal = uow.artifacts.get_proposal(
+            proposal_id=proposal_id, for_update=True
+        )
         if proposal is None:
             # 저장소가 workspace를 고정하므로, 남의 workspace 변경안도
             # 여기서는 없는 것과 같다.
@@ -456,6 +460,12 @@ def _record_undecided(
     이미 결정된 블록은 건드리지 않는다. 사람의 결정은 불변이다. 다툼
     (contested) 블록은 승자를 골라야 하므로 approve로 일괄 승인할 수 없다.
 
+    쓰기는 `insert_verdict_if_absent`로 한다. 미결정 목록을 읽은 뒤
+    쓰기까지 사이에 사람이 같은 블록에 단건 결정을 저장할 수 있는데, 그
+    경우 이 함수의 쓰기는 아무것도 바꾸지 않고 넘어간다. 뒤이어
+    `_verdicts_by_index`가 결정을 다시 읽으므로 발행은 실제로 저장된
+    결정으로 진행된다.
+
     Raises:
         PublishError: undecided 값이 approve·reject가 아니면 INVALID,
             reject인데 사유가 없으면 INVALID, approve인데 다툼 블록이
@@ -493,7 +503,9 @@ def _record_undecided(
     approving = undecided == UNDECIDED_APPROVE
     for index in missing:
         block = proposal.blocks[index]
-        uow.block_verdicts.upsert_verdict(
+        # 돌려주는 값은 보지 않는다. 이미 사람의 결정이 있으면 그 결정이
+        # 이긴다.
+        uow.block_verdicts.insert_verdict_if_absent(
             proposal_id=proposal.id,
             block_index=index,
             block_content_hash=block_content_hash(block),

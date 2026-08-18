@@ -157,7 +157,7 @@ class FakeArtifactRepository:
         return proposal_id
 
     def get_proposal(
-        self, *, proposal_id: uuid.UUID
+        self, *, proposal_id: uuid.UUID, for_update: bool = False
     ) -> StoredArtifactProposal | None:
         row = self.proposals.get(proposal_id)
         if row is None:
@@ -292,6 +292,33 @@ class FakeBlockVerdictRepository:
             "reviewer": reviewer,
             "reviewed_at": reviewed_at,
         }
+
+    def insert_verdict_if_absent(
+        self,
+        *,
+        proposal_id: uuid.UUID,
+        block_index: int,
+        block_content_hash: str,
+        verdict: str,
+        rejection_reason: str | None,
+        chosen_winner_claim_id: uuid.UUID | None,
+        reviewer: str,
+        reviewed_at: datetime,
+    ) -> bool:
+        """이미 결정이 있는 블록은 건드리지 않는다."""
+        if (proposal_id, block_index) in self.verdicts:
+            return False
+        self.upsert_verdict(
+            proposal_id=proposal_id,
+            block_index=block_index,
+            block_content_hash=block_content_hash,
+            verdict=verdict,
+            rejection_reason=rejection_reason,
+            chosen_winner_claim_id=chosen_winner_claim_id,
+            reviewer=reviewer,
+            reviewed_at=reviewed_at,
+        )
+        return True
 
     def list_for_proposal(
         self, *, proposal_id: uuid.UUID
@@ -1286,3 +1313,58 @@ def test_undecided_reject_requires_reason_and_rejects_rest() -> None:
     assert result.revision_id is None
     assert result.blocks_published == 0
     assert result.blocks_rejected == 2
+
+
+def test_bulk_undecided_never_overwrites_a_concurrent_human_verdict() -> None:
+    """미결정 목록을 읽은 뒤 들어온 사람의 판정이 그대로 살아남는다.
+
+    일괄 승인은 결정 목록을 먼저 읽어 빈 블록을 고른다. 그 사이에 다른
+    검토자가 같은 블록에 반려를 저장하면, 일괄 쓰기가 그 반려를 덮어써서는
+    안 된다. 저장소의 첫 목록 조회 직후 사람의 반려를 끼워 넣어 그 틈을
+    그대로 만든다.
+    """
+    uow = FakeUnitOfWork()
+    claims = uow.knowledge_candidates
+    blocks = tuple(
+        _claim_block(claims.add_claim(), f"predicate_{index}")
+        for index in range(3)
+    )
+    proposal_id = uow.artifacts.add_proposal(
+        artifact_id=uuid.uuid4(), blocks=blocks, base_revision_id=None
+    )
+
+    verdicts = uow.block_verdicts
+    original_list = verdicts.list_for_proposal
+    interleaved: list[int] = []
+
+    def list_then_interleave(
+        *, proposal_id: uuid.UUID
+    ) -> tuple[StoredBlockVerdict, ...]:
+        rows = original_list(proposal_id=proposal_id)
+        if not interleaved:
+            interleaved.append(1)
+            verdicts.upsert_verdict(
+                proposal_id=proposal_id,
+                block_index=1,
+                block_content_hash=block_content_hash(blocks[1]),
+                verdict="rejected",
+                rejection_reason="사람이 직접 반려했다",
+                chosen_winner_claim_id=None,
+                reviewer="user:other",
+                reviewed_at=DECIDED_AT,
+            )
+        return rows
+
+    verdicts.list_for_proposal = list_then_interleave
+
+    result = _publish(uow, proposal_id, undecided="approve")
+
+    human = verdicts.verdicts[(proposal_id, 1)]
+    assert human["verdict"] == "rejected"
+    assert human["reviewer"] == "user:other"
+    assert human["rejection_reason"] == "사람이 직접 반려했다"
+    # 발행은 실제로 저장된 결정으로 진행된다. 사람이 반려한 블록 하나가
+    # 반려로 세어진다.
+    assert result.verdict == "approved"
+    assert result.blocks_published == 2
+    assert result.blocks_rejected == 1

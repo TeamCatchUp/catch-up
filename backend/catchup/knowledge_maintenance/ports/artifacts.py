@@ -256,8 +256,15 @@ class ArtifactRepository(Protocol):
         self,
         *,
         proposal_id: uuid.UUID,
+        for_update: bool = False,
     ) -> StoredArtifactProposal | None:
-        """변경안 하나를 문서 제목·대상과 함께 읽는다."""
+        """변경안 하나를 문서 제목·대상과 함께 읽는다.
+
+        for_update가 참이면 변경안 행을 transaction이 끝날 때까지 잠근다.
+        같은 변경안을 건드리는 단건 판정과 일괄 발행이 이 행 하나를 두고
+        줄을 서므로, 한쪽이 읽은 결정 목록이 다른 쪽 때문에 도중에 바뀌지
+        않는다.
+        """
         ...
 
     def list_pending_proposals(

@@ -305,7 +305,7 @@ class _FakeArtifacts:
         self._latest = latest
 
     def get_proposal(
-        self, *, proposal_id: uuid.UUID
+        self, *, proposal_id: uuid.UUID, for_update: bool = False
     ) -> StoredArtifactProposal | None:
         if self._proposal is None or self._proposal.id != proposal_id:
             return None

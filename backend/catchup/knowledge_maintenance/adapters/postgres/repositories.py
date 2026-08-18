@@ -2857,13 +2857,23 @@ class SqlAlchemyArtifactRepository:
         self,
         *,
         proposal_id: uuid.UUID,
+        for_update: bool = False,
     ) -> StoredArtifactProposal | None:
-        """변경안 하나를 문서 제목·대상과 함께 읽는다."""
-        row = self._session.execute(
-            self._proposal_statement().where(
-                KnowledgeArtifactChangeProposalRow.id == proposal_id
+        """변경안 하나를 문서 제목·대상과 함께 읽는다.
+
+        for_update가 참이면 변경안 행에만 FOR UPDATE를 건다. 함께 읽는
+        문서 행까지 잠그면 그 문서를 건드리는 다른 일까지 줄을 서므로,
+        잠금 대상을 변경안 행으로 좁힌다. 잠금은 transaction이 끝날 때
+        풀린다.
+        """
+        statement = self._proposal_statement().where(
+            KnowledgeArtifactChangeProposalRow.id == proposal_id
+        )
+        if for_update:
+            statement = statement.with_for_update(
+                of=KnowledgeArtifactChangeProposalRow
             )
-        ).first()
+        row = self._session.execute(statement).first()
         if row is None:
             return None
         return _artifact_proposal_to_domain(row[0], row[1], row[2])
@@ -3348,6 +3358,52 @@ class SqlAlchemyBlockVerdictRepository:
         )
         self._session.execute(statement)
         self._session.flush()
+
+    def insert_verdict_if_absent(
+        self,
+        *,
+        proposal_id: uuid.UUID,
+        block_index: int,
+        block_content_hash: str,
+        verdict: str,
+        rejection_reason: str | None,
+        chosen_winner_claim_id: uuid.UUID | None,
+        reviewer: str,
+        reviewed_at: datetime,
+    ) -> bool:
+        """결정이 없는 블록에만 결정을 쓴다.
+
+        `ON CONFLICT DO NOTHING`이라 이미 결정이 있으면 한 컬럼도 바뀌지
+        않는다. 넣었으면 True, 이미 있어서 건너뛰었으면 False다. 판단과
+        쓰기가 한 문장 안에서 끝나므로, 미결정을 고른 뒤 사람이 단건
+        결정을 저장해도 그 결정을 덮어쓰지 않는다.
+
+        넣었는지는 RETURNING이 돌려준 행으로 본다. 이 조합에서 rowcount는
+        -1로 나와 쓸 수 없고, 충돌해서 건너뛴 INSERT는 RETURNING 행이
+        아예 없다.
+
+        Raises:
+            ValueError: 변경안이 고정된 workspace에 없을 때 던진다.
+        """
+        self._assert_proposal_in_workspace(proposal_id)
+        statement = pg_insert(KnowledgeBlockVerdictRow).values(
+            id=uuid.uuid4(),
+            workspace_id=self._workspace_id,
+            proposal_id=proposal_id,
+            block_index=block_index,
+            block_content_hash=block_content_hash,
+            verdict=verdict,
+            rejection_reason=rejection_reason,
+            chosen_winner_claim_id=chosen_winner_claim_id,
+            reviewer=reviewer,
+            reviewed_at=reviewed_at,
+        )
+        statement = statement.on_conflict_do_nothing(
+            constraint="uq_block_verdict_proposal_block",
+        ).returning(KnowledgeBlockVerdictRow.id)
+        inserted = self._session.execute(statement).first()
+        self._session.flush()
+        return inserted is not None
 
     def list_for_proposal(
         self, *, proposal_id: uuid.UUID

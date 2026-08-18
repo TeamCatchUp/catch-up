@@ -108,6 +108,7 @@ class FakeArtifactRepository:
         self,
         *,
         proposal_id: uuid.UUID,
+        for_update: bool = False,
     ) -> StoredArtifactProposal | None:
         row = self.proposals.get(proposal_id)
         if row is None:
@@ -169,6 +170,33 @@ class FakeBlockVerdictRepository:
             "reviewer": reviewer,
             "reviewed_at": reviewed_at,
         }
+
+    def insert_verdict_if_absent(
+        self,
+        *,
+        proposal_id: uuid.UUID,
+        block_index: int,
+        block_content_hash: str,
+        verdict: str,
+        rejection_reason: str | None,
+        chosen_winner_claim_id: uuid.UUID | None,
+        reviewer: str,
+        reviewed_at: datetime,
+    ) -> bool:
+        """이미 결정이 있는 블록은 건드리지 않는다."""
+        if (proposal_id, block_index) in self.verdicts:
+            return False
+        self.upsert_verdict(
+            proposal_id=proposal_id,
+            block_index=block_index,
+            block_content_hash=block_content_hash,
+            verdict=verdict,
+            rejection_reason=rejection_reason,
+            chosen_winner_claim_id=chosen_winner_claim_id,
+            reviewer=reviewer,
+            reviewed_at=reviewed_at,
+        )
+        return True
 
     def list_for_proposal(
         self, *, proposal_id: uuid.UUID
