@@ -56,6 +56,7 @@ export default function PurposeSelectField({
         <div role="radiogroup" aria-label={categoryLabel} className="flex flex-wrap items-center gap-3">
           {categories.map((category) => {
             const checked = category.id === selectedCategoryId;
+            const disabled = category.disabled === true;
             const Icon = CATEGORY_ICONS[category.icon as KnownInfoCategoryIcon] ?? IconTag;
 
             return (
@@ -64,16 +65,26 @@ export default function PurposeSelectField({
                 type="button"
                 role="radio"
                 aria-checked={checked}
+                disabled={disabled}
                 onClick={() => onSelectCategory?.(category.id)}
                 className={cn(
-                  'text-body-small flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors',
-                  checked
-                    ? 'bg-accent-black-lighten text-text-normal-inverse'
-                    : 'border-line-normal-neutral text-text-normal-neutral hover:bg-fill-normal-interaction-hover border',
+                  'text-body-small flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors',
+                  disabled
+                    ? 'border-line-normal-normal bg-fill-normal-interaction-inactive text-text-normal-assistive cursor-not-allowed border'
+                    : checked
+                      ? 'bg-accent-black-lighten text-text-normal-inverse cursor-pointer'
+                      : 'border-line-normal-neutral text-text-normal-neutral hover:bg-fill-normal-interaction-hover cursor-pointer border',
                 )}
               >
                 <Icon
-                  className={cn('size-5 shrink-0', checked ? 'text-icon-normal-inverse' : 'text-icon-normal-normal')}
+                  className={cn(
+                    'size-5 shrink-0',
+                    disabled
+                      ? 'text-icon-normal-assistive'
+                      : checked
+                        ? 'text-icon-normal-inverse'
+                        : 'text-icon-normal-normal',
+                  )}
                 />
                 {category.label}
               </button>

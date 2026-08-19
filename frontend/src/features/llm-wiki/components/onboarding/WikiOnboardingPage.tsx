@@ -66,10 +66,11 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
   const router = useRouter();
 
   const [name, setName] = useState('');
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [purposeId, setPurposeId] = useState<string | null>(null);
-  const [docKindId, setDocKindId] = useState<string | null>(null);
-  const [toneId, setToneId] = useState<string | null>(null);
+  // 선택 필드는 각 목록의 첫 항목으로 시작한다 — 빈 선택으로 여는 화면이 아니다
+  const [categoryId, setCategoryId] = useState<string | null>(WIKI_INFO_CATEGORIES[0].id);
+  const [purposeId, setPurposeId] = useState<string | null>(WIKI_PURPOSE_OPTIONS[0].id);
+  const [docKindId, setDocKindId] = useState<string | null>(WIKI_DOC_KIND_PRESETS[0].id);
+  const [toneId, setToneId] = useState<string | null>(WIKI_TONE_STYLE_OPTIONS[0].id);
   // 선택지가 있는 일정 필드만 값이 바뀐다 — 나머지는 픽스처 기본값을 유지한다
   const [scheduleSelection, setScheduleSelection] = useState<Record<string, string>>(INITIAL_SCHEDULE_SELECTION);
   // 표는 고른 채널의 목록이다 — 드롭다운에서 고르면 여기 쌓인다

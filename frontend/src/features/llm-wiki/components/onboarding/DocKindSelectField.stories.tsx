@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
-import { expect, fn, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
 import {
@@ -39,12 +39,13 @@ const meta = {
         nodeId: '18047:99875',
       },
       viewport: { width: 1008 },
-      states: ['default', 'narrow-slot'],
+      states: ['default', 'disabled-presets-stay-unselectable', 'narrow-slot'],
       dataNotes: [
         '**8/14 시안 갱신으로 항목이 전면 교체됐다.** 기존 4종(용어집·팀/인물·서비스 개요·의사결정 이력) → 6종(기능 요청·고객 불편사항·자주 묻는 질문·고객사별 요청사항·고객사 히스토리·정책 예외사항). 라벨·설명 모두 실카피이고, 8/13 감사가 지적한 설명 복붙 문제는 해당 항목 소멸로 해소됐다.',
         '우측 패널 제목이 "예시 문장" → "템플릿 예시"로 바뀌고, 목적 오해 방지 카피가 이 헤더 우측으로 이동했다.',
         '**패널 본문은 문서 양식 6종의 마크다운이다**(Confluence 163282945 원문, 종류와 1:1). 필러가 아니라 실제 양식이고, 부모가 선택된 종류의 양식을 넘긴다.',
         '표·인용·코드 칩이 있어 공용 `markdown-body` + remarkGfm으로 렌더한다 — 채팅·에디터가 쓰는 그 규격이다.',
+        '**지금은 "기능 요청 정리"만 고를 수 있다**(8/19 사용자 확정). 나머지 5종은 앞으로 열릴 자리라 숨기지 않고 비활성으로 노출하며, 비활성 표현은 2단계 백필 선택지와 같은 `disabled` 플래그다.',
       ],
       layoutNotes: [
         '좌 리스트:우 패널 = 400:606 비율(grid-cols-[400fr_606fr]) — px 고정 대신 비율로 옮겼다.',
@@ -78,6 +79,32 @@ export const Default: Story = {
 
     // 6개가 스크롤 안에 들어간다 — 목록이 카드 밖으로 흘러넘치면 안 된다
     await expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
+
+    // 기능 요청 정리 하나만 고를 수 있고 나머지 5종은 자리만 지킨다
+    await expect(radios.filter((radio) => !radio.hasAttribute('disabled'))).toHaveLength(1);
+    await expect(canvas.getByRole('radio', { name: new RegExp(WIKI_DOC_KIND_PRESETS[0].label) })).toBeEnabled();
+    for (const preset of WIKI_DOC_KIND_PRESETS.filter((item) => item.disabled)) {
+      await expect(canvas.getByRole('radio', { name: new RegExp(preset.label) })).toBeDisabled();
+    }
+  },
+};
+
+/** 비활성 종류는 클릭도 키보드 탐색도 받지 않는다 — 라디오 그룹에서 빠져야 한다 */
+export const DisabledPresetsStayUnselectable: Story = {
+  args: { ...baseArgs, onSelect: fn() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+
+    const disabledPreset = WIKI_DOC_KIND_PRESETS.find((preset) => preset.disabled)!;
+    await userEvent.click(canvas.getByRole('radio', { name: new RegExp(disabledPreset.label) }));
+    await expect(args.onSelect).not.toHaveBeenCalled();
+
+    // 탭 순서에서도 빠진다 — disabled 버튼은 포커스를 받지 않는다
+    canvas.getByRole('radio', { name: new RegExp(disabledPreset.label) }).focus();
+    await expect(canvas.getByRole('radio', { name: new RegExp(disabledPreset.label) })).not.toHaveFocus();
+
+    await userEvent.click(canvas.getByRole('radio', { name: new RegExp(WIKI_DOC_KIND_PRESETS[0].label) }));
+    await expect(args.onSelect).toHaveBeenCalledWith(WIKI_DOC_KIND_PRESETS[0].id);
   },
 };
 

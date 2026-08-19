@@ -35,13 +35,14 @@ export const WIKI_NAME_FIELD = {
 export const INFO_CATEGORY_FIELD_LABEL = '어떤 정보를 정리하고 싶으세요?';
 export const PURPOSE_FIELD_LABEL = '이 위키를 어떻게 쓰실 건가요?';
 
+// VOC만 지원한다 — 나머지는 앞으로 열릴 자리라 고를 수 없이 노출된다
 export const WIKI_INFO_CATEGORIES: readonly WikiInfoCategory[] = [
   { id: 'voc', label: '고객 문의 (VOC)', icon: 'support-agent' },
-  { id: 'product', label: '제품과 기획', icon: 'lightbulb' },
-  { id: 'ops', label: '운영과 정책', icon: 'shield' },
-  { id: 'sales', label: '세일즈와 고객', icon: 'client' },
-  { id: 'dev', label: '개발과 기술', icon: 'database' },
-  { id: 'team-guide', label: '팀 가이드 및 온보딩', icon: 'group' },
+  { id: 'product', label: '제품과 기획', icon: 'lightbulb', disabled: true },
+  { id: 'ops', label: '운영과 정책', icon: 'shield', disabled: true },
+  { id: 'sales', label: '세일즈와 고객', icon: 'client', disabled: true },
+  { id: 'dev', label: '개발과 기술', icon: 'database', disabled: true },
+  { id: 'team-guide', label: '팀 가이드 및 온보딩', icon: 'group', disabled: true },
 ];
 
 /**
@@ -61,6 +62,7 @@ export const DOC_KIND_SAMPLE_TITLE = '템플릿 예시';
 /** 목적이 수집 범위가 아니라 문서 종류·문체에만 쓰인다는 오해 방지 카피 */
 export const DOC_KIND_SAMPLE_CAPTION = '입력한 목적은 만들 문서의 종류와 문체를 정하는 데 쓰여요.';
 
+// 기능 요청 정리만 지원한다 — 나머지는 앞으로 열릴 자리라 고를 수 없이 노출된다
 export const WIKI_DOC_KIND_PRESETS: readonly WikiDocKindPreset[] = [
   {
     id: 'feature-request',
@@ -73,36 +75,41 @@ export const WIKI_DOC_KIND_PRESETS: readonly WikiDocKindPreset[] = [
     icon: 'error',
     label: '고객 불편사항 정리',
     description: '고객이 어떤 상황에서 불편을 겪는지 정리한 문서',
+    disabled: true,
   },
   {
     id: 'faq',
     icon: 'help',
     label: '자주 묻는 질문 정리',
     description: '반복되는 질문과 현재 기준 답변을 정리한 문서',
+    disabled: true,
   },
   {
     id: 'client-request',
     icon: 'client',
     label: '고객사별 요청사항 정리',
     description: '특정 고객사가 요청한 기능과 조건을 정리한 문서',
+    disabled: true,
   },
   {
     id: 'client-history',
     icon: 'history',
     label: '고객사 히스토리 정리',
     description: '고객사와 오간 문의·요청·결정을 시간순으로 정리한 문서',
+    disabled: true,
   },
   {
     id: 'policy',
     icon: 'book',
     label: '정책 · 예외사항 정리',
     description: '현재 적용 기준과 예외로 처리되는 경우를 정리한 문서',
+    disabled: true,
   },
 ];
 
-// 앞 문장만 실카피, 뒤는 시안 필러 그대로 — 선택별로 갈리는지도 미정이다
+// 앞 문장만 실카피, 뒤는 시안 필러 그대로 — 발행본에는 처리 상태값을 남기지 않는다
 export const TEMPLATE_SAMPLE_TEXT_TBD =
-  '엑셀 내보내기 기능에 대한 요구. 5개 고객사에서 반복 접수되었으며 현재 상태는 검토 중이다. text text text text text text text text text text text text text text text text text text text text text text text text text text text text text text';
+  '엑셀 내보내기 기능 요청. 5개 고객사에서 반복 접수됐다. text text text text text text text text text text text text text text text text text text text text text text text text text text text text text text';
 
 export const TONE_STYLE_FIELD_LABEL = '문서를 어떤 문체로 쓸까요?';
 export const TONE_SAMPLE_TAG_LABEL = '예시';
@@ -112,13 +119,13 @@ export const WIKI_TONE_STYLE_OPTIONS: readonly WikiToneStyleOption[] = [
     id: 'wiki-standard',
     label: '위키 표준체',
     description: '중립 서술체로 사실과 근거, 시점을 건조하게 기록',
-    sampleText: '엑셀 내보내기 기능에 대한 요구. 5개 고객사에서 반복 접수되었으며 현재 검토 중이다.',
+    sampleText: '엑셀 내보내기 기능에 대한 요구. 5개 고객사에서 반복 접수됐다.',
   },
   {
     id: 'support-guide',
     label: '응대 가이드체',
     description: '고객에게 그대로 전달할 수 있는 해요체 표현',
-    sampleText: '엑셀 내보내기는 아직 지원하지 않아요. 검토 중이라고 안내해 주세요.',
+    sampleText: '엑셀 내보내기는 아직 지원하지 않아요. 현재 지원 범위를 그대로 안내해 주세요.',
   },
   {
     id: 'report-summary',

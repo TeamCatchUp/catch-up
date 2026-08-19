@@ -27,6 +27,8 @@ export interface WikiInfoCategory {
   id: string;
   label: string;
   icon: InfoCategoryIcon;
+  /** 아직 지원하지 않는 카테고리는 고를 수 없이 노출된다 */
+  disabled?: boolean;
 }
 
 // 문서 종류 아이콘. 시안 6종만 알려져 있고 나머지는 열어둔다 — 미지 아이콘은 file로 렌더
@@ -39,6 +41,8 @@ export interface WikiDocKindPreset {
   icon: DocKindIcon;
   label: string;
   description: string;
+  /** 아직 지원하지 않는 종류는 고를 수 없이 노출된다 */
+  disabled?: boolean;
 }
 
 /** 문체 카드(단일 선택). 예시 문장은 8/14 시안에서 실카피로 확보됐다 */
