@@ -1,10 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import api from '@/shared/api/client';
-import { API } from '@/shared/api/endpoints';
 import { parseApiError } from '@/shared/api/errors';
 import { toast } from '@/shared/components/ui/toast';
 
+import { addWikiFavorite, removeWikiFavorite } from '../api/wikiRequests';
 import { wikiQueries } from './wiki.queries';
 
 export interface WikiFavoriteToggleVariables {
@@ -22,11 +21,8 @@ export const useWikiFavoriteToggleMutation = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ artifactId, favorite }: WikiFavoriteToggleVariables): Promise<void> => {
-      const url = API.wiki.favorite(artifactId);
-      if (favorite) await api.put(url);
-      else await api.delete(url);
-    },
+    mutationFn: ({ artifactId, favorite }: WikiFavoriteToggleVariables): Promise<void> =>
+      favorite ? addWikiFavorite(artifactId) : removeWikiFavorite(artifactId),
     onSuccess: () => {
       // all()이 favorites·artifacts 키를 모두 덮는다 — 문서 목록의 is_favorite도 여기서 다시 온다
       queryClient.invalidateQueries({ queryKey: wikiQueries.all() });

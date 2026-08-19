@@ -6,14 +6,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { wikiQueries } from './wiki.queries';
 import { useWikiFavoriteToggleMutation } from './wikiFavorites.mutations';
 
-const apiMock = vi.hoisted(() => ({ put: vi.fn(), delete: vi.fn() }));
+const wikiApi = vi.hoisted(() => ({ addWikiFavorite: vi.fn(), removeWikiFavorite: vi.fn() }));
 const toastMock = vi.hoisted(() => vi.fn());
 
 // 실 요청과 sonner 렌더를 막는다 — 여기서 볼 것은 방향과 무효화 대상뿐이다
-vi.mock('@/shared/api/client', () => ({ default: apiMock }));
+vi.mock('../api/wikiRequests', () => wikiApi);
 vi.mock('@/shared/components/ui/toast', () => ({ toast: toastMock }));
 
-const FAVORITE_URL = '/api/v1/wiki/favorites/af-1';
+const ARTIFACT_ID = 'af-1';
 
 /** parseApiError가 읽는 최소 형태의 axios 에러 */
 const apiError = (code: string, message: string) => ({
@@ -34,30 +34,30 @@ const createHarness = () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  apiMock.put.mockResolvedValue({ data: undefined });
-  apiMock.delete.mockResolvedValue({ data: undefined });
+  wikiApi.addWikiFavorite.mockResolvedValue(undefined);
+  wikiApi.removeWikiFavorite.mockResolvedValue(undefined);
 });
 
 describe('useWikiFavoriteToggleMutation', () => {
-  it('등록은 PUT, 해제는 DELETE로 같은 자리를 뒤집는다', async () => {
+  it('등록과 해제가 서로 반대 요청으로 같은 자리를 뒤집는다', async () => {
     const { wrapper } = createHarness();
     const { result } = renderHook(() => useWikiFavoriteToggleMutation(), { wrapper });
 
-    result.current.mutate({ artifactId: 'af-1', favorite: true });
+    result.current.mutate({ artifactId: ARTIFACT_ID, favorite: true });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(apiMock.put).toHaveBeenCalledWith(FAVORITE_URL);
-    expect(apiMock.delete).not.toHaveBeenCalled();
+    expect(wikiApi.addWikiFavorite).toHaveBeenCalledWith(ARTIFACT_ID);
+    expect(wikiApi.removeWikiFavorite).not.toHaveBeenCalled();
 
-    result.current.mutate({ artifactId: 'af-1', favorite: false });
-    await waitFor(() => expect(apiMock.delete).toHaveBeenCalledWith(FAVORITE_URL));
-    expect(apiMock.put).toHaveBeenCalledTimes(1);
+    result.current.mutate({ artifactId: ARTIFACT_ID, favorite: false });
+    await waitFor(() => expect(wikiApi.removeWikiFavorite).toHaveBeenCalledWith(ARTIFACT_ID));
+    expect(wikiApi.addWikiFavorite).toHaveBeenCalledTimes(1);
   });
 
   it('성공하면 위키 뿌리를 무효화한다 — 즐겨찾기 섹션과 문서 행의 별이 함께 바뀐다', async () => {
     const { wrapper, invalidatedKeys } = createHarness();
     const { result } = renderHook(() => useWikiFavoriteToggleMutation(), { wrapper });
 
-    result.current.mutate({ artifactId: 'af-1', favorite: true });
+    result.current.mutate({ artifactId: ARTIFACT_ID, favorite: true });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(invalidatedKeys()).toEqual([wikiQueries.all()]);
@@ -67,18 +67,18 @@ describe('useWikiFavoriteToggleMutation', () => {
     const { wrapper, invalidatedKeys } = createHarness();
     const { result } = renderHook(() => useWikiFavoriteToggleMutation(), { wrapper });
 
-    result.current.mutate({ artifactId: 'af-1', favorite: false });
+    result.current.mutate({ artifactId: ARTIFACT_ID, favorite: false });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(invalidatedKeys()).toEqual([wikiQueries.all()]);
   });
 
   it('실패하면 서버 문구만 띄우고 캐시를 건드리지 않는다', async () => {
-    apiMock.put.mockRejectedValue(apiError('NOT_FOUND', '문서를 찾을 수 없어요.'));
+    wikiApi.addWikiFavorite.mockRejectedValue(apiError('NOT_FOUND', '문서를 찾을 수 없어요.'));
     const { wrapper, invalidatedKeys } = createHarness();
     const { result } = renderHook(() => useWikiFavoriteToggleMutation(), { wrapper });
 
-    result.current.mutate({ artifactId: 'af-1', favorite: true });
+    result.current.mutate({ artifactId: ARTIFACT_ID, favorite: true });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(toastMock).toHaveBeenCalledWith('문서를 찾을 수 없어요.');

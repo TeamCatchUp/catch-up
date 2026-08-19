@@ -1,10 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import api from '@/shared/api/client';
-import { API } from '@/shared/api/endpoints';
 import { parseApiError } from '@/shared/api/errors';
 import { toast } from '@/shared/components/ui/toast';
 
+import { createWikiFolder, renameWikiChannel, renameWikiFolder } from '../api/wikiRequests';
 import { wikiQueries } from './wiki.queries';
 
 export interface RenameWikiChannelVariables {
@@ -33,9 +32,8 @@ export const useRenameWikiChannelMutation = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ channelId, name }: RenameWikiChannelVariables): Promise<void> => {
-      await api.patch(API.wiki.channel(channelId), { name });
-    },
+    mutationFn: ({ channelId, name }: RenameWikiChannelVariables): Promise<void> =>
+      renameWikiChannel(channelId, name),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: wikiQueries.channels().queryKey });
     },
@@ -51,9 +49,7 @@ export const useCreateWikiFolderMutation = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ channelId, name }: CreateWikiFolderVariables): Promise<void> => {
-      await api.post(API.wiki.folders(channelId), { name });
-    },
+    mutationFn: ({ channelId, name }: CreateWikiFolderVariables): Promise<void> => createWikiFolder(channelId, name),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: wikiQueries.channels().queryKey });
     },
@@ -68,9 +64,8 @@ export const useRenameWikiFolderMutation = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ channelId, folderId, name }: RenameWikiFolderVariables): Promise<void> => {
-      await api.patch(API.wiki.folder(channelId, folderId), { name });
-    },
+    mutationFn: ({ channelId, folderId, name }: RenameWikiFolderVariables): Promise<void> =>
+      renameWikiFolder(channelId, folderId, name),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: wikiQueries.channels().queryKey });
     },

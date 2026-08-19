@@ -1,4 +1,4 @@
-/** GET /api/v1/wiki/* 요청 함수. 응답은 서버 DTO 그대로 돌려주고 변환은 매퍼가 맡는다. */
+/** /api/v1/wiki/* 요청 함수. 응답은 서버 DTO 그대로 돌려주고 변환은 매퍼가 맡는다. */
 
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
@@ -49,4 +49,29 @@ export async function fetchWikiArtifactDocument(
 export async function fetchWikiFavorites(signal?: AbortSignal): Promise<WikiFavoriteListDto> {
   const res = await api.get<WikiFavoriteListDto>(API.wiki.favorites, { signal });
   return res.data;
+}
+
+/** 즐겨찾기 등록(멱등). 문서(artifact) 단위라 채널·폴더에는 보낼 경로가 없다. */
+export async function addWikiFavorite(artifactId: string): Promise<void> {
+  await api.put(API.wiki.favorite(artifactId));
+}
+
+/** 즐겨찾기 해제(멱등). 등록과 같은 자리를 뒤집는다. */
+export async function removeWikiFavorite(artifactId: string): Promise<void> {
+  await api.delete(API.wiki.favorite(artifactId));
+}
+
+/** 채널 이름 변경(채널 관리자). 응답 본문은 쓰지 않는다. */
+export async function renameWikiChannel(channelId: string, name: string): Promise<void> {
+  await api.patch(API.wiki.channel(channelId), { name });
+}
+
+/** 폴더 생성(채널 관리자). 폴더는 채널 바로 아래에만 생긴다. */
+export async function createWikiFolder(channelId: string, name: string): Promise<void> {
+  await api.post(API.wiki.folders(channelId), { name });
+}
+
+/** 폴더 이름 변경(채널 관리자). 폴더 경로가 채널 아래라 소속 채널 id가 함께 필요하다. */
+export async function renameWikiFolder(channelId: string, folderId: string, name: string): Promise<void> {
+  await api.patch(API.wiki.folder(channelId, folderId), { name });
 }

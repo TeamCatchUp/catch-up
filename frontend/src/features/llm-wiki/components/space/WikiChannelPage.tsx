@@ -18,7 +18,6 @@ interface WikiChannelPageProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
-  onPageSizeClick?: () => void;
   onFolderClick?: (folderId: string) => void;
 }
 
@@ -32,7 +31,6 @@ export default function WikiChannelPage({
   currentPage,
   totalPages,
   onPageChange,
-  onPageSizeClick,
   onFolderClick,
 }: WikiChannelPageProps) {
   return (
@@ -69,7 +67,6 @@ export default function WikiChannelPage({
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={onPageChange}
-            onPageSizeClick={onPageSizeClick}
           />
         </div>
       </div>

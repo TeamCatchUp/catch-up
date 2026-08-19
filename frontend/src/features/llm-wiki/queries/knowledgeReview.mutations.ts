@@ -1,7 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import api from '@/shared/api/client';
-import { API } from '@/shared/api/endpoints';
 import { parseApiError } from '@/shared/api/errors';
 import { toast } from '@/shared/components/ui/toast';
 
@@ -13,11 +11,20 @@ import type {
   ReviewPublishRequest,
   ReviewRejectRequest,
 } from '../api/knowledgeReviewDto';
+import {
+  approveReviewProposal,
+  publishReviewProposal,
+  rejectReviewProposal,
+  submitReviewBlockVerdict,
+} from '../api/knowledgeReviewRequests';
 import { knowledgeReviewQueries } from './knowledgeReview.queries';
 import { wikiQueries } from './wiki.queries';
 
-/** 낙관적 잠금이 걸린 경로의 실패. 서버 문구를 그대로 띄우고 화면을 다시 읽게 한다 */
-const STALE_CODES = ['STALE_BLOCK', 'ALREADY_DECIDED', 'UNDECIDED_BLOCKS', 'CONFLICT_RACE'];
+/** 블록 판정이 낡은 상태로 막히는 코드. 재조회가 곧 복구다 */
+const BLOCK_VERDICT_STALE_CODES = ['STALE_BLOCK', 'ALREADY_DECIDED'];
+
+/** 발행이 낡은 상태로 막히는 코드. 블록 판정에는 없는 미결정·모순 경합이 더 온다 */
+const PUBLISH_STALE_CODES = ['STALE_BLOCK', 'ALREADY_DECIDED', 'UNDECIDED_BLOCKS', 'CONFLICT_RACE'];
 
 /** 검토 큐 토스트만 우하단에 띄운다 — 전역 Toaster(하단 중앙)는 그대로 둔다 */
 export const REVIEW_TOAST_OPTIONS = { position: 'bottom-right' } as const;
@@ -36,17 +43,15 @@ export const useReviewBlockVerdictMutation = (proposalId: string) => {
   const detailKey = knowledgeReviewQueries.queueItem(proposalId).queryKey;
 
   return useMutation({
-    mutationFn: async ({ blockIndex, ...body }: BlockVerdictVariables): Promise<ReviewBlockVerdictDto> => {
-      const res = await api.put<ReviewBlockVerdictDto>(API.knowledgeReview.blockVerdict(proposalId, blockIndex), body);
-      return res.data;
-    },
+    mutationFn: ({ blockIndex, ...body }: BlockVerdictVariables): Promise<ReviewBlockVerdictDto> =>
+      submitReviewBlockVerdict(proposalId, blockIndex, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: detailKey });
     },
     onError: (error) => {
       const { code, message } = parseApiError(error);
       toast(message, REVIEW_TOAST_OPTIONS);
-      if (STALE_CODES.includes(code)) queryClient.invalidateQueries({ queryKey: detailKey });
+      if (BLOCK_VERDICT_STALE_CODES.includes(code)) queryClient.invalidateQueries({ queryKey: detailKey });
     },
   });
 };
@@ -56,10 +61,7 @@ export const useReviewPublishMutation = (proposalId: string) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (body: ReviewPublishRequest): Promise<ReviewPublishDto> => {
-      const res = await api.post<ReviewPublishDto>(API.knowledgeReview.publish(proposalId), body);
-      return res.data;
-    },
+    mutationFn: (body: ReviewPublishRequest): Promise<ReviewPublishDto> => publishReviewProposal(proposalId, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: knowledgeReviewQueries.all() });
       queryClient.invalidateQueries({ queryKey: wikiQueries.all() });
@@ -67,7 +69,7 @@ export const useReviewPublishMutation = (proposalId: string) => {
     onError: (error) => {
       const { code, message } = parseApiError(error);
       toast(message, REVIEW_TOAST_OPTIONS);
-      if (STALE_CODES.includes(code)) {
+      if (PUBLISH_STALE_CODES.includes(code)) {
         queryClient.invalidateQueries({ queryKey: knowledgeReviewQueries.queueItem(proposalId).queryKey });
       }
     },
@@ -82,10 +84,7 @@ export const useRejectReviewProposalMutation = (proposalId: string) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (body: ReviewRejectRequest): Promise<ReviewDecisionDto> => {
-      const res = await api.post<ReviewDecisionDto>(API.knowledgeReview.reject(proposalId), body);
-      return res.data;
-    },
+    mutationFn: (body: ReviewRejectRequest): Promise<ReviewDecisionDto> => rejectReviewProposal(proposalId, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: knowledgeReviewQueries.all() });
       queryClient.invalidateQueries({ queryKey: wikiQueries.all() });
@@ -104,10 +103,7 @@ export const useApproveReviewProposalMutation = (proposalId: string) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (): Promise<ReviewDecisionDto> => {
-      const res = await api.post<ReviewDecisionDto>(API.knowledgeReview.approve(proposalId));
-      return res.data;
-    },
+    mutationFn: (): Promise<ReviewDecisionDto> => approveReviewProposal(proposalId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: knowledgeReviewQueries.all() });
       queryClient.invalidateQueries({ queryKey: wikiQueries.all() });

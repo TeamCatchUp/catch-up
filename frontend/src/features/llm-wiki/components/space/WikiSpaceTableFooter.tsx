@@ -16,8 +16,6 @@ interface WikiSpaceTableFooterProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
-  /** 페이지 크기 선택 열기 — 옵션 시안이 없어 핸들러가 없으면 정적 표시로 그린다 */
-  onPageSizeClick?: () => void;
   /** 쪽 크기 선택. 주면 표시가 드롭다운으로 열리고, 없으면 표시 그대로다. */
   onPageSizeChange?: (pageSize: number) => void;
 }
@@ -31,7 +29,6 @@ export default function WikiSpaceTableFooter({
   currentPage,
   totalPages,
   onPageChange,
-  onPageSizeClick,
   onPageSizeChange,
 }: WikiSpaceTableFooterProps) {
   const pageSizeContent = (
@@ -65,10 +62,6 @@ export default function WikiSpaceTableFooter({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-        ) : onPageSizeClick ? (
-          <button type="button" onClick={onPageSizeClick} className={`${PAGE_SIZE_CONTROL_CLASS} cursor-pointer`}>
-            {pageSizeContent}
-          </button>
         ) : (
           <span className={PAGE_SIZE_CONTROL_CLASS}>{pageSizeContent}</span>
         )}

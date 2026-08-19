@@ -10,11 +10,15 @@ import {
   useRenameWikiFolderMutation,
 } from './wikiChannels.mutations';
 
-const apiMock = vi.hoisted(() => ({ patch: vi.fn(), post: vi.fn() }));
+const wikiApi = vi.hoisted(() => ({
+  renameWikiChannel: vi.fn(),
+  renameWikiFolder: vi.fn(),
+  createWikiFolder: vi.fn(),
+}));
 const toastMock = vi.hoisted(() => vi.fn());
 
-// 실 요청과 sonner 렌더를 막는다 — 여기서 볼 것은 경로와 무효화 대상뿐이다
-vi.mock('@/shared/api/client', () => ({ default: apiMock }));
+// 실 요청과 sonner 렌더를 막는다 — 여기서 볼 것은 넘기는 인자와 무효화 대상뿐이다
+vi.mock('../api/wikiRequests', () => wikiApi);
 vi.mock('@/shared/components/ui/toast', () => ({ toast: toastMock }));
 
 /** parseApiError가 읽는 최소 형태의 axios 에러 */
@@ -38,19 +42,20 @@ const channelsKey = wikiQueries.channels().queryKey;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  apiMock.patch.mockResolvedValue({ data: undefined });
-  apiMock.post.mockResolvedValue({ data: undefined });
+  wikiApi.renameWikiChannel.mockResolvedValue(undefined);
+  wikiApi.renameWikiFolder.mockResolvedValue(undefined);
+  wikiApi.createWikiFolder.mockResolvedValue(undefined);
 });
 
 describe('useRenameWikiChannelMutation', () => {
-  it('채널 경로로 이름만 보낸다', async () => {
+  it('채널 id와 새 이름만 넘긴다', async () => {
     const { wrapper } = createHarness();
     const { result } = renderHook(() => useRenameWikiChannelMutation(), { wrapper });
 
     result.current.mutate({ channelId: 'ch-1', name: '결제' });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(apiMock.patch).toHaveBeenCalledWith('/api/v1/wiki/channels/ch-1', { name: '결제' });
+    expect(wikiApi.renameWikiChannel).toHaveBeenCalledWith('ch-1', '결제');
   });
 
   it('성공하면 채널 목록만 다시 읽는다 — 트리의 이름이 그 응답에서 온다', async () => {
@@ -64,7 +69,7 @@ describe('useRenameWikiChannelMutation', () => {
   });
 
   it('이름 중복 같은 실패는 서버 문구를 그대로 띄우고 캐시를 건드리지 않는다', async () => {
-    apiMock.patch.mockRejectedValue(apiError('DUPLICATE_NAME', '같은 이름의 채널이 있어요.'));
+    wikiApi.renameWikiChannel.mockRejectedValue(apiError('DUPLICATE_NAME', '같은 이름의 채널이 있어요.'));
     const { wrapper, invalidatedKeys } = createHarness();
     const { result } = renderHook(() => useRenameWikiChannelMutation(), { wrapper });
 
@@ -77,14 +82,14 @@ describe('useRenameWikiChannelMutation', () => {
 });
 
 describe('useRenameWikiFolderMutation', () => {
-  it('폴더 경로는 소속 채널 id를 함께 싣는다', async () => {
+  it('폴더 이름 변경은 소속 채널 id를 함께 싣는다', async () => {
     const { wrapper } = createHarness();
     const { result } = renderHook(() => useRenameWikiFolderMutation(), { wrapper });
 
     result.current.mutate({ channelId: 'ch-1', folderId: 'fd-1', name: '장애 대응' });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(apiMock.patch).toHaveBeenCalledWith('/api/v1/wiki/channels/ch-1/folders/fd-1', { name: '장애 대응' });
+    expect(wikiApi.renameWikiFolder).toHaveBeenCalledWith('ch-1', 'fd-1', '장애 대응');
   });
 
   it('폴더 이름도 채널 목록을 다시 읽는다 — 폴더 이름이 같은 응답에 실린다', async () => {
@@ -98,7 +103,7 @@ describe('useRenameWikiFolderMutation', () => {
   });
 
   it('실패하면 문구만 띄운다', async () => {
-    apiMock.patch.mockRejectedValue(apiError('FORBIDDEN', '채널 관리자만 바꿀 수 있어요.'));
+    wikiApi.renameWikiFolder.mockRejectedValue(apiError('FORBIDDEN', '채널 관리자만 바꿀 수 있어요.'));
     const { wrapper, invalidatedKeys } = createHarness();
     const { result } = renderHook(() => useRenameWikiFolderMutation(), { wrapper });
 
@@ -111,14 +116,14 @@ describe('useRenameWikiFolderMutation', () => {
 });
 
 describe('useCreateWikiFolderMutation', () => {
-  it('채널 폴더 경로로 이름만 보낸다 — 폴더 안의 폴더 경로가 없다', async () => {
+  it('폴더 생성은 소속 채널 id와 이름만 넘긴다 — 폴더 안의 폴더 경로가 없다', async () => {
     const { wrapper } = createHarness();
     const { result } = renderHook(() => useCreateWikiFolderMutation(), { wrapper });
 
     result.current.mutate({ channelId: 'ch-1', name: '장애 대응' });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(apiMock.post).toHaveBeenCalledWith('/api/v1/wiki/channels/ch-1/folders', { name: '장애 대응' });
+    expect(wikiApi.createWikiFolder).toHaveBeenCalledWith('ch-1', '장애 대응');
   });
 
   it('성공하면 채널 목록만 다시 읽는다 — 새 폴더가 그 응답에 실린다', async () => {
@@ -132,7 +137,7 @@ describe('useCreateWikiFolderMutation', () => {
   });
 
   it('이름 중복 409는 서버 문구를 그대로 띄우고 캐시를 건드리지 않는다', async () => {
-    apiMock.post.mockRejectedValue(apiError('DUPLICATE_NAME', '같은 이름의 폴더가 있어요.'));
+    wikiApi.createWikiFolder.mockRejectedValue(apiError('DUPLICATE_NAME', '같은 이름의 폴더가 있어요.'));
     const { wrapper, invalidatedKeys } = createHarness();
     const { result } = renderHook(() => useCreateWikiFolderMutation(), { wrapper });
 

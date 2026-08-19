@@ -42,7 +42,6 @@ interface WikiDashboardPageProps {
   onDocumentClick?: (documentId: string) => void;
   /** 쪽 크기 선택. 소비처가 그 값을 들고 훅에 넘긴다. */
   onPageSizeChange?: (pageSize: number) => void;
-  onPageSizeClick?: () => void;
   onMoreClick?: () => void;
 }
 
@@ -58,7 +57,6 @@ export default function WikiDashboardPage({
   onQueryStateChange,
   onDocumentClick,
   onPageSizeChange,
-  onPageSizeClick,
   onMoreClick,
 }: WikiDashboardPageProps) {
   const { filter, selectedAssigneeIds, createdAtRange, keyword, sortId, page } = queryState;
@@ -167,7 +165,6 @@ export default function WikiDashboardPage({
               totalPages={totalPages}
               onPageChange={(nextPage) => onQueryStateChange({ ...queryState, page: nextPage })}
               onPageSizeChange={onPageSizeChange}
-              onPageSizeClick={onPageSizeClick}
             />
           </div>
         </div>

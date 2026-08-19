@@ -12,11 +12,16 @@ import {
 import { knowledgeReviewQueries } from './knowledgeReview.queries';
 import { wikiQueries } from './wiki.queries';
 
-const apiMock = vi.hoisted(() => ({ post: vi.fn(), put: vi.fn() }));
+const reviewApi = vi.hoisted(() => ({
+  submitReviewBlockVerdict: vi.fn(),
+  publishReviewProposal: vi.fn(),
+  rejectReviewProposal: vi.fn(),
+  approveReviewProposal: vi.fn(),
+}));
 const toastMock = vi.hoisted(() => vi.fn());
 
-// 실 요청과 sonner 렌더를 막는다 — 여기서 볼 것은 무효화 대상뿐이다
-vi.mock('@/shared/api/client', () => ({ default: apiMock }));
+// 실 요청과 sonner 렌더를 막는다 — 여기서 볼 것은 넘기는 인자와 무효화 대상뿐이다
+vi.mock('../api/knowledgeReviewRequests', () => reviewApi);
 vi.mock('@/shared/components/ui/toast', () => ({ toast: toastMock }));
 
 const PROPOSAL_ID = 'pr-1';
@@ -57,14 +62,14 @@ describe('useReviewBlockVerdictMutation', () => {
   };
 
   it('블록 자리는 경로로 가고 본문에는 남지 않는다', async () => {
-    apiMock.put.mockResolvedValue({ data: VERDICT_RESPONSE });
+    reviewApi.submitReviewBlockVerdict.mockResolvedValue(VERDICT_RESPONSE);
     const { wrapper } = createHarness();
     const { result } = renderHook(() => useReviewBlockVerdictMutation(PROPOSAL_ID), { wrapper });
 
     result.current.mutate({ blockIndex: 2, verdict: 'approved', block_content_hash: 'h-2' });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(apiMock.put).toHaveBeenCalledWith('/api/v1/knowledge-review/queue/pr-1/blocks/2/verdict', {
+    expect(reviewApi.submitReviewBlockVerdict).toHaveBeenCalledWith(PROPOSAL_ID, 2, {
       verdict: 'approved',
       block_content_hash: 'h-2',
     });
@@ -72,7 +77,7 @@ describe('useReviewBlockVerdictMutation', () => {
   });
 
   it('성공하면 상세만 다시 읽는다 — 블록 판정으로 큐 줄은 바뀌지 않는다', async () => {
-    apiMock.put.mockResolvedValue({ data: VERDICT_RESPONSE });
+    reviewApi.submitReviewBlockVerdict.mockResolvedValue(VERDICT_RESPONSE);
     const { wrapper, invalidatedKeys } = createHarness();
     const { result } = renderHook(() => useReviewBlockVerdictMutation(PROPOSAL_ID), { wrapper });
 
@@ -83,7 +88,7 @@ describe('useReviewBlockVerdictMutation', () => {
   });
 
   it('낡은 지문으로 막히면 서버 문구를 띄우고 상세를 다시 읽는다 — 재조회가 곧 복구다', async () => {
-    apiMock.put.mockRejectedValue(apiError('STALE_BLOCK', '다른 검토자가 먼저 판정했어요.'));
+    reviewApi.submitReviewBlockVerdict.mockRejectedValue(apiError('STALE_BLOCK', '다른 검토자가 먼저 판정했어요.'));
     const { wrapper, invalidatedKeys } = createHarness();
     const { result } = renderHook(() => useReviewBlockVerdictMutation(PROPOSAL_ID), { wrapper });
 
@@ -95,7 +100,7 @@ describe('useReviewBlockVerdictMutation', () => {
   });
 
   it('낙관적 잠금과 무관한 실패는 문구만 띄우고 캐시를 건드리지 않는다', async () => {
-    apiMock.put.mockRejectedValue(apiError('FORBIDDEN', '검토 권한이 없어요.'));
+    reviewApi.submitReviewBlockVerdict.mockRejectedValue(apiError('FORBIDDEN', '검토 권한이 없어요.'));
     const { wrapper, invalidatedKeys } = createHarness();
     const { result } = renderHook(() => useReviewBlockVerdictMutation(PROPOSAL_ID), { wrapper });
 
@@ -120,21 +125,19 @@ describe('useReviewPublishMutation', () => {
   };
 
   it('발행은 큐 뿌리와 위키 뿌리를 함께 무효화한다 — 줄이 빠지고 문서 상태도 바뀐다', async () => {
-    apiMock.post.mockResolvedValue({ data: PUBLISH_RESPONSE });
+    reviewApi.publishReviewProposal.mockResolvedValue(PUBLISH_RESPONSE);
     const { wrapper, invalidatedKeys } = createHarness();
     const { result } = renderHook(() => useReviewPublishMutation(PROPOSAL_ID), { wrapper });
 
     result.current.mutate({ base_revision_id: 'rv-8' });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(apiMock.post).toHaveBeenCalledWith('/api/v1/knowledge-review/queue/pr-1/publish', {
-      base_revision_id: 'rv-8',
-    });
+    expect(reviewApi.publishReviewProposal).toHaveBeenCalledWith(PROPOSAL_ID, { base_revision_id: 'rv-8' });
     expect(invalidatedKeys()).toEqual([knowledgeReviewQueries.all(), wikiQueries.all()]);
   });
 
   it('낡은 상태로 막히면 상세만 다시 읽는다 — 뿌리까지 되돌리지 않는다', async () => {
-    apiMock.post.mockRejectedValue(apiError('UNDECIDED_BLOCKS', '아직 판정하지 않은 블록이 있어요.'));
+    reviewApi.publishReviewProposal.mockRejectedValue(apiError('UNDECIDED_BLOCKS', '아직 판정하지 않은 블록이 있어요.'));
     const { wrapper, invalidatedKeys } = createHarness();
     const { result } = renderHook(() => useReviewPublishMutation(PROPOSAL_ID), { wrapper });
 
@@ -146,7 +149,7 @@ describe('useReviewPublishMutation', () => {
   });
 
   it('그 밖의 실패는 문구만 띄운다', async () => {
-    apiMock.post.mockRejectedValue(apiError('FORBIDDEN', '발행 권한이 없어요.'));
+    reviewApi.publishReviewProposal.mockRejectedValue(apiError('FORBIDDEN', '발행 권한이 없어요.'));
     const { wrapper, invalidatedKeys } = createHarness();
     const { result } = renderHook(() => useReviewPublishMutation(PROPOSAL_ID), { wrapper });
 
@@ -168,20 +171,18 @@ describe('useRejectReviewProposalMutation', () => {
   };
 
   it('반려는 blocks가 아니라 artifacts 경로로 가고 사유를 실어 보낸다', async () => {
-    apiMock.post.mockResolvedValue({ data: REJECT_RESPONSE });
+    reviewApi.rejectReviewProposal.mockResolvedValue(REJECT_RESPONSE);
     const { wrapper } = createHarness();
     const { result } = renderHook(() => useRejectReviewProposalMutation(PROPOSAL_ID), { wrapper });
 
     result.current.mutate({ reason: '근거가 부족해요.' });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(apiMock.post).toHaveBeenCalledWith('/api/v1/knowledge-review/artifacts/pr-1/reject', {
-      reason: '근거가 부족해요.',
-    });
+    expect(reviewApi.rejectReviewProposal).toHaveBeenCalledWith(PROPOSAL_ID, { reason: '근거가 부족해요.' });
   });
 
   it('반려도 큐 뿌리와 위키 뿌리를 함께 무효화한다', async () => {
-    apiMock.post.mockResolvedValue({ data: REJECT_RESPONSE });
+    reviewApi.rejectReviewProposal.mockResolvedValue(REJECT_RESPONSE);
     const { wrapper, invalidatedKeys } = createHarness();
     const { result } = renderHook(() => useRejectReviewProposalMutation(PROPOSAL_ID), { wrapper });
 
@@ -192,7 +193,7 @@ describe('useRejectReviewProposalMutation', () => {
   });
 
   it('실패하면 문구만 띄운다 — 반려에는 낡은 상태 재조회 분기가 없다', async () => {
-    apiMock.post.mockRejectedValue(apiError('ALREADY_DECIDED', '이미 판정된 변경안이에요.'));
+    reviewApi.rejectReviewProposal.mockRejectedValue(apiError('ALREADY_DECIDED', '이미 판정된 변경안이에요.'));
     const { wrapper, invalidatedKeys } = createHarness();
     const { result } = renderHook(() => useRejectReviewProposalMutation(PROPOSAL_ID), { wrapper });
 

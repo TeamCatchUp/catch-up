@@ -19,7 +19,6 @@ interface WikiFolderPageProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
-  onPageSizeClick?: () => void;
   onDocumentClick?: (documentId: string) => void;
   onBreadcrumbClick?: (crumb: DocumentBreadcrumb, index: number) => void;
 }
@@ -35,7 +34,6 @@ export default function WikiFolderPage({
   currentPage,
   totalPages,
   onPageChange,
-  onPageSizeClick,
   onDocumentClick,
   onBreadcrumbClick,
 }: WikiFolderPageProps) {
@@ -80,7 +78,6 @@ export default function WikiFolderPage({
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={onPageChange}
-            onPageSizeClick={onPageSizeClick}
           />
         </div>
       </div>

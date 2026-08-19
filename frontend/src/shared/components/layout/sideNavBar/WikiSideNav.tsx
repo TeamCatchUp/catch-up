@@ -213,7 +213,9 @@ export default function WikiSideNav({
     const node = menu?.nodeId ? findTreeNode(nodes, menu.nodeId) : undefined;
     // 이름 바꾸기·폴더 추가는 눌린 자리에 입력 팝오버를 이어 띄운다 — 보낼 수 없는 노드에서는 열지 않는다
     if (actionId === 'rename' && menu && canRename(node)) setNameInput({ mode: 'rename', node, anchor: menu.anchor });
-    else if (actionId === 'folder' && menu && node) setNameInput({ mode: 'create-folder', node, anchor: menu.anchor });
+    // 폴더는 채널 바로 아래에만 생긴다
+    else if (actionId === 'folder' && menu && node?.kind === 'channel')
+      setNameInput({ mode: 'create-folder', node, anchor: menu.anchor });
     // 채널 생성 화면은 온보딩뿐이다 — 별도 생성 폼이 없다
     else if (actionId === 'channel') go('/llm-wiki/onboarding')();
     onMenuAction?.(menu?.nodeId, actionId);
