@@ -1,6 +1,5 @@
 'use client';
 
-import { useMemo, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 
 import IconGrid from '@/public/icons/icon/grid.svg';
@@ -19,20 +18,27 @@ import {
   createCreatedAtFilter,
   createStatusFilter,
   type DashboardActiveFilter,
-  type DashboardSortId,
-  filterDocuments,
+  type DashboardQueryState,
+  getFilterAxis,
+  INITIAL_DASHBOARD_QUERY_STATE,
   resolveStatFilter,
-  sortDocuments,
 } from './dashboardFilters';
 import ReviewStatCard from './ReviewStatCard';
 
 interface WikiDashboardPageProps {
   stats: readonly ReviewStatCardData[];
+  /** 서버가 이미 좁혀 준 한 쪽. 화면은 다시 거르지 않는다. */
   documents: readonly DocumentRowData[];
-  /** "내 담당" 필터의 기준. 로그인 사용자 API가 없어 주입받는다. */
-  currentUserName: string;
+  /** limit·offset을 걸기 전 문서 수 — 쪽 수 계산의 유일한 재료다. */
+  totalCount: number;
+  /** 담당자 후보. id는 담당자 user_id 문자열이다. */
   assigneeOptions: readonly ReviewQueueFilterOption[];
+  /** "내 담당" 지표의 기준. 없으면 그 카드는 누를 수 없다. */
+  myUserId?: number;
   pageSize: number;
+  /** 조회 상태와 그 갱신 신호. 목록 요청은 소비처가 만든다. */
+  queryState: DashboardQueryState;
+  onQueryStateChange: (next: DashboardQueryState) => void;
   onDocumentClick?: (documentId: string) => void;
   onPageSizeClick?: () => void;
   onMoreClick?: () => void;
@@ -42,38 +48,38 @@ interface WikiDashboardPageProps {
 export default function WikiDashboardPage({
   stats,
   documents,
-  currentUserName,
+  totalCount,
   assigneeOptions,
+  myUserId,
   pageSize,
+  queryState,
+  onQueryStateChange,
   onDocumentClick,
   onPageSizeClick,
   onMoreClick,
 }: WikiDashboardPageProps) {
-  // 필터는 한 번에 하나다 — 지표 카드와 드롭다운이 같은 자리를 놓고 서로를 덮어쓴다.
-  const [activeFilter, setActiveFilter] = useState<DashboardActiveFilter | null>(null);
-  const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<readonly string[]>([]);
-  const [createdAtRange, setCreatedAtRange] = useState<DateRange | undefined>();
-  const [keyword, setKeyword] = useState('');
-  const [sortId, setSortId] = useState<DashboardSortId>('recent');
-  const [currentPage, setCurrentPage] = useState(1);
+  const { filter, selectedAssigneeIds, createdAtRange, keyword, sortId, page } = queryState;
 
+  // 필터는 한 번에 하나다 — 지표 카드와 드롭다운이 같은 자리를 놓고 서로를 덮어쓴다.
   const applyFilter = (
     next: DashboardActiveFilter | null,
     { assigneeIds = [], range }: { assigneeIds?: readonly string[]; range?: DateRange } = {},
-  ) => {
-    setSelectedAssigneeIds(assigneeIds);
-    setCreatedAtRange(range);
-    setActiveFilter(next);
-    setCurrentPage(1);
-  };
+  ) =>
+    onQueryStateChange({
+      ...queryState,
+      filter: next,
+      selectedAssigneeIds: assigneeIds,
+      createdAtRange: range,
+      page: 1,
+    });
 
   const handleAssigneeToggle = (optionId: string) => {
     const nextIds = selectedAssigneeIds.includes(optionId)
       ? selectedAssigneeIds.filter((id) => id !== optionId)
       : [...selectedAssigneeIds, optionId];
-    const names = assigneeOptions.filter((option) => nextIds.includes(option.id)).map((option) => option.label);
+    const selected = assigneeOptions.filter((option) => nextIds.includes(option.id));
 
-    applyFilter(createAssigneeFilter(names), { assigneeIds: nextIds });
+    applyFilter(createAssigneeFilter(selected), { assigneeIds: nextIds });
   };
 
   const handleStatusSelect = (status: KnownDocumentStatus) => applyFilter(createStatusFilter(status));
@@ -81,16 +87,7 @@ export default function WikiDashboardPage({
   const handleCreatedAtChange = (range: DateRange | undefined) =>
     applyFilter(createCreatedAtFilter(range), { range });
 
-  const visibleDocuments = useMemo(() => {
-    const filtered = filterDocuments(documents, activeFilter, currentUserName);
-    const needle = keyword.trim().toLowerCase();
-    // 검색은 제목 대조다 — 본문·태그 검색은 계약이 없다.
-    const searched = needle ? filtered.filter((row) => row.title.toLowerCase().includes(needle)) : filtered;
-
-    return sortDocuments(searched, sortId);
-  }, [activeFilter, currentUserName, documents, keyword, sortId]);
-
-  const totalPages = Math.max(1, Math.ceil(visibleDocuments.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   return (
     <div className="flex flex-col">
@@ -118,7 +115,7 @@ export default function WikiDashboardPage({
           {/* 지표 4종이 행을 나눠 갖는다 — 1040 = 245×4 + 20×3 */}
           <div className="grid grid-cols-4 gap-5">
             {stats.map((stat) => {
-              const action = resolveStatFilter(stat.id);
+              const action = resolveStatFilter(stat.id, myUserId);
 
               return (
                 <ReviewStatCard
@@ -131,34 +128,29 @@ export default function WikiDashboardPage({
           </div>
 
           <DashboardFilterBar
+            searchKeyword={keyword}
             sortId={sortId}
-            onSortSelect={setSortId}
+            onSortSelect={(nextSortId) => onQueryStateChange({ ...queryState, sortId: nextSortId, page: 1 })}
             createdAtRange={createdAtRange}
             onCreatedAtChange={handleCreatedAtChange}
-            activeAxis={activeFilter?.axis ?? null}
-            activeValueLabel={activeFilter?.label}
+            activeAxis={filter ? getFilterAxis(filter) : null}
+            activeValueLabel={filter?.label}
             assigneeOptions={assigneeOptions}
             selectedAssigneeIds={selectedAssigneeIds}
             onAssigneeToggle={handleAssigneeToggle}
             onStatusSelect={handleStatusSelect}
-            onSearchChange={(next) => {
-              setKeyword(next);
-              setCurrentPage(1);
-            }}
-            onClearFilters={() => {
-              setKeyword('');
-              applyFilter(null);
-            }}
+            onSearchChange={(next) => onQueryStateChange({ ...queryState, keyword: next, page: 1 })}
+            onClearFilters={() => onQueryStateChange(INITIAL_DASHBOARD_QUERY_STATE)}
           />
 
           <div className="flex flex-col gap-8">
             <div className="flex flex-col">
               <DashboardDocumentTableHeader />
-              {visibleDocuments.length === 0 ? (
+              {documents.length === 0 ? (
                 <DocumentTableEmptyState />
               ) : (
                 <div className="flex flex-col gap-1">
-                  {visibleDocuments.map((document) => (
+                  {documents.map((document) => (
                     <DashboardDocumentRow key={document.id} document={document} onClick={onDocumentClick} />
                   ))}
                 </div>
@@ -168,9 +160,9 @@ export default function WikiDashboardPage({
             {/* 시안 우측에 같은 컨트롤이 하나 더 있으나 레이어명이 "Page Size (중복?)"이라 렌더하지 않는다 */}
             <WikiSpaceTableFooter
               pageSize={pageSize}
-              currentPage={currentPage}
+              currentPage={page}
               totalPages={totalPages}
-              onPageChange={setCurrentPage}
+              onPageChange={(nextPage) => onQueryStateChange({ ...queryState, page: nextPage })}
               onPageSizeClick={onPageSizeClick}
             />
           </div>

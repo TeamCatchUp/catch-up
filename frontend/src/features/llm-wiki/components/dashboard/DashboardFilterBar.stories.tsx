@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
-import { REVIEW_QUEUE_ASSIGNEE_OPTIONS } from '../../fixtures/llmWikiFixtures';
+import { DASHBOARD_ASSIGNEE_OPTIONS } from '../../fixtures/llmWikiFixtures';
 import DashboardFilterBar from './DashboardFilterBar';
 
 const meta = {
@@ -10,10 +10,11 @@ const meta = {
   component: DashboardFilterBar,
   tags: ['autodocs'],
   args: {
+    searchKeyword: '',
     sortId: 'recent',
     onSortSelect: fn(),
     onCreatedAtChange: fn(),
-    assigneeOptions: REVIEW_QUEUE_ASSIGNEE_OPTIONS,
+    assigneeOptions: DASHBOARD_ASSIGNEE_OPTIONS,
     selectedAssigneeIds: [],
     onAssigneeToggle: fn(),
     onStatusSelect: fn(),
@@ -153,8 +154,9 @@ export const AssigneeDropdown: Story = {
     // 카드 폭은 300 고정이다(상태 250과 다른 값).
     await expect(window.getComputedStyle(input.closest('[role=menu]') as HTMLElement).width).toBe('300px');
 
+    // 옵션 id는 담당자 user_id 문자열이다 — 그대로 서버 파라미터가 된다.
     await userEvent.click(body.getByText('직원10'));
-    await expect(args.onAssigneeToggle).toHaveBeenCalledWith('u-seoyeon');
+    await expect(args.onAssigneeToggle).toHaveBeenCalledWith('2');
   },
 };
 

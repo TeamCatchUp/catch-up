@@ -253,6 +253,19 @@ export const REVIEW_QUEUE_ASSIGNEE_OPTIONS: readonly ReviewQueueFilterOption[] =
   { id: 'u-external', label: '외부 협력자' },
 ];
 
+/**
+ * 대시보드 담당자 축 후보. id는 담당자 user_id 문자열이라 목록 API 파라미터로 그대로 나간다.
+ * 값은 DOCUMENT_ROW_FIXTURES의 담당자와 맞춰 둔다 — 필터 결과가 표와 어긋나면 안 된다.
+ */
+export const DASHBOARD_ASSIGNEE_OPTIONS: readonly ReviewQueueFilterOption[] = [
+  { id: '1', label: '팀원F', trailingLabel: 'FE' },
+  { id: '2', label: '직원10', trailingLabel: 'PM' },
+  { id: '3', label: '이진수', trailingLabel: 'BE' },
+  { id: '4', label: '김하은', trailingLabel: 'Design' },
+  { id: '5', label: '최민우', trailingLabel: 'BE' },
+  { id: '6', label: '팀원G', trailingLabel: 'FE' },
+];
+
 /** 검토 큐 필터 대상 채널 축 표본. 채널은 직책이 없어 trailingLabel을 두지 않는다. */
 export const REVIEW_QUEUE_CHANNEL_OPTIONS: readonly ReviewQueueFilterOption[] = [
   { id: 'ch-billing', label: '결제' },
