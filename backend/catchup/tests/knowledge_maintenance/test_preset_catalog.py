@@ -15,6 +15,7 @@ from catchup.knowledge_maintenance.domain.preset_catalog import find_kind
 from catchup.knowledge_maintenance.domain.preset_catalog import find_kind_by_name
 from catchup.knowledge_maintenance.domain.preset_catalog import find_purpose
 from catchup.knowledge_maintenance.domain.preset_catalog import find_style
+from catchup.knowledge_maintenance.domain.preset_catalog import layout_for_kind
 
 
 def test_every_template_name_is_in_its_domain_seed() -> None:
@@ -356,3 +357,29 @@ def test_voc_purposes_map_to_surviving_kinds() -> None:
         "voc.account_requests": "customer_voice_profile",
     }
     assert find_purpose("voc.churn_signals") is None
+
+
+def test_every_kind_layout_keys_exist_in_its_selection_spec() -> None:
+    """레이아웃이 부르는 칸이 전부 그 종류의 선택 규칙 안에 있다."""
+    for domain in PRESET_DOMAINS:
+        for preset_kind in domain.kinds:
+            layout = preset_kind.layout
+            assert layout is not None, preset_kind.kind
+            spec = preset_kind.spec_template()
+            allowed = set(spec.predicate_sections or ()) | {
+                " \u2192 ".join(
+                    f"{s.relation_type}({s.direction})" for s in path.steps
+                )
+                for path in spec.relation_paths
+            }
+            keys = {key for key, _ in layout.sections}
+            for group in layout.table_groups:
+                keys |= set(group.section_keys)
+            keys |= set(layout.always_show)
+            assert keys <= allowed, (preset_kind.kind, keys - allowed)
+
+
+def test_layout_for_kind_returns_none_for_unknown() -> None:
+    """모르는 종류를 물으면 레이아웃이 없다고 답한다."""
+    assert layout_for_kind("no_such_kind") is None
+    assert layout_for_kind("feature_request_status") is not None
