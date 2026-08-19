@@ -3,9 +3,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useFunnel } from '@use-funnel/browser';
+import { motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 
 import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
+import { usePrefersReducedMotion } from '@/shared/hooks/usePrefersReducedMotion';
+import { MotionState, stepReplace, stepReplaceReduced } from '@/shared/motion';
 import { automationCredentialsQueries } from '@/shared/queries/automationCredentials.queries';
 
 import { mapOnboardingChannelRows } from '../../api/onboardingSourceMappers';
@@ -55,7 +58,7 @@ import { buildOnboardingNextSteps } from '../../utils/onboarding/onboardingNextS
 import { buildExecutionAnchor, intervalMinutesOf, resolveNextRunAt } from '../../utils/onboarding/scheduleAnchor';
 import { buildScheduleResultSentence } from '../../utils/onboarding/scheduleResultText';
 import type { WikiOnboardingDraft, WikiOnboardingSteps } from '../../utils/onboarding/wikiOnboardingSteps';
-import { WIKI_ONBOARDING_FUNNEL_ID } from '../../utils/onboarding/wikiOnboardingSteps';
+import { WIKI_ONBOARDING_FUNNEL_ID, WIKI_ONBOARDING_STEP_ORDER } from '../../utils/onboarding/wikiOnboardingSteps';
 import OnboardingChannelTable from './OnboardingChannelTable';
 import type { SummarySectionView } from './OnboardingSummaryCard';
 import WikiOnboardingCompleteStep from './WikiOnboardingCompleteStep';
@@ -87,6 +90,14 @@ export default function WikiOnboardingPage() {
 
   // 새로고침해도 history state에 남은 스냅샷으로 입력을 되살린다
   const restored = funnel.context;
+
+  const prefersReducedMotion = usePrefersReducedMotion();
+  // 스텝 교체가 앞으로 가는지 뒤로 오는지. 진행 순서에서의 자리 차이로 읽는다
+  const stepIndex = WIKI_ONBOARDING_STEP_ORDER.indexOf(funnel.step);
+  const [stepSwap, setStepSwap] = useState({ step: funnel.step, index: stepIndex, direction: 1 });
+  if (stepSwap.step !== funnel.step) {
+    setStepSwap({ step: funnel.step, index: stepIndex, direction: stepIndex < stepSwap.index ? -1 : 1 });
+  }
 
   const [name, setName] = useState(restored.name ?? '');
   // 선택 필드는 각 목록의 첫 항목으로 시작한다 — 빈 선택으로 여는 화면이 아니다
@@ -177,119 +188,131 @@ export default function WikiOnboardingPage() {
 
   return (
     <>
-      <funnel.Render
-        purpose={({ history }) => (
-          <WikiOnboardingPurposeStep
-            steps={ONBOARDING_STEPS}
-            heading={ONBOARDING_PURPOSE_HEADING}
-            basicInfoTitle={ONBOARDING_BASIC_INFO_TITLE}
-            nameLabel={WIKI_NAME_FIELD.label}
-            nameValue={name}
-            onNameChange={setName}
-            namePlaceholder={WIKI_NAME_FIELD.placeholder}
-            nameMaxLength={WIKI_NAME_FIELD.maxLength}
-            purpose={{
-              categoryLabel: INFO_CATEGORY_FIELD_LABEL,
-              categories: WIKI_INFO_CATEGORIES,
-              selectedCategoryId: categoryId,
-              onSelectCategory: setCategoryId,
-              purposeLabel: PURPOSE_FIELD_LABEL,
-              purposeOptions: WIKI_PURPOSE_OPTIONS,
-              selectedPurposeId: purposeId,
-              onSelectPurpose: setPurposeId,
-            }}
-            docSettingTitle={ONBOARDING_DOC_SETTING_TITLE}
-            docKind={{
-              label: DOC_KIND_FIELD_LABEL,
-              presets: WIKI_DOC_KIND_PRESETS,
-              selectedId: docKindId,
-              onSelect: setDocKindId,
-              sampleTitle: DOC_KIND_SAMPLE_TITLE,
-              sampleCaption: DOC_KIND_SAMPLE_CAPTION,
-              // 양식이 없는 종류는 아직 없지만, 종류가 열린 타입이라 필러를 폴백으로 둔다
-              sampleText: WIKI_DOC_TEMPLATE_SAMPLES[docKindId ?? ''] ?? TEMPLATE_SAMPLE_TEXT_TBD,
-            }}
-            tone={{
-              label: TONE_STYLE_FIELD_LABEL,
-              options: WIKI_TONE_STYLE_OPTIONS,
-              selectedId: toneId,
-              onSelect: setToneId,
-              sampleTagLabel: TONE_SAMPLE_TAG_LABEL,
-            }}
-            nextLabel={ONBOARDING_NEXT_LABEL}
-            onNext={() => history.push('source', draftSnapshot())}
-            nextDisabled={!canLeavePurposeStep}
-            onExit={requestExit}
-          />
-        )}
-        source={({ history }) => (
-          <WikiOnboardingSourceStep
-            steps={ONBOARDING_STEPS}
-            heading={ONBOARDING_SOURCE_HEADING}
-            channelLabel={CHANNEL_FIELD_LABEL}
-            channelCaption={CHANNEL_FIELD_CAPTION}
-            channelPickerPlaceholder={CHANNEL_PICKER_PLACEHOLDER}
-            channelTableHeaders={CHANNEL_TABLE_HEADERS}
-            availableChannels={availableChannelRows}
-            onSelectChannel={(credentialId) => setSelectedCredentialIds((current) => [...current, credentialId])}
-            channelRows={selectedChannelRows}
-            channelListStatus={channelListStatus}
-            onRetryChannelList={() => void credentialsQuery.refetch()}
-            scheduleFields={scheduleFields}
-            onSelectScheduleOption={(fieldId, optionId) =>
-              setScheduleSelection((current) => ({ ...current, [fieldId]: optionId }))
-            }
-            resultText={buildScheduleResultSentence({
-              pollingOptionId: scheduleSelection[SCHEDULE_FIELD_IDS.pollingInterval],
-              runTimeOptionId: scheduleSelection[SCHEDULE_FIELD_IDS.runTime],
-            })}
-            backfillNoticeText={BACKFILL_NOTICE_TEXT}
-            backLabel={ONBOARDING_BACK_LABEL}
-            onBack={() => history.back()}
-            nextLabel={ONBOARDING_FINISH_LABEL}
-            onNext={() => history.push('complete', draftSnapshot())}
-            nextDisabled={!canLeaveSourceStep}
-            onExit={requestExit}
-          />
-        )}
-        complete={({ history }) => {
-          const now = new Date();
-          const intervalMinutes = intervalMinutesOf(scheduleSelection[SCHEDULE_FIELD_IDS.pollingInterval]);
-          const nextRunAt = resolveNextRunAt(
-            buildExecutionAnchor(scheduleSelection[SCHEDULE_FIELD_IDS.runTime], now),
-            intervalMinutes,
-            now,
-          );
-
-          return (
-            <WikiOnboardingCompleteStep
+      {/*
+       * 스텝 교체는 들어오는 쪽만 움직인다 — funnel.Render는 나가는 사본도 현재 스텝을 그려
+       * exit을 걸면 같은 화면이 두 장 겹친다.
+       */}
+      <motion.div
+        key={funnel.step}
+        custom={stepSwap.direction}
+        variants={prefersReducedMotion ? stepReplaceReduced : stepReplace}
+        initial={MotionState.Hidden}
+        animate={MotionState.Visible}
+      >
+        <funnel.Render
+          purpose={({ history }) => (
+            <WikiOnboardingPurposeStep
               steps={ONBOARDING_STEPS}
-              heading={ONBOARDING_COMPLETE_HEADING}
-              summarySections={buildSummarySections({
-                name,
-                categoryId,
-                purposeId,
-                docKindId,
-                toneId,
-                scheduleFields,
-                channelRows: selectedChannelRows,
-              })}
-              nextStepsTitle={ONBOARDING_NEXT_STEPS_TITLE}
-              nextSteps={buildOnboardingNextSteps({
-                backfillOptionId: scheduleSelection[SCHEDULE_FIELD_IDS.backfillRange],
-                nextRunAt,
-                now,
-              })}
-              backLabel={ONBOARDING_BACK_LABEL}
-              onBack={() => history.back()}
-              finishLabel={ONBOARDING_FINISH_LABEL}
-              onFinish={submitOnboarding}
-              finishDisabled={submit.isPending || !canLeavePurposeStep || !canLeaveSourceStep}
+              heading={ONBOARDING_PURPOSE_HEADING}
+              basicInfoTitle={ONBOARDING_BASIC_INFO_TITLE}
+              nameLabel={WIKI_NAME_FIELD.label}
+              nameValue={name}
+              onNameChange={setName}
+              namePlaceholder={WIKI_NAME_FIELD.placeholder}
+              nameMaxLength={WIKI_NAME_FIELD.maxLength}
+              purpose={{
+                categoryLabel: INFO_CATEGORY_FIELD_LABEL,
+                categories: WIKI_INFO_CATEGORIES,
+                selectedCategoryId: categoryId,
+                onSelectCategory: setCategoryId,
+                purposeLabel: PURPOSE_FIELD_LABEL,
+                purposeOptions: WIKI_PURPOSE_OPTIONS,
+                selectedPurposeId: purposeId,
+                onSelectPurpose: setPurposeId,
+              }}
+              docSettingTitle={ONBOARDING_DOC_SETTING_TITLE}
+              docKind={{
+                label: DOC_KIND_FIELD_LABEL,
+                presets: WIKI_DOC_KIND_PRESETS,
+                selectedId: docKindId,
+                onSelect: setDocKindId,
+                sampleTitle: DOC_KIND_SAMPLE_TITLE,
+                sampleCaption: DOC_KIND_SAMPLE_CAPTION,
+                // 양식이 없는 종류는 아직 없지만, 종류가 열린 타입이라 필러를 폴백으로 둔다
+                sampleText: WIKI_DOC_TEMPLATE_SAMPLES[docKindId ?? ''] ?? TEMPLATE_SAMPLE_TEXT_TBD,
+              }}
+              tone={{
+                label: TONE_STYLE_FIELD_LABEL,
+                options: WIKI_TONE_STYLE_OPTIONS,
+                selectedId: toneId,
+                onSelect: setToneId,
+                sampleTagLabel: TONE_SAMPLE_TAG_LABEL,
+              }}
+              nextLabel={ONBOARDING_NEXT_LABEL}
+              onNext={() => history.push('source', draftSnapshot())}
+              nextDisabled={!canLeavePurposeStep}
               onExit={requestExit}
             />
-          );
-        }}
-      />
+          )}
+          source={({ history }) => (
+            <WikiOnboardingSourceStep
+              steps={ONBOARDING_STEPS}
+              heading={ONBOARDING_SOURCE_HEADING}
+              channelLabel={CHANNEL_FIELD_LABEL}
+              channelCaption={CHANNEL_FIELD_CAPTION}
+              channelPickerPlaceholder={CHANNEL_PICKER_PLACEHOLDER}
+              channelTableHeaders={CHANNEL_TABLE_HEADERS}
+              availableChannels={availableChannelRows}
+              onSelectChannel={(credentialId) => setSelectedCredentialIds((current) => [...current, credentialId])}
+              channelRows={selectedChannelRows}
+              channelListStatus={channelListStatus}
+              onRetryChannelList={() => void credentialsQuery.refetch()}
+              scheduleFields={scheduleFields}
+              onSelectScheduleOption={(fieldId, optionId) =>
+                setScheduleSelection((current) => ({ ...current, [fieldId]: optionId }))
+              }
+              resultText={buildScheduleResultSentence({
+                pollingOptionId: scheduleSelection[SCHEDULE_FIELD_IDS.pollingInterval],
+                runTimeOptionId: scheduleSelection[SCHEDULE_FIELD_IDS.runTime],
+              })}
+              backfillNoticeText={BACKFILL_NOTICE_TEXT}
+              backLabel={ONBOARDING_BACK_LABEL}
+              onBack={() => history.back()}
+              nextLabel={ONBOARDING_FINISH_LABEL}
+              onNext={() => history.push('complete', draftSnapshot())}
+              nextDisabled={!canLeaveSourceStep}
+              onExit={requestExit}
+            />
+          )}
+          complete={({ history }) => {
+            const now = new Date();
+            const intervalMinutes = intervalMinutesOf(scheduleSelection[SCHEDULE_FIELD_IDS.pollingInterval]);
+            const nextRunAt = resolveNextRunAt(
+              buildExecutionAnchor(scheduleSelection[SCHEDULE_FIELD_IDS.runTime], now),
+              intervalMinutes,
+              now,
+            );
+
+            return (
+              <WikiOnboardingCompleteStep
+                steps={ONBOARDING_STEPS}
+                heading={ONBOARDING_COMPLETE_HEADING}
+                summarySections={buildSummarySections({
+                  name,
+                  categoryId,
+                  purposeId,
+                  docKindId,
+                  toneId,
+                  scheduleFields,
+                  channelRows: selectedChannelRows,
+                })}
+                nextStepsTitle={ONBOARDING_NEXT_STEPS_TITLE}
+                nextSteps={buildOnboardingNextSteps({
+                  backfillOptionId: scheduleSelection[SCHEDULE_FIELD_IDS.backfillRange],
+                  nextRunAt,
+                  now,
+                })}
+                backLabel={ONBOARDING_BACK_LABEL}
+                onBack={() => history.back()}
+                finishLabel={ONBOARDING_FINISH_LABEL}
+                onFinish={submitOnboarding}
+                finishDisabled={submit.isPending || !canLeavePurposeStep || !canLeaveSourceStep}
+                onExit={requestExit}
+              />
+            );
+          }}
+        />
+      </motion.div>
 
       <ConfirmDialog
         open={exitConfirmOpen}

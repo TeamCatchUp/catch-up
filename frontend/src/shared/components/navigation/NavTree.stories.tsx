@@ -99,6 +99,8 @@ const meta = {
       ],
       interactionNotes: [
         '접기/펼치기는 캐럿 버튼 전용이다. 행 본문 클릭은 이동만 한다.',
+        '하위 목록은 disclosureExpand(높이+opacity)로 열리고 닫힌다. 접히는 동안에도 트리에 남아 있어 queryBy 어서션은 waitFor로 감싼다.',
+        'reduced motion에서는 disclosureExpandReduced로 갈아타 즉시 전환된다 — 검증은 NavTree.test.tsx(matchMedia mock)에 있다.',
         '캐럿은 자식이 있는 행에만, hover 또는 포커스에서 앞 아이콘을 대체해 나타난다.',
         'hover는 플레이로 어서션하지 않는다 — userEvent.hover()는 합성 이벤트라 브라우저의 :hover를 켜지 못한다. focus-within으로 검증한다.',
         '캐럿은 표시형 depth 연결자와 같은 arrow_right2 자산이고, 펼침은 90도 회전이다 — 시안에 펼침 상태가 없어 잠정값이다(design-request).',
@@ -176,8 +178,11 @@ export const Interactive: Story = {
     const collapse = canvas.getByRole('button', { name: '채널명 text text text text 1 접기' });
     await expect(collapse).toHaveAttribute('aria-expanded', 'true');
 
+    // 하위는 접힘 애니메이션이 끝난 뒤에 트리에서 빠진다 — 즉시 사라지면 높이가 한 번에 튄다
     await userEvent.click(collapse);
-    await expect(canvas.queryByRole('button', { name: '파일명texttexttext 1' })).toBeNull();
+    await waitFor(async () => {
+      await expect(canvas.queryByRole('button', { name: '파일명texttexttext 1' })).toBeNull();
+    });
 
     /*
      * 마우스로 누르면 캐럿이 다시 숨는다 — 어포던스가 hover·focus-visible에만 걸려 있기

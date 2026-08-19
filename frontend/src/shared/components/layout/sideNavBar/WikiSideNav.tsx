@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { usePathname, useRouter } from 'next/navigation';
 
 import IconAdd400 from '@/public/icons/icon/add_small_400.svg';
@@ -16,6 +17,8 @@ import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
 import { UserMenuContent } from '@/shared/components/layout/sideNavBar/modal/UserModal';
 import NavTree, { type NavTreeNode } from '@/shared/components/navigation/NavTree';
 import { Popover, PopoverAnchor, PopoverContent } from '@/shared/components/ui/popover';
+import { usePrefersReducedMotion } from '@/shared/hooks/usePrefersReducedMotion';
+import { disclosureExpand, disclosureExpandReduced, MotionState } from '@/shared/motion';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { useUserStore } from '@/shared/store/userStore';
 
@@ -74,6 +77,31 @@ const NODE_KIND_LABEL: Record<WikiTreeNodeKind, string> = {
 
 // 껍데기는 메뉴·이름 입력이 직접 그린다. overflow-visible이 없으면 그림자가 잘린다
 const POPOVER_SHELL_CLASS = 'overflow-visible border-0 bg-transparent p-0 shadow-none';
+
+/**
+ * 섹션 머리글 아래 본문. 접히는 동안 내용이 밖으로 새지 않게 overflow-hidden을 함께 준다.
+ * 머리글과의 간격을 안쪽 pt가 들어 접힌 뒤 빈 gap이 남지 않는다.
+ */
+function SnbSectionBody({ open, children }: { open: boolean; children: React.ReactNode }) {
+  const prefersReducedMotion = usePrefersReducedMotion();
+
+  return (
+    <AnimatePresence initial={false}>
+      {open && (
+        <motion.div
+          key="section-body"
+          variants={prefersReducedMotion ? disclosureExpandReduced : disclosureExpand}
+          initial={MotionState.Hidden}
+          animate={MotionState.Visible}
+          exit={MotionState.Exit}
+          className="overflow-hidden"
+        >
+          <div className="flex flex-col gap-1.5 pt-1.5">{children}</div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
 
 /** 트리에서 id로 노드를 찾는다. 케밥 메뉴가 즐겨찾기·소속 채널·목적지를 물을 때 쓴다 */
 export function findTreeNode(nodes: readonly WikiTreeNode[], id: string): WikiTreeNode | undefined {
@@ -281,7 +309,9 @@ export default function WikiSideNav({
             <SnbSpaceSwitcher variant="closed" Icon={SPACE_WIKI_ICON} label="LLM Wiki" selected />
           </>
         }
-        footer={<SnbRailFooter userName={user?.name ?? '이름없음'} onSettingsClick={goSettings} profileMenu={profileMenu} />}
+        footer={
+          <SnbRailFooter userName={user?.name ?? '이름없음'} onSettingsClick={goSettings} profileMenu={profileMenu} />
+        }
       >
         <SnbRailItem Icon={IconAdd400} label="새 채팅" onClick={go('/')} />
         <SnbRailItem Icon={IconUpdate} label="요청됨" selected={isReview} onClick={go('/llm-wiki/review')} />
@@ -307,12 +337,7 @@ export default function WikiSideNav({
         <>
           <div className="flex flex-col">
             <SnbNavRow Icon={IconAdd400} label="새 채팅" iconOnDisc onClick={go('/')} />
-            <SnbNavRow
-              Icon={IconUpdate}
-              label="요청됨"
-              selected={isReview}
-              onClick={go('/llm-wiki/review')}
-            />
+            <SnbNavRow Icon={IconUpdate} label="요청됨" selected={isReview} onClick={go('/llm-wiki/review')} />
           </div>
           <SnbTeamspaceCard name="Acme의 지식 허브" Icon={TEAMSPACE_ICON} />
           <div className="flex flex-col">
@@ -331,14 +356,15 @@ export default function WikiSideNav({
         />
       }
     >
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col">
         <SnbSectionHeader
           label="즐겨찾기"
           expanded={favoritesOpen}
           onToggleCollapse={() => setFavoritesOpen((open) => !open)}
         />
-        {favoritesOpen &&
-          favorites.map((item) => (
+        {/* 행이 하나도 없으면 본문 자체를 열지 않는다 — 빈 상자만큼 머리글이 밀린다 */}
+        <SnbSectionBody open={favoritesOpen && favorites.length > 0}>
+          {favorites.map((item) => (
             <SnbNavRow
               key={item.id}
               Icon={IconFile}
@@ -348,8 +374,9 @@ export default function WikiSideNav({
               onClick={item.href === undefined ? undefined : go(item.href)}
             />
           ))}
+        </SnbSectionBody>
       </div>
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col">
         <SnbSectionHeader
           label="위키"
           expanded={wikiOpen}
@@ -366,7 +393,7 @@ export default function WikiSideNav({
             ) : undefined
           }
         />
-        {wikiOpen && (
+        <SnbSectionBody open={wikiOpen}>
           <NavTree
             nodes={treeNodes}
             activeId={activeTreeId}
@@ -379,7 +406,7 @@ export default function WikiSideNav({
             onNodeMore={(nodeId, anchor) => setMenu({ kind: 'row-more', nodeId, anchor })}
             onNodeAdd={(nodeId, anchor) => setMenu({ kind: 'row-add', nodeId, anchor })}
           />
-        )}
+        </SnbSectionBody>
       </div>
 
       {/* 앵커가 트리·머리글 안의 버튼이라 virtualRef로 붙인다 — 팝오버 껍데기는 메뉴가 직접 그린다 */}

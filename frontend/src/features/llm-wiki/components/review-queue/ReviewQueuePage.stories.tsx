@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
 import { BASE_WIKI_BLOCKS, PROPOSED_BLOCK_CHANGES, PROPOSED_WIKI_BLOCKS } from '../../fixtures/llmWikiDiffFixtures';
@@ -26,12 +26,16 @@ const meta = {
   render: function ReviewQueueStory(args) {
     const [selectedId, setSelectedId] = useState(args.selectedId);
     const [rejectDialogOpen, setRejectDialogOpen] = useState(args.rejectDialogOpen);
+    // 라우트는 고른 안건의 상세를 다시 받아온다 — 스토리는 픽스처 행에서 같은 값을 꺼낸다
+    const selectedRow = args.items.find((item) => item.id === selectedId);
 
     return (
       <div className="h-225">
         <ReviewQueuePage
           {...args}
           selectedId={selectedId}
+          title={selectedRow?.title ?? args.title}
+          waitingLabel={selectedRow?.waitingLabel ?? args.waitingLabel}
           onSelectItem={(id) => {
             args.onSelectItem(id);
             setSelectedId(id);
@@ -95,6 +99,7 @@ const meta = {
       viewport: { width: 1400, height: 900 },
       states: [
         'default',
+        'detail-swap',
         'undecided-blocks',
         'no-review-permission',
         'no-reject-path',
@@ -119,6 +124,11 @@ const meta = {
       layoutNotes: [
         '좌 300 · 우 350 고정, 중앙이 남는 폭을 흡수한다. 높이는 셸이 준다 — 스토리가 900 슬롯을 흉내낸다.',
         '헤더는 좌측 목록을 뺀 나머지 폭을 전부 덮는다 — 중앙과 우측 패널이 그 아래에 나란히 선다.',
+      ],
+      interactionNotes: [
+        '안건을 바꾸면 중앙 상세만 stepReplace로 교체된다(AnimatePresence mode="wait"). 스크롤 상자와 좌·우 패널은 제자리다.',
+        '방향은 목록 순서에서 읽는다 — 아래 안건은 아래에서 들어오고 위 안건은 위에서 들어온다.',
+        'reduced motion에서는 stepReplaceReduced로 갈아타 이동 없이 짧은 fade만 남는다 — 변형 정의 검증은 shared/motion/presets.test.ts에 있다.',
       ],
     }),
   },
@@ -170,6 +180,34 @@ export const Default: Story = {
     // 다른 행을 고르면 선택이 옮겨간다
     await userEvent.click(canvas.getByText('환불 문서 병합 제안'));
     await expect(args.onSelectItem).toHaveBeenCalledWith('proposal-merge-refund');
+  },
+};
+
+/**
+ * 헤더 ↓/↑ 로 다음·이전 안건을 오갈 때 중앙 상세가 통째로 교체된다.
+ * 교체 중 두 상세가 겹쳐 서지 않는지를 본다 — 겹치면 스크롤 상자 높이가 두 배로 튄다.
+ */
+export const DetailSwap: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const header = canvas.getByRole('navigation', { name: '현재 위치' }).closest('header')!;
+    const [first, second] = REVIEW_QUEUE_ITEM_FIXTURES;
+
+    const detailTitle = (name: string) => canvas.queryByRole('heading', { level: 2, name });
+    await expect(detailTitle(first.title)).toBeInTheDocument();
+
+    await userEvent.click(within(header).getByRole('button', { name: '다음 변경사항' }));
+    await waitFor(async () => {
+      await expect(detailTitle(second.title)).toBeInTheDocument();
+    });
+    await expect(detailTitle(first.title)).toBeNull();
+
+    // 위로 되돌리면 앞 안건이 다시 선다 — 방향만 뒤집히고 안무는 같다
+    await userEvent.click(within(header).getByRole('button', { name: '이전 변경사항' }));
+    await waitFor(async () => {
+      await expect(detailTitle(first.title)).toBeInTheDocument();
+    });
+    await expect(detailTitle(second.title)).toBeNull();
   },
 };
 

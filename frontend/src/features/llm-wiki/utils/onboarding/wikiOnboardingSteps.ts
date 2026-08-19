@@ -17,3 +17,6 @@ export type WikiOnboardingSteps = {
 };
 
 export const WIKI_ONBOARDING_FUNNEL_ID = 'wiki-onboarding';
+
+/** 스텝 진행 순서. 전환 방향(앞으로/뒤로)을 읽는 데만 쓴다 */
+export const WIKI_ONBOARDING_STEP_ORDER: readonly (keyof WikiOnboardingSteps)[] = ['purpose', 'source', 'complete'];

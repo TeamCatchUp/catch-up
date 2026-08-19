@@ -1,6 +1,7 @@
 'use client';
 
 import { type ComponentType, type SVGProps, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 
 import IconAdd from '@/public/icons/icon/add_small_400.svg';
 import IconArrowRightFilled from '@/public/icons/icon/arrow_right_filled.svg';
@@ -8,6 +9,8 @@ import IconArrowRightFilled from '@/public/icons/icon/arrow_right_filled.svg';
 import IconArrowRight2 from '@/public/icons/icon/arrow_right2.svg';
 import IconMore from '@/public/icons/icon/kebab_horizontal_400.svg';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
+import { usePrefersReducedMotion } from '@/shared/hooks/usePrefersReducedMotion';
+import { disclosureExpand, disclosureExpandReduced, MotionState } from '@/shared/motion';
 import { cn } from '@/shared/utils/cn';
 
 export interface NavTreeNode {
@@ -106,6 +109,7 @@ export default function NavTree({
 }: NavTreeProps) {
   const isStatic = onNodeClick === undefined;
   const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(() => new Set(defaultExpandedIds));
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   const toggle = (id: string) => {
     const expanded = !expandedIds.has(id);
@@ -273,10 +277,36 @@ export default function NavTree({
     // 표시형은 접을 수 없다 — 경로 조각을 보여주는 것이 전부라 접을 이유가 없다
     const expanded = isStatic || expandedIds.has(node.id);
 
+    if (isStatic) {
+      return (
+        <li key={node.id} className="flex flex-col gap-2">
+          {renderRow(node, depth, hasChildren, expanded)}
+          {hasChildren ? renderList(node.children ?? [], depth + 1) : null}
+        </li>
+      );
+    }
+
     return (
-      <li key={node.id} className={cn('flex flex-col', isStatic ? 'gap-2' : 'gap-0.5')}>
+      <li key={node.id} className="flex flex-col">
         {renderRow(node, depth, hasChildren, expanded)}
-        {hasChildren && expanded ? renderList(node.children ?? [], depth + 1) : null}
+        {/*
+         * overflow-hidden은 높이가 줄어드는 동안 하위 행이 밖으로 새는 것을 막는다.
+         * 행 간격은 안쪽 pt가 들어 접힌 뒤 빈 gap이 남지 않는다.
+         */}
+        <AnimatePresence initial={false}>
+          {hasChildren && expanded && (
+            <motion.div
+              key="children"
+              variants={prefersReducedMotion ? disclosureExpandReduced : disclosureExpand}
+              initial={MotionState.Hidden}
+              animate={MotionState.Visible}
+              exit={MotionState.Exit}
+              className="overflow-hidden"
+            >
+              <div className="pt-0.5">{renderList(node.children ?? [], depth + 1)}</div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </li>
     );
   };

@@ -1,5 +1,5 @@
 import type { ComponentProps, ReactElement } from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -20,8 +20,7 @@ const mockSidebarState = {
 
 vi.mock('@/shared/store/sidebarStore', () => ({
   useSidebarStore: Object.assign(
-    (selector?: (s: typeof mockSidebarState) => unknown) =>
-      selector ? selector(mockSidebarState) : mockSidebarState,
+    (selector?: (s: typeof mockSidebarState) => unknown) => (selector ? selector(mockSidebarState) : mockSidebarState),
     { getState: () => mockSidebarState },
   ),
 }));
@@ -234,6 +233,7 @@ describe('WikiSideNav 펼침', () => {
     expect(screen.queryByTestId('snb-rename-popover')).toBeNull();
   });
 
+  // 접기는 높이 애니메이션이 끝난 뒤에 언마운트된다 — 클릭 직후에는 아직 트리에 있다
   it('섹션 머리글로 즐겨찾기·위키를 접을 수 있다', async () => {
     const user = userEvent.setup();
     renderWikiNav();
@@ -246,13 +246,14 @@ describe('WikiSideNav 펼침', () => {
 
     await user.click(favorites);
     expect(screen.getByRole('button', { name: '즐겨찾기' })).toHaveAttribute('aria-expanded', 'false');
-    expect(favoriteRows()).toHaveLength(0);
+    await waitFor(() => expect(favoriteRows()).toHaveLength(0));
 
     // 트리는 자기 머리글만 따른다 — 즐겨찾기를 접어도 남는다
-    const treeRows = () => screen.queryAllByRole('button', { name: /^채널명 text text text text text text text text$/ });
+    const treeRows = () =>
+      screen.queryAllByRole('button', { name: /^채널명 text text text text text text text text$/ });
     expect(treeRows()).toHaveLength(3);
     await user.click(screen.getByRole('button', { name: '위키' }));
-    expect(treeRows()).toHaveLength(0);
+    await waitFor(() => expect(treeRows()).toHaveLength(0));
   });
 
   it('메뉴가 열린 동안 그 행의 액션이 유지된다', async () => {

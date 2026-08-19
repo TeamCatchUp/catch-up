@@ -1,5 +1,8 @@
 'use client';
 
+import { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+
 import IconArrowDown from '@/public/icons/icon/arrow_down.svg';
 import IconArrowUp from '@/public/icons/icon/arrow_up.svg';
 import IconCalendarClock from '@/public/icons/icon/calendar_clock.svg';
@@ -9,6 +12,8 @@ import IconPersonFilled from '@/public/icons/icon/person_filled.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
 import IconWikiChannelFilled from '@/public/icons/icon/wiki_channel_filled.svg';
 import { Button } from '@/shared/components/ui/button';
+import { usePrefersReducedMotion } from '@/shared/hooks/usePrefersReducedMotion';
+import { MotionState, stepReplace, stepReplaceReduced } from '@/shared/motion';
 
 import type { ReviewQueueRowData } from '../../api/knowledgeReviewMappers';
 import type { BlockDiffEntry } from '../../types/llmWikiDiff';
@@ -117,6 +122,13 @@ export default function ReviewQueuePage({
   // 목록이 비면 그릴 상세가 없다 — 좌측 머리글·필터만 남기고 안내로 대체한다
   const isEmpty = items.length === 0;
 
+  const prefersReducedMotion = usePrefersReducedMotion();
+  // 상세가 넘어가는 방향. 목록에서 아래 안건을 고르면 아래에서, 위면 위에서 들어온다
+  const [swap, setSwap] = useState({ id: selectedId, index: selectedIndex, direction: 1 });
+  if (swap.id !== selectedId) {
+    setSwap({ id: selectedId, index: selectedIndex, direction: selectedIndex < swap.index ? -1 : 1 });
+  }
+
   const moveSelection = (offset: number) => {
     const next = items[selectedIndex + offset];
     if (next) onSelectItem(next.id);
@@ -224,32 +236,43 @@ export default function ReviewQueuePage({
           <div className="flex min-h-0 flex-1">
             {/* 중앙 — 제안 상세 */}
             <div className="flex min-w-0 flex-1 flex-col">
+              {/* 스크롤 상자는 그대로 두고 안쪽만 교체한다 — 상자가 움직이면 스크롤바가 함께 튄다 */}
               <div className="min-h-0 flex-1 overflow-y-auto">
-                <div className="flex flex-col gap-9 px-9 py-9">
-                  <div className="flex flex-col gap-3">
-                    <h2 className="text-heading-xlarge text-text-normal-strong">{title}</h2>
-                    {/* 작성자 줄은 없다 — LLM 제안이라 큐 응답에 작성자가 실리지 않는다 */}
-                    <span className="text-body-xsmall text-text-normal-alternative">{waitingLabel}</span>
-                  </div>
+                <AnimatePresence mode="wait" custom={swap.direction} initial={false}>
+                  <motion.div
+                    key={selectedId ?? 'none'}
+                    custom={swap.direction}
+                    variants={prefersReducedMotion ? stepReplaceReduced : stepReplace}
+                    initial={MotionState.Hidden}
+                    animate={MotionState.Visible}
+                    exit={MotionState.Exit}
+                    className="flex flex-col gap-9 px-9 py-9"
+                  >
+                    <div className="flex flex-col gap-3">
+                      <h2 className="text-heading-xlarge text-text-normal-strong">{title}</h2>
+                      {/* 작성자 줄은 없다 — LLM 제안이라 큐 응답에 작성자가 실리지 않는다 */}
+                      <span className="text-body-xsmall text-text-normal-alternative">{waitingLabel}</span>
+                    </div>
 
-                  <ChangeSummaryCard changeCount={entries.length} body={summary} />
+                    <ChangeSummaryCard changeCount={entries.length} body={summary} />
 
-                  <BlockDiffSection
-                    entries={entries}
-                    canReview={canReview}
-                    canReject={canReject}
-                    onApprove={(id) => {
-                      const entry = entries.find((item) => item.id === id);
-                      if (entry) onApproveBlock(entry);
-                    }}
-                    onReject={(id) => {
-                      const entry = entries.find((item) => item.id === id);
-                      if (entry) onRejectBlock?.(entry);
-                    }}
-                    onApproveAll={onApproveAll}
-                    onRejectAll={() => onRejectDialogOpenChange(true)}
-                  />
-                </div>
+                    <BlockDiffSection
+                      entries={entries}
+                      canReview={canReview}
+                      canReject={canReject}
+                      onApprove={(id) => {
+                        const entry = entries.find((item) => item.id === id);
+                        if (entry) onApproveBlock(entry);
+                      }}
+                      onReject={(id) => {
+                        const entry = entries.find((item) => item.id === id);
+                        if (entry) onRejectBlock?.(entry);
+                      }}
+                      onApproveAll={onApproveAll}
+                      onRejectAll={() => onRejectDialogOpenChange(true)}
+                    />
+                  </motion.div>
+                </AnimatePresence>
               </div>
 
               <ReviewPublishBar canReview={canReview} disabled={publishDisabled} onPublish={onPublish} />
