@@ -119,8 +119,8 @@ export const HomeExpanded: Story = {
     await expect(canvas.getByText('프로젝트')).toBeInTheDocument();
     // 트리는 slot으로 들어온다
     await expect(canvas.getByRole('button', { name: '파일명texttexttexttext' })).toBeInTheDocument();
-    // 요청됨 배지는 서버 값이다
-    await expect(canvas.getByTestId('snb-nav-row-count')).toHaveTextContent('1');
+    // 건수 배지는 대응 집계가 없어 걷어냈다 — 되살아나면 근거 없는 숫자가 다시 보인다
+    await expect(canvas.queryByTestId('snb-nav-row-count')).toBeNull();
 
     await step('셸 골격 치수를 값으로 고정한다', async () => {
       const nav = canvasElement.querySelector('nav')!;

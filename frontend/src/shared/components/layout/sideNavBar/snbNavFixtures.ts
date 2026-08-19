@@ -33,15 +33,12 @@ export const SPACE_HOME_ICON = IconHomeFilled;
 export const SPACE_WIKI_ICON = IconStacksFilled;
 export const TEAMSPACE_ICON = IconTeamspace;
 
-/** 요청됨 배지 건수. 집계 API 계약이 없어 시안 값을 그대로 쓴다 */
-export const REQUESTED_COUNT = 1;
-
 // 문서 탐색은 시안에 없지만 구 사이드바 진입점이라 홈 펼침에만 남긴다
 export const HOME_PRIMARY_ITEMS: readonly SnbNavFixtureItem[] = [
   { id: 'new-chat', label: '새 채팅', Icon: IconAdd },
   { id: 'search', label: '검색', Icon: IconSearch300 },
   { id: 'doc-search', label: '문서 탐색', Icon: IconDocumentSearch, beta: true },
-  { id: 'requested', label: '요청됨', Icon: IconUpdate, selected: true, count: REQUESTED_COUNT },
+  { id: 'requested', label: '요청됨', Icon: IconUpdate, selected: true },
 ];
 
 export const HOME_AGENT_ITEMS: readonly SnbNavFixtureItem[] = [
@@ -75,7 +72,7 @@ export const HOME_RAIL_ITEMS: readonly SnbNavFixtureItem[] = [
 export const WIKI_PRIMARY_ITEMS: readonly SnbNavFixtureItem[] = [
   { id: 'new-chat', label: '새 채팅', Icon: IconAdd },
   { id: 'search', label: '검색', Icon: IconSearch300 },
-  { id: 'requested', label: '요청됨', Icon: IconUpdate, count: REQUESTED_COUNT },
+  { id: 'requested', label: '요청됨', Icon: IconUpdate },
 ];
 
 export const WIKI_DROPDOWN_ITEMS: readonly SnbNavFixtureItem[] = [

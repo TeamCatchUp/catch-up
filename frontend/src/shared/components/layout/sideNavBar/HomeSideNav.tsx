@@ -19,7 +19,7 @@ import { useUserStore } from '@/shared/store/userStore';
 import SideNavRail from './SideNavRail';
 import SideNavShell from './SideNavShell';
 import SnbFooter from './SnbFooter';
-import { REQUESTED_COUNT, SPACE_HOME_ICON, SPACE_WIKI_ICON } from './snbNavFixtures';
+import { SPACE_HOME_ICON, SPACE_WIKI_ICON } from './snbNavFixtures';
 import SnbNavRow from './SnbNavRow';
 import SnbRailFooter from './SnbRailFooter';
 import SnbRailItem from './SnbRailItem';
@@ -105,7 +105,7 @@ export default function HomeSideNav() {
             selected={isDocsMode}
             onClick={go('/?mode=docs')}
           />
-          <SnbNavRow Icon={IconUpdate} label="요청됨" count={REQUESTED_COUNT} onClick={go('/llm-wiki/review')} />
+          <SnbNavRow Icon={IconUpdate} label="요청됨" onClick={go('/llm-wiki/review')} />
         </div>
       }
       footer={

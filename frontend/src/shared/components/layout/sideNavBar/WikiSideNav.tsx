@@ -26,7 +26,7 @@ import SideNavShell from './SideNavShell';
 import SnbBoxButton from './SnbBoxButton';
 import SnbDropdownMenu from './SnbDropdownMenu';
 import SnbFooter from './SnbFooter';
-import { REQUESTED_COUNT, SPACE_HOME_ICON, SPACE_WIKI_ICON, TEAMSPACE_ICON } from './snbNavFixtures';
+import { SPACE_HOME_ICON, SPACE_WIKI_ICON, TEAMSPACE_ICON } from './snbNavFixtures';
 import SnbNavRow from './SnbNavRow';
 import SnbRailFooter from './SnbRailFooter';
 import SnbRailItem from './SnbRailItem';
@@ -295,7 +295,6 @@ export default function WikiSideNav({
             <SnbNavRow
               Icon={IconUpdate}
               label="요청됨"
-              count={REQUESTED_COUNT}
               selected={isReview}
               onClick={go('/llm-wiki/review')}
             />
