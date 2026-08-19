@@ -29,6 +29,8 @@ interface WikiOnboardingPurposeStepProps {
   tone: ComponentProps<typeof ToneStyleField>;
   nextLabel: string;
   onNext?: () => void;
+  /** 필수 입력(이름·카테고리·목적·문서 종류·문체)이 덜 찼으면 잠긴다 */
+  nextDisabled?: boolean;
   /** 상단 바 뒤로가기 — 하단 "이전"(단계 후퇴)과 달리 온보딩을 벗어난다 */
   onExit?: () => void;
 }
@@ -49,6 +51,7 @@ export default function WikiOnboardingPurposeStep({
   tone,
   nextLabel,
   onNext,
+  nextDisabled,
   onExit,
 }: WikiOnboardingPurposeStepProps) {
   return (
@@ -92,7 +95,7 @@ export default function WikiOnboardingPurposeStep({
         </div>
       </div>
 
-      <OnboardingActionBar nextLabel={nextLabel} onNext={onNext} />
+      <OnboardingActionBar nextLabel={nextLabel} onNext={onNext} nextDisabled={nextDisabled} />
     </div>
   );
 }

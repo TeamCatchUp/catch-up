@@ -13,6 +13,7 @@ import {
   DOC_KIND_SAMPLE_CAPTION,
   DOC_KIND_SAMPLE_TITLE,
   INFO_CATEGORY_FIELD_LABEL,
+  INITIAL_SCHEDULE_SELECTION,
   ONBOARDING_BACK_LABEL,
   ONBOARDING_BASIC_INFO_TITLE,
   ONBOARDING_CHANNEL_ROWS,
@@ -62,12 +63,12 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
   const router = useRouter();
 
   const [name, setName] = useState('');
-  const [categoryId, setCategoryId] = useState<string | null>(WIKI_INFO_CATEGORIES[0].id);
-  const [purposeId, setPurposeId] = useState<string | null>(WIKI_PURPOSE_OPTIONS[0].id);
-  const [docKindId, setDocKindId] = useState<string | null>(WIKI_DOC_KIND_PRESETS[0].id);
-  const [toneId, setToneId] = useState<string | null>(WIKI_TONE_STYLE_OPTIONS[0].id);
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [purposeId, setPurposeId] = useState<string | null>(null);
+  const [docKindId, setDocKindId] = useState<string | null>(null);
+  const [toneId, setToneId] = useState<string | null>(null);
   // 선택지가 있는 일정 필드만 값이 바뀐다 — 나머지는 픽스처 기본값을 유지한다
-  const [scheduleSelection, setScheduleSelection] = useState<Record<string, string>>({});
+  const [scheduleSelection, setScheduleSelection] = useState<Record<string, string>>(INITIAL_SCHEDULE_SELECTION);
   // 표는 고른 채널의 목록이다 — 드롭다운에서 고르면 여기 쌓인다
   const [selectedCredentialIds, setSelectedCredentialIds] = useState<readonly number[]>([]);
 
@@ -75,10 +76,20 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
     .map((id) => ONBOARDING_CHANNEL_ROWS.find((row) => row.channel.credentialId === id))
     .filter((row) => row !== undefined);
 
+  // 서버 필수값 기준으로 잠근다 — 일정은 기본 선택이 있어 조건에 들지 않는다
+  const canLeavePurposeStep = Boolean(name.trim() && categoryId && purposeId && docKindId && toneId);
+  const canLeaveSourceStep = selectedCredentialIds.length > 0;
+
   const scheduleFields = SCHEDULE_FIELDS.map((field) => {
     const picked = field.options?.find((option) => option.id === scheduleSelection[field.id]);
     return picked ? { ...field, valueLabel: picked.label } : field;
   });
+
+  // 대시보드에서 replace로 밀려오면 돌아갈 자리가 없다 — 그때는 홈으로 내보낸다
+  const exitOnboarding = () => {
+    if (window.history.length > 1) router.back();
+    else router.push('/');
+  };
 
   const goToStep = (next: OnboardingStepNumber) =>
     router.push(next === 1 ? ONBOARDING_PATH : `${ONBOARDING_PATH}?step=${next}`);
@@ -102,7 +113,7 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
         onBack={() => goToStep(2)}
         finishLabel={ONBOARDING_FINISH_LABEL}
         onFinish={() => router.push('/llm-wiki')}
-        onExit={() => router.back()}
+        onExit={exitOnboarding}
       />
     );
   }
@@ -129,7 +140,8 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
         onBack={() => goToStep(1)}
         nextLabel={ONBOARDING_FINISH_LABEL}
         onNext={() => goToStep(3)}
-        onExit={() => router.back()}
+        nextDisabled={!canLeaveSourceStep}
+        onExit={exitOnboarding}
       />
     );
   }
@@ -174,7 +186,8 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
       }}
       nextLabel={ONBOARDING_NEXT_LABEL}
       onNext={() => goToStep(2)}
-      onExit={() => router.back()}
+      nextDisabled={!canLeavePurposeStep}
+      onExit={exitOnboarding}
     />
   );
 }

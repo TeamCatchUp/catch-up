@@ -167,3 +167,15 @@ export const ChannelListError: Story = {
     await expect(args.onRetryChannelList).toHaveBeenCalled();
   },
 };
+
+/** 소스 채널을 하나도 고르지 않은 상태. 수집 설정은 채널마다 저장되므로 진행할 수 없다. */
+export const NextLockedWithoutChannel: Story = {
+  args: { ...baseArgs, channelRows: [], nextDisabled: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByRole('button', { name: ONBOARDING_FINISH_LABEL })).toBeDisabled();
+    // 일정은 기본 선택이 있어 잠금 사유가 아니다 — 트리거에 값이 그대로 보인다.
+    await expect(canvas.getByText('매일')).toBeInTheDocument();
+  },
+};

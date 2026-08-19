@@ -135,18 +135,15 @@ export const CHANNEL_PICKER_PLACEHOLDER = '채널톡 내 채널을 선택해주�
 export const CHANNEL_TABLE_HEADERS = { name: '채널명', lastModified: '최근 수정일' } as const;
 
 // 행 카피는 시안 필러(TBD). 채널은 채널톡 자격증명 계약 모양을 지킨다 — 수정일만 [SPEC]
-export const ONBOARDING_CHANNEL_ROWS: readonly OnboardingChannelRow[] = Array.from(
-  { length: 5 },
-  (_, index) => ({
-    channel: {
-      credentialId: index + 1,
-      name: '채널명 text text text text text text text text text text text text text',
-      externalId: `ct-channel-${index + 1}`,
-      isConfigured: true,
-    },
-    lastModifiedLabel: '2025.01.23',
-  }),
-);
+export const ONBOARDING_CHANNEL_ROWS: readonly OnboardingChannelRow[] = Array.from({ length: 5 }, (_, index) => ({
+  channel: {
+    credentialId: index + 1,
+    name: '채널명 text text text text text text text text text text text text text',
+    externalId: `ct-channel-${index + 1}`,
+    isConfigured: true,
+  },
+  lastModifiedLabel: '2025.01.23',
+}));
 
 /**
  * 기본값과 주기 선택지는 기획 문서(Confluence 160301060 §3.2)가 원천이다 —
@@ -188,6 +185,17 @@ export const SCHEDULE_FIELDS: readonly ScheduleFieldData[] = [
     ],
   },
 ];
+
+/**
+ * 일정 필드의 기본 선택. 트리거에 그려진 값이 곧 초기값이라 라벨로 역산한다 —
+ * 보이는 값과 상태가 어긋나면 사용자가 고르지 않은 설정을 고른 줄 안다.
+ */
+export const INITIAL_SCHEDULE_SELECTION: Readonly<Record<string, string>> = Object.fromEntries(
+  SCHEDULE_FIELDS.flatMap((field) => {
+    const picked = field.options?.find((option) => option.label === field.valueLabel);
+    return picked ? [[field.id, picked.id] as const] : [];
+  }),
+);
 
 export const SCHEDULE_RESULT_TEXT = '매일 자정에 새 상담을 확인하고 문서 초안을 만들어요.';
 export const BACKFILL_NOTICE_TEXT = '과거 이력 가져오기는 곧 지원돼요.';

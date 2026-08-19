@@ -135,3 +135,13 @@ export const Default: Story = {
     await expect(onNext).toHaveBeenCalled();
   },
 };
+
+/** 필수 입력이 덜 찬 상태. 보낼 수 없는 요청을 만들지 않게 다음 버튼이 잠긴다. */
+export const NextLockedUntilRequiredFilled: Story = {
+  args: { ...baseArgs, nextDisabled: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByRole('button', { name: ONBOARDING_NEXT_LABEL })).toBeDisabled();
+  },
+};

@@ -109,6 +109,8 @@ interface WikiOnboardingSourceStepProps {
   onBack?: () => void;
   nextLabel: string;
   onNext?: () => void;
+  /** 소스 채널을 하나도 고르지 않으면 잠긴다 — 수집 설정은 채널마다 저장된다 */
+  nextDisabled?: boolean;
   /** 상단 바 뒤로가기 — 하단 "이전"(단계 후퇴)과 달리 온보딩을 벗어난다 */
   onExit?: () => void;
 }
@@ -136,6 +138,7 @@ export default function WikiOnboardingSourceStep({
   onBack,
   nextLabel,
   onNext,
+  nextDisabled,
   onExit,
 }: WikiOnboardingSourceStepProps) {
   // 이미 고른 채널은 다시 고를 수 없다 — 표에 같은 채널이 두 번 들어가지 않게 한다
@@ -224,7 +227,13 @@ export default function WikiOnboardingSourceStep({
         </div>
       </div>
 
-      <OnboardingActionBar backLabel={backLabel} onBack={onBack} nextLabel={nextLabel} onNext={onNext} />
+      <OnboardingActionBar
+        backLabel={backLabel}
+        onBack={onBack}
+        nextLabel={nextLabel}
+        onNext={onNext}
+        nextDisabled={nextDisabled}
+      />
     </div>
   );
 }
