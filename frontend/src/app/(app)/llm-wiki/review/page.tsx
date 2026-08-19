@@ -95,8 +95,9 @@ export default function Page() {
     avatarSrc: owner.profileImageUrl,
   }));
 
-  // 미판정 블록이 하나라도 남으면 서버가 발행을 거부한다 — 변경 없는 블록도 판정 대상이다
-  const publishDisabled = detail === null || detail.blocks.some((block) => block.verdict === null);
+  // 변경 없는 블록은 판정할 카드가 없어 미판정으로 잠그면 발행이 영영 막힌다.
+  // 열어 두고, 서버가 미판정을 거부하면 그 메시지를 토스트로 보인다(사용자 확정).
+  const publishDisabled = detail === null;
 
   const approveBlock = (entry: BlockDiffEntry) => {
     // 판정 경로가 없는 카드(발행판에서만 빠진 블록)는 요청 자체가 성립하지 않는다
