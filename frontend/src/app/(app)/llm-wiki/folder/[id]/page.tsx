@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { notFound, useParams, useRouter } from 'next/navigation';
 
 import { mapWikiArtifactRows, mapWikiChannelList } from '@/features/llm-wiki/api/wikiMappers';
@@ -21,12 +21,14 @@ export default function Page() {
   const [currentPage, setCurrentPage] = useState(1);
 
   const channelsQuery = useQuery(wikiQueries.channels());
-  const documentsQuery = useQuery(
-    wikiQueries.artifacts({ folder_id: id, limit: PAGE_SIZE, offset: (currentPage - 1) * PAGE_SIZE }),
-  );
+  // placeholderData로 이전 쪽을 유지한다 — 쪽을 넘기는 동안 빈 상태가 끼어들지 않는다
+  const documentsQuery = useQuery({
+    ...wikiQueries.artifacts({ folder_id: id, limit: PAGE_SIZE, offset: (currentPage - 1) * PAGE_SIZE }),
+    placeholderData: keepPreviousData,
+  });
 
   // 로딩·에러 시안이 없어 화면을 만들지 않는다
-  if (channelsQuery.isPending || !channelsQuery.data) return null;
+  if (channelsQuery.isPending || !channelsQuery.data || documentsQuery.isPending) return null;
 
   const channel = mapWikiChannelList(channelsQuery.data).find((item) =>
     item.folders.some((folder) => folder.id === id),

@@ -3,6 +3,7 @@ import IconFolderFilled from '@/public/icons/icon/folder_filled.svg';
 import type { DocumentBreadcrumb, WikiChannel, WikiFolder } from '../../types/llmWikiModel';
 import { DashboardDocumentTableHeader } from '../document/DashboardDocumentRow';
 import FolderDocumentRow, { type FolderDocumentRowItem } from '../document/FolderDocumentRow';
+import DocumentTableEmptyState from '../document/states/DocumentTableEmptyState';
 import WikiPageHeader from '../header/WikiPageHeader';
 import WikiSpaceTableFooter from './WikiSpaceTableFooter';
 import WikiSpaceTitleBlock from './WikiSpaceTitleBlock';
@@ -63,11 +64,15 @@ export default function WikiFolderPage({
         <div className="flex flex-col gap-8">
           <div className="flex flex-col">
             <DashboardDocumentTableHeader />
-            <div className="flex flex-col gap-1">
-              {documentRows.map((row) => (
-                <FolderDocumentRow key={row.id} kind="document" item={row} onClick={onDocumentClick} />
-              ))}
-            </div>
+            {documentRows.length === 0 ? (
+              <DocumentTableEmptyState />
+            ) : (
+              <div className="flex flex-col gap-1">
+                {documentRows.map((row) => (
+                  <FolderDocumentRow key={row.id} kind="document" item={row} onClick={onDocumentClick} />
+                ))}
+              </div>
+            )}
           </div>
 
           <WikiSpaceTableFooter

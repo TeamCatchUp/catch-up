@@ -23,7 +23,7 @@ const meta = {
         nodeId: '18234:49957',
       },
       viewport: { width: 1040, height: 460 },
-      states: ['default', 'with-header'],
+      states: ['default', 'with-header', 'custom-message'],
       reuseNotes: [
         '일러스트는 시안 프레임(18234:51036, 64x55)을 SVG 그대로 내려 커밋했다 — 임의 제작 아님.',
         '표 헤더는 DashboardDocumentTableHeader를 그대로 쓴다 — 빈 상태에서도 헤더가 남는 것이 시안이다.',
@@ -31,6 +31,7 @@ const meta = {
       dataNotes: [
         '2026-08-14 시안 도착으로 구현했다 — 그 전까지 대시보드 빈 상태는 MISSING이라 만들지 않던 항목이다(감사 금지 목록에서 해제).',
         '문구 "문서가 없어요"는 시안 실재값이다. 필터 결과 0건과 문서 0건을 문구로 가르지 않는다 — 시안이 하나뿐이다.',
+        'message prop은 행 대상이 문서가 아닌 표(채널 페이지의 폴더 목록)를 위해 열었다 — 기본값은 시안 문구 그대로다.',
         '로딩·에러 상태는 여전히 MISSING이라 만들지 않는다.',
       ],
       tokenNotes: [
@@ -119,5 +120,22 @@ export const NotShownWithRows: Story = {
 
     await expect(canvas.getByText('표본 문서')).toBeInTheDocument();
     await expect(canvas.queryByText('문서가 없어요')).toBeNull();
+  },
+};
+
+/** 문구만 갈아 끼운 모습 — 채널 페이지의 폴더 목록이 이 형태를 쓴다. */
+export const CustomMessage: Story = {
+  args: { message: '폴더가 없어요' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByText('폴더가 없어요')).toBeInTheDocument();
+    await expect(canvas.queryByText('문서가 없어요')).toBeNull();
+
+    // 문구만 바뀌고 일러스트·여백은 기본값과 같아야 한다.
+    const illustration = canvasElement.querySelector('svg') as SVGSVGElement;
+    await expect(illustration.getBoundingClientRect().width).toBe(64);
+    const root = canvas.getByText('폴더가 없어요').parentElement as HTMLElement;
+    await expect(getComputedStyle(root).paddingTop).toBe('180px');
   },
 };

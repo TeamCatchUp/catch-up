@@ -33,17 +33,19 @@ const meta = {
         nodeId: '17724:185191',
       },
       viewport: { width: 1200, height: 1440 },
-      states: ['default', 'folder-rows-without-meta', 'long-names-narrow-viewport'],
+      states: ['default', 'folder-rows-without-meta', 'long-names-narrow-viewport', 'empty'],
       reuseNotes: [
         'WikiPageHeader(detail·채널 1마디)·DashboardDocumentTableHeader·FolderDocumentRow·공용 Pagination을 조립만 한다 — 전부 무수정 소비.',
         '표 열은 대시보드와 같은 상수(DASHBOARD_DOCUMENT_META_GRID) 공유라 이 화면에서 재정의하지 않는다.',
+        '빈 표는 대시보드가 쓰는 DocumentTableEmptyState를 문구만 갈아 재사용한다 — 일러스트·여백은 승인 시안 그대로다.',
       ],
       dataNotes: [
         '채널 mock은 ChannelListItemResponse 정합(WikiChannelListItem 소비) — 폴더 행의 담당자·상태·최근 활동과 작성자는 목록 API 미동봉(협상 대상, 감사 8/13 부록).',
         '실 라우트는 그 네 칸을 빈 값으로 넘긴다 — FolderRowsWithoutMeta가 그때의 표 모습이다.',
         '상단 200px 커버는 바탕색만 시안값이고 콘텐츠는 미정(사진 가능성) — 안은 비워 둔다. 페이지 크기 옵션 목록은 미도시라 정적 표시가 기본이다.',
         '헤더 우측 kebab 버튼은 두 시안에 있으나 동작 정의가 없어 렌더하지 않는다(actions 슬롯 비움) — 디자이너 질문.',
-        '빈 채널·로딩·에러 스토리는 만들지 않는다 — 디자인 MISSING 유지.',
+        '빈 채널 문구 "폴더가 없어요"는 시안 없이 지었다 — 대시보드 승인 문구 "문서가 없어요"의 어형을 그대로 따랐다(디자이너 확인 대상).',
+        '로딩·에러 스토리는 만들지 않는다 — 디자인 MISSING 유지. 폴더는 채널 목록 응답에 전량 실려 와 빈 표는 폴더 0개일 때만 뜬다.',
       ],
       tokenNotes: [
         '채널명 #1E2124 = text-text-normal-strong + heading(sb)/xlarge. 작성자 라벨 #6D7882 = alternative, 이름 #464C53 = neutral, body(md)/xsmall.',
@@ -164,5 +166,31 @@ export const LongNamesInNarrowViewport: Story = {
     const firstRow = canvas.getByRole('button', { name: /승인·실패 처리/ });
     await expect(firstRow.getBoundingClientRect().width).toBeLessThanOrEqual(slot.getBoundingClientRect().width);
     await expect(canvas.getByText('2일 전').getBoundingClientRect().width).toBe(96);
+  },
+};
+
+/** 폴더가 하나도 없는 채널. 표 헤더와 푸터는 남고 행 자리만 안내로 바뀐다. */
+export const EmptyChannel: Story = {
+  args: {
+    channel: { ...WIKI_CHANNEL_FIXTURE, documentCount: 0, folders: [] },
+    folderRows: [],
+    totalPages: 1,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // 문구는 대시보드 빈 표의 어형을 따르되 대상이 폴더다.
+    await expect(canvas.getByText('폴더가 없어요')).toBeInTheDocument();
+    await expect(canvas.queryByText('문서가 없어요')).toBeNull();
+
+    // 제목 블록·표 헤더·푸터는 그대로다 — 빈 상태가 화면을 통째로 대체하지 않는다.
+    await expect(canvas.getByRole('heading', { level: 1, name: '결제' })).toBeInTheDocument();
+    await expect(canvas.getByText('최근 활동')).toBeInTheDocument();
+    await expect(canvas.getByText('씩 나열')).toBeInTheDocument();
+
+    // 폴더 행은 하나도 없다.
+    for (const row of CHANNEL_FOLDER_ROW_FIXTURES) {
+      await expect(canvas.queryByText(row.name)).toBeNull();
+    }
   },
 };
