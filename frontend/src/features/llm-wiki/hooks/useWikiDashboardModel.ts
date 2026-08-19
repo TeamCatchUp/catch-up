@@ -38,6 +38,13 @@ interface UseWikiDashboardModelReturn {
 export function useWikiDashboardModel(pageSize: number): UseWikiDashboardModelReturn {
   const [queryState, setQueryState] = useState<DashboardQueryState>(INITIAL_DASHBOARD_QUERY_STATE);
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
+  const [appliedPageSize, setAppliedPageSize] = useState(pageSize);
+
+  // 쪽 크기가 바뀌면 offset 기준이 달라진다 — 어긋난 쪽으로 요청이 나가기 전에 1쪽으로 되돌린다.
+  if (appliedPageSize !== pageSize) {
+    setAppliedPageSize(pageSize);
+    setQueryState((prev) => (prev.page === 1 ? prev : { ...prev, page: 1 }));
+  }
 
   // 검색어 디바운스 — 타건마다 목록을 다시 부르지 않는다
   useEffect(() => {

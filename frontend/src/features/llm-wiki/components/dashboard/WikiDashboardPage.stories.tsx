@@ -40,6 +40,7 @@ const meta = {
     queryState: INITIAL_DASHBOARD_QUERY_STATE,
     onQueryStateChange: fn(),
     onDocumentClick: fn(),
+    onPageSizeChange: fn(),
   },
   parameters: {
     ...catchupParameters({
@@ -55,9 +56,17 @@ const meta = {
         nodeId: '17595:148922',
       },
       viewport: { width: 1200, height: 1571 },
-      states: ['default', 'stat-card-filters-table', 'empty-table', 'empty-by-filter', 'paged', 'narrow-viewport'],
+      states: [
+        'default',
+        'stat-card-filters-table',
+        'empty-table',
+        'empty-by-filter',
+        'paged',
+        'page-size-dropdown',
+        'narrow-viewport',
+      ],
       reuseNotes: [
-        'WikiPageHeader(main)·ReviewStatCard·DashboardDocumentTableHeader·DashboardDocumentRow·WikiSpaceTableFooter를 조립만 한다 — 전부 무수정 소비. 푸터는 채널·폴더 세션 파일이라 소비만 하고 손대지 않았다.',
+        'WikiPageHeader(main)·ReviewStatCard·DashboardDocumentTableHeader·DashboardDocumentRow·WikiSpaceTableFooter를 조립만 한다. 푸터는 채널·폴더와 공유하는 부품이라 쪽 크기 선택을 optional prop으로만 열고 대시보드만 배선했다(채널·폴더는 종전과 같은 정적 표시).',
         '필터 칩은 shared Chip(variant=square)이다 — 미선택 토큰(흰 배경·Line/Normal/Neutral·Text/Normal/Normal)과 선택 토큰(Fill/Primary/Normal/Assistive·Line/Primary/Normal·Text/Primary/Normal)이 시안과 그대로 일치해 새 칩을 만들지 않았다. 시안 gap 8·padding 10만 className으로 덮는다.',
         'align·progress·calendar·person·search_300·cancel_small·dropdown_down·dashboard·kebab_horizontal 전부 기존 에셋이고 Figma 컴포넌트명과 1:1 — 신규 export 없음.',
         '검색창만 직접 조립했다 — 공용 Input에 아이콘 슬롯이 없고, 시안 배경(Fill/Normal/Strong)·테두리(Line/Normal/Assistive)가 Input의 두 size 어느 쪽과도 다르다.',
@@ -227,6 +236,35 @@ export const Paged: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '2' }));
     await expect(args.onQueryStateChange).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }));
+  },
+};
+
+/**
+ * 쪽 크기 드롭다운. 푸터의 표시가 그대로 트리거고 옵션은 10·20·30·40·50 5종이다.
+ * 고른 값은 소비처로 나가고 그것을 다시 받아 표시한다 — limit 파라미터는 소비처가 만든다.
+ */
+export const PageSizeDropdown: Story = {
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    await userEvent.click(canvas.getByRole('button', { name: '20' }));
+
+    const items = await body.findAllByRole('menuitem');
+    await expect(items.map((item) => item.textContent)).toEqual(['10', '20', '30', '40', '50']);
+
+    // 카드 폭은 트리거 폭 변수에 묶여 있다 — 풀리면 드롭다운 기본 최소폭(200)이 숫자 하나에 남는다.
+    const menuStyle = getComputedStyle(body.getByRole('menu'));
+    await expect(parseFloat(menuStyle.width)).toBeCloseTo(
+      parseFloat(menuStyle.getPropertyValue('--radix-dropdown-menu-trigger-width')),
+      1,
+    );
+
+    // 적용 중인 크기만 채움이 있다.
+    await expect(getComputedStyle(items[1]).backgroundColor).not.toBe(getComputedStyle(items[0]).backgroundColor);
+
+    await userEvent.click(items[3]);
+    await expect(args.onPageSizeChange).toHaveBeenCalledWith(40);
   },
 };
 
