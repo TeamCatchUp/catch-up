@@ -29,7 +29,14 @@ const meta = {
         nodeId: '18160:82761',
       },
       viewport: { width: 1040, height: 240 },
-      states: ['folder-row', 'document-row', 'table-alignment', 'long-name-narrow-slot'],
+      states: [
+        'folder-row',
+        'document-row',
+        'multiple-owners',
+        'unassigned-owner',
+        'table-alignment',
+        'long-name-narrow-slot',
+      ],
       reuseNotes: [
         '열 기하는 대시보드 표와 동일 실측이라 DASHBOARD_DOCUMENT_TABLE_SHELL·META_GRID 상수를 공유한다 — 헤더도 DashboardDocumentTableHeader 그대로.',
         '담당자 아바타·상태 배지·최근 활동 열은 DashboardDocumentRow와 같은 조합(공용 Avatar small 25 + line-assistive 링, DocumentStatusBadge md).',
@@ -39,6 +46,7 @@ const meta = {
         '2026-08-13 재실측(채널 17724:185191·폴더 17762:104787): 8/5의 VOC·고객사 아이콘 쌍 행이 담당자·상태·최근 활동 열로 교체됐다.',
         '행 상태는 시안에 도시된 검토 완료만 픽스처로 쓴다 — 다른 상태 행·폴더 배지 집계 의미는 미도시(디자이너 질문 유지).',
         '담당자 이름·이미지, 최근 활동은 목록 API 미동봉(협상 대상) — 감사 8/13 부록 참조.',
+        '담당자는 문서 행과 같은 owners[] 복수 계약이다. 2인 이상 표시는 시안 대기 — 아바타 그룹·+N 배지를 발명하지 않고 첫 담당자만 렌더한다.',
       ],
       tokenNotes: [
         '이름 #33363D = text-text-normal-normal + heading(sb)/small. 아이콘 셸 #F7F7F8 = bg-fill-normal-strong, 아이콘 #B1B8BE = text-icon-normal-alternative.',
@@ -86,6 +94,41 @@ export const DocumentRow: Story = {
 
     await expect(canvas.getByText('결제 승인 실패 시 재시도 정책')).toBeInTheDocument();
     await expect(leadingIconFill(canvas.getByRole('button'))).toBe('none');
+  },
+};
+
+/** 담당자 2인 이상. 표시 시안이 없어 첫 담당자만 렌더하고 초과 인원은 렌더하지 않는다. */
+export const MultipleOwners: Story = {
+  args: {
+    kind: 'folder',
+    item: createFolderDocumentRow({
+      owners: [
+        { userId: 1, displayName: '팀원F', profileImageUrl: null },
+        { userId: 5, displayName: '남궁현', profileImageUrl: null },
+      ],
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByText('팀원F')).toBeInTheDocument();
+    // 초과 인원이 새어 나오면 시안 없는 UI를 발명한 것이다.
+    await expect(canvas.queryByText('남궁현')).toBeNull();
+    await expect(canvasElement.querySelectorAll('.border-line-normal-assistive')).toHaveLength(1);
+  },
+};
+
+/** 담당자 미지정(빈 배열). 표기 시안이 없어 자리만 비운다 — 열 폭은 유지된다. */
+export const UnassignedOwner: Story = {
+  args: { kind: 'document', item: createFolderDocumentRow({ owners: [] }) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.queryByText('팀원F')).toBeNull();
+    // 아바타까지 함께 빠져야 자리 비움이다 — 이름만 빠지면 빈 아바타가 남는다.
+    await expect(canvasElement.querySelector('.border-line-normal-assistive')).toBeNull();
+
+    await expect(canvas.getByText('2일 전').getBoundingClientRect().width).toBe(96);
   },
 };
 

@@ -38,7 +38,8 @@ interface DashboardDocumentRowProps {
 }
 
 export default function DashboardDocumentRow({ document, onClick, onBreadcrumbClick }: DashboardDocumentRowProps) {
-  const { id, title, breadcrumbs, status, ownerName, ownerProfileImageUrl, lastActivityLabel } = document;
+  const { id, title, breadcrumbs, status, owners, lastActivityLabel } = document;
+  const [owner] = owners;
 
   // hover 채움은 시안에 없고 DS 중립 상호작용 토큰을 채택한 것이다(사용자 확정).
   return (
@@ -96,16 +97,16 @@ export default function DashboardDocumentRow({ document, onClick, onBreadcrumbCl
 
       <span className={DASHBOARD_DOCUMENT_META_GRID}>
         {/* 담당자 열 — 이름이 바로 옆이라 아바타 alt는 비운다(중복 낭독 방지).
-            미지정(null)은 표기 시안이 없어 자리만 비운다 */}
+            미지정(빈 배열)과 2인 이상 표기는 시안이 없어 첫 담당자만 렌더한다 */}
         <span className="flex min-w-0 items-center gap-3">
-          {ownerName !== null && (
+          {owner && (
             <>
               <Avatar
                 size="small"
-                src={ownerProfileImageUrl}
+                src={owner.profileImageUrl}
                 className="border-line-normal-assistive shrink-0 rounded-xl"
               />
-              <span className="text-body-small text-text-normal-normal truncate">{ownerName}</span>
+              <span className="text-body-small text-text-normal-normal truncate">{owner.displayName}</span>
             </>
           )}
         </span>

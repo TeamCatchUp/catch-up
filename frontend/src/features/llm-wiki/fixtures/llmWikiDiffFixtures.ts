@@ -18,6 +18,8 @@ type BlockSeed = Partial<WikiBlock> & Pick<WikiBlock, 'blockIndex' | 'heading' |
 function block(seed: BlockSeed): WikiBlock {
   return {
     kind: 'claim_section',
+    // narrative 기본값 null = 산문 없는 옛 데이터 표본. 있는 표본은 호출부가 명시로 준다
+    narrative: null,
     proposalIds: ['prop-payment-retry'],
     ontologyVersion: 'v1',
     blockContentHash: fakeContentHash(seed.body),
@@ -33,6 +35,7 @@ export const BASE_WIKI_BLOCKS: readonly WikiBlock[] = [
     blockIndex: 0,
     heading: '재시도 정책',
     body: '결제 승인 실패 시 1회 재시도한다.\n재시도 간격은 30초다.',
+    narrative: '결제 승인이 실패하면 자동으로 한 번 더 시도합니다.\n재시도 간격은 30초입니다.',
     claimIds: ['c-retry-1'],
   }),
   block({
@@ -48,6 +51,7 @@ export const PROPOSED_WIKI_BLOCKS: readonly WikiBlock[] = [
     blockIndex: 0,
     heading: '재시도 정책',
     body: '결제 승인 실패 시 3회까지 재시도한다.\n재시도 간격은 30초다.',
+    narrative: '결제 승인이 실패하면 자동으로 세 번까지 시도합니다.\n재시도 간격은 30초입니다.',
     claimIds: ['c-retry-1'],
     sources: [
       {

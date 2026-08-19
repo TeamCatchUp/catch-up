@@ -39,7 +39,6 @@ import IconPerson from '@/public/icons/icon/person.svg';
 import IconPersonFilled from '@/public/icons/icon/person_filled.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
 import IconWikiChannelFilled from '@/public/icons/icon/wiki_channel_filled.svg';
-import { Avatar } from '@/shared/components/ui/avatar';
 import { Button } from '@/shared/components/ui/button';
 
 /** 검토 대상 문서 mock — 미리보기 라우팅과 breadcrumb·문서 위치의 원천이다 */
@@ -239,12 +238,8 @@ export default function Page() {
           <div className="flex flex-col gap-9 px-9 py-9">
             <div className="flex flex-col gap-3">
               <h2 className="text-heading-xlarge text-text-normal-strong">{selected.title}</h2>
-              <div className="text-body-xsmall flex items-center gap-3">
-                <Avatar size="small" src={selected.authorProfileImageUrl} />
-                <span className="text-text-normal-alternative">작성자</span>
-                <span className="text-text-normal-neutral">{selected.authorName}</span>
-                <span className="text-text-normal-alternative">{selected.waitingLabel}</span>
-              </div>
+              {/* 작성자 줄은 없다 — LLM 제안이라 큐 응답에 작성자가 실리지 않는다 */}
+              <span className="text-body-xsmall text-text-normal-alternative">{selected.waitingLabel}</span>
             </div>
 
             <ChangeSummaryCard
@@ -256,13 +251,14 @@ export default function Page() {
             <BlockDiffSection
               entries={displayedEntries}
               onPreview={handlePreview}
+              canReview={selected.canReview}
               onApprove={(id) => submitBlockVerdict(id, 'approved')}
               onReject={(id) => submitBlockVerdict(id, 'rejected')}
             />
           </div>
         </div>
 
-        <ReviewPublishBar onPublish={handlePublish} />
+        <ReviewPublishBar canReview={selected.canReview} onPublish={handlePublish} />
       </div>
 
       {/* 우측 — 문서 위치·담당자 */}

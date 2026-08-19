@@ -10,6 +10,10 @@ import {
   PROPOSED_WIKI_BLOCKS,
 } from './llmWikiDiffFixtures';
 
+/** DiffLine 목록을 한 문자열로 편다 — 어느 축의 본문이 실렸는지 보려는 용도다 */
+const flatten = (lines: readonly { segments: readonly { text: string }[] }[] | null) =>
+  (lines ?? []).map((line) => line.segments.map((segment) => segment.text).join('')).join('\n');
+
 describe('llmWikiDiffFixtures', () => {
   it('기본 쌍은 modified → added → removed 세 카드를 낸다 (스토리 계약)', () => {
     const entries = computeBlockDiff(BASE_WIKI_BLOCKS, PROPOSED_WIKI_BLOCKS);
@@ -52,6 +56,31 @@ describe('llmWikiDiffFixtures', () => {
   it('저장된 반려 판정이 카드의 rejected로 이어진다', () => {
     const [entry] = computeBlockDiff(BASE_WIKI_BLOCKS, JUDGED_PROPOSED_BLOCKS);
     expect(entry.rejected).toBe(true);
+  });
+
+  it('산문 있는 블록과 없는 블록이 모두 표본에 있다 (폴백 경로 표본)', () => {
+    const all = [...BASE_WIKI_BLOCKS, ...PROPOSED_WIKI_BLOCKS];
+    expect(all.some((wikiBlock) => wikiBlock.narrative !== null)).toBe(true);
+    expect(all.some((wikiBlock) => wikiBlock.narrative === null)).toBe(true);
+  });
+
+  it('산문이 있으면 표시 본문은 산문이다 — body 값 표기는 화면에 실리지 않는다', () => {
+    const [modified] = computeBlockDiff(BASE_WIKI_BLOCKS, PROPOSED_WIKI_BLOCKS);
+    expect(flatten(modified.after)).toBe(PROPOSED_WIKI_BLOCKS[0].narrative);
+    expect(flatten(modified.after)).not.toContain('3회까지');
+  });
+
+  it('산문이 없으면 body로 폴백한다 (옛 데이터)', () => {
+    const entries = computeBlockDiff(BASE_WIKI_BLOCKS, PROPOSED_WIKI_BLOCKS);
+    const added = entries.find((entry) => entry.kind === 'added')!;
+    expect(flatten(added.after)).toBe(PROPOSED_WIKI_BLOCKS[1].body);
+  });
+
+  it('한쪽만 산문인 쌍은 양쪽 다 body로 비교한다 — 축이 섞이면 전부 바뀐 것처럼 보인다', () => {
+    // BASE는 산문이 있고 JUDGED는 없다
+    const [entry] = computeBlockDiff([BASE_WIKI_BLOCKS[0]], JUDGED_PROPOSED_BLOCKS);
+    expect(flatten(entry.before)).toBe(BASE_WIKI_BLOCKS[0].body);
+    expect(flatten(entry.after)).toBe(JUDGED_PROPOSED_BLOCKS[0].body);
   });
 
   it('같은 본문이면 같은 지문이다 (낙관적 잠금 mock의 전제)', () => {

@@ -1,11 +1,17 @@
 import type { FolderDocumentRowItem } from '../components/document/FolderDocumentRow';
-import type { WikiChannelListItem } from '../types/llmWikiModel';
+import type { DocumentOwner, WikiChannelListItem } from '../types/llmWikiModel';
+
+/** 담당자 표본 한 명. userId는 픽스처 안에서만 유일하면 되고 실제 계정과 무관하다 */
+const rowOwner = (userId: number, displayName: string): DocumentOwner => ({
+  userId,
+  displayName,
+  profileImageUrl: null,
+});
 
 const BASE_ROW: FolderDocumentRowItem = {
   id: 'folder-approval-failure',
   name: '승인·실패 처리',
-  ownerName: '팀원F',
-  ownerProfileImageUrl: null,
+  owners: [rowOwner(1, '팀원F')],
   status: 'reviewed',
   lastActivityLabel: '2일 전',
 };
@@ -21,19 +27,20 @@ export const CHANNEL_FOLDER_ROW_FIXTURES: readonly FolderDocumentRowItem[] = [
   createFolderDocumentRow({
     id: 'folder-refund',
     name: '환불',
-    ownerName: '직원10',
+    owners: [rowOwner(2, '직원10')],
     lastActivityLabel: '어제',
   }),
   createFolderDocumentRow({
     id: 'folder-settlement',
     name: '정산',
-    ownerName: '이진수',
+    // 담당자 2인 행 — 행은 첫 명만 렌더하지만 복수 계약이 픽스처에 실재해야 한다
+    owners: [rowOwner(3, '이진수'), rowOwner(5, '남궁현')],
     lastActivityLabel: '2024.12.12',
   }),
   createFolderDocumentRow({
     id: 'folder-pg-integration',
     name: 'PG 연동',
-    ownerName: '팀원F',
+    owners: [rowOwner(1, '팀원F')],
     lastActivityLabel: '5일 전',
   }),
 ];
@@ -61,13 +68,13 @@ export const FOLDER_DOCUMENT_ROW_FIXTURES: readonly FolderDocumentRowItem[] = [
   createFolderDocumentRow({
     id: 'doc-approval-timeout',
     name: '승인 타임아웃 기준과 재요청 안내',
-    ownerName: '직원10',
+    owners: [rowOwner(2, '직원10')],
     lastActivityLabel: '어제',
   }),
   createFolderDocumentRow({
     id: 'doc-failure-codes',
     name: 'PG사별 실패 코드 대응표',
-    ownerName: '이진수',
+    owners: [rowOwner(3, '이진수')],
     lastActivityLabel: '2024.12.12',
   }),
   // 문서 라우트 픽스처(llmWikiDocumentFixtures)와 id가 이어지는 행 — mock 앱에서 문서 화면까지 이동된다

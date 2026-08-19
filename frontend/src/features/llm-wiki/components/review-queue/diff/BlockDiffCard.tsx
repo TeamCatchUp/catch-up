@@ -15,6 +15,8 @@ import DiffText from './DiffText';
 export interface BlockDiffCardProps {
   entry: BlockDiffEntry;
   defaultCollapsed?: boolean;
+  /** [BE] can_review. false면 판정 버튼을 렌더하지 않는다 — 열람은 그대로다 */
+  canReview?: boolean;
   onApprove: (id: string) => void;
   /** 제안 기각 */
   onReject: (id: string) => void;
@@ -27,6 +29,7 @@ export interface BlockDiffCardProps {
 export default function BlockDiffCard({
   entry,
   defaultCollapsed = false,
+  canReview = true,
   onApprove,
   onReject,
 }: BlockDiffCardProps) {
@@ -56,15 +59,17 @@ export default function BlockDiffCard({
             반려됨
           </span>
         ) : (
-          <>
-            {/* outline은 테두리 1px이 더해져 solid와 높이가 어긋난다 — 양쪽에 같은 높이를 준다 */}
-            <Button variant="box-outline-gray" size="sm" className="h-7.5" onClick={() => onReject(id)}>
-              반려
-            </Button>
-            <Button variant="box-solid-primary" size="sm" className="h-7.5" onClick={() => onApprove(id)}>
-              승인
-            </Button>
-          </>
+          canReview && (
+            <>
+              {/* outline은 테두리 1px이 더해져 solid와 높이가 어긋난다 — 양쪽에 같은 높이를 준다 */}
+              <Button variant="box-outline-gray" size="sm" className="h-7.5" onClick={() => onReject(id)}>
+                반려
+              </Button>
+              <Button variant="box-solid-primary" size="sm" className="h-7.5" onClick={() => onApprove(id)}>
+                승인
+              </Button>
+            </>
+          )
         )}
       </header>
 

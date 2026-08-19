@@ -28,10 +28,10 @@ const meta = {
       reuseNotes: [
         '검토 큐 좌측 목록(17564:126942, 폭 300)의 행이다. 기본형은 17849:106767. 충돌(모순) 아이콘 행(17564:126946)은 MVP 제외 결정으로 렌더·스토리를 제거했다 — 재도입 시 error.svg(icon/error 389:1866)가 리포에 이미 있다.',
         'add_small.svg(mask0_46_1623 = icon/add_small 46:1623)는 리포에 이미 있는 에셋과 컴포넌트 id가 정확히 일치한다 — 신규 export 없음.',
-        '아바타는 공용 `shared/components/ui/avatar`의 size=small(25px)이다 — 폴백·isSafeUrl 가드가 컴포넌트 안에 있어 행에서 되풀이하지 않는다.',
+        '작성자 아바타·이름은 걷어냈다(공용 Avatar 소비 지점 소멸). 시안에는 있으나 GET /knowledge-review/queue 응답에 대응 필드가 없다 — LLM 제안이라 작성자 개념이 부재하고, 시안 정리는 design-request 몫.',
       ],
       dataNotes: [
-        '행에 신뢰도를 표시하지 않는다 — 감사 판정 MISSING(필터에만 존재). fixture의 confidence는 계약 보존용이라 이 컴포넌트는 props로 받지도 않는다. Default play가 미노출을 가드한다.',
+        '작성자·신뢰도는 계약에서 제거됐다 — 실 API 응답에 없다. Default play가 아바타·이름의 부재를 가드한다.',
         '충돌(모순) 아이콘 행은 MVP 제외 — hasConflictIcon 필드는 [BE] contains_conflict 대응이라 계약만 보존하고 렌더하지 않는다.',
         '유형 배지도 만들지 않는다 — 백엔드 3종↔명세 6유형 불일치로 체계 미정. 8/6 재확인에서도 행에는 유형 표기가 없었다. 대신 상세 패널 헤더에 "유형 / 상태 태그"(17845:105886) 자리표시 텍스트가 새로 생겼다 — 배지가 붙는다면 행이 아니라 상세다.',
         '빈 큐·로딩·에러·처리 피드백(pending/성공/실패)·stale 거부 스토리는 만들지 않는다(감사 §7 금지 목록).',
@@ -39,18 +39,16 @@ const meta = {
       ],
       tokenNotes: [
         '제목 #33363D = text-text-normal-normal, heading(sb)/small = text-heading-small.',
-        '작성자명도 #33363D(text-text-normal-normal), 대기 기간만 #B1B8BE = text-text-normal-assistive. 둘 다 body(md)/xsmall = text-body-xsmall.',
+        '대기 기간 #B1B8BE = text-text-normal-assistive, body(md)/xsmall = text-body-xsmall.',
         '행 하단 구분선 #EAEBEC = Line/Normal/Neutral = border-line-normal-neutral, 1px 하단만.',
         '선택 채움 #F7F7F8 = Fill/Normal/Strong = bg-fill-normal-strong. 비선택 행은 fills=[] — 투명이다.',
         'add_small 칩은 #F7F7F8 배경(bg-fill-normal-strong) + radius/rounded 1000(rounded-full) + 아이콘 #6D7882 = text-icon-normal-neutral.',
-        '아바타 radius/xl 12 = rounded-xl, 테두리 #F4F4F5 = Line/Normal/Assistive = border-line-normal-assistive. 공용 Avatar 기본값(radius 1000 + Fill/Normal/Strong #F7F7F8)과 다르다 — 디자인 시스템 원본 imagebox/profile(582:2674)이 아니라 이 목록의 인스턴스 13개가 전부 덮어쓴 값이라 className으로 되덮었다. 어느 쪽이 의도인지는 디자이너 확인 대상.',
       ],
       layoutNotes: [
         '행은 세로 스택(padding 12/16, gap 12)이고 폭은 Figma sizing=fill이라 px를 박지 않았다 — 목록 폭 300은 부모 것이다. FluidWidth 스토리가 400px 슬롯에서 400을 확인한다.',
-        '높이도 결과값이다(12 + 제목 23 + 12 + 메타 25 + 12 = 84). h-*를 두지 않는다.',
-        '폭 흡수는 레벨당 하나다: 행 전체는 제목 슬롯, 메타 행은 작성자명 슬롯. 대기 기간·아바타·아이콘은 shrink-0.',
-        '축소 순서는 제목 truncate → 작성자명 truncate이고 가로 스크롤은 없다. Figma 목록 렌더에서 제목이 한 줄 말줄임이다.',
-        '고정 치수는 아이콘 24 · add_small 22 · 아바타 25 세 개뿐이고 전부 컨트롤 크기다.',
+        '높이는 결과값이다 — h-*를 두지 않는다.',
+        '폭을 흡수하는 슬롯은 제목 하나다. 제목은 한 줄 말줄임이고 가로 스크롤은 없다.',
+        '고정 치수는 아이콘 24 · add_small 22 둘뿐이고 전부 컨트롤 크기다.',
       ],
       interactionNotes: [
         'hover 채움은 fill-normal-interaction-hover다 — Figma 행 노드에 hover 정의가 없어 사용자 결정으로 중립 interaction 토큰을 채택했다. 선택 행 위에서는 알파가 strong 채움 위에 합성된다.',
@@ -76,11 +74,11 @@ export const Default: Story = {
     const canvas = within(canvasElement);
 
     await expect(canvas.getByText('결제 승인 실패 시 재시도 정책 변경안')).toBeInTheDocument();
-    await expect(canvas.getByText('직원10')).toBeInTheDocument();
     await expect(canvas.getByText('15시간 전')).toBeInTheDocument();
 
-    // 신뢰도 숫자는 행에 노출하지 않는다.
-    await expect(canvas.queryByText(/0\.62|62%/)).toBeNull();
+    // 작성자는 계약에서 빠졌다 — 아바타 폴백 svg도 남으면 안 된다.
+    await expect(canvas.queryByText('직원10')).toBeNull();
+    await expect(canvasElement.querySelector('svg[viewBox="0 0 40 40"]')).toBeNull();
     // 유형도 마찬가지다. 체계가 미정이라 어떤 형태로도 행에 나오면 안 된다.
     await expect(canvas.queryByText(/publish|발행/)).toBeNull();
 
@@ -88,15 +86,6 @@ export const Default: Story = {
     // 비선택 행은 채움이 없다 — 발명하지 않는다.
     await expect(window.getComputedStyle(row).backgroundColor).toBe('rgba(0, 0, 0, 0)');
     await expect(row).not.toHaveAttribute('aria-current');
-
-    // 공용 Avatar 위에 덮은 radius·테두리가 tailwind-merge를 통과했는지 잰다.
-    // 덮기가 풀리면 Avatar 기본값으로 조용히 돌아간다.
-    const avatar = canvasElement.querySelector('svg[viewBox="0 0 40 40"]')?.parentElement;
-    await expect(avatar).not.toBeUndefined();
-    const avatarStyle = window.getComputedStyle(avatar as HTMLElement);
-    await expect(avatarStyle.borderTopLeftRadius).toBe('12px');
-    await expect(avatarStyle.borderTopColor).toBe('rgb(244, 244, 245)');
-    await expect(Math.round((avatar as HTMLElement).getBoundingClientRect().width)).toBe(25);
 
     await userEvent.click(row);
     await expect(args.onSelect).toHaveBeenCalledWith('proposal-payment-retry-v3');
@@ -147,7 +136,6 @@ export const FluidWidthAndTruncation: Story = {
   args: {
     item: createReviewQueueItem({
       title: '결제 승인 실패 시 재시도 정책 변경안 및 PG사별 예외 처리와 고객 안내 문구 표준화 제안 text text text',
-      authorName: '직원10 (플랫폼 프로덕트 매니지먼트 그룹 · 결제 도메인 오너)',
     }),
   },
   decorators: [
@@ -170,11 +158,8 @@ export const FluidWidthAndTruncation: Story = {
     await expect(title.scrollWidth).toBeGreaterThan(title.clientWidth);
     await expect(title.getClientRects()).toHaveLength(1);
 
-    // 대기 기간은 줄어들지 않는다 — 축소 순서상 작성자명이 먼저 잘려야 한다.
+    // 대기 기간은 짧아 잘리지 않는다 — 축소 부담은 제목이 진다.
     const waiting = canvas.getByText('15시간 전');
     await expect(waiting.scrollWidth).toBe(waiting.clientWidth);
-    await expect(canvas.getByText(args.item.authorName).scrollWidth).toBeGreaterThan(
-      canvas.getByText(args.item.authorName).clientWidth,
-    );
   },
 };

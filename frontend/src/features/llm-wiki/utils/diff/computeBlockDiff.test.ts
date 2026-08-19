@@ -8,6 +8,7 @@ const block = (overrides: Partial<WikiBlock>): WikiBlock => ({
   kind: 'claim_section',
   heading: '재시도 정책',
   body: '결제 승인 실패 시 1회 재시도한다.',
+  narrative: null,
   claimIds: ['c-retry-1'],
   proposalIds: ['prop-1'],
   ontologyVersion: 'v1',

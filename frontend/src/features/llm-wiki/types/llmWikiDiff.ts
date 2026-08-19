@@ -42,6 +42,8 @@ export interface WikiBlock {
   heading: string;
   /** 플레인 문자열 — 인라인 서식 없음 */
   body: string;
+  /** [BE] 사람용 산문. 이쪽이 표시 정본이고 body는 값 표기다 — 없으면(옛 데이터) body로 폴백한다 */
+  narrative: string | null;
   /** [BE] 페어링 키이자 블록 단위 Read Set */
   claimIds: readonly string[];
   proposalIds: readonly string[];

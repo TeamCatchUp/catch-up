@@ -36,7 +36,7 @@ const meta = {
         nodeId: '17849:106310',
       },
       viewport: { width: 700, height: 420 },
-      states: ['modified', 'added', 'removed', 'collapsed', 'rejected', 'long-text', 'no-reason'],
+      states: ['modified', 'added', 'removed', 'collapsed', 'rejected', 'long-text', 'no-reason', 'no-review-permission'],
       reuseNotes: [
         '버튼은 공용 Button(box-solid-primary/box-outline-gray/icon-only-gray)을 그대로 쓴다 — 시안의 Box Button small(30px)·Icon button small(28px) 대응. 아이콘 버튼 28px는 AgentCard 관례대로 size="sm" + size-7이다.',
         '헤더 배치: 셰브런 · 제목 · 반려 · 승인. 판정이 승인·반려 둘로 정리되면서 되돌리기(rotate)가 빠지고 삭제가 반려로 바뀌었다(8/7) — 백엔드 approve/reject와 1:1이다.',
@@ -51,6 +51,8 @@ const meta = {
         '카드 제목·"수정된 이유"의 실카피는 시안이 placeholder라 미정(감사 UNKNOWN 카피 미정). 빈 diff·로딩·에러 스토리는 만들지 않는다(MISSING).',
         '삭제 블록도 사유를 갖는다(2026-08-07 계약 결정) — 그래서 삭제는 proposed에서 "빠짐"이 아니라 removed:true tombstone으로 온다. 빠짐만으로 온 블록은 사유 없는 카드가 되고, 그 빈 푸터가 계약 위반의 신호다(NoReason 스토리가 그 모습).',
         '"수정된 이유"는 백엔드에 대응 컬럼이 없다 — 제안 테이블의 reason은 검토자용 rejection_reason뿐이다. 출처·단위(블록당 vs 제안서당)는 API 계약 협상 대상.',
+        '본문은 narrative(사람용 산문)가 정본이고, 없는 블록(옛 데이터)만 body로 폴백한다 — Modified가 산문 경로, Added가 폴백 경로를 밟는다.',
+        'canReview=false면 판정 버튼이 사라지고 열람만 남는다 — 값은 서버가 계산한 can_review이고 프론트는 재계산하지 않는다. 비활성+툴팁 안은 디자이너 미결이라 숨김으로 간다.',
       ],
       tokenNotes: [
         '패널 색은 8/7 실측 확정(17849:106867·17848:106179) — removed: bg-red-1(#FFFAFA)/좌측 바 2px red-40, added: bg-green-5(#E6FAF2)/좌측 바 2px green-60(#00985A). 패널 자체에는 padding도 radius도 없다.',
@@ -77,9 +79,13 @@ export const Modified: Story = {
     const canvas = within(canvasElement);
 
     await expect(canvas.getByText('재시도 정책')).toBeInTheDocument();
-    // 좌우 패널이 모두 있고, 바뀐 단어가 양쪽에서 강조된다
-    await expect(canvas.getByText('1회')).toBeInTheDocument();
-    await expect(canvas.getByText('3회까지')).toBeInTheDocument();
+    // 본문은 산문 축이다 — body의 값 표기(1회/3회까지)는 화면에 실리지 않는다
+    await expect(canvasElement.textContent).toContain('한 번 더');
+    await expect(canvasElement.textContent).toContain('세 번까지');
+    await expect(canvasElement.textContent).not.toContain('3회까지');
+    // 좌우 패널에서 바뀐 단어가 강조된다
+    await expect(canvasElement.querySelectorAll('[class*="bg-green-20"]').length).toBeGreaterThan(0);
+    await expect(canvasElement.querySelectorAll('[class*="bg-red-10"]').length).toBeGreaterThan(0);
     await expect(canvas.getByText(/수정된 이유/)).toBeInTheDocument();
 
     await userEvent.click(canvas.getByRole('button', { name: '승인' }));
@@ -100,6 +106,8 @@ export const Added: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('PG 점검 시간 예외')).toBeInTheDocument();
+    // 산문 없는 블록(옛 데이터)은 body로 폴백한다
+    await expect(canvasElement.textContent).toContain('PG사 정기 점검 시간에는 재시도를 수행하지 않는다.');
     // 단일 전폭 패널 — 빨강(before) 패널이 없어야 한다
     await expect(canvasElement.querySelectorAll('[class*="border-red"]')).toHaveLength(0);
   },
@@ -139,12 +147,12 @@ export const Collapsed: Story = {
     const canvas = within(canvasElement);
 
     // 접힌 상태 — 본문과 푸터가 없다
-    await expect(canvas.queryByText('1회')).toBeNull();
+    await expect(canvasElement.textContent).not.toContain('세 번까지');
     await expect(canvas.queryByText(/수정된 이유/)).toBeNull();
 
     // 셰브런으로 펼치면 본문이 돌아온다
     await userEvent.click(canvas.getByRole('button', { name: '펼치기' }));
-    await expect(canvas.getByText('1회')).toBeInTheDocument();
+    await expect(canvasElement.textContent).toContain('세 번까지');
   },
 };
 
@@ -156,6 +164,22 @@ export const LongText: Story = {
     // 긴 문단은 잘리지 않고 감긴다 — 가로 스크롤이 없어야 한다
     const card = canvasElement.querySelector('section')!;
     await expect(card.scrollWidth).toBeLessThanOrEqual(card.clientWidth);
+  },
+};
+
+/** 검토 권한 없음 — 판정 버튼이 사라지고 diff 열람만 남는다. */
+export const NoReviewPermission: Story = {
+  args: { entry: modifiedEntry, canReview: false },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // 결정 계열 버튼이 하나도 없다 — 남은 버튼은 접기 셰브런뿐이다
+    const names = canvas.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent);
+    await expect(names).toEqual(['접기']);
+
+    // 열람은 권한과 무관하다 — 본문과 근거가 그대로 보인다
+    await expect(canvasElement.textContent).toContain('세 번까지');
+    await expect(canvas.getByText(/수정된 이유/)).toBeInTheDocument();
   },
 };
 

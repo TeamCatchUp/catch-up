@@ -37,6 +37,16 @@ function plainLines(body: string): DiffLine[] {
 
 const sharesClaimId = (a: WikiBlock, b: WikiBlock) => a.claimIds.some((id) => b.claimIds.includes(id));
 
+/** 화면에 실리는 본문. 산문이 정본이고 없으면 값 표기로 폴백한다 */
+const displayBody = (block: WikiBlock) => block.narrative ?? block.body;
+
+/** 좌우 비교는 한 축에서만 한다 — 한쪽만 산문이면 축이 섞여 전부 바뀐 것처럼 보인다 */
+function comparedPair(base: WikiBlock, proposed: WikiBlock): [string, string] {
+  return base.narrative != null && proposed.narrative != null
+    ? [base.narrative, proposed.narrative]
+    : [base.body, proposed.body];
+}
+
 /** 판정 요청에 필요한 값들. 승인됨 배지는 시안이 없어 rejected만 내보낸다 */
 function verdictFields(proposed: WikiBlock) {
   return {
@@ -70,7 +80,7 @@ export function computeBlockDiff(
         id: `removed-${proposedIndex}`,
         kind: 'removed',
         title: deleted.heading,
-        before: plainLines(deleted.body),
+        before: plainLines(displayBody(deleted)),
         after: null,
         reason: proposed.reason ?? null,
         ...verdictFields(proposed),
@@ -84,7 +94,7 @@ export function computeBlockDiff(
         kind: 'added',
         title: proposed.heading,
         before: null,
-        after: plainLines(proposed.body),
+        after: plainLines(displayBody(proposed)),
         reason: proposed.reason ?? null,
         ...verdictFields(proposed),
       });
@@ -95,7 +105,8 @@ export function computeBlockDiff(
     const base = baseBlocks[baseIndex];
     if (base.body === proposed.body) return; // 변경 없음 — heading 변경 감지는 범위 밖
 
-    const parts = wordDiff.diff(base.body, proposed.body);
+    // 변경 판정은 값 표기(body) 축이고, 강조는 화면에 실린 본문 축이다
+    const parts = wordDiff.diff(...comparedPair(base, proposed));
     entries.push({
       id: `modified-${proposedIndex}`,
       kind: 'modified',
@@ -115,7 +126,7 @@ export function computeBlockDiff(
       id: `removed-orphan-${baseIndex}`,
       kind: 'removed',
       title: base.heading,
-      before: plainLines(base.body),
+      before: plainLines(displayBody(base)),
       after: null,
       reason: null,
       blockIndex: null,

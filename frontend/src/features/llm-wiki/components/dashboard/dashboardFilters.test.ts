@@ -49,18 +49,21 @@ describe('dashboardFilters', () => {
 
     const result = filterDocuments(DOCUMENT_ROW_FIXTURES, filter, CURRENT_USER);
     expect(result.length).toBeGreaterThan(0);
-    expect(result.every((row) => row.ownerName === CURRENT_USER)).toBe(true);
+    expect(result.every((row) => row.owners.some((owner) => owner.displayName === CURRENT_USER))).toBe(true);
   });
 
-  it('담당자 미지정은 ownerName이 null인 행만 남긴다 — 빈 문자열 담당자와 섞이지 않는다', () => {
+  it('담당자 미지정은 owners가 빈 배열인 행만 남긴다 — 빈 문자열 담당자와 섞이지 않는다', () => {
     const filter = filterOf('stat-unassigned');
     // 칩이 "담당자: 담당자 미지정"으로 겹쳐 적히지 않게 값 라벨은 축 이름을 뺀다.
     expect(filter.label).toBe('미지정');
-    const documents = [...DOCUMENT_ROW_FIXTURES, createDocumentRow({ id: 'doc-blank-owner', ownerName: '' })];
+    const documents = [
+      ...DOCUMENT_ROW_FIXTURES,
+      createDocumentRow({ id: 'doc-blank-owner', owners: [{ userId: 99, displayName: '', profileImageUrl: null }] }),
+    ];
 
     const result = filterDocuments(documents, filter, CURRENT_USER);
     expect(result.length).toBeGreaterThan(0);
-    expect(result.every((row) => row.ownerName === null)).toBe(true);
+    expect(result.every((row) => row.owners.length === 0)).toBe(true);
     expect(result.some((row) => row.id === 'doc-blank-owner')).toBe(false);
   });
 
@@ -80,9 +83,13 @@ describe('dashboardFilters', () => {
 
     const result = filterDocuments(DOCUMENT_ROW_FIXTURES, filter, CURRENT_USER);
     expect(result.length).toBeGreaterThan(0);
-    expect(result.every((row) => row.ownerName === '직원10' || row.ownerName === '이진수')).toBe(true);
+    expect(
+      result.every((row) =>
+        row.owners.some((owner) => owner.displayName === '직원10' || owner.displayName === '이진수'),
+      ),
+    ).toBe(true);
     // 미지정 행이 섞이면 "고른 사람"의 뜻이 무너진다
-    expect(result.some((row) => row.ownerName === null)).toBe(false);
+    expect(result.some((row) => row.owners.length === 0)).toBe(false);
   });
 
   it('필터가 없으면 원본을 그대로 돌려준다', () => {

@@ -20,11 +20,11 @@ describe('llmWikiFixtures 정합성', () => {
     }
   });
 
-  it('confidence는 0~1 범위다 (knowledge_*_candidates.confidence)', () => {
-    for (const item of REVIEW_QUEUE_ITEM_FIXTURES) {
-      expect(item.confidence).toBeGreaterThanOrEqual(0);
-      expect(item.confidence).toBeLessThanOrEqual(1);
-    }
+  it('검토 권한은 행마다 갈린다 — 권한 있는 행·없는 행이 모두 표본에 있다', () => {
+    // 한쪽만 남으면 버튼 게이트가 화면 경로에서 한 번도 밟히지 않는다
+    const flags = REVIEW_QUEUE_ITEM_FIXTURES.map((item) => item.canReview);
+    expect(flags).toContain(true);
+    expect(flags).toContain(false);
   });
 
   it('검토 항목 유형은 열린 타입이다 — 미지 값 대입이 컴파일·실행된다', () => {
@@ -53,5 +53,20 @@ describe('llmWikiFixtures 정합성', () => {
   it('문서 행 fixture는 검토 대기 행을 포함한다 (표의 두 번째 상태 표본)', () => {
     // 이 행이 사라지면 검토 대기 배지의 표 노출 경로가 스토리에서 증발한다 — 존재를 못박는다
     expect(DOCUMENT_ROW_FIXTURES.some((row) => row.status === 'pending_review')).toBe(true);
+  });
+
+  it('담당자는 복수 계약이다 — 미지정(0인)·단수·복수 행이 모두 표본에 있다', () => {
+    const ownerCounts = DOCUMENT_ROW_FIXTURES.map((row) => row.owners.length);
+    expect(ownerCounts).toContain(0);
+    expect(ownerCounts).toContain(1);
+    // 복수 행이 사라지면 owners[]가 사실상 단수로 굳고 계약 회귀를 잡을 표본이 없어진다
+    expect(ownerCounts.some((count) => count > 1)).toBe(true);
+  });
+
+  it('행의 첫 담당자 이름은 서로 다르다 — 스토리가 담당자 셀을 이름으로 집어 좌표를 잰다', () => {
+    const firstOwnerNames = DOCUMENT_ROW_FIXTURES.flatMap((row) => row.owners.slice(0, 1)).map(
+      (owner) => owner.displayName,
+    );
+    expect(new Set(firstOwnerNames).size).toBe(firstOwnerNames.length);
   });
 });

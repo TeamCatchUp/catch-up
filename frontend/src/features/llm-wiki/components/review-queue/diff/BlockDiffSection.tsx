@@ -8,6 +8,8 @@ export interface BlockDiffSectionProps {
   entries: readonly BlockDiffEntry[];
   /** 헤더 우상단 "미리보기". 동작이 미정이라 콜백만 뚫어 둔다 */
   onPreview: () => void;
+  /** [BE] can_review. 카드의 판정 버튼 노출 여부로 그대로 내려간다 */
+  canReview?: boolean;
   onApprove: (id: string) => void;
   /** 제안 기각 */
   onReject: (id: string) => void;
@@ -20,6 +22,7 @@ export interface BlockDiffSectionProps {
 export default function BlockDiffSection({
   entries,
   onPreview,
+  canReview = true,
   onApprove,
   onReject,
 }: BlockDiffSectionProps) {
@@ -45,6 +48,7 @@ export default function BlockDiffSection({
         <BlockDiffCard
           key={entry.id}
           entry={entry}
+          canReview={canReview}
           onApprove={onApprove}
           onReject={onReject}
         />

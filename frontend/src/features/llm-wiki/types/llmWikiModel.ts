@@ -27,6 +27,16 @@ export interface DocumentBreadcrumb {
   label: string;
 }
 
+/**
+ * [BE] 문서 담당자 한 명. 목록 응답의 owners[] 원소이고, 식별은 userId다 —
+ * 동명이인이 있어 표시명으로 사람을 가를 수 없다.
+ */
+export interface DocumentOwner {
+  userId: number;
+  displayName: string;
+  profileImageUrl: string | null;
+}
+
 /** [BE] 채널. 식별자는 UUID 문자열 — 파싱 없이 경로에 그대로 싣는 계약이다 */
 export interface WikiChannel {
   id: string;
@@ -63,11 +73,10 @@ export interface DocumentRowData {
   breadcrumbs: readonly DocumentBreadcrumb[];
   status: DocumentStatus;
   /**
-   * [BE] 담당자 표시명. null은 미지정이다 — 지정·해제 API가 실물이라 실제로 발생하는 상태다.
-   * 목록 응답에 이름·이미지는 미동봉(협상 대상).
+   * [BE] 담당자 목록. 빈 배열은 미지정이다 — 지정·해제 API가 실물이라 실제로 발생하는 상태다.
+   * 2인 이상 표시 시안이 없어 행은 첫 담당자만 렌더한다.
    */
-  ownerName: string | null;
-  ownerProfileImageUrl: string | null;
+  owners: readonly DocumentOwner[];
   /** [BE] 생성 시각(ISO). 생성일 필터가 대조하는 값이다 */
   createdAt: string;
   /**
@@ -78,20 +87,17 @@ export interface DocumentRowData {
   lastActivityLabel: string;
 }
 
+/**
+ * 검토 큐 한 줄. 작성자·신뢰도 필드는 두지 않는다 —
+ * LLM 제안이라 작성자 개념이 없고 큐 응답에도 실리지 않는다.
+ */
 export interface ReviewQueueItemData {
   id: string;
   type: ReviewItemType;
   /** [BE] 행 제목 */
   title: string;
-  authorName: string;
-  authorProfileImageUrl: string | null;
   /** 대기 기간 표시 문자열 (예: "15시간 전") */
   waitingLabel: string;
-  /**
-   * [BE] 추출 신뢰도(0~1). 명세의 "연결 신뢰도"와 다른 값이다.
-   * 행 UI에는 표시하지 않는다 — 계약 보존용.
-   */
-  confidence: number;
   status: ChangeProposalStatus;
   /** [BE] rejected면 필수 (DB CHECK) */
   rejectionReason: string | null;
@@ -99,6 +105,11 @@ export interface ReviewQueueItemData {
   baseRevisionId: string;
   /** 충돌(에러 아이콘) 행 — 상단 고정 여부는 미정 */
   hasConflictIcon: boolean;
+  /**
+   * [BE] 결정 권한. 담당자·채널 관리자 폴백을 서버가 계산해 내려준다 —
+   * 프론트는 소비만 하고 재계산하지 않는다.
+   */
+  canReview: boolean;
 }
 
 export interface ReviewStatCardData {

@@ -26,13 +26,13 @@ const STAT_FILTERS: Readonly<Record<string, DashboardActiveFilter>> = {
   'stat-my-assigned': {
     axis: 'assignee',
     label: '내 담당',
-    matches: (row, currentUserName) => row.ownerName === currentUserName,
+    matches: (row, currentUserName) => row.owners.some((owner) => owner.displayName === currentUserName),
   },
   'stat-unassigned': {
     // 카드 라벨은 "담당자 미지정"이지만 칩은 축 이름을 앞에 달아서 "담당자: 미지정"으로 줄인다.
     axis: 'assignee',
     label: '미지정',
-    matches: (row) => row.ownerName === null,
+    matches: (row) => row.owners.length === 0,
   },
 };
 
@@ -69,7 +69,7 @@ export function createAssigneeFilter(names: readonly string[]): DashboardActiveF
   return {
     axis: 'assignee',
     label: names.join(', '),
-    matches: (row) => row.ownerName !== null && names.includes(row.ownerName),
+    matches: (row) => row.owners.some((owner) => names.includes(owner.displayName)),
   };
 }
 
