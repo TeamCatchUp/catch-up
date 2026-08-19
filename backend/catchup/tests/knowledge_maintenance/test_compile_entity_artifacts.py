@@ -27,6 +27,7 @@ from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_OPEN_QUESTION
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_SUMMARY
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
@@ -650,6 +651,19 @@ def _publish(uow: FakeUnitOfWork, *, revision_number: int) -> uuid.UUID:
     return proposal_id
 
 
+def _content_blocks(blocks) -> list:
+    """맨 앞의 요약 블록을 빼고 본문 블록만 남긴다.
+
+    요약은 아래 블록을 센 집계라 절의 차례·본문·근거를 보는 시험의
+    대상이 아니다. 요약 자체는 test_compile_summary_block.py가 본다.
+    """
+    return [
+        block
+        for block in blocks
+        if block.block_kind != BLOCK_KIND_SUMMARY
+    ]
+
+
 def _reject_block(
     uow: FakeUnitOfWork,
     *,
@@ -732,7 +746,7 @@ def test_entity_without_pending_proposal_gets_claim_sections_only() -> None:
     assert uow.committed == 1
 
     row = _only_pending(uow)
-    blocks = row["blocks"]
+    blocks = _content_blocks(row["blocks"])
     assert [block.block_kind for block in blocks] == [
         BLOCK_KIND_CLAIM_SECTION,
         BLOCK_KIND_CLAIM_SECTION,
@@ -765,7 +779,10 @@ def test_predicate_order_follows_dictionary_then_name() -> None:
 
     _run(uow)
 
-    headings = [block.heading for block in _only_pending(uow)["blocks"]]
+    headings = [
+        block.heading
+        for block in _content_blocks(_only_pending(uow)["blocks"])
+    ]
     assert headings == [
         "release_month",
         "rate_limit",
@@ -786,7 +803,7 @@ def test_multiple_values_are_all_listed_without_judgement() -> None:
 
     _run(uow)
 
-    block = _only_pending(uow)["blocks"][0]
+    block = _content_blocks(_only_pending(uow)["blocks"])[0]
     assert block.body == (
         "60 (2026-07-30 관찰)\n120 (2026-07-30 관찰)"
     )
@@ -807,7 +824,7 @@ def test_contradiction_predicate_renders_contested_block() -> None:
 
     _run(uow)
 
-    blocks = _only_pending(uow)["blocks"]
+    blocks = _content_blocks(_only_pending(uow)["blocks"])
     assert [block.block_kind for block in blocks] == [BLOCK_KIND_CONTESTED]
     block = blocks[0]
     assert block.heading == "rate_limit"
@@ -853,7 +870,7 @@ def test_contested_block_replaces_its_open_question() -> None:
 
     _run(uow)
 
-    blocks = _only_pending(uow)["blocks"]
+    blocks = _content_blocks(_only_pending(uow)["blocks"])
     assert [block.block_kind for block in blocks] == [
         BLOCK_KIND_CONTESTED,
         BLOCK_KIND_OPEN_QUESTION,
@@ -888,7 +905,7 @@ def test_contested_variants_stay_inside_the_proposal() -> None:
 
     _run(uow)
 
-    blocks = _only_pending(uow)["blocks"]
+    blocks = _content_blocks(_only_pending(uow)["blocks"])
     assert [block.block_kind for block in blocks] == [
         BLOCK_KIND_CONTESTED,
         BLOCK_KIND_CLAIM_SECTION,
@@ -957,7 +974,7 @@ def test_single_live_claim_keeps_open_question() -> None:
 
     _run(uow)
 
-    blocks = _only_pending(uow)["blocks"]
+    blocks = _content_blocks(_only_pending(uow)["blocks"])
     assert [block.block_kind for block in blocks] == [
         BLOCK_KIND_CLAIM_SECTION,
         BLOCK_KIND_OPEN_QUESTION,
@@ -1034,7 +1051,7 @@ def test_changed_claim_abandons_pending_and_writes_new() -> None:
     fresh = _only_pending(uow)
     assert fresh["id"] != stale_id
     assert uow.artifacts.by_id[stale_id]["status"] == "abandoned"
-    assert fresh["blocks"][0].body == "120 (2026-07-30 관찰)"
+    assert _content_blocks(fresh["blocks"])[0].body == "120 (2026-07-30 관찰)"
 
 
 def test_returning_to_abandoned_content_revives_that_row() -> None:
@@ -1470,7 +1487,7 @@ def test_claim_section_sources_follow_member_order() -> None:
 
     _run(uow)
 
-    block = _only_pending(uow)["blocks"][0]
+    block = _content_blocks(_only_pending(uow)["blocks"])[0]
     assert block.claim_ids == (older.id, newer.id)
     assert [source.claim_id for source in block.sources] == [
         older.id,
@@ -1555,17 +1572,22 @@ def test_rejected_block_is_dropped_from_the_next_compile() -> None:
     )
     _run(uow)
     first = _only_pending(uow)
-    assert [block.heading for block in first["blocks"]] == [
+    assert [
+        block.heading for block in _content_blocks(first["blocks"])
+    ] == [
         "release_month",
         "rate_limit",
     ]
-    _reject_block(uow, proposal_id=first["id"], block_index=0)
+    # 요약이 맨 앞에 서므로 본문 첫 블록은 index 1이다.
+    _reject_block(uow, proposal_id=first["id"], block_index=1)
 
     result = _run(uow)
 
     assert result.blocks_suppressed == 1
     fresh = _only_pending(uow)
-    assert [block.heading for block in fresh["blocks"]] == ["rate_limit"]
+    assert [block.heading for block in _content_blocks(fresh["blocks"])] == [
+        "rate_limit"
+    ]
     assert fresh["content_hash"] == blocks_content_hash(fresh["blocks"])
 
 
@@ -1589,19 +1611,21 @@ def test_rejected_contested_block_reopens_its_question() -> None:
     )
     _run(uow)
     first = _only_pending(uow)
-    assert [block.block_kind for block in first["blocks"]] == [
-        BLOCK_KIND_CONTESTED
-    ]
-    _reject_block(uow, proposal_id=first["id"], block_index=0)
+    assert [
+        block.block_kind for block in _content_blocks(first["blocks"])
+    ] == [BLOCK_KIND_CONTESTED]
+    _reject_block(uow, proposal_id=first["id"], block_index=1)
 
     result = _run(uow)
 
     assert result.blocks_suppressed == 1
     fresh = _only_pending(uow)
-    kinds = [block.block_kind for block in fresh["blocks"]]
+    kinds = [block.block_kind for block in _content_blocks(fresh["blocks"])]
     assert BLOCK_KIND_CONTESTED not in kinds
     assert kinds == [BLOCK_KIND_OPEN_QUESTION]
-    assert fresh["blocks"][0].proposal_ids == (contradiction.id,)
+    assert _content_blocks(fresh["blocks"])[0].proposal_ids == (
+        contradiction.id,
+    )
     assert fresh["content_hash"] == blocks_content_hash(fresh["blocks"])
     validate_blocks(fresh["blocks"])
     # 되살린 카드도 같은 입력이면 같은 본문이라 다시 쌓이지 않는다.
@@ -1626,9 +1650,9 @@ def test_reopened_question_can_be_rejected_too() -> None:
         pending={node_id: [contradiction]},
     )
     _run(uow)
-    _reject_block(uow, proposal_id=_only_pending(uow)["id"], block_index=0)
+    _reject_block(uow, proposal_id=_only_pending(uow)["id"], block_index=1)
     _run(uow)
-    _reject_block(uow, proposal_id=_only_pending(uow)["id"], block_index=0)
+    _reject_block(uow, proposal_id=_only_pending(uow)["id"], block_index=1)
 
     result = _run(uow)
 
@@ -1650,7 +1674,7 @@ def test_changed_block_reappears_after_rejection() -> None:
         claims=[_claim(node_id=node_id, value=60), month],
     )
     _run(uow)
-    _reject_block(uow, proposal_id=_only_pending(uow)["id"], block_index=0)
+    _reject_block(uow, proposal_id=_only_pending(uow)["id"], block_index=1)
     _run(uow)
 
     uow.knowledge_candidates.claims = [
@@ -1661,11 +1685,12 @@ def test_changed_block_reappears_after_rejection() -> None:
 
     assert result.blocks_suppressed == 0
     fresh = _only_pending(uow)
-    assert [block.heading for block in fresh["blocks"]] == [
+    content = _content_blocks(fresh["blocks"])
+    assert [block.heading for block in content] == [
         "release_month",
         "rate_limit",
     ]
-    assert fresh["blocks"][0].body == "2026-10 (2026-07-30 관찰)"
+    assert content[0].body == "2026-10 (2026-07-30 관찰)"
 
 
 def test_node_with_every_block_rejected_is_skipped() -> None:
@@ -1681,7 +1706,9 @@ def test_node_with_every_block_rejected_is_skipped() -> None:
     )
     _run(uow)
     stale_id = _only_pending(uow)["id"]
-    _reject_block(uow, proposal_id=stale_id, block_index=0)
+    # 요약을 뺀 본문 블록을 물린다. 요약은 남은 본문을 다시 세어 서므로
+    # 본문이 통째로 빠지면 요약도 함께 사라진다.
+    _reject_block(uow, proposal_id=stale_id, block_index=1)
 
     result = _run(uow)
 
@@ -1710,7 +1737,7 @@ def test_compiled_blocks_pass_validation_with_sources() -> None:
     blocks = _only_pending(uow)["blocks"]
     validate_blocks(blocks)
     # 모순 안건은 대조 블록 하나로 접히므로 절과 질문이 따로 서지 않는다.
-    assert len(blocks) == 1
+    assert len(_content_blocks(blocks)) == 1
     for block in blocks:
         assert block.sources
         assert {source.claim_id for source in block.sources} <= set(

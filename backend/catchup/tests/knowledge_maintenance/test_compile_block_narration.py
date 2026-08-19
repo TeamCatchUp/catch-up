@@ -16,6 +16,7 @@ from structlog.testing import capture_logs
 from catchup.knowledge_maintenance.contracts.extraction import RelationTypeEntry
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_RELATION_SECTION
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_SUMMARY
 from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.domain.preset_catalog import DEFAULT_PURPOSE_SENTENCE
@@ -49,6 +50,19 @@ from catchup.tests.knowledge_maintenance.test_compile_definition_artifacts impor
     _definition_row,
 )
 from catchup.tests.knowledge_maintenance.test_compile_definition_artifacts import _spec
+
+
+def _content_headings(narrator) -> list[str]:
+    """요약을 뺀, 본문 블록 서술 요청의 제목만 모은다.
+
+    요약은 아래 블록을 센 줄이라 절 하나만 바뀌어도 함께 바뀐다. 어느
+    절이 다시 서술됐는지 보는 시험에서는 그 한 줄을 빼고 센다.
+    """
+    return [
+        request.heading
+        for request in narrator.requests
+        if request.block_kind != BLOCK_KIND_SUMMARY
+    ]
 
 
 class _FakeNarrator:
@@ -250,8 +264,10 @@ def test_case_d_changed_block_reuses_the_rest() -> None:
 
     result = _run(uow, narrator)
 
-    assert [item.heading for item in narrator.requests] == ["priority"]
-    assert result.blocks_narrated == 1
+    # 요약은 집계가 달라졌으므로 함께 다시 서술된다.
+    assert _content_headings(narrator) == ["priority"]
+    assert narrator.requests[0].block_kind == BLOCK_KIND_SUMMARY
+    assert result.blocks_narrated == 2
     assert result.blocks_narrative_reused == 1
 
 
@@ -361,11 +377,12 @@ def test_case_e_rejected_block_narrative_is_not_reused() -> None:
 
     result = _run(uow, narrator)
 
-    assert sorted(item.heading for item in narrator.requests) == [
+    assert sorted(_content_headings(narrator)) == [
         "priority",
         "status",
     ]
-    assert result.blocks_narrated == 2
+    # 요약까지 세 블록이 다시 서술된다.
+    assert result.blocks_narrated == 3
     assert result.blocks_narrative_reused == 0
 
 
@@ -452,7 +469,8 @@ def test_case_g_relation_section_is_narrated_from_body_lines() -> None:
     assert relation_request.statements == ()
     assert relation_request.edges == ("요청 A → owned_by → 결제팀",)
     assert relation_request.hints == ("요청 A는 결제팀이 맡는다",)
-    assert result.blocks_narrated == 2
+    # claim 절·관계 절·요약 세 블록이 서술된다.
+    assert result.blocks_narrated == 3
     relation_block = next(
         block
         for block in _blocks(uow)
@@ -712,8 +730,10 @@ def test_contested_block_without_any_verified_quote_is_not_narrated() -> None:
     result = _run(uow, narrator)
 
     assert [block.block_kind for block in _blocks(uow)] == [
-        BLOCK_KIND_CONTESTED
+        BLOCK_KIND_SUMMARY,
+        BLOCK_KIND_CONTESTED,
     ]
+    # 요약의 근거도 같은 인용이라 검증된 문장이 없어 서술되지 않는다.
     assert narrator.requests == []
     assert result.nodes_failed == 0
     assert result.blocks_narrated == 0

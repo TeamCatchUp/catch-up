@@ -53,6 +53,7 @@ from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTI
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_OPEN_QUESTION
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_RELATION_SECTION
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_SUMMARY
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.artifact import ContestedVariant
@@ -328,6 +329,7 @@ def compile_definition_artifacts(
                     nodes_failed += 1
                     continue
 
+                title = _definition_title(definition, source)
                 blocks = _build_blocks(
                     claims=by_node.get(source.node_id, ()),
                     pending=pending,
@@ -335,6 +337,7 @@ def compile_definition_artifacts(
                     now=now,
                     allowed=definition.selection_spec.predicate_sections,
                     relation_blocks=relation_blocks,
+                    title=title,
                 )
                 if not blocks:
                     # 쓸 내용이 없으면 빈 문서를 만들지 않는다. 검토자에게
@@ -358,7 +361,7 @@ def compile_definition_artifacts(
                         channel_id=definition.channel_id,
                         kind=definition.kind,
                         subject_node_id=source.node_id,
-                        title=_definition_title(definition, source),
+                        title=title,
                         folder_id=definition.folder_id,
                     )
                 )
@@ -672,12 +675,28 @@ def _propose_node_blocks(
     여기가 정한다. 두 입구가 이 자리를 나눠 쓰므로 반려 억제와 지문
     비교와 멱등 키 규칙이 입구마다 갈리지 않는다.
 
+    요약 블록은 여기서 다시 센다. 요약은 아래 블록을 집계한 줄이라,
+    반려로 빠진 블록이 있는데 옛 집계를 그대로 두면 문서가 싣지 않은
+    근거를 가리키게 된다. 다시 센 줄도 반려 장부를 거치므로 사람이
+    요약 자체를 물린 판단은 그대로 살아 있다.
+
     Raises:
         NarrationError: 블록 산문을 받아 오지 못했을 때 그대로 올라간다.
             부르는 쪽이 이 문서 하나만 접는다.
     """
     rejected = uow.block_verdicts.find_rejected_hashes(
         artifact_id=artifact_id,
+    )
+    summary = next(
+        (
+            block
+            for block in blocks
+            if block.block_kind == BLOCK_KIND_SUMMARY
+        ),
+        None,
+    )
+    blocks = tuple(
+        block for block in blocks if block.block_kind != BLOCK_KIND_SUMMARY
     )
     blocks, dropped, suppressed_ids = _drop_rejected_blocks(
         blocks,
@@ -703,6 +722,21 @@ def _propose_node_blocks(
     if reopened:
         validate_blocks(reopened)
         blocks = (*blocks, *reopened)
+    if blocks and summary is not None:
+        rebuilt = _summary_block(
+            blocks,
+            title=summary.heading,
+            ontology_version=summary.ontology_version,
+        )
+        if rebuilt is not None:
+            kept, dropped_summary, _ = _drop_rejected_blocks(
+                (rebuilt,),
+                rejected,
+                workspace_id=workspace_id,
+                artifact_id=artifact_id,
+            )
+            suppressed += dropped_summary
+            blocks = (*kept, *blocks)
     if not blocks:
         # 남은 문장이 없으면 빈 카드 규칙과 같이 건너뛴다. 다만 큐에
         # 남은 계류는 접는다. 그 계류가 담은 본문이 바로 방금 반려된
@@ -840,9 +874,10 @@ def _narration_request(
     있다. 그래서 접두로 갈라 간선 줄만 사실로 넘기고 원문 문장은 표현
     힌트로 넘긴다. 잘린 걸음을 알리는 줄은 사실이므로 간선 쪽에 남는다.
 
-    claim 절·열린 질문·대조 블록의 사실 입력은 검증된 인용뿐이다. 블록
-    본문과 제목은 색인용 라벨에서 온 문장이라 근거가 아니라 주제 힌트로만
-    넘긴다.
+    claim 절·열린 질문·대조·요약 블록의 사실 입력은 검증된 인용뿐이다.
+    블록 본문과 제목은 색인용 라벨에서 온 문장이라 근거가 아니라 주제
+    힌트로만 넘긴다. 요약 블록은 본문이 결정론 집계 한 줄이므로 그 줄이
+    그대로 주제 힌트가 되고, 사실 입력은 문서 전체의 검증된 인용이다.
 
     대조 블록은 자기 sources를 비우고 근거를 후보마다 나눠 갖는다. 후보를
     합치면 어느 인용이 어느 값의 근거인지 사라지므로 갈라서 넘긴다. 검증된
@@ -1038,6 +1073,7 @@ def _build_blocks(
     now: datetime,
     allowed: tuple[str, ...] | None = None,
     relation_blocks: tuple[ArtifactBlock, ...] = (),
+    title: str = "",
 ) -> tuple[ArtifactBlock, ...]:
     """카드 본문을 이룰 블록을 정해진 순서로 만든다.
 
@@ -1047,6 +1083,9 @@ def _build_blocks(
     관계 절은 claim 절과 열린 질문 사이에 놓는다. 앞쪽은 이 대상이
     무엇인지를, 뒤쪽은 사람에게 묻는 것을 말하므로, 대상과 이웃의
     관계는 그 사이에 온다.
+
+    실을 내용이 있으면 요약 블록을 맨 앞에 세운다. 문서를 열자마자 읽는
+    자리라 아래 블록들을 집계한 한 줄이 먼저 와야 한다.
     """
     ontology_version = vocabulary.snapshot_id or None
     sections = _claim_sections(
@@ -1067,7 +1106,93 @@ def _build_blocks(
         [item for item in pending if item.id not in contested_ids],
         ontology_version,
     )
-    return tuple([*sections, *relation_blocks, *questions])
+    body = tuple([*sections, *relation_blocks, *questions])
+    summary = _summary_block(
+        body,
+        title=title,
+        ontology_version=ontology_version,
+    )
+    if summary is None:
+        return body
+    return (summary, *body)
+
+
+# 요약 블록이 나르는 근거 인용의 상한이다. 근거 수를 제한하는 것은 산문
+# 입력 길이를 묶기 위해서다.
+_SUMMARY_SOURCE_LIMIT = 40
+
+
+def _summary_block(
+    blocks: Sequence[ArtifactBlock],
+    *,
+    title: str,
+    ontology_version: str | None,
+) -> ArtifactBlock | None:
+    """문서 맨 앞에 세울 요약 블록을 만든다. 근거가 없으면 None이다.
+
+    본문은 아래 블록들을 센 집계 한 줄이다. LLM을 부르지 않고 세기만
+    하므로 같은 입력이면 같은 줄이 나온다. 집계 항목의 순서와 표기를
+    바꾸면 내용 지문이 달라져 사람이 이미 본 카드가 검토 큐에 다시
+    쌓이므로, 형식은 시험으로 고정한다.
+
+    claim 장부와 근거는 모든 블록의 합집합이다. 요약이 문서 전체를
+    가리키는 블록이기 때문이다. 합칠 때는 정렬해 순서를 고정한다. 블록이
+    들어온 차례나 저장소가 돌려준 차례에 기대면 같은 입력이 다른 지문을
+    낳는다.
+
+    claim 근거가 하나도 없으면 만들지 않는다. 관계만 있는 문서가 그런
+    경우인데, 요약은 claim 장부를 요구하는 블록이라 빈 장부로 세우면
+    근거 계약에 걸린다.
+    """
+    if not blocks:
+        return None
+    claim_ids = sorted(
+        {claim_id for block in blocks for claim_id in block.claim_ids},
+        key=str,
+    )
+    if not claim_ids:
+        return None
+    relation_count = len(
+        {
+            relation_id
+            for block in blocks
+            for relation_id in block.relation_ids
+        }
+    )
+    question_count = sum(
+        1
+        for block in blocks
+        if block.block_kind == BLOCK_KIND_OPEN_QUESTION
+    )
+    sources = sorted(
+        {source for block in blocks for source in block.sources},
+        key=lambda source: (
+            source.observed_at,
+            str(source.claim_id),
+            source.statement,
+        ),
+    )
+    if sources:
+        first = sources[0].observed_at.isoformat()
+        last = sources[-1].observed_at.isoformat()
+    else:
+        first = "없음"
+        last = "없음"
+    return ArtifactBlock(
+        block_kind=BLOCK_KIND_SUMMARY,
+        heading=title,
+        body=(
+            f"claim {len(claim_ids)}건"
+            f" · 관계 {relation_count}건"
+            f" · 열린 질문 {question_count}건"
+            f" · 최초 보고 {first}"
+            f" · 최근 보고 {last}"
+        ),
+        claim_ids=tuple(claim_ids),
+        proposal_ids=(),
+        ontology_version=ontology_version,
+        sources=tuple(sources[:_SUMMARY_SOURCE_LIMIT]),
+    )
 
 
 @dataclass(frozen=True, slots=True)

@@ -57,6 +57,7 @@ from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 from catchup.knowledge_maintenance.contracts.extraction import RelationTypeEntry
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_RELATION_SECTION
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_SUMMARY
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.artifact import block_content_hash
@@ -276,6 +277,19 @@ def _pending_by_title(uow: FakeDefinitionUnitOfWork) -> dict[str, dict]:
     }
 
 
+def _content_blocks(blocks) -> list:
+    """맨 앞의 요약 블록을 빼고 본문 블록만 남긴다.
+
+    요약은 아래 블록을 센 집계라 절의 차례나 종류를 보는 시험의 대상이
+    아니다. 요약 자체는 test_compile_summary_block.py가 본다.
+    """
+    return [
+        block
+        for block in blocks
+        if block.block_kind != BLOCK_KIND_SUMMARY
+    ]
+
+
 def test_definition_loop_creates_proposal_per_matching_entity() -> None:
     """정의가 고른 종류의 노드마다 문서 변경안이 하나씩 선다."""
     first = uuid.uuid4()
@@ -385,7 +399,7 @@ def test_predicate_sections_orders_and_filters() -> None:
     _run(uow)
 
     row = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]
-    headings = [block.heading for block in row["blocks"]]
+    headings = [block.heading for block in _content_blocks(row["blocks"])]
     # 어휘 차례는 status·summary·priority지만 정의의 차례가 이긴다.
     assert headings == ["summary", "status"]
 
@@ -405,7 +419,9 @@ def test_no_predicate_sections_keeps_dictionary_order() -> None:
     _run(uow)
 
     row = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]
-    assert [block.heading for block in row["blocks"]] == [
+    assert [
+        block.heading for block in _content_blocks(row["blocks"])
+    ] == [
         "status",
         "priority",
     ]
@@ -728,7 +744,9 @@ def test_dead_path_without_truncation_stays_silent() -> None:
     result = _run(uow)
 
     blocks = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]["blocks"]
-    assert [block.block_kind for block in blocks] == [BLOCK_KIND_CLAIM_SECTION]
+    assert [
+        block.block_kind for block in _content_blocks(blocks)
+    ] == [BLOCK_KIND_CLAIM_SECTION]
     assert result.nodes_failed == 0
 
 
@@ -770,11 +788,11 @@ def test_relation_blocks_included_with_ledger() -> None:
     _run(uow)
 
     blocks = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]["blocks"]
-    assert [block.block_kind for block in blocks] == [
+    assert [block.block_kind for block in _content_blocks(blocks)] == [
         BLOCK_KIND_CLAIM_SECTION,
         BLOCK_KIND_RELATION_SECTION,
     ]
-    relation_block = blocks[1]
+    relation_block = _content_blocks(blocks)[1]
     assert relation_block.heading == "owned_by(out)"
     assert relation_block.body == (
         "요청 A → owned_by → 결제팀\n  ↳ 요청 A는 결제팀이 맡는다"
@@ -806,7 +824,9 @@ def test_relation_path_without_edges_leaves_no_block() -> None:
     _run(uow)
 
     blocks = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]["blocks"]
-    assert [block.block_kind for block in blocks] == [BLOCK_KIND_CLAIM_SECTION]
+    assert [
+        block.block_kind for block in _content_blocks(blocks)
+    ] == [BLOCK_KIND_CLAIM_SECTION]
 
 
 def test_invalid_definition_skipped_not_fatal() -> None:
