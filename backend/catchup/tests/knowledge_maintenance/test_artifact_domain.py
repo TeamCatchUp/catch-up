@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from datetime import UTC
 from datetime import datetime
 
@@ -8,10 +9,12 @@ import pytest
 
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_OPEN_QUESTION
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_SUMMARY
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlockError
 from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.artifact import artifact_idempotency_key
+from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.domain.artifact import deserialize_blocks
 from catchup.knowledge_maintenance.domain.artifact import serialize_blocks
@@ -23,13 +26,18 @@ _OBSERVED_AT = datetime(2026, 8, 7, 12, 30, tzinfo=UTC)
 
 
 def _claim_block(
-    heading: str,
+    heading: str = "h1",
     body: str = "60",
     sources: tuple[BlockSource, ...] = (),
+    block_kind: str = BLOCK_KIND_CLAIM_SECTION,
 ) -> ArtifactBlock:
-    """근거 하나를 가진 정상 claim_section 블록을 만든다."""
+    """근거 하나를 가진 정상 claim_section 블록을 만든다.
+
+    block_kind를 넘기면 claim_section과 같은 규칙을 따르는 다른 종류의
+    블록도 같은 모양으로 만든다.
+    """
     return ArtifactBlock(
-        block_kind=BLOCK_KIND_CLAIM_SECTION,
+        block_kind=block_kind,
         heading=heading,
         body=body,
         claim_ids=(_CLAIM_ID,),
@@ -250,3 +258,29 @@ def test_idempotency_key_is_stable_and_distinct() -> None:
         artifact_id, content_hash, base_revision_id=base
     )
     assert len(key) == 64
+
+
+def test_summary_block_is_valid_with_claim_ids() -> None:
+    block = _claim_block(block_kind=BLOCK_KIND_SUMMARY, heading="요약")
+    validate_blocks([block])  # raises nothing
+
+
+def test_summary_block_without_claims_is_rejected() -> None:
+    block = replace(
+        _claim_block(block_kind=BLOCK_KIND_SUMMARY, heading="요약"),
+        claim_ids=(),
+        sources=(),
+    )
+    with pytest.raises(ArtifactBlockError):
+        validate_blocks([block])
+
+
+def test_change_reason_roundtrips_and_stays_out_of_hash() -> None:
+    plain = _claim_block()
+    explained = replace(plain, change_reason="고객 C가 같은 요청을 해 횟수가 늘었다")
+    assert block_content_hash(plain) == block_content_hash(explained)
+    assert blocks_content_hash([plain]) == blocks_content_hash([explained])
+    serialized = serialize_blocks([explained])
+    assert serialized[0]["change_reason"] == explained.change_reason
+    assert "change_reason" not in serialize_blocks([plain])[0]
+    assert deserialize_blocks(serialized)[0].change_reason == explained.change_reason
