@@ -38,6 +38,7 @@ from catchup.db.models import KnowledgeArtifactRevision
 from catchup.db.models import KnowledgeNode
 from catchup.db.models import User
 from catchup.db.models import UserStatus
+from catchup.db.models import UserWorkspace
 from catchup.db.models import WikiArtifactFavorite
 from catchup.db.models import Workspace
 
@@ -556,3 +557,198 @@ def test_definitions_carry_folder_and_purpose(db, workspace_id) -> None:
     assert set(by_channel) == {channel.id, other.id}
     assert [row.kind for row in by_channel[channel.id]] == ["feature_request_status"]
     assert [row.kind for row in by_channel[other.id]] == ["faq_answer"]
+
+
+# ======================= 대시보드 목록 =======================
+
+
+def _artifact_at(
+    db: Session,
+    workspace_id: int,
+    channel: Channel,
+    title: str,
+    created_at: datetime,
+) -> KnowledgeArtifact:
+    """생성 시각을 직접 지정한 문서 한 편을 만든다.
+
+    created_at의 server_default가 now()라, 한 트랜잭션 안에서 만든 문서는
+    시각이 전부 같아진다. 정렬을 확인하려면 시각을 직접 넣어야 한다.
+    """
+    artifact = _artifact(db, workspace_id, channel, "faq_answer", title)
+    artifact.created_at = created_at
+    db.flush()
+    return artifact
+
+
+def _proposal_at(
+    db: Session,
+    artifact: KnowledgeArtifact,
+    status: str,
+    created_at: datetime,
+) -> KnowledgeArtifactChangeProposal:
+    """도착 시각을 직접 지정한 변경안 한 건을 만든다."""
+    proposal = _proposal(db, artifact, status)
+    proposal.created_at = created_at
+    db.flush()
+    return proposal
+
+
+def _revision_at(
+    db: Session,
+    artifact: KnowledgeArtifact,
+    number: int,
+    created_at: datetime,
+) -> KnowledgeArtifactRevision:
+    """발행 시각을 직접 지정한 판 하나를 만든다.
+
+    판을 만들면 출처가 되는 승인 제안도 함께 생긴다. 그 제안의 시각도 같이
+    맞춰야 "발행이 마지막 활동"인 상황을 만들 수 있다.
+    """
+    revision = _revision(db, artifact, number)
+    revision.created_at = created_at
+    proposal = db.get(KnowledgeArtifactChangeProposal, revision.source_proposal_id)
+    assert proposal is not None
+    proposal.created_at = created_at
+    db.flush()
+    return revision
+
+
+def test_list_artifacts_unassigned_filter(db, workspace_id) -> None:
+    """unassigned는 담당자 행이 하나도 없는 문서만 남긴다."""
+    user = _user(db, "unassigned@x.com")
+    channel = _channel(db, workspace_id, created_by=user.id)
+    assigned = _artifact(db, workspace_id, channel, "faq_answer", "담당 있음")
+    orphan = _artifact(db, workspace_id, channel, "faq_answer", "담당 없음")
+    wiki_queries.add_artifact_owner(
+        db, artifact_id=assigned.id, user_id=user.id, granted_by=user.id
+    )
+    db.flush()
+
+    rows, total = wiki_queries.list_artifacts(
+        db, workspace_id=workspace_id, unassigned=True
+    )
+
+    assert total == 1
+    assert rows[0].artifact_id == orphan.id
+
+
+def test_list_artifacts_searches_title(db, workspace_id) -> None:
+    """q는 제목 부분일치로 거르고, 와일드카드 문자는 글자 그대로 본다."""
+    user = _user(db, "search@x.com")
+    channel = _channel(db, workspace_id, created_by=user.id)
+    for title in ("결제 오류", "배송 지연", "50% 할인", "5012 정산", "a_b", "axb"):
+        _artifact(db, workspace_id, channel, "faq_answer", title)
+    db.flush()
+
+    rows, total = wiki_queries.list_artifacts(db, workspace_id=workspace_id, q="오류")
+    assert total == 1
+    assert rows[0].title == "결제 오류"
+
+    _, blank_total = wiki_queries.list_artifacts(db, workspace_id=workspace_id, q="   ")
+    assert blank_total == 6
+
+    rows, total = wiki_queries.list_artifacts(db, workspace_id=workspace_id, q="50%")
+    assert total == 1
+    assert rows[0].title == "50% 할인"
+
+    rows, total = wiki_queries.list_artifacts(db, workspace_id=workspace_id, q="a_b")
+    assert total == 1
+    assert rows[0].title == "a_b"
+
+
+def test_list_artifacts_sorts_by_activity_or_creation(db, workspace_id) -> None:
+    """정렬 키와 방향을 고를 수 있고, 기본값은 마지막 활동 내림차순이다."""
+    user = _user(db, "sort@x.com")
+    channel = _channel(db, workspace_id, created_by=user.id)
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    old = _artifact_at(db, workspace_id, channel, "old", base)
+    mid = _artifact_at(db, workspace_id, channel, "mid", base + timedelta(days=1))
+    new = _artifact_at(db, workspace_id, channel, "new", base + timedelta(days=2))
+    # 가장 먼저 만들어진 문서에 가장 늦은 활동을 붙인다. 두 정렬 키가
+    # 서로 다른 순서를 내야 무엇으로 정렬했는지 구분된다.
+    _proposal_at(db, old, "pending", base + timedelta(days=3))
+
+    def titles(**kwargs: object) -> list[str]:
+        rows, _ = wiki_queries.list_artifacts(db, workspace_id=workspace_id, **kwargs)
+        return [row.title for row in rows]
+
+    assert titles() == ["old", "new", "mid"]
+    assert titles(sort="last_activity", order="desc") == ["old", "new", "mid"]
+    assert titles(sort="last_activity", order="asc") == ["mid", "new", "old"]
+    assert titles(sort="created_at", order="asc") == ["old", "mid", "new"]
+    assert titles(sort="created_at", order="desc") == ["new", "mid", "old"]
+    assert {old.id, mid.id, new.id} == {
+        row.artifact_id
+        for row in wiki_queries.list_artifacts(db, workspace_id=workspace_id)[0]
+    }
+
+
+def test_list_artifacts_last_activity_at(db, workspace_id) -> None:
+    """마지막 활동 시각은 발행·제안 중 늦은 쪽이고, 둘 다 없으면 생성 시각이다."""
+    user = _user(db, "activity@x.com")
+    channel = _channel(db, workspace_id, created_by=user.id)
+    base = datetime(2026, 2, 1, tzinfo=UTC)
+    quiet = _artifact_at(db, workspace_id, channel, "조용함", base)
+    published = _artifact_at(db, workspace_id, channel, "발행됨", base)
+    _revision_at(db, published, 1, base + timedelta(days=5))
+    proposed = _artifact_at(db, workspace_id, channel, "제안됨", base)
+    _revision_at(db, proposed, 1, base + timedelta(days=5))
+    # 반려된 제안도 활동이다. 도착 자체가 문서가 움직인 사실이라
+    # status로 가리지 않는다.
+    _proposal_at(db, proposed, "rejected", base + timedelta(days=9))
+
+    rows, _ = wiki_queries.list_artifacts(db, workspace_id=workspace_id)
+    activity = {row.title: row.last_activity_at for row in rows}
+
+    assert activity["조용함"] == base
+    assert activity["발행됨"] == base + timedelta(days=5)
+    assert activity["제안됨"] == base + timedelta(days=9)
+
+
+def _member(
+    db: Session,
+    *,
+    workspace_id: int,
+    email: str,
+    name: str,
+    status: UserStatus = UserStatus.ACTIVE,
+) -> User:
+    """이름과 상태를 지정한 workspace 구성원 한 명을 만든다."""
+    user = User(
+        email=email,
+        name=name,
+        picture=f"https://example.com/{name}.png",
+        provider="keycloak",
+        status=status,
+    )
+    db.add(user)
+    db.flush()
+    db.add(UserWorkspace(user_id=user.id, workspace_id=workspace_id))
+    db.flush()
+    return user
+
+
+def test_list_workspace_members_returns_active_members_only(db, workspace_id) -> None:
+    """활성 구성원만 이름 순으로 돌려주고, 다른 workspace는 섞이지 않는다."""
+    company = Company(name=f"co-{uuid.uuid4().hex[:8]}", size=CompanySize.SMALL)
+    db.add(company)
+    db.flush()
+    other = Workspace(name=f"ws-{uuid.uuid4().hex[:8]}", company_id=company.id)
+    db.add(other)
+    db.flush()
+    second = _member(db, workspace_id=workspace_id, email="n@x.com", name="나")
+    first = _member(db, workspace_id=workspace_id, email="g@x.com", name="가")
+    _member(
+        db,
+        workspace_id=workspace_id,
+        email="off@x.com",
+        name="다",
+        status=UserStatus.INACTIVE,
+    )
+    _member(db, workspace_id=other.id, email="other@x.com", name="라")
+
+    rows = wiki_queries.list_workspace_members(db, workspace_id=workspace_id)
+
+    assert [row.user_id for row in rows] == [first.id, second.id]
+    assert [row.display_name for row in rows] == ["가", "나"]
+    assert rows[0].profile_image_url == first.picture

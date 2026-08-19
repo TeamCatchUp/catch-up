@@ -193,6 +193,18 @@ class OwnerResponse(BaseModel):
     profile_image_url: str | None
 
 
+class WorkspaceMemberListResponse(BaseModel):
+    """워크스페이스의 활성 구성원 목록을 담는다.
+
+    항목 모양은 담당자 응답(OwnerResponse)과 같다. 담당자를 고르는 화면이
+    "고를 수 있는 사람"과 "이미 담당인 사람"을 같은 타입으로 다루게 하려는
+    것이다. 모양이 다르면 화면이 두 목록을 맞춰 보려고 변환을 한 겹 더
+    둬야 한다.
+    """
+
+    items: list[OwnerResponse]
+
+
 class ArtifactOwnerResponse(BaseModel):
     """문서 담당자 한 명의 지정 결과를 담는다.
 
@@ -332,6 +344,11 @@ class ArtifactListItemResponse(BaseModel):
     status는 컬럼이 아니라 계류 제안 수와 최신 판에서 계산한 값이다. 계류
     제안이 있으면 그것이 먼저다. 발행본이 있어도 사람이 볼 일이 남아 있는
     쪽을 먼저 알려야 하기 때문이다.
+
+    last_activity_at은 이 문서가 마지막으로 움직인 시각이다. 가장 최근 발행
+    시각과 가장 최근 변경안 도착 시각 중 늦은 쪽이고, 둘 다 없으면 문서
+    생성 시각이다. 변경안은 계류·승인·반려를 가리지 않는다. 도착 자체가
+    문서가 움직인 사실이기 때문이다. 값은 항상 있다.
     """
 
     artifact_id: str
@@ -340,6 +357,7 @@ class ArtifactListItemResponse(BaseModel):
     channel_id: str | None
     folder_id: str | None
     created_at: datetime
+    last_activity_at: datetime
     status: Literal["pending_review", "published", "no_revision"]
     pending_proposal_count: int
     latest_revision: LatestRevisionResponse | None
