@@ -282,10 +282,11 @@ _자주 혼동되는 지점, 과거 이슈. 예: "삭제 요청 즉시 삭제"�
 
 /** 문서 종류 id → 템플릿 마크다운 */
 export const WIKI_DOC_TEMPLATE_SAMPLES: Readonly<Record<string, string>> = {
-  'feature-request': FEATURE_REQUEST,
-  'pain-point': PAIN_POINT,
-  faq: FAQ,
-  'client-request': CLIENT_REQUEST,
-  'client-history': CLIENT_HISTORY,
+  feature_request_status: FEATURE_REQUEST,
+  complaint_topic_brief: PAIN_POINT,
+  faq_answer: FAQ,
+  customer_voice_profile: CLIENT_REQUEST,
+  customer_history: CLIENT_HISTORY,
+  // 서버 카탈로그에 대응 종류가 없다 — 시안에만 있는 카드다
   policy: POLICY,
 };

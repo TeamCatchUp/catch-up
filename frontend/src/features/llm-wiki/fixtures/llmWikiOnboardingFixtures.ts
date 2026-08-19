@@ -42,19 +42,19 @@ export const WIKI_INFO_CATEGORIES: readonly WikiInfoCategory[] = [
   { id: 'ops', label: '운영과 정책', icon: 'shield', disabled: true },
   { id: 'sales', label: '세일즈와 고객', icon: 'client', disabled: true },
   { id: 'dev', label: '개발과 기술', icon: 'database', disabled: true },
-  { id: 'team-guide', label: '팀 가이드 및 온보딩', icon: 'group', disabled: true },
+  { id: 'onboarding', label: '팀 가이드 및 온보딩', icon: 'group', disabled: true },
 ];
 
 /**
- * 목적 선택지. 시안은 VOC를 고른 상태만 그렸지만 카테고리별로 갈린다는 근거가 없어
- * 어느 칩을 골라도 같은 목록이 이어진다(8/14 사용자 확정).
+ * 목적 선택지. id는 서버 카탈로그 값이고 문구는 시안을 쓴다 — 서버 라벨은 더 짧다.
+ * 서버의 voc.request_status_tracking은 시안에 대응 항목이 없어 싣지 않는다.
  */
 export const WIKI_PURPOSE_OPTIONS: readonly WikiPurposeOption[] = [
-  { id: 'feature-demand', label: '어떤 기능을 가장 많이 요청하는지 모아보고 싶어요' },
-  { id: 'faq', label: '자주 들어오는 질문과 답변을 정리해두고 싶어요' },
-  { id: 'pain-point', label: '고객이 어디서 자주 불편해하는지 모아보고 싶어요' },
-  { id: 'client-request', label: '고객사별로 지금까지 나온 요청과 맥락을 보고 싶어요' },
-  { id: 'customer-needs', label: '상담에서 반복해서 보이는 고객 니즈를 모으고 싶어요' },
+  { id: 'voc.top_requests', label: '어떤 기능을 가장 많이 요청하는지 모아보고 싶어요' },
+  { id: 'voc.faq_consistency', label: '자주 들어오는 질문과 답변을 정리해두고 싶어요' },
+  { id: 'voc.complaint_patterns', label: '고객이 어디서 자주 불편해하는지 모아보고 싶어요' },
+  { id: 'voc.account_requests', label: '고객사별로 지금까지 나온 요청과 맥락을 보고 싶어요' },
+  { id: 'voc.customer_understanding', label: '상담에서 반복해서 보이는 고객 니즈를 모으고 싶어요' },
 ];
 
 export const DOC_KIND_FIELD_LABEL = '어떤 종류의 문서를 만들까요?';
@@ -65,34 +65,34 @@ export const DOC_KIND_SAMPLE_CAPTION = '입력한 목적은 만들 문서의 종
 // 기능 요청 정리만 지원한다 — 나머지는 앞으로 열릴 자리라 고를 수 없이 노출된다
 export const WIKI_DOC_KIND_PRESETS: readonly WikiDocKindPreset[] = [
   {
-    id: 'feature-request',
+    id: 'feature_request_status',
     icon: 'request',
     label: '기능 요청 정리',
     description: '고객이 원하는 기능과 그 이유, 사용 상황을 정리한 문서',
   },
   {
-    id: 'pain-point',
+    id: 'complaint_topic_brief',
     icon: 'error',
     label: '고객 불편사항 정리',
     description: '고객이 어떤 상황에서 불편을 겪는지 정리한 문서',
     disabled: true,
   },
   {
-    id: 'faq',
+    id: 'faq_answer',
     icon: 'help',
     label: '자주 묻는 질문 정리',
     description: '반복되는 질문과 현재 기준 답변을 정리한 문서',
     disabled: true,
   },
   {
-    id: 'client-request',
+    id: 'customer_voice_profile',
     icon: 'client',
     label: '고객사별 요청사항 정리',
     description: '특정 고객사가 요청한 기능과 조건을 정리한 문서',
     disabled: true,
   },
   {
-    id: 'client-history',
+    id: 'customer_history',
     icon: 'history',
     label: '고객사 히스토리 정리',
     description: '고객사와 오간 문의·요청·결정을 시간순으로 정리한 문서',
@@ -116,19 +116,19 @@ export const TONE_SAMPLE_TAG_LABEL = '예시';
 
 export const WIKI_TONE_STYLE_OPTIONS: readonly WikiToneStyleOption[] = [
   {
-    id: 'wiki-standard',
+    id: 'style.wiki_standard',
     label: '위키 표준체',
     description: '중립 서술체로 사실과 근거, 시점을 건조하게 기록',
     sampleText: '엑셀 내보내기 기능에 대한 요구. 5개 고객사에서 반복 접수됐다.',
   },
   {
-    id: 'support-guide',
+    id: 'style.support_guide',
     label: '응대 가이드체',
     description: '고객에게 그대로 전달할 수 있는 해요체 표현',
     sampleText: '엑셀 내보내기는 아직 지원하지 않아요. 현재 지원 범위를 그대로 안내해 주세요.',
   },
   {
-    id: 'report-summary',
+    id: 'style.report_summary',
     label: '보고 요약체',
     description: '두괄식 요약과 수치로 판단에 필요한 규모를 앞세움',
     sampleText: '엑셀 내보내기 요구 누적 5개사. 최근 한 달 접수 증가.',

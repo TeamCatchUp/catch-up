@@ -141,9 +141,9 @@ describe('WikiOnboardingPage 제출', () => {
     expect(posted[0].body).toEqual({
       name: 'CS 응대 위키',
       domain_preset: 'voc',
-      purpose_presets: ['feature-demand'],
-      kinds: ['feature-request'],
-      style_preset: 'wiki-standard',
+      purpose_presets: ['voc.top_requests'],
+      kinds: ['feature_request_status'],
+      style_preset: 'style.wiki_standard',
     });
 
     // ② 수집 설정은 고른 채널톡 credential 경로마다 한 번씩
