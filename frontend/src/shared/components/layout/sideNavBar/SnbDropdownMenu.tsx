@@ -28,6 +28,9 @@ const Divider = () => <div data-testid="snb-dropdown-menu-divider" className="bg
  * 이 컴포넌트는 받은 항목을 그리기만 한다.
  */
 export default function SnbDropdownMenu({ categoryLabel, groups, metaLines, className }: SnbDropdownMenuProps) {
+  // 권한으로 항목이 모두 빠진 묶음은 구분선만 남기지 않는다
+  const visibleGroups = groups.filter((group) => group.length > 0);
+
   return (
     <div
       data-testid="snb-dropdown-menu"
@@ -41,7 +44,7 @@ export default function SnbDropdownMenu({ categoryLabel, groups, metaLines, clas
       )}
       {/* 블록 사이는 모두 8, 그룹 안 항목만 4로 붙는다 */}
       <div className={cn('flex flex-col', categoryLabel && 'mt-2')}>
-        {groups.map((group, groupIndex) => (
+        {visibleGroups.map((group, groupIndex) => (
           <Fragment key={group.map((item) => item.id).join('|')}>
             {groupIndex > 0 && <Divider />}
             <div className="flex flex-col gap-1">

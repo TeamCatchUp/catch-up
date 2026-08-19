@@ -105,8 +105,13 @@ export interface WikiTreeNode extends NavTreeNode {
   channelId: string;
   /** 즐겨찾기 여부. 케밥 항목 라벨이 이 값으로 갈린다 */
   favorite?: boolean;
+  /** 케밥 하단 부가 정보(최종 편집자·시각). 없으면 그 줄과 구분선이 함께 빠진다 */
+  metaLines?: readonly string[];
   children?: readonly WikiTreeNode[];
 }
+
+/** 최종 편집자·시각에 대응하는 API 필드가 없어 시안 문구를 표본으로 둔다 */
+const SAMPLE_EDIT_META: readonly string[] = ['팀원G 최종 편집', '오늘 오전 12:30'];
 
 /** 채널 id → 그 채널의 관리자 여부. 전역 플래그가 아니다 — 채널마다 따로다 */
 export const WIKI_CHANNEL_ADMINS: Readonly<Record<string, boolean>> = {
@@ -123,6 +128,7 @@ export const PROJECT_TREE_NODES: readonly WikiTreeNode[] = [
     label: '채널명 text text text text text text text text',
     Icon: IconWikiChannel,
     canAddChild: true,
+    metaLines: SAMPLE_EDIT_META,
     children: [
       {
         id: 'folder-1',
@@ -130,8 +136,16 @@ export const PROJECT_TREE_NODES: readonly WikiTreeNode[] = [
         label: '폴더명 text text text text text text text',
         Icon: IconFolder,
         canAddChild: true,
+        metaLines: SAMPLE_EDIT_META,
         children: [
-          { id: 'file-1', channelId: 'channel-1', label: '파일명texttexttexttext', Icon: IconFile, favorite: true },
+          {
+            id: 'file-1',
+            channelId: 'channel-1',
+            label: '파일명texttexttexttext',
+            Icon: IconFile,
+            favorite: true,
+            metaLines: SAMPLE_EDIT_META,
+          },
         ],
       },
       {

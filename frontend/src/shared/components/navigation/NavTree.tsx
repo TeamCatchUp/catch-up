@@ -7,6 +7,7 @@ import IconArrowRightFilled from '@/public/icons/icon/arrow_right_filled.svg';
 // 표시형 depth 연결자는 꺾쇠, 탐색형 접기 캐럿은 속이 찬 삼각형이다 — 자산이 다르다
 import IconArrowRight2 from '@/public/icons/icon/arrow_right2.svg';
 import IconMore from '@/public/icons/icon/kebab_horizontal_400.svg';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
 import { cn } from '@/shared/utils/cn';
 
 export interface NavTreeNode {
@@ -42,35 +43,47 @@ const STATIC_INDENT_PX = 16;
 /** 이 depth부터 라벨 앞에 점 슬롯이 하나 더 붙는다 (시안 type=sub menu_depth2) */
 const DOT_DEPTH = 2;
 
+/** 행 액션의 툴팁 문구. 접근 이름은 여기에 행 라벨을 앞세워 만든다 */
+const MORE_ACTION = '추가 작업';
+const ADD_ACTION = '하위 페이지 추가';
+
 /** 행 hover·포커스에서만 나타나는 행 액션 버튼. 동작은 소비처 핸들러가 안다. */
 function RowActionButton({
   label,
+  tooltip,
   Icon,
   onClick,
   active = false,
 }: {
   label: string;
+  /** 툴팁 문구. 접근 이름과 달리 행 라벨을 붙이지 않는다 */
+  tooltip: string;
   Icon: ComponentType<SVGProps<SVGSVGElement>>;
   onClick: (trigger: HTMLElement) => void;
   active?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-expanded={active || undefined}
-      onClick={(event) => onClick(event.currentTarget)}
-      /*
-       * DS Icon button(392:1887)의 상태 fill이다 — hover 10%, 메뉴 열림 12%.
-       * 토큰 이름과 한 칸씩 어긋나 보이지만 22px 원에서 6%는 거의 보이지 않는다.
-       */
-      className={cn(
-        'flex size-5.5 shrink-0 cursor-pointer items-center justify-center rounded-full',
-        active ? 'bg-fill-normal-interaction-pressed-hover' : 'hover:bg-fill-normal-interaction-pressed',
-      )}
-    >
-      <Icon aria-hidden className="size-4.5" />
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={label}
+          aria-expanded={active || undefined}
+          onClick={(event) => onClick(event.currentTarget)}
+          /*
+           * DS Icon button(392:1887)의 상태 fill이다 — hover 10%, 메뉴 열림 12%.
+           * 토큰 이름과 한 칸씩 어긋나 보이지만 22px 원에서 6%는 거의 보이지 않는다.
+           */
+          className={cn(
+            'flex size-5.5 shrink-0 cursor-pointer items-center justify-center rounded-full',
+            active ? 'bg-fill-normal-interaction-pressed-hover' : 'hover:bg-fill-normal-interaction-pressed',
+          )}
+        >
+          <Icon aria-hidden className="size-4.5" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top">{tooltip}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -227,7 +240,8 @@ export default function NavTree({
           >
             {onNodeMore && (
               <RowActionButton
-                label={`${node.label} 추가 작업`}
+                label={`${node.label} ${MORE_ACTION}`}
+                tooltip={MORE_ACTION}
                 Icon={IconMore}
                 active={menuOpen && openActionMenu?.kind === 'more'}
                 onClick={(trigger) => onNodeMore(node.id, trigger)}
@@ -235,7 +249,8 @@ export default function NavTree({
             )}
             {onNodeAdd && node.canAddChild && (
               <RowActionButton
-                label={`${node.label} 하위 페이지 추가`}
+                label={`${node.label} ${ADD_ACTION}`}
+                tooltip={ADD_ACTION}
                 Icon={IconAdd}
                 active={menuOpen && openActionMenu?.kind === 'add'}
                 onClick={(trigger) => onNodeAdd(node.id, trigger)}

@@ -62,7 +62,15 @@ const meta = {
         nodeId: '17578:127214',
       },
       viewport: { width: 280, height: 360 },
-      states: ['interactive', 'active', 'static-location', 'long-label-narrow', 'row-actions', 'row-actions-menu-open'],
+      states: [
+        'interactive',
+        'active',
+        'static-location',
+        'long-label-narrow',
+        'row-actions',
+        'row-actions-menu-open',
+        'row-action-tooltips',
+      ],
       reuseNotes: [
         'SNB 프로젝트 섹션(탐색형, 17578:127214 > Projects Section 17884:15677)과 검토 큐 "문서 위치"(표시형, 17564:127054)가 같은 트리를 쓴다.',
         '행 상태 스펙 시트는 17895:46178(NavTree상세) — Default/hover/Pressed/Selected/Selected_hover 5종.',
@@ -76,6 +84,7 @@ const meta = {
         '표시형 들여쓰기는 여전히 16px 단위로 행 자체를 민다(depth x = 0/16).',
         '표시형은 행 높이 28에 행 간격 8이고, depth > 0 행 앞에 arrow_right2 연결자가 붙는다.',
         '행 액션은 오버레이가 아니라 in-flow다 — 나타나면 라벨 폭이 줄어든다(Figma 채널 라벨 170 → 112). 액션 버튼 22×22, 그룹 gap 2.',
+        '8/19 시안(18658:50796)의 행 액션 툴팁은 검정 75% 배경, radius 8, padding 6, label(rg)/xsmall 흰색이다 — 공용 Tooltip sm과 값이 같아 오버라이드하지 않는다.',
       ],
       dataNotes: [
         'Figma 라벨은 전부 placeholder("채널명 text text text text…", "폴더명 text text text t…", "파일명texttexttext…") — 실카피 미정.',
@@ -93,6 +102,7 @@ const meta = {
         '캐럿은 자식이 있는 행에만, hover 또는 포커스에서 앞 아이콘을 대체해 나타난다.',
         'hover는 플레이로 어서션하지 않는다 — userEvent.hover()는 합성 이벤트라 브라우저의 :hover를 켜지 못한다. focus-within으로 검증한다.',
         '캐럿은 표시형 depth 연결자와 같은 arrow_right2 자산이고, 펼침은 90도 회전이다 — 시안에 펼침 상태가 없어 잠정값이다(design-request).',
+        '행 액션 툴팁 문구는 행 라벨을 붙이지 않는다("추가 작업"/"하위 페이지 추가"). 접근 이름만 행 라벨을 앞세워 같은 트리 안에서 서로 구분된다.',
       ],
     }),
   },
@@ -331,6 +341,52 @@ export const RowActionsMenuOpen: Story = {
 
     // 다른 행은 그대로 숨어 있다
     await expect(canvas.queryByRole('button', { name: '폴더명 text text text t 2 추가 작업' })).toBeNull();
+  },
+};
+
+/*
+ * 액션 버튼의 툴팁. CSS :hover는 못 켜지만 Radix는 포인터 이벤트로 열려서
+ * 액션을 포커스로 드러낸 뒤 hover로 툴팁만 확인한다.
+ */
+export const RowActionTooltips: Story = {
+  args: {
+    defaultExpandedIds: ['channel-1'],
+    onNodeClick: fn(),
+    onNodeMore: fn(),
+    onNodeAdd: fn(),
+  },
+  render: (args) => (
+    <Frame>
+      <NavTree {...args} />
+    </Frame>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // 툴팁은 포털로 body에 붙는다 — 캔버스 안에서는 찾을 수 없다
+    const portal = within(document.body);
+
+    const channel = canvas.getByRole('button', { name: '채널명 text text text text 1' });
+    channel.focus();
+
+    await userEvent.hover(canvas.getByRole('button', { name: '채널명 text text text text 1 추가 작업' }));
+    const moreTip = await portal.findByRole('tooltip');
+    // 문구에는 행 라벨이 붙지 않는다 — 접근 이름과 다른 값이다
+    await expect(moreTip).toHaveTextContent('추가 작업');
+    await expect(moreTip.textContent).not.toContain('채널명');
+
+    // 시안 규격: 검정 75%, radius 8, padding 6
+    const bubble = document.querySelector('[data-radix-popper-content-wrapper] [data-side]')!;
+    const bubbleStyle = getComputedStyle(bubble);
+    await expect(bubbleStyle.backgroundColor).toBe('rgba(0, 0, 0, 0.75)');
+    await expect(bubbleStyle.color).toBe('rgb(255, 255, 255)');
+    await expect(bubbleStyle.borderRadius).toBe('8px');
+    await expect(bubbleStyle.padding).toBe('6px');
+
+    await userEvent.unhover(canvas.getByRole('button', { name: '채널명 text text text text 1 추가 작업' }));
+    await userEvent.hover(canvas.getByRole('button', { name: '채널명 text text text text 1 하위 페이지 추가' }));
+    await waitFor(async () => {
+      await expect(await portal.findByRole('tooltip')).toHaveTextContent('하위 페이지 추가');
+    });
   },
 };
 

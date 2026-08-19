@@ -12,6 +12,7 @@ import IconLink from '@/public/icons/icon/link.svg';
 import IconSearch300 from '@/public/icons/icon/search_300.svg';
 import IconSearch400 from '@/public/icons/icon/search_400.svg';
 import IconStar from '@/public/icons/icon/star.svg';
+import IconStarOff from '@/public/icons/icon/star_off.svg';
 import IconUpdate from '@/public/icons/icon/update.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
 import { UserMenuContent } from '@/shared/components/layout/sideNavBar/modal/UserModal';
@@ -132,8 +133,8 @@ export default function WikiSideNav({
   };
 
   /*
-   * 메뉴 항목의 목적지가 아직 없다. 시안의 하단 메타(최종 편집자·시각)도 백엔드
-   * 계약에 대응 필드가 없어 넣지 않는다 — 지어내면 승인된 값처럼 굳는다.
+   * 메뉴 항목의 목적지가 아직 없다. 하단 메타는 노드가 값을 들고 있을 때만 그린다 —
+   * 대응 API 필드가 없어 fixture 표본 외에는 비어 있다.
    */
   const menuProps = () => {
     // 섹션의 + 는 채널만 만든다. 파일·폴더는 채널 아래에서만 생긴다
@@ -156,8 +157,8 @@ export default function WikiSideNav({
     }
     const node = menu?.nodeId ? findWikiTreeNode(menu.nodeId) : undefined;
     const favoriteItem = node?.favorite
-      ? { id: 'unfavorite', label: '즐겨찾기 해제', Icon: IconStar, onSelect: select('unfavorite') }
-      : { id: 'favorite', label: '즐겨찾기', Icon: IconStar, onSelect: select('favorite') };
+      ? { id: 'unfavorite', label: '즐겨찾기 해제', Icon: IconStarOff, onSelect: select('unfavorite') }
+      : { id: 'favorite', label: '즐겨찾기에 추가', Icon: IconStar, onSelect: select('favorite') };
     // 이름 바꾸기 같은 관리 항목은 그 노드가 속한 채널의 관리자에게만 보인다
     const canManage = node ? isChannelAdmin(node.channelId) : false;
     return {
@@ -171,6 +172,7 @@ export default function WikiSideNav({
             : []),
         ],
       ],
+      metaLines: node?.metaLines,
     };
   };
 
