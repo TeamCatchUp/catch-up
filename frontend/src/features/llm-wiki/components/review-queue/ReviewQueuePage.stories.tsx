@@ -3,11 +3,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
-import {
-  BASE_WIKI_BLOCKS,
-  PROPOSED_BLOCK_CHANGES,
-  PROPOSED_WIKI_BLOCKS,
-} from '../../fixtures/llmWikiDiffFixtures';
+import { BASE_WIKI_BLOCKS, PROPOSED_BLOCK_CHANGES, PROPOSED_WIKI_BLOCKS } from '../../fixtures/llmWikiDiffFixtures';
 import { REVIEW_QUEUE_CHANNEL_OPTIONS, REVIEW_QUEUE_ITEM_FIXTURES } from '../../fixtures/llmWikiFixtures';
 import { buildBlockDiff } from '../../utils/diff/buildBlockDiff';
 import { INITIAL_REVIEW_QUEUE_FILTER_STATE } from './reviewQueueFilters';
@@ -87,7 +83,14 @@ const meta = {
         nodeId: '17564:127037',
       },
       viewport: { width: 1400, height: 900 },
-      states: ['default', 'undecided-blocks', 'no-review-permission', 'no-reject-path'],
+      states: [
+        'default',
+        'undecided-blocks',
+        'no-review-permission',
+        'no-reject-path',
+        'empty-queue',
+        'empty-by-filter',
+      ],
       reuseNotes: [
         'ReviewQueueListHeader·ReviewQueueRow·ReviewQueueFilterDropdown·WikiPageHeader(detail)·ChangeSummaryCard·BlockDiffSection·DocumentLocationCard·ReviewParticipantsCard·ReviewPublishBar를 조립만 한다.',
       ],
@@ -97,9 +100,13 @@ const meta = {
         '발행 버튼은 미판정 블록이 하나라도 남으면 잠긴다. 변경 없는 블록도 판정 대상이라 카드가 없는 블록이 잠금을 유지할 수 있다 — 일괄 처리(undecided) UI는 시안이 없어 만들지 않았다.',
         '반려는 사유가 필수인데 사유 입력 시안이 없다 — 진입점을 닫아 보낼 수 없는 요청을 막는다(NoRejectPath). 시안이 오면 canReject만 켠다.',
         '채널·담당자 축은 서버가 하나씩만 받는다 — 둘 이상 고르면 파라미터로 나가지 않고 받은 쪽에서 좁힌다. 좁히기는 라우트가 맡고 화면은 관여하지 않는다.',
+        '빈 큐는 시안이 없다(감사 MISSING·높음). 새 시각을 만들지 않고 대시보드 빈 표와 같은 일러스트·타이포를 쓰며, 필터 결과 0건도 같은 안내다 — 문구를 가르는 근거가 없다. 디자이너 확인 대상.',
+        '목록이 비면 좌측 머리글과 필터는 남는다 — 필터로 비운 경우 되돌릴 경로가 사라지면 안 된다.',
         '로딩·에러 시각은 시안이 없어 만들지 않는다 — 데이터가 없으면 상세 자리가 빈 채로 남는다.',
       ],
-      layoutNotes: ['좌 300 · 우 350 고정, 중앙이 남는 폭을 흡수한다. 높이는 셸이 준다 — 스토리가 900 슬롯을 흉내낸다.'],
+      layoutNotes: [
+        '좌 300 · 우 350 고정, 중앙이 남는 폭을 흡수한다. 높이는 셸이 준다 — 스토리가 900 슬롯을 흉내낸다.',
+      ],
     }),
   },
 } satisfies Meta<typeof ReviewQueuePage>;
@@ -172,5 +179,48 @@ export const NoRejectPath: Story = {
 
     await expect(canvas.queryAllByRole('button', { name: '반려' })).toHaveLength(0);
     await expect(canvas.getAllByRole('button', { name: '승인' }).length).toBeGreaterThan(0);
+  },
+};
+
+/**
+ * 처리할 변경안이 하나도 없을 때. 상세를 그릴 대상이 없어 중앙·우측을 안내로 갈음한다.
+ * 시안이 없는 상태라 대시보드 빈 표의 일러스트·타이포를 그대로 쓴다(디자이너 확인 대상).
+ */
+export const EmptyQueue: Story = {
+  args: { items: [], totalCount: 0, selectedId: null, entries: [], participants: [] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByText('요청된 변경사항이 없어요')).toBeInTheDocument();
+
+    // 머리글의 건수는 0으로 남는다 — 목록 자리만 비운다.
+    await expect(canvas.getByText('요청된 변경사항')).toBeInTheDocument();
+    await expect(canvas.getByText('0')).toBeInTheDocument();
+
+    // 상세·판정 자리가 통째로 빠진다. 껍데기만 남은 화면을 막는 어서션이다.
+    await expect(canvas.queryByRole('button', { name: '최종 내보내기' })).toBeNull();
+    await expect(canvas.queryAllByRole('button', { name: '승인' })).toHaveLength(0);
+    await expect(canvas.queryByText('문서 위치')).toBeNull();
+
+    // 필터는 남아야 한다 — 필터로 비운 경우 되돌릴 경로가 여기뿐이다.
+    await expect(canvas.getByRole('button', { name: '필터' })).toBeInTheDocument();
+  },
+};
+
+/** 필터를 걸어 결과가 0건인 경우. 안내 문구는 빈 큐와 가르지 않는다(시안 근거 없음). */
+export const EmptyByFilter: Story = {
+  args: {
+    items: [],
+    totalCount: 0,
+    selectedId: null,
+    entries: [],
+    participants: [],
+    filters: { channelIds: ['channel-payments'], assigneeIds: [], waitingId: 'all' },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByText('요청된 변경사항이 없어요')).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: '필터' })).toBeInTheDocument();
   },
 };

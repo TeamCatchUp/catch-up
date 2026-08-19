@@ -30,6 +30,7 @@ import {
 } from './reviewQueueFilters';
 import ReviewQueueListHeader from './ReviewQueueListHeader';
 import ReviewQueueRow from './ReviewQueueRow';
+import ReviewQueueEmptyState from './states/ReviewQueueEmptyState';
 
 export interface ReviewQueuePageProps {
   items: readonly ReviewQueueRowData[];
@@ -97,6 +98,8 @@ export default function ReviewQueuePage({
   onPublish,
 }: ReviewQueuePageProps) {
   const selectedIndex = items.findIndex((item) => item.id === selectedId);
+  // 목록이 비면 그릴 상세가 없다 — 좌측 머리글·필터만 남기고 안내로 대체한다
+  const isEmpty = items.length === 0;
 
   const moveSelection = (offset: number) => {
     const next = items[selectedIndex + offset];
@@ -166,73 +169,79 @@ export default function ReviewQueuePage({
         </div>
       </aside>
 
-      {/* 중앙 — 제안 상세 */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <WikiPageHeader
-          variant="detail"
-          breadcrumbs={breadcrumbs}
-          actions={
-            <>
-              <Button
-                variant="icon-only-gray"
-                size="md"
-                aria-label="다음 변경사항"
-                disabled={selectedIndex < 0 || selectedIndex >= items.length - 1}
-                onClick={() => moveSelection(1)}
-              >
-                <IconArrowDown aria-hidden className="size-6" />
-              </Button>
-              <Button
-                variant="icon-only-gray"
-                size="md"
-                aria-label="이전 변경사항"
-                disabled={selectedIndex <= 0}
-                onClick={() => moveSelection(-1)}
-              >
-                <IconArrowUp aria-hidden className="size-6" />
-              </Button>
-            </>
-          }
-        />
+      {isEmpty ? (
+        <ReviewQueueEmptyState />
+      ) : (
+        <>
+          {/* 중앙 — 제안 상세 */}
+          <div className="flex min-w-0 flex-1 flex-col">
+            <WikiPageHeader
+              variant="detail"
+              breadcrumbs={breadcrumbs}
+              actions={
+                <>
+                  <Button
+                    variant="icon-only-gray"
+                    size="md"
+                    aria-label="다음 변경사항"
+                    disabled={selectedIndex < 0 || selectedIndex >= items.length - 1}
+                    onClick={() => moveSelection(1)}
+                  >
+                    <IconArrowDown aria-hidden className="size-6" />
+                  </Button>
+                  <Button
+                    variant="icon-only-gray"
+                    size="md"
+                    aria-label="이전 변경사항"
+                    disabled={selectedIndex <= 0}
+                    onClick={() => moveSelection(-1)}
+                  >
+                    <IconArrowUp aria-hidden className="size-6" />
+                  </Button>
+                </>
+              }
+            />
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="flex flex-col gap-9 px-9 py-9">
-            <div className="flex flex-col gap-3">
-              <h2 className="text-heading-xlarge text-text-normal-strong">{title}</h2>
-              {/* 작성자 줄은 없다 — LLM 제안이라 큐 응답에 작성자가 실리지 않는다 */}
-              <span className="text-body-xsmall text-text-normal-alternative">{waitingLabel}</span>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="flex flex-col gap-9 px-9 py-9">
+                <div className="flex flex-col gap-3">
+                  <h2 className="text-heading-xlarge text-text-normal-strong">{title}</h2>
+                  {/* 작성자 줄은 없다 — LLM 제안이라 큐 응답에 작성자가 실리지 않는다 */}
+                  <span className="text-body-xsmall text-text-normal-alternative">{waitingLabel}</span>
+                </div>
+
+                <ChangeSummaryCard changeCount={entries.length} body={summary} />
+
+                <BlockDiffSection
+                  entries={entries}
+                  onPreview={onPreview}
+                  canReview={canReview}
+                  canReject={canReject}
+                  onApprove={(id) => {
+                    const entry = entries.find((item) => item.id === id);
+                    if (entry) onApproveBlock(entry);
+                  }}
+                  onReject={(id) => {
+                    const entry = entries.find((item) => item.id === id);
+                    if (entry) onRejectBlock?.(entry);
+                  }}
+                />
+              </div>
             </div>
 
-            <ChangeSummaryCard changeCount={entries.length} body={summary} />
-
-            <BlockDiffSection
-              entries={entries}
-              onPreview={onPreview}
-              canReview={canReview}
-              canReject={canReject}
-              onApprove={(id) => {
-                const entry = entries.find((item) => item.id === id);
-                if (entry) onApproveBlock(entry);
-              }}
-              onReject={(id) => {
-                const entry = entries.find((item) => item.id === id);
-                if (entry) onRejectBlock?.(entry);
-              }}
-            />
+            <ReviewPublishBar canReview={canReview} disabled={publishDisabled} onPublish={onPublish} />
           </div>
-        </div>
 
-        <ReviewPublishBar canReview={canReview} disabled={publishDisabled} onPublish={onPublish} />
-      </div>
-
-      {/* 우측 — 문서 위치·담당자 */}
-      <aside className="border-line-normal-neutral flex w-87.5 shrink-0 flex-col overflow-y-auto border-l">
-        <DocumentLocationCard breadcrumbs={locationBreadcrumbs} />
-        <ReviewParticipantsCard
-          participants={participants}
-          stackAvatars={participants.map((participant) => ({ src: participant.avatarSrc ?? null }))}
-        />
-      </aside>
+          {/* 우측 — 문서 위치·담당자 */}
+          <aside className="border-line-normal-neutral flex w-87.5 shrink-0 flex-col overflow-y-auto border-l">
+            <DocumentLocationCard breadcrumbs={locationBreadcrumbs} />
+            <ReviewParticipantsCard
+              participants={participants}
+              stackAvatars={participants.map((participant) => ({ src: participant.avatarSrc ?? null }))}
+            />
+          </aside>
+        </>
+      )}
     </div>
   );
 }
