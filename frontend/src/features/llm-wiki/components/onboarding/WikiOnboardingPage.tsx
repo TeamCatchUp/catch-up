@@ -35,7 +35,6 @@ import {
   PURPOSE_FIELD_LABEL,
   SCHEDULE_FIELD_IDS,
   SCHEDULE_FIELDS,
-  SCHEDULE_RESULT_TEXT,
   TEMPLATE_SAMPLE_TEXT_TBD,
   TONE_SAMPLE_TAG_LABEL,
   TONE_STYLE_FIELD_LABEL,
@@ -47,9 +46,14 @@ import {
 } from '../../fixtures/llmWikiOnboardingFixtures';
 import { WIKI_DOC_TEMPLATE_SAMPLES } from '../../fixtures/llmWikiTemplateSamples';
 import { useWikiOnboardingSubmitMutation } from '../../queries/wikiOnboarding.mutations';
-import type { OnboardingChannelRow, ScheduleFieldData } from '../../types/llmWikiOnboarding';
+import type {
+  OnboardingChannelListStatus,
+  OnboardingChannelRow,
+  ScheduleFieldData,
+} from '../../types/llmWikiOnboarding';
 import { buildOnboardingNextSteps } from '../../utils/onboarding/onboardingNextSteps';
 import { buildExecutionAnchor, intervalMinutesOf, resolveNextRunAt } from '../../utils/onboarding/scheduleAnchor';
+import { buildScheduleResultSentence } from '../../utils/onboarding/scheduleResultText';
 import type { WikiOnboardingDraft, WikiOnboardingSteps } from '../../utils/onboarding/wikiOnboardingSteps';
 import { WIKI_ONBOARDING_FUNNEL_ID } from '../../utils/onboarding/wikiOnboardingSteps';
 import OnboardingChannelTable from './OnboardingChannelTable';
@@ -61,6 +65,13 @@ import WikiOnboardingSourceStep from './WikiOnboardingSourceStep';
 export const EXIT_CONFIRM_TITLE = '온보딩을 그만두시겠어요?';
 export const EXIT_CONFIRM_DESCRIPTION = '지금 나가면 작성한 내용이 모두 사라져요.';
 export const EXIT_CONFIRM_LABEL = '나가기';
+
+/** 채널 표가 아는 세 상태로 쿼리 상태를 옮긴다 — 빈 목록은 ready + 행 0으로 갈린다 */
+const CHANNEL_LIST_STATUS_BY_QUERY: Record<'pending' | 'error' | 'success', OnboardingChannelListStatus> = {
+  pending: 'loading',
+  error: 'error',
+  success: 'ready',
+};
 
 /**
  * 온보딩 마법사. 단계는 useFunnel이 소유하고 입력값은 화면이 들고 있는다.
@@ -94,8 +105,9 @@ export default function WikiOnboardingPage() {
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
 
   // 소스 후보는 연결된 채널톡 채널이다 — 수집 설정도 이 credential_id로 저장한다
-  const { data: credentials } = useQuery(automationCredentialsQueries.credentials('channel_talk'));
-  const availableChannelRows = mapOnboardingChannelRows(credentials?.credentials ?? []);
+  const credentialsQuery = useQuery(automationCredentialsQueries.credentials('channel_talk'));
+  const availableChannelRows = mapOnboardingChannelRows(credentialsQuery.data?.credentials ?? []);
+  const channelListStatus: OnboardingChannelListStatus = CHANNEL_LIST_STATUS_BY_QUERY[credentialsQuery.status];
 
   const submit = useWikiOnboardingSubmitMutation();
 
@@ -132,11 +144,8 @@ export default function WikiOnboardingPage() {
     selectedCredentialIds,
   });
 
-  // 대시보드에서 replace로 밀려오면 돌아갈 자리가 없다 — 그때는 홈으로 내보낸다
-  const exitOnboarding = () => {
-    if (window.history.length > 1) router.back();
-    else router.push('/');
-  };
+  // funnel이 스텝마다 history를 쌓아 back은 스텝 후퇴가 된다 — 밖으로 나가는 길은 홈뿐이다
+  const exitOnboarding = () => router.push('/');
 
   const requestExit = () => {
     if (isDirty) setExitConfirmOpen(true);
@@ -224,11 +233,16 @@ export default function WikiOnboardingPage() {
             availableChannels={availableChannelRows}
             onSelectChannel={(credentialId) => setSelectedCredentialIds((current) => [...current, credentialId])}
             channelRows={selectedChannelRows}
+            channelListStatus={channelListStatus}
+            onRetryChannelList={() => void credentialsQuery.refetch()}
             scheduleFields={scheduleFields}
             onSelectScheduleOption={(fieldId, optionId) =>
               setScheduleSelection((current) => ({ ...current, [fieldId]: optionId }))
             }
-            resultText={SCHEDULE_RESULT_TEXT}
+            resultText={buildScheduleResultSentence({
+              pollingOptionId: scheduleSelection[SCHEDULE_FIELD_IDS.pollingInterval],
+              runTimeOptionId: scheduleSelection[SCHEDULE_FIELD_IDS.runTime],
+            })}
             backfillNoticeText={BACKFILL_NOTICE_TEXT}
             backLabel={ONBOARDING_BACK_LABEL}
             onBack={() => history.back()}

@@ -8,15 +8,23 @@ import {
   CHANNEL_FIELD_LABEL,
   CHANNEL_PICKER_PLACEHOLDER,
   CHANNEL_TABLE_HEADERS,
+  INITIAL_SCHEDULE_SELECTION,
   ONBOARDING_BACK_LABEL,
   ONBOARDING_CHANNEL_ROWS,
   ONBOARDING_FINISH_LABEL,
   ONBOARDING_SOURCE_HEADING,
   ONBOARDING_STEPS,
+  SCHEDULE_FIELD_IDS,
   SCHEDULE_FIELDS,
-  SCHEDULE_RESULT_TEXT,
 } from '../../fixtures/llmWikiOnboardingFixtures';
+import { buildScheduleResultSentence } from '../../utils/onboarding/scheduleResultText';
 import WikiOnboardingSourceStep from './WikiOnboardingSourceStep';
+
+// 스토리의 일정 필드는 픽스처 기본값이라 결과 문장도 그 선택에서 뽑는다
+const SCHEDULE_RESULT_TEXT = buildScheduleResultSentence({
+  pollingOptionId: INITIAL_SCHEDULE_SELECTION[SCHEDULE_FIELD_IDS.pollingInterval],
+  runTimeOptionId: INITIAL_SCHEDULE_SELECTION[SCHEDULE_FIELD_IDS.runTime],
+});
 
 const onNext = fn();
 const onBack = fn();

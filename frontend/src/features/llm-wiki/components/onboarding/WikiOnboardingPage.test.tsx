@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { http, HttpResponse } from 'msw';
+import { delay, http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { toast } from '@/shared/components/ui/toast';
@@ -118,10 +118,9 @@ async function walkToCompleteStep(user: ReturnType<typeof userEvent.setup>, chan
   await screen.findByRole('heading', { name: ONBOARDING_COMPLETE_HEADING });
 }
 
-/** 이탈 경로는 history 유무에 따라 back과 홈 이동으로 갈린다 — 둘을 합쳐 한 번인지만 본다 */
-function exitCallCount() {
-  const homeCalls = mockPush.mock.calls.filter(([path]) => path === '/').length;
-  return mockBack.mock.calls.length + homeCalls;
+/** 이탈 목적지는 홈 하나뿐이다 — funnel history 때문에 back은 스텝 후퇴가 된다 */
+function homeExitCallCount() {
+  return mockPush.mock.calls.filter(([path]) => path === '/').length;
 }
 
 beforeEach(() => {
@@ -189,16 +188,16 @@ describe('WikiOnboardingPage 이탈 확인', () => {
     await user.click(screen.getByRole('button', { name: EXIT_BUTTON_LABEL }));
 
     expect(await screen.findByText(EXIT_CONFIRM_TITLE)).toBeInTheDocument();
-    expect(exitCallCount()).toBe(0);
+    expect(homeExitCallCount()).toBe(0);
 
     await user.click(screen.getByRole('button', { name: '취소' }));
 
     await waitFor(() => expect(screen.queryByText(EXIT_CONFIRM_TITLE)).not.toBeInTheDocument());
-    expect(exitCallCount()).toBe(0);
+    expect(homeExitCallCount()).toBe(0);
     expect(screen.getByRole('heading', { name: ONBOARDING_PURPOSE_HEADING })).toBeInTheDocument();
   });
 
-  it('확인을 누르면 이탈 경로를 부른다', async () => {
+  it('확인을 누르면 홈으로 나간다', async () => {
     const user = userEvent.setup();
     mockSubmitHandlers();
     renderOnboarding();
@@ -207,10 +206,12 @@ describe('WikiOnboardingPage 이탈 확인', () => {
     await user.click(screen.getByRole('button', { name: EXIT_BUTTON_LABEL }));
     await user.click(await screen.findByRole('button', { name: EXIT_CONFIRM_LABEL }));
 
-    expect(exitCallCount()).toBe(1);
+    expect(mockPush).toHaveBeenCalledWith('/');
+    expect(homeExitCallCount()).toBe(1);
+    expect(mockBack).not.toHaveBeenCalled();
   });
 
-  it('아무것도 건드리지 않았으면 모달 없이 바로 나간다', async () => {
+  it('아무것도 건드리지 않았으면 모달 없이 바로 홈으로 나간다', async () => {
     const user = userEvent.setup();
     mockSubmitHandlers();
     renderOnboarding();
@@ -218,7 +219,89 @@ describe('WikiOnboardingPage 이탈 확인', () => {
     await user.click(screen.getByRole('button', { name: EXIT_BUTTON_LABEL }));
 
     expect(screen.queryByText(EXIT_CONFIRM_TITLE)).not.toBeInTheDocument();
-    expect(exitCallCount()).toBe(1);
+    expect(mockPush).toHaveBeenCalledWith('/');
+    expect(homeExitCallCount()).toBe(1);
+  });
+
+  it('단계를 전진한 뒤 나가도 스텝 후퇴가 아니라 홈으로 간다', async () => {
+    const user = userEvent.setup();
+    mockSubmitHandlers();
+    renderOnboarding();
+
+    // funnel이 스텝마다 history를 쌓는 지점 — 2단계에서 나가도 1단계로 돌아가지 않는다
+    await user.type(screen.getByPlaceholderText(WIKI_NAME_FIELD.placeholder), 'CS 응대 위키');
+    await user.click(screen.getByRole('button', { name: ONBOARDING_NEXT_LABEL }));
+    await screen.findByRole('heading', { name: ONBOARDING_SOURCE_HEADING });
+
+    await user.click(screen.getByRole('button', { name: EXIT_BUTTON_LABEL }));
+    await user.click(await screen.findByRole('button', { name: EXIT_CONFIRM_LABEL }));
+
+    expect(mockPush).toHaveBeenCalledWith('/');
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: ONBOARDING_SOURCE_HEADING })).toBeInTheDocument();
+  });
+
+  it('완료 화면에서 나가도 홈으로 간다', async () => {
+    const user = userEvent.setup();
+    mockSubmitHandlers();
+    renderOnboarding();
+
+    await walkToCompleteStep(user, ['고객지원']);
+
+    await user.click(screen.getByRole('button', { name: EXIT_BUTTON_LABEL }));
+    await user.click(await screen.findByRole('button', { name: EXIT_CONFIRM_LABEL }));
+
+    expect(mockPush).toHaveBeenCalledWith('/');
+    expect(mockBack).not.toHaveBeenCalled();
+  });
+});
+
+describe('WikiOnboardingPage 수집 위치 화면', () => {
+  /** 1단계를 통과해 2단계를 연다 */
+  async function openSourceStep(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(screen.getByPlaceholderText(WIKI_NAME_FIELD.placeholder), 'CS 응대 위키');
+    await user.click(screen.getByRole('button', { name: ONBOARDING_NEXT_LABEL }));
+    await screen.findByRole('heading', { name: ONBOARDING_SOURCE_HEADING });
+  }
+
+  it('일정 선택을 바꾸면 결과 문장이 따라간다', async () => {
+    const user = userEvent.setup();
+    mockSubmitHandlers();
+    renderOnboarding();
+
+    await openSourceStep(user);
+    expect(screen.getByText('매일 자정에 새 상담을 확인하고 문서 초안을 만들어요.')).toBeInTheDocument();
+
+    // 트리거의 현재 값 텍스트로 갱신 주기 드롭다운을 연다
+    await user.click(screen.getByText('매일').closest('button')!);
+    await user.click(await screen.findByRole('menuitem', { name: '6시간마다' }));
+
+    expect(screen.getByText('6시간마다 자정에 새 상담을 확인하고 문서 초안을 만들어요.')).toBeInTheDocument();
+    expect(screen.queryByText('매일 자정에 새 상담을 확인하고 문서 초안을 만들어요.')).not.toBeInTheDocument();
+  });
+
+  it('채널 후보를 불러오는 동안에는 표 자리에 골격이 놓인다', async () => {
+    const user = userEvent.setup();
+    server.use(http.get('/api/v1/automations/credentials', async () => await delay('infinite')));
+    renderOnboarding();
+
+    await openSourceStep(user);
+
+    expect(screen.getByRole('status', { name: '채널 목록 불러오는 중' })).toBeInTheDocument();
+  });
+
+  it('채널 후보 조회가 실패하면 표 자리에 실패 안내가 놓인다', async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.get('/api/v1/automations/credentials', () =>
+        HttpResponse.json({ code: 'INTERNAL', message: '실패' }, { status: 500 }),
+      ),
+    );
+    renderOnboarding();
+
+    await openSourceStep(user);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('채널 목록을 불러오지 못했습니다');
   });
 });
 

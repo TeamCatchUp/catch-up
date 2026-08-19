@@ -210,7 +210,10 @@ export const INITIAL_SCHEDULE_SELECTION: Readonly<Record<string, string>> = Obje
   }),
 );
 
-export const SCHEDULE_RESULT_TEXT = '매일 자정에 새 상담을 확인하고 문서 초안을 만들어요.';
+/** 2단계 결과 문장. 어형은 고정이고 주기·실행 시각 자리만 선택 라벨로 갈린다 */
+export const buildScheduleResultText = (intervalLabel: string, runTimeLabel: string) =>
+  `${intervalLabel} ${runTimeLabel}에 새 상담을 확인하고 문서 초안을 만들어요.`;
+
 export const BACKFILL_NOTICE_TEXT = '과거 이력 가져오기는 곧 지원돼요.';
 
 export const ONBOARDING_NEXT_LABEL = '다음 단계로';
