@@ -1,8 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 
+import { automationCredentialsQueries } from '@/shared/queries/automationCredentials.queries';
+
+import { mapOnboardingChannelRows } from '../../api/onboardingSourceMappers';
 import {
   BACKFILL_NOTICE_TEXT,
   CHANNEL_FIELD_CAPTION,
@@ -16,7 +20,6 @@ import {
   INITIAL_SCHEDULE_SELECTION,
   ONBOARDING_BACK_LABEL,
   ONBOARDING_BASIC_INFO_TITLE,
-  ONBOARDING_CHANNEL_ROWS,
   ONBOARDING_COMPLETE_HEADING,
   ONBOARDING_DOC_SETTING_TITLE,
   ONBOARDING_FINISH_LABEL,
@@ -72,8 +75,12 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
   // 표는 고른 채널의 목록이다 — 드롭다운에서 고르면 여기 쌓인다
   const [selectedCredentialIds, setSelectedCredentialIds] = useState<readonly number[]>([]);
 
+  // 소스 후보는 연결된 채널톡 채널이다 — 수집 설정도 이 credential_id로 저장한다
+  const { data: credentials } = useQuery(automationCredentialsQueries.credentials('channel_talk'));
+  const availableChannelRows = mapOnboardingChannelRows(credentials?.credentials ?? []);
+
   const selectedChannelRows = selectedCredentialIds
-    .map((id) => ONBOARDING_CHANNEL_ROWS.find((row) => row.channel.credentialId === id))
+    .map((id) => availableChannelRows.find((row) => row.channel.credentialId === id))
     .filter((row) => row !== undefined);
 
   // 서버 필수값 기준으로 잠근다 — 일정은 기본 선택이 있어 조건에 들지 않는다
@@ -127,7 +134,7 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
         channelCaption={CHANNEL_FIELD_CAPTION}
         channelPickerPlaceholder={CHANNEL_PICKER_PLACEHOLDER}
         channelTableHeaders={CHANNEL_TABLE_HEADERS}
-        availableChannels={ONBOARDING_CHANNEL_ROWS}
+        availableChannels={availableChannelRows}
         onSelectChannel={(credentialId) => setSelectedCredentialIds((current) => [...current, credentialId])}
         channelRows={selectedChannelRows}
         scheduleFields={scheduleFields}
