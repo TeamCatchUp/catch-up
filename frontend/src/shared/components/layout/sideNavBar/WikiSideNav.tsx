@@ -9,8 +9,6 @@ import IconFile from '@/public/icons/icon/file.svg';
 import IconFolder from '@/public/icons/icon/folder.svg';
 import IconGrid from '@/public/icons/icon/grid.svg';
 import IconLink from '@/public/icons/icon/link.svg';
-import IconSearch300 from '@/public/icons/icon/search_300.svg';
-import IconSearch400 from '@/public/icons/icon/search_400.svg';
 import IconStar from '@/public/icons/icon/star.svg';
 import IconStarOff from '@/public/icons/icon/star_off.svg';
 import IconUpdate from '@/public/icons/icon/update.svg';
@@ -36,14 +34,7 @@ import SnbSpaceSwitcher from './SnbSpaceSwitcher';
 import SnbTeamspaceCard from './SnbTeamspaceCard';
 
 /** 트리·섹션 메뉴 항목 키. 항목이 늘어도 소비처가 깨지지 않게 열어둔다 */
-export type KnownSnbMenuActionId =
-  | 'favorite'
-  | 'unfavorite'
-  | 'copy-link'
-  | 'rename'
-  | 'file'
-  | 'folder'
-  | 'channel';
+export type KnownSnbMenuActionId = 'favorite' | 'unfavorite' | 'copy-link' | 'rename' | 'folder' | 'channel';
 export type SnbMenuActionId = KnownSnbMenuActionId | (string & {});
 
 /** 트리 행의 종류. 케밥 머리 라벨이 이 값으로 갈린다 */
@@ -84,8 +75,8 @@ const NODE_KIND_LABEL: Record<WikiTreeNodeKind, string> = {
 // 껍데기는 메뉴·이름 입력이 직접 그린다. overflow-visible이 없으면 그림자가 잘린다
 const POPOVER_SHELL_CLASS = 'overflow-visible border-0 bg-transparent p-0 shadow-none';
 
-/** 트리에서 id로 노드를 찾는다. 케밥 메뉴가 즐겨찾기·소속 채널을 물을 때 쓴다 */
-function findTreeNode(nodes: readonly WikiTreeNode[], id: string): WikiTreeNode | undefined {
+/** 트리에서 id로 노드를 찾는다. 케밥 메뉴가 즐겨찾기·소속 채널·목적지를 물을 때 쓴다 */
+export function findTreeNode(nodes: readonly WikiTreeNode[], id: string): WikiTreeNode | undefined {
   for (const node of nodes) {
     if (node.id === id) return node;
     const hit = node.children ? findTreeNode(node.children, id) : undefined;
@@ -108,6 +99,8 @@ export interface WikiSideNavProps {
   onMenuAction?: (nodeId: string | undefined, actionId: SnbMenuActionId) => void;
   /** 이름 바꾸기 제출. 보낼 경로가 종류·소속 채널로 갈려 노드째 넘긴다 */
   onRenameSubmit?: (node: WikiTreeNode, name: string) => void;
+  /** 하위 폴더 추가 제출. 첫 인자는 폴더가 생길 채널 노드다 */
+  onFolderCreateSubmit?: (channelNode: WikiTreeNode, name: string) => void;
 }
 
 /**
@@ -122,6 +115,7 @@ export default function WikiSideNav({
   onNodeToggle,
   onMenuAction,
   onRenameSubmit,
+  onFolderCreateSubmit,
 }: WikiSideNavProps = {}) {
   const router = useRouter();
   const pathname = usePathname();
@@ -149,16 +143,20 @@ export default function WikiSideNav({
   } | null>(null);
   const closeMenu = () => setMenu(null);
 
-  // 이름 바꾸기 입력. 케밥에서 이어 열려 앵커를 그대로 물려받는다
-  const [rename, setRename] = useState<{ node: WikiTreeNode; anchor: HTMLElement } | null>(null);
+  // 이름 입력. 케밥·하위 추가에서 이어 열려 앵커를 그대로 물려받는다
+  const [nameInput, setNameInput] = useState<{
+    mode: 'rename' | 'create-folder';
+    node: WikiTreeNode;
+    anchor: HTMLElement;
+  } | null>(null);
 
   // 섹션 접기는 로컬 상태다 — 서버에 보존할 계약이 없다
   const [favoritesOpen, setFavoritesOpen] = useState(true);
   const [wikiOpen, setWikiOpen] = useState(true);
 
   // 메뉴·입력이 열린 동안 액션이 사라지면 앵커가 0×0이 되므로 어느 행이 열렸는지 트리에 알린다
-  const openRowMenu = rename
-    ? { nodeId: rename.node.id, kind: 'more' as const }
+  const openRowMenu = nameInput
+    ? { nodeId: nameInput.node.id, kind: nameInput.mode === 'rename' ? ('more' as const) : ('add' as const) }
     : menu && menu.nodeId && menu.kind !== 'section-add'
       ? { nodeId: menu.nodeId, kind: menu.kind === 'row-more' ? ('more' as const) : ('add' as const) }
       : undefined;
@@ -172,12 +170,12 @@ export default function WikiSideNav({
     return nodes.flatMap(flatten).find((node) => node.href === pathname)?.id;
   }, [nodes, pathname]);
 
-  // 하위 추가(+)는 그 채널의 관리자에게만 남긴다 — 구조상 가능해도 권한이 없으면 어포던스가 없다
+  // 하위 추가(+)는 그 채널의 관리자에게만, 채널 행에만 남긴다 — 폴더는 채널 바로 아래에만 생긴다
   const treeNodes = useMemo(() => {
     const gate = (items: readonly WikiTreeNode[]): NavTreeNode[] =>
       items.map((node) => ({
         ...node,
-        canAddChild: node.canAddChild === true && channelAdmins[node.channelId] === true,
+        canAddChild: node.canAddChild === true && node.kind === 'channel' && channelAdmins[node.channelId] === true,
         children: node.children ? gate(node.children) : undefined,
       }));
     return gate(nodes);
@@ -185,14 +183,17 @@ export default function WikiSideNav({
 
   const select = (actionId: SnbMenuActionId) => () => {
     const node = menu?.nodeId ? findTreeNode(nodes, menu.nodeId) : undefined;
-    // 이름 바꾸기는 케밥 자리에 입력 팝오버를 이어 띄운다 — 보낼 수 없는 노드에서는 열지 않는다
-    if (actionId === 'rename' && menu && canRename(node)) setRename({ node, anchor: menu.anchor });
+    // 이름 바꾸기·폴더 추가는 눌린 자리에 입력 팝오버를 이어 띄운다 — 보낼 수 없는 노드에서는 열지 않는다
+    if (actionId === 'rename' && menu && canRename(node)) setNameInput({ mode: 'rename', node, anchor: menu.anchor });
+    else if (actionId === 'folder' && menu && node) setNameInput({ mode: 'create-folder', node, anchor: menu.anchor });
+    // 채널 생성 화면은 온보딩뿐이다 — 별도 생성 폼이 없다
+    else if (actionId === 'channel') go('/llm-wiki/onboarding')();
     onMenuAction?.(menu?.nodeId, actionId);
     closeMenu();
   };
 
   /*
-   * 메뉴 항목의 목적지가 아직 없다. 하단 메타는 노드가 값을 들고 있을 때만 그린다 —
+   * 하단 메타는 노드가 값을 들고 있을 때만 그린다 —
    * 대응 API 필드가 없어 fixture 표본 외에는 비어 있다.
    */
   const menuProps = () => {
@@ -203,15 +204,11 @@ export default function WikiSideNav({
         groups: [[{ id: 'channel', label: '채널', Icon: IconWikiChannel, onSelect: select('channel') }]],
       };
     }
+    // 문서 생성 API가 없어 파일 항목을 두지 않는다 — 문서는 대화에서 만들어진다
     if (menu?.kind === 'row-add') {
       return {
         categoryLabel: '하위 페이지 추가',
-        groups: [
-          [
-            { id: 'file', label: '파일', Icon: IconFile, onSelect: select('file') },
-            { id: 'folder', label: '폴더', Icon: IconFolder, onSelect: select('folder') },
-          ],
-        ],
+        groups: [[{ id: 'folder', label: '폴더', Icon: IconFolder, onSelect: select('folder') }]],
       };
     }
     const node = menu?.nodeId ? findTreeNode(nodes, menu.nodeId) : undefined;
@@ -287,8 +284,6 @@ export default function WikiSideNav({
         footer={<SnbRailFooter userName={user?.name ?? '이름없음'} onSettingsClick={goSettings} profileMenu={profileMenu} />}
       >
         <SnbRailItem Icon={IconAdd400} label="새 채팅" onClick={go('/')} />
-        {/* 검색은 목적지가 정해지기 전까지 아무 동작도 하지 않는다 */}
-        <SnbRailItem Icon={IconSearch400} label="검색" />
         <SnbRailItem Icon={IconUpdate} label="요청됨" selected={isReview} onClick={go('/llm-wiki/review')} />
         <SnbRailItem Icon={IconGrid} label="위키 대시보드" selected={isDashboard} onClick={go('/llm-wiki')} />
         {/* 즐겨찾기·최근 위키는 갈 곳이 없다 */}
@@ -312,7 +307,6 @@ export default function WikiSideNav({
         <>
           <div className="flex flex-col">
             <SnbNavRow Icon={IconAdd400} label="새 채팅" iconOnDisc onClick={go('/')} />
-            <SnbNavRow Icon={IconSearch300} label="검색" />
             <SnbNavRow
               Icon={IconUpdate}
               label="요청됨"
@@ -403,19 +397,21 @@ export default function WikiSideNav({
         </Popover>
       )}
 
-      {/* 이름 입력도 케밥과 같은 앵커에 같은 방식으로 붙는다 */}
-      {rename && (
-        <Popover open onOpenChange={(open) => !open && setRename(null)}>
-          <PopoverAnchor virtualRef={{ current: rename.anchor }} />
+      {/* 이름 입력도 케밥과 같은 앵커에 같은 방식으로 붙는다. 생성은 빈 값으로 여는 같은 입력이다 */}
+      {nameInput && (
+        <Popover open onOpenChange={(open) => !open && setNameInput(null)}>
+          <PopoverAnchor virtualRef={{ current: nameInput.anchor }} />
           <PopoverContent align="start" side="right" className={POPOVER_SHELL_CLASS}>
             <SnbRenamePopover
-              kind={rename.node.kind}
-              defaultValue={rename.node.label}
+              kind={nameInput.mode === 'create-folder' ? 'folder' : nameInput.node.kind}
+              defaultValue={nameInput.mode === 'create-folder' ? '' : nameInput.node.label}
+              aria-label={nameInput.mode === 'create-folder' ? '폴더 이름' : undefined}
               onSubmit={(name) => {
-                onRenameSubmit?.(rename.node, name);
-                setRename(null);
+                if (nameInput.mode === 'create-folder') onFolderCreateSubmit?.(nameInput.node, name);
+                else onRenameSubmit?.(nameInput.node, name);
+                setNameInput(null);
               }}
-              onCancel={() => setRename(null)}
+              onCancel={() => setNameInput(null)}
             />
           </PopoverContent>
         </Popover>

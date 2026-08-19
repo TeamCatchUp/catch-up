@@ -80,22 +80,14 @@ describe('WikiSideNav 펼침', () => {
     renderWikiNav();
 
     expect(screen.getByRole('button', { name: '새 채팅' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '검색' })).toBeInTheDocument();
+    // 검색은 목적지가 없어 항목째 내렸다
+    expect(screen.queryByRole('button', { name: '검색' })).toBeNull();
     // 접근 이름에 배지 건수가 붙는다
     expect(screen.getByRole('button', { name: /^요청됨/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '위키 대시보드' })).toBeInTheDocument();
     // 즐겨찾기는 단일 행이 아니라 섹션이다 (시안 15338:92139)
     expect(screen.getByText('즐겨찾기')).toBeInTheDocument();
     expect(screen.getByText('위키')).toBeInTheDocument();
-  });
-
-  it('검색은 목적지가 없어 눌러도 이동하지 않는다', async () => {
-    const user = userEvent.setup();
-    renderWikiNav();
-
-    await user.click(screen.getByRole('button', { name: '검색' }));
-
-    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it('즐겨찾기 행은 자기 문서 경로로 이동한다', async () => {
@@ -205,15 +197,41 @@ describe('WikiSideNav 펼침', () => {
     expect(popover).not.toHaveClass('overflow-hidden');
   });
 
-  it('트리 행의 하위 추가를 누르면 파일·폴더 메뉴가 열린다', async () => {
+  it('트리 행의 하위 추가를 누르면 폴더 항목만 열린다', async () => {
     const user = userEvent.setup();
     renderWikiNav();
 
     await user.click(screen.getAllByRole('button', { name: `${CHANNEL_LABEL} 하위 페이지 추가` })[0]);
 
     expect(screen.getByText('하위 페이지 추가')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '파일' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '폴더' })).toBeInTheDocument();
+    // 문서 생성 API가 없어 파일 항목을 두지 않는다
+    expect(screen.queryByRole('button', { name: '파일' })).toBeNull();
+  });
+
+  it('폴더 항목을 고르면 빈 입력이 이어 뜨고 제출이 채널 노드째 나간다', async () => {
+    const user = userEvent.setup();
+    const onFolderCreateSubmit = vi.fn();
+    renderWikiNav({ onFolderCreateSubmit });
+
+    const add = screen.getAllByRole('button', { name: `${CHANNEL_LABEL} 하위 페이지 추가` })[0];
+    await user.click(add);
+    await user.click(screen.getByRole('button', { name: '폴더' }));
+
+    // 이름 바꾸기와 달리 기존 값을 물려받지 않는다
+    const input = screen.getByRole('textbox', { name: '폴더 이름' });
+    expect(input).toHaveValue('');
+    // 앵커가 사라지면 팝오버가 좌상단으로 튄다 — 입력이 떠 있는 동안 행 액션이 남아야 한다
+    expect(add.parentElement).toHaveClass('flex');
+    expect(add.parentElement).not.toHaveClass('hidden');
+
+    await user.type(input, '장애 대응{Enter}');
+
+    expect(onFolderCreateSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'channel-1', kind: 'channel' }),
+      '장애 대응',
+    );
+    expect(screen.queryByTestId('snb-rename-popover')).toBeNull();
   });
 
   it('섹션 머리글로 즐겨찾기·위키를 접을 수 있다', async () => {
@@ -262,9 +280,19 @@ describe('WikiSideNav 펼침', () => {
     await user.click(screen.getByRole('button', { name: '추가하기' }));
 
     expect(screen.getByText('하위 페이지 추가')).toBeInTheDocument();
-    // 섹션에서는 채널만 만든다 — 파일·폴더는 채널 아래에서만 생긴다
+    // 섹션에서는 채널만 만든다 — 폴더는 채널 아래에서만 생긴다
     expect(screen.getByRole('button', { name: '채널' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '파일' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '폴더' })).toBeNull();
+  });
+
+  it('채널 항목은 채널을 만드는 유일한 화면인 온보딩으로 보낸다', async () => {
+    const user = userEvent.setup();
+    renderWikiNav({ canCreateWiki: true });
+
+    await user.click(screen.getByRole('button', { name: '추가하기' }));
+    await user.click(screen.getByRole('button', { name: '채널' }));
+
+    expect(mockPush).toHaveBeenCalledWith('/llm-wiki/onboarding');
   });
 
   it('메뉴 항목을 고르면 노드 id와 항목 키가 밖으로 나가고 메뉴가 닫힌다', async () => {
@@ -388,11 +416,16 @@ describe('WikiSideNav 펼침', () => {
     expect(onRenameSubmit).not.toHaveBeenCalled();
   });
 
-  it('하위 추가(+)는 관리자 채널 행에만 붙고 판정은 prop을 따른다', () => {
+  it('하위 추가(+)는 관리자 채널 행에만 붙고 판정은 prop을 따른다', async () => {
     const addButtons = () => screen.queryAllByRole('button', { name: `${CHANNEL_LABEL} 하위 페이지 추가` });
 
+    const user = userEvent.setup();
     const { unmount } = renderWikiNav();
     expect(addButtons()).toHaveLength(2);
+
+    // 폴더 안에는 만들 것이 없다 — 폴더 행에는 + 가 붙지 않는다
+    await expandRow(user, CHANNEL_LABEL);
+    expect(screen.queryAllByRole('button', { name: `${FOLDER_LABEL} 하위 페이지 추가` })).toHaveLength(0);
     unmount();
 
     // 같은 노드라도 채널 관리자 판정이 바뀌면 어포던스가 따라 바뀐다
@@ -435,15 +468,16 @@ describe('WikiSideNav 닫힘', () => {
     mockSidebarState.isSidebarOpen = false;
   });
 
-  it('Rail 6항목을 시안 순서대로 렌더한다', () => {
+  it('Rail 항목을 시안 순서대로 렌더한다', () => {
     renderWikiNav();
 
-    // 시안 15346:97297 — 새 채팅·검색·요청됨·위키 대시보드·즐겨찾기·최근 위키
-    ['새 채팅', '검색', '요청됨', '위키 대시보드', '즐겨찾기', '최근 위키'].forEach((label) =>
+    // 시안 15346:97297에서 검색을 뺀 5항목
+    ['새 채팅', '요청됨', '위키 대시보드', '즐겨찾기', '최근 위키'].forEach((label) =>
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument(),
     );
-    // 지식 관리는 제품 결정으로 빠졌다
+    // 지식 관리는 제품 결정으로 빠졌고, 검색은 목적지가 없어 내렸다
     expect(screen.queryByRole('button', { name: '지식 관리' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '검색' })).toBeNull();
     // 닫힘에는 트리가 없다
     expect(screen.queryByText('위키')).toBeNull();
   });

@@ -10,9 +10,11 @@ import { server } from '@/test/msw/server';
 
 import WikiSideNavContainer from './WikiSideNavContainer';
 
+const mockPush = vi.hoisted(() => vi.fn());
+
 vi.mock('next/navigation', () => ({
   usePathname: () => '/llm-wiki',
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 const mockSidebarState = {
@@ -89,6 +91,10 @@ let writes: RecordedWrite[] = [];
 let channelListCallCount = 0;
 let favoriteListCallCount = 0;
 
+/** 링크 복사가 무엇을 넘겼는지 보는 자리. userEvent.setup()이 심는 클립보드 스텁을 뒤에서 덮는다 */
+const writeText = vi.fn<(text: string) => Promise<void>>();
+const stubClipboard = () => Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+
 const recordWrite = async (request: Request): Promise<RecordedWrite> => ({
   method: request.method,
   path: new URL(request.url).pathname,
@@ -99,6 +105,7 @@ beforeEach(() => {
   writes = [];
   channelListCallCount = 0;
   favoriteListCallCount = 0;
+  writeText.mockResolvedValue(undefined);
 
   server.use(
     http.get('/api/v1/auth/me', () =>
@@ -128,6 +135,10 @@ beforeEach(() => {
     http.patch('/api/v1/wiki/channels/:channelId/folders/:folderId', async ({ request }) => {
       writes.push(await recordWrite(request));
       return HttpResponse.json({ id: 'fd-1', name: '새 폴더 이름', channel_id: 'ch-1' });
+    }),
+    http.post('/api/v1/wiki/channels/:channelId/folders', async ({ request }) => {
+      writes.push(await recordWrite(request));
+      return HttpResponse.json({ id: 'fd-2', name: '장애 대응', channel_id: 'ch-1' }, { status: 201 });
     }),
   );
 });
@@ -218,6 +229,58 @@ describe('WikiSideNavContainer 쓰기 배선', () => {
         { method: 'PATCH', path: '/api/v1/wiki/channels/ch-1/folders/fd-1', body: { name: '새 폴더 이름' } },
       ]),
     );
+  });
+
+  it('하위 폴더 추가가 채널 폴더 경로로 POST를 보내고 목록을 다시 읽는다', async () => {
+    const user = userEvent.setup();
+    renderContainer();
+
+    await user.click(await screen.findByRole('button', { name: `${CHANNEL_LABEL} 하위 페이지 추가` }));
+    await user.click(screen.getByRole('button', { name: '폴더' }));
+    await user.type(screen.getByRole('textbox', { name: '폴더 이름' }), '장애 대응{Enter}');
+
+    await waitFor(() =>
+      expect(writes).toEqual([
+        { method: 'POST', path: '/api/v1/wiki/channels/ch-1/folders', body: { name: '장애 대응' } },
+      ]),
+    );
+    await waitFor(() => expect(channelListCallCount).toBeGreaterThan(1));
+  });
+
+  it('링크 복사는 현재 오리진에 노드 경로를 붙여 클립보드에 넣는다', async () => {
+    const user = userEvent.setup();
+    stubClipboard();
+    renderContainer();
+
+    await user.click((await screen.findAllByRole('button', { name: `${CHANNEL_LABEL} 추가 작업` }))[0]);
+    await user.click(screen.getByRole('button', { name: '링크 복사' }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/llm-wiki/channel/ch-1`));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('링크가 복사되었습니다.'));
+    // 읽기 액션이라 서버로는 아무것도 나가지 않는다
+    expect(writes).toEqual([]);
+  });
+
+  it('클립보드 권한이 막히면 실패 문구를 띄운다', async () => {
+    const user = userEvent.setup();
+    stubClipboard();
+    writeText.mockRejectedValue(new Error('denied'));
+    renderContainer();
+
+    await user.click((await screen.findAllByRole('button', { name: `${CHANNEL_LABEL} 추가 작업` }))[0]);
+    await user.click(screen.getByRole('button', { name: '링크 복사' }));
+
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('복사에 실패했습니다.'));
+  });
+
+  it('위키 섹션의 채널 추가는 온보딩으로 보낸다', async () => {
+    const user = userEvent.setup();
+    renderContainer();
+
+    await user.click(await screen.findByRole('button', { name: '추가하기' }));
+    await user.click(screen.getByRole('button', { name: '채널' }));
+
+    expect(mockPush).toHaveBeenCalledWith('/llm-wiki/onboarding');
   });
 
   it('이름 중복 409는 서버 문구를 토스트로 띄운다', async () => {
