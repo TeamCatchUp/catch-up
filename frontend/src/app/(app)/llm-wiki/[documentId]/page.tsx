@@ -1,23 +1,31 @@
-import { notFound } from 'next/navigation';
+'use client';
+
+import { useParams, useRouter } from 'next/navigation';
 
 import WikiDocumentPage from '@/features/llm-wiki/components/document/WikiDocumentPage';
-import { findWikiDocument } from '@/features/llm-wiki/fixtures/llmWikiDocumentFixtures';
-
-interface PageProps {
-  params: Promise<{ documentId: string }>;
-  searchParams: Promise<{ proposalId?: string }>;
-}
+import { useWikiDocumentModel } from '@/features/llm-wiki/hooks/useWikiDocumentModel';
 
 /**
- * 문서 화면. 문서 조회 API가 없어 픽스처로 렌더한다.
- * 404 시안이 없어 직접 만들지 않고 notFound()로 프레임워크 기본에 맡긴다.
+ * 문서 화면. 검토 큐에서 발행된 판을 읽기만 하고 편집 경로는 두지 않는다.
+ * 로딩·미발행(404 ARTIFACT_NOT_PUBLISHED)·에러 시안이 없어 화면을 만들지 않는다.
  */
-export default async function Page({ params, searchParams }: PageProps) {
-  const { documentId } = await params;
-  const { proposalId } = await searchParams;
+export default function Page() {
+  const router = useRouter();
+  const { documentId } = useParams<{ documentId: string }>();
+  const { document, breadcrumbs } = useWikiDocumentModel(documentId);
 
-  const document = findWikiDocument(documentId);
-  if (!document) notFound();
+  if (!document) return null;
 
-  return <WikiDocumentPage document={document} proposalId={proposalId ?? null} />;
+  const { channelId, folderId } = document;
+
+  return (
+    <WikiDocumentPage
+      document={document}
+      breadcrumbs={breadcrumbs}
+      onBreadcrumbClick={(crumb) => {
+        if (crumb.kind === 'channel' && channelId) router.push(`/llm-wiki/channel/${channelId}`);
+        if (crumb.kind === 'folder' && folderId) router.push(`/llm-wiki/folder/${folderId}`);
+      }}
+    />
+  );
 }
