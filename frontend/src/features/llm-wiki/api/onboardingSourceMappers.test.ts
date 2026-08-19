@@ -30,8 +30,8 @@ describe('mapChannelTalkChannel', () => {
 });
 
 describe('mapOnboardingChannelRows', () => {
-  it('"최근 수정일"은 대응 필드가 없어 빈 문자열이다', () => {
-    expect(mapOnboardingChannelRows([credential()])[0].lastModifiedLabel).toBe('');
+  it('행에는 채널만 실린다 — "최근 수정일" 필드는 없앴다', () => {
+    expect(mapOnboardingChannelRows([credential()])[0]).toEqual({ channel: mapChannelTalkChannel(credential()) });
   });
 
   it('연결이 없으면 빈 목록이다', () => {

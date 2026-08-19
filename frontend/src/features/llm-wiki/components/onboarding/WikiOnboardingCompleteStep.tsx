@@ -18,6 +18,8 @@ interface WikiOnboardingCompleteStepProps {
   onBack?: () => void;
   finishLabel: string;
   onFinish?: () => void;
+  /** 제출 중이거나 필수 입력이 덜 찼을 때 잠근다 — 같은 제출이 두 번 나가지 않게 한다 */
+  finishDisabled?: boolean;
   /** 상단 바 뒤로가기 — 하단 "이전"(단계 후퇴)과 달리 온보딩을 벗어난다 */
   onExit?: () => void;
 }
@@ -33,6 +35,7 @@ export default function WikiOnboardingCompleteStep({
   onBack,
   finishLabel,
   onFinish,
+  finishDisabled,
   onExit,
 }: WikiOnboardingCompleteStepProps) {
   return (
@@ -60,7 +63,13 @@ export default function WikiOnboardingCompleteStep({
         </div>
       </div>
 
-      <OnboardingActionBar backLabel={backLabel} onBack={onBack} nextLabel={finishLabel} onNext={onFinish} />
+      <OnboardingActionBar
+        backLabel={backLabel}
+        onBack={onBack}
+        nextLabel={finishLabel}
+        onNext={onFinish}
+        nextDisabled={finishDisabled}
+      />
     </div>
   );
 }

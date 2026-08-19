@@ -24,7 +24,6 @@ import {
   ONBOARDING_DOC_SETTING_TITLE,
   ONBOARDING_FINISH_LABEL,
   ONBOARDING_NEXT_LABEL,
-  ONBOARDING_NEXT_STEPS,
   ONBOARDING_NEXT_STEPS_TITLE,
   ONBOARDING_PURPOSE_HEADING,
   ONBOARDING_SOURCE_HEADING,
@@ -32,6 +31,7 @@ import {
   ONBOARDING_SUMMARY_CHANNEL_LABEL,
   ONBOARDING_SUMMARY_SECTIONS,
   PURPOSE_FIELD_LABEL,
+  SCHEDULE_FIELD_IDS,
   SCHEDULE_FIELDS,
   SCHEDULE_RESULT_TEXT,
   TEMPLATE_SAMPLE_TEXT_TBD,
@@ -44,8 +44,11 @@ import {
   WIKI_TONE_STYLE_OPTIONS,
 } from '../../fixtures/llmWikiOnboardingFixtures';
 import { WIKI_DOC_TEMPLATE_SAMPLES } from '../../fixtures/llmWikiTemplateSamples';
-import type { OnboardingChannelRow } from '../../types/llmWikiOnboarding';
+import { useWikiOnboardingSubmitMutation } from '../../queries/wikiOnboarding.mutations';
+import type { OnboardingChannelRow, ScheduleFieldData } from '../../types/llmWikiOnboarding';
+import { buildOnboardingNextSteps } from '../../utils/onboarding/onboardingNextSteps';
 import type { OnboardingStepNumber } from '../../utils/onboarding/resolveOnboardingStep';
+import { buildExecutionAnchor, intervalMinutesOf, resolveNextRunAt } from '../../utils/onboarding/scheduleAnchor';
 import OnboardingChannelTable from './OnboardingChannelTable';
 import type { SummarySectionView } from './OnboardingSummaryCard';
 import WikiOnboardingCompleteStep from './WikiOnboardingCompleteStep';
@@ -60,7 +63,7 @@ const ONBOARDING_PATH = '/llm-wiki/onboarding';
 
 /**
  * 온보딩 마법사. 단계는 URL이 소유하고 입력값은 화면이 들고 있는다.
- * 완료 후 이동만 하고 위키를 만들지는 않는다 — 생성 API가 아직 없다.
+ * 제출은 채널 생성 1회 + 고른 채널톡 채널마다 수집 설정 저장 N회다.
  */
 export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
   const router = useRouter();
@@ -79,6 +82,8 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
   // 소스 후보는 연결된 채널톡 채널이다 — 수집 설정도 이 credential_id로 저장한다
   const { data: credentials } = useQuery(automationCredentialsQueries.credentials('channel_talk'));
   const availableChannelRows = mapOnboardingChannelRows(credentials?.credentials ?? []);
+
+  const submit = useWikiOnboardingSubmitMutation();
 
   const selectedChannelRows = selectedCredentialIds
     .map((id) => availableChannelRows.find((row) => row.channel.credentialId === id))
@@ -102,7 +107,38 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
   const goToStep = (next: OnboardingStepNumber) =>
     router.push(next === 1 ? ONBOARDING_PATH : `${ONBOARDING_PATH}?step=${next}`);
 
+  const submitOnboarding = () => {
+    const now = new Date();
+    submit.mutate(
+      {
+        channel: {
+          name: name.trim(),
+          domain_preset: categoryId ?? '',
+          purpose_presets: purposeId ? [purposeId] : [],
+          kinds: docKindId ? [docKindId] : [],
+          style_preset: toneId ?? '',
+        },
+        credentialIds: selectedCredentialIds,
+        maintenance: {
+          enabled: true,
+          interval_minutes: intervalMinutesOf(scheduleSelection[SCHEDULE_FIELD_IDS.pollingInterval]),
+          execution_anchor_at: buildExecutionAnchor(scheduleSelection[SCHEDULE_FIELD_IDS.runTime], now),
+        },
+      },
+      // 수집 설정이 일부 실패해도 채널은 남는다 — 실패 수만 알리고 대시보드로 보낸다
+      { onSuccess: () => router.push('/llm-wiki') },
+    );
+  };
+
   if (step === 3) {
+    const now = new Date();
+    const intervalMinutes = intervalMinutesOf(scheduleSelection[SCHEDULE_FIELD_IDS.pollingInterval]);
+    const nextRunAt = resolveNextRunAt(
+      buildExecutionAnchor(scheduleSelection[SCHEDULE_FIELD_IDS.runTime], now),
+      intervalMinutes,
+      now,
+    );
+
     return (
       <WikiOnboardingCompleteStep
         steps={ONBOARDING_STEPS}
@@ -113,14 +149,20 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
           purposeId,
           docKindId,
           toneId,
+          scheduleFields,
           channelRows: selectedChannelRows,
         })}
         nextStepsTitle={ONBOARDING_NEXT_STEPS_TITLE}
-        nextSteps={ONBOARDING_NEXT_STEPS}
+        nextSteps={buildOnboardingNextSteps({
+          backfillOptionId: scheduleSelection[SCHEDULE_FIELD_IDS.backfillRange],
+          nextRunAt,
+          now,
+        })}
         backLabel={ONBOARDING_BACK_LABEL}
         onBack={() => goToStep(2)}
         finishLabel={ONBOARDING_FINISH_LABEL}
-        onFinish={() => router.push('/llm-wiki')}
+        onFinish={submitOnboarding}
+        finishDisabled={submit.isPending || !canLeavePurposeStep || !canLeaveSourceStep}
         onExit={exitOnboarding}
       />
     );
@@ -206,32 +248,42 @@ interface SummaryInput {
   purposeId: string | null;
   docKindId: string | null;
   toneId: string | null;
+  /** 트리거에 보이는 값이 그대로 요약이 된다 — 두 화면이 어긋나면 고르지 않은 설정을 본 셈이다 */
+  scheduleFields: readonly ScheduleFieldData[];
   channelRows: readonly OnboardingChannelRow[];
 }
 
-/** 1단계 선택분만 실제 입력으로 채운다 — 2단계는 선택 UI가 시안에 없어 픽스처 값을 유지한다 */
+/** 값이 없는 행은 undefined로 남겨 픽스처 값을 그대로 쓰게 한다 */
+const summaryValues = (label: string | undefined) => (label ? [label] : undefined);
+
+/** 요약 두 구역을 모두 실제 선택으로 채운다. 픽스처 값은 행 순서와 라벨만 공급한다 */
 function buildSummarySections(input: SummaryInput): readonly SummarySectionView[] {
   const category = WIKI_INFO_CATEGORIES.find((item) => item.id === input.categoryId);
   const purpose = WIKI_PURPOSE_OPTIONS.find((item) => item.id === input.purposeId);
   const docKind = WIKI_DOC_KIND_PRESETS.find((item) => item.id === input.docKindId);
   const tone = WIKI_TONE_STYLE_OPTIONS.find((item) => item.id === input.toneId);
+  const scheduleValueOf = (fieldId: string) => input.scheduleFields.find((field) => field.id === fieldId)?.valueLabel;
 
   const [purposeSection, collectionSection] = ONBOARDING_SUMMARY_SECTIONS;
-  const overrides: Record<string, readonly string[]> = {
+  const overrides: Record<string, readonly string[] | undefined> = {
     이름: input.name ? [input.name] : [],
     '정리할 정보': category ? [category.label] : [],
     목적: purpose ? [purpose.label] : [],
     '문서 종류': docKind ? [docKind.label] : [],
     문체: tone ? [tone.label] : [],
+    '갱신 주기': summaryValues(scheduleValueOf(SCHEDULE_FIELD_IDS.pollingInterval)),
+    언제부터: summaryValues(scheduleValueOf(SCHEDULE_FIELD_IDS.backfillRange)),
+    실행시간: summaryValues(scheduleValueOf(SCHEDULE_FIELD_IDS.runTime)),
   };
 
+  const fillRows = (section: (typeof ONBOARDING_SUMMARY_SECTIONS)[number]) =>
+    section.rows.map((row) => ({ ...row, values: overrides[row.label] ?? row.values }));
+
   return [
-    {
-      ...purposeSection,
-      rows: purposeSection.rows.map((row) => ({ ...row, values: overrides[row.label] ?? row.values })),
-    },
+    { ...purposeSection, rows: fillRows(purposeSection) },
     {
       ...collectionSection,
+      rows: fillRows(collectionSection),
       // 채널은 행이 아니라 2단계와 같은 표로 놓인다
       lead: {
         label: ONBOARDING_SUMMARY_CHANNEL_LABEL,

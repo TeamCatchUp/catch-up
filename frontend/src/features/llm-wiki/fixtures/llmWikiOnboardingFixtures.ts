@@ -139,9 +139,9 @@ export const CHANNEL_FIELD_LABEL = '어떤 채널톡 채널의 문의를 감지�
 /** 명세의 수집 범위 오해 방지 카피 */
 export const CHANNEL_FIELD_CAPTION = '선택한 채널의 고객 상담만 읽어요. 팀챗 등 내부 대화는 읽지 않아요.';
 export const CHANNEL_PICKER_PLACEHOLDER = '채널톡 내 채널을 선택해주세요';
-export const CHANNEL_TABLE_HEADERS = { name: '채널명', lastModified: '최근 수정일' } as const;
+export const CHANNEL_TABLE_HEADERS = { name: '채널명' } as const;
 
-// 행 카피는 시안 필러(TBD). 채널은 채널톡 자격증명 계약 모양을 지킨다 — 수정일만 [SPEC]
+// 행 카피는 시안 필러(TBD). 채널은 채널톡 자격증명 계약 모양을 지킨다
 export const ONBOARDING_CHANNEL_ROWS: readonly OnboardingChannelRow[] = Array.from({ length: 5 }, (_, index) => ({
   channel: {
     credentialId: index + 1,
@@ -149,8 +149,14 @@ export const ONBOARDING_CHANNEL_ROWS: readonly OnboardingChannelRow[] = Array.fr
     externalId: `ct-channel-${index + 1}`,
     isConfigured: true,
   },
-  lastModifiedLabel: '2025.01.23',
 }));
+
+/** 일정 필드 식별자. 제출 payload와 완료 화면이 같은 선택값을 이 키로 읽는다 */
+export const SCHEDULE_FIELD_IDS = {
+  pollingInterval: 'polling-interval',
+  backfillRange: 'backfill-range',
+  runTime: 'run-time',
+} as const;
 
 /**
  * 기본값과 주기 선택지는 기획 문서(Confluence 160301060 §3.2)가 원천이다 —
@@ -158,7 +164,7 @@ export const ONBOARDING_CHANNEL_ROWS: readonly OnboardingChannelRow[] = Array.fr
  */
 export const SCHEDULE_FIELDS: readonly ScheduleFieldData[] = [
   {
-    id: 'polling-interval',
+    id: SCHEDULE_FIELD_IDS.pollingInterval,
     label: '얼마나 자주 갱신할까요?',
     valueLabel: '매일',
     icon: 'calendar-clock',
@@ -170,7 +176,7 @@ export const SCHEDULE_FIELDS: readonly ScheduleFieldData[] = [
     ],
   },
   {
-    id: 'backfill-range',
+    id: SCHEDULE_FIELD_IDS.backfillRange,
     label: '언제부터의 상담을 가져올까요?',
     valueLabel: '지금부터',
     // 앞 둘은 추후 지원이라 고를 수 없이 노출된다(기획 §3.2, 시안 disabled)
@@ -181,7 +187,7 @@ export const SCHEDULE_FIELDS: readonly ScheduleFieldData[] = [
     ],
   },
   {
-    id: 'run-time',
+    id: SCHEDULE_FIELD_IDS.runTime,
     label: '몇 시에 실행할까요?',
     valueLabel: '자정',
     options: [
@@ -239,9 +245,21 @@ export const ONBOARDING_SUMMARY_CHANNEL_LABEL = '연결한 채널톡 채널';
 
 export const ONBOARDING_NEXT_STEPS_TITLE = '위키를 만들면';
 
-/** 명세의 완료 화면 3요소 — ①② 시간 약속, ③ 검수 안내. 별도 철학 문단은 시안에 없다 */
-export const ONBOARDING_NEXT_STEPS: readonly string[] = [
-  '오늘 들어오는 상담부터 수집을 시작해요',
-  '내일 자정 첫 갱신 때 첫 문서 초안이 검토 큐에 도착해요',
-  '문서는 사람의 승인 없이는 바뀌지 않아요',
-];
+// 완료 화면 3요소의 조각. ①② 시간 약속은 선택값에서 파생되고 ③은 고정이다
+export const DEFAULT_BACKFILL_OPTION_ID = 'from-now';
+
+/** 백필 선택별 수집 시작 안내. 고를 수 있는 값은 "지금부터"뿐이고 나머지는 카피 미정(TBD) */
+export const ONBOARDING_BACKFILL_START_TEXTS: Readonly<Record<string, string>> = {
+  all: '지금까지 쌓인 상담 전체부터 수집을 시작해요',
+  'recent-months': '최근 몇 개월치 상담부터 수집을 시작해요',
+  [DEFAULT_BACKFILL_OPTION_ID]: '오늘 들어오는 상담부터 수집을 시작해요',
+};
+
+export const buildOnboardingFirstRunText = (when: string) => `${when} 첫 갱신 때 첫 문서 초안이 검토 큐에 도착해요`;
+
+/** 제품 원칙이라 선택과 무관하게 고정이다 */
+export const ONBOARDING_APPROVAL_PRINCIPLE_TEXT = '문서는 사람의 승인 없이는 바뀌지 않아요';
+
+/** 채널은 이미 만들어졌고 수집 설정 저장만 실패한 경우의 알림 */
+export const buildMaintenanceFailureText = (failedCount: number, message: string) =>
+  `채널 ${failedCount}개의 수집 설정을 저장하지 못했어요. ${message}`;

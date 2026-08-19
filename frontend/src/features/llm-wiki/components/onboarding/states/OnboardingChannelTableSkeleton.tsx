@@ -18,7 +18,6 @@ export default function OnboardingChannelTableSkeleton() {
     >
       <div className={cn(ONBOARDING_CHANNEL_TABLE_GRID, 'border-line-normal-neutral border-b py-3')}>
         <Skeleton className="h-5 w-16" />
-        <Skeleton className="h-5 w-20 justify-self-end" />
       </div>
       {Array.from({ length: SKELETON_ROW_COUNT }, (_, index) => (
         <div key={index} className={cn(ONBOARDING_CHANNEL_TABLE_GRID, 'py-3')}>
@@ -26,7 +25,6 @@ export default function OnboardingChannelTableSkeleton() {
             <Skeleton className="size-5 shrink-0 rounded-full" />
             <Skeleton className="h-5 w-full max-w-80" />
           </div>
-          <Skeleton className="h-5 w-24 justify-self-end" />
         </div>
       ))}
     </div>

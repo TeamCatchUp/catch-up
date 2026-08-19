@@ -12,7 +12,7 @@ export function mapChannelTalkChannel(dto: AutomationCredentialItem): ChannelTal
   };
 }
 
-/** 온보딩 채널 표의 행. "최근 수정일"은 대응 필드가 없어 비운다. */
+/** 온보딩 채널 표의 행. 표에 놓이는 열은 채널명 하나뿐이다. */
 export function mapOnboardingChannelRows(dtos: readonly AutomationCredentialItem[]): OnboardingChannelRow[] {
-  return dtos.map((dto) => ({ channel: mapChannelTalkChannel(dto), lastModifiedLabel: '' }));
+  return dtos.map((dto) => ({ channel: mapChannelTalkChannel(dto) }));
 }

@@ -94,7 +94,7 @@ interface WikiOnboardingSourceStepProps {
   availableChannels?: readonly OnboardingChannelRow[];
   onSelectChannel?: (credentialId: number) => void;
   onOpenChannelPicker?: () => void;
-  channelTableHeaders: { name: string; lastModified: string };
+  channelTableHeaders: { name: string };
   /** 표는 고른 채널의 목록이다 */
   channelRows: readonly OnboardingChannelRow[];
   channelListStatus?: OnboardingChannelListStatus;

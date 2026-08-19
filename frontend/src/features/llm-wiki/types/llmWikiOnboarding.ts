@@ -67,8 +67,6 @@ export interface ChannelTalkChannel {
 /** 채널 표의 행. 표에 놓이는 채널은 위키 채널이 아니라 채널톡 채널이다 */
 export interface OnboardingChannelRow {
   channel: ChannelTalkChannel;
-  /** [SPEC] 시안의 "최근 수정일" 열 — 백엔드 계약에 대응 필드가 없다 */
-  lastModifiedLabel: string;
 }
 
 /**

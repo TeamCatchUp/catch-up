@@ -162,6 +162,9 @@ export const API = {
       `${API_PREFIX}/wiki/artifacts/${artifactId}/owners/${userId}`, // PUT 담당자 지정 / DELETE 해제
     favorites: `${API_PREFIX}/wiki/favorites`, // GET 즐겨찾기 목록 (최근 등록 순)
     favorite: (artifactId: string) => `${API_PREFIX}/wiki/favorites/${artifactId}`, // PUT 등록 / DELETE 해제 (둘 다 멱등)
+    // 경로 키는 채널톡 credential_id다 — 수집 설정은 위키가 아니라 소스 채널 단위로 저장된다
+    knowledgeMaintenanceSettings: (credentialId: number) =>
+      `${API_PREFIX}/wiki/knowledge-maintenance-settings/${credentialId}`, // PUT 수집 주기·실행 앵커 저장 (관리자)
   },
 
   // LLM Wiki 검수 루프 — 변경안 큐·블록 판정·발행

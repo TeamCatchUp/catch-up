@@ -8,7 +8,7 @@ import OnboardingChannelErrorNotice from './states/OnboardingChannelErrorNotice'
 import OnboardingChannelTableSkeleton from './states/OnboardingChannelTableSkeleton';
 
 interface OnboardingChannelTableProps {
-  headers: { name: string; lastModified: string };
+  headers: { name: string };
   rows: readonly OnboardingChannelRow[];
   status?: OnboardingChannelListStatus;
   onRetry?: () => void;
@@ -37,9 +37,6 @@ export default function OnboardingChannelTable({
             >
               {headers.name}
             </th>
-            <th role="columnheader" className="text-body-xsmall text-text-normal-alternative text-right font-medium">
-              {headers.lastModified}
-            </th>
           </tr>
         </thead>
         <tbody role="rowgroup" className="block">
@@ -48,9 +45,6 @@ export default function OnboardingChannelTable({
               <td role="cell" className="flex min-w-0 items-center gap-3">
                 <IconTagChannel className="text-icon-normal-neutral size-5.5 shrink-0" />
                 <span className="text-body-small text-text-normal-neutral truncate">{row.channel.name}</span>
-              </td>
-              <td role="cell" className="text-body-small text-text-normal-alternative text-right">
-                {row.lastModifiedLabel}
               </td>
             </tr>
           ))}
