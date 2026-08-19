@@ -67,6 +67,7 @@ const meta = {
         '**기본값·주기 선택지는 기획 문서(Confluence 160301060 §3.2)가 원천이다.** 시안 트리거의 "1분"은 공용 컴포넌트 필러였고 완료 화면 요약("매일"·"자정")이 기획과 일치한다 — 값 불일치가 이렇게 해소됐다.',
         '주기만 드롭다운이 열린다(6시간마다/12시간마다/매일/주 1회). 백필은 선택지 라벨이 기획에 확정돼 있지 않고(“최근 N개월”의 N 미정), 실행 시각은 기획이 “시각 선택, 기본 자정”까지만 정해 둘 다 트리거만 그린다.',
         '채널 목록의 로딩·빈·에러는 8/14 시안에도 없다 — 8/13 사용자 승인 구현분을 유지한다.',
+        '표의 채널은 위키 채널이 아니라 채널톡 채널이다 — mock은 GET /automations/credentials 응답(credential_id·external_id·is_configured) 모양을 지키고, 선택 식별자도 credentialId다.',
       ],
       layoutNotes: ['일정 3열 grid-cols-3 gap-4 — 시안 필드 폭 325.33은 (1008−32)/3의 결과값이라 고정하지 않는다.'],
     }),
@@ -125,7 +126,7 @@ export const ChannelPickerAddsRow: Story = {
     await expect(items).toHaveLength(ONBOARDING_CHANNEL_ROWS.length);
 
     await userEvent.click(items[0]);
-    await expect(args.onSelectChannel).toHaveBeenCalledWith(ONBOARDING_CHANNEL_ROWS[0].channel.id);
+    await expect(args.onSelectChannel).toHaveBeenCalledWith(ONBOARDING_CHANNEL_ROWS[0].channel.credentialId);
   },
 };
 

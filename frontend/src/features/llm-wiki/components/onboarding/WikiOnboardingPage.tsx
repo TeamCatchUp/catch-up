@@ -69,10 +69,10 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
   // 선택지가 있는 일정 필드만 값이 바뀐다 — 나머지는 픽스처 기본값을 유지한다
   const [scheduleSelection, setScheduleSelection] = useState<Record<string, string>>({});
   // 표는 고른 채널의 목록이다 — 드롭다운에서 고르면 여기 쌓인다
-  const [selectedChannelIds, setSelectedChannelIds] = useState<readonly string[]>([]);
+  const [selectedCredentialIds, setSelectedCredentialIds] = useState<readonly number[]>([]);
 
-  const selectedChannelRows = selectedChannelIds
-    .map((id) => ONBOARDING_CHANNEL_ROWS.find((row) => row.channel.id === id))
+  const selectedChannelRows = selectedCredentialIds
+    .map((id) => ONBOARDING_CHANNEL_ROWS.find((row) => row.channel.credentialId === id))
     .filter((row) => row !== undefined);
 
   const scheduleFields = SCHEDULE_FIELDS.map((field) => {
@@ -117,7 +117,7 @@ export default function WikiOnboardingPage({ step }: WikiOnboardingPageProps) {
         channelPickerPlaceholder={CHANNEL_PICKER_PLACEHOLDER}
         channelTableHeaders={CHANNEL_TABLE_HEADERS}
         availableChannels={ONBOARDING_CHANNEL_ROWS}
-        onSelectChannel={(channelId) => setSelectedChannelIds((current) => [...current, channelId])}
+        onSelectChannel={(credentialId) => setSelectedCredentialIds((current) => [...current, credentialId])}
         channelRows={selectedChannelRows}
         scheduleFields={scheduleFields}
         onSelectScheduleOption={(fieldId, optionId) =>

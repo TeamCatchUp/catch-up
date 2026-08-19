@@ -21,6 +21,7 @@ interface WikiOnboardingPurposeStepProps {
   nameValue: string;
   onNameChange?: (next: string) => void;
   namePlaceholder: string;
+  /** [BE] 채널명은 1~20자 — 상한 초과 입력은 잘라서 올린다 */
   nameMaxLength: number;
   purpose: ComponentProps<typeof PurposeSelectField>;
   docSettingTitle: string;
@@ -71,7 +72,7 @@ export default function WikiOnboardingPurposeStep({
                   maxLength={nameMaxLength}
                   placeholder={namePlaceholder}
                   aria-label={nameLabel}
-                  onChange={(event) => onNameChange?.(event.target.value)}
+                  onChange={(event) => onNameChange?.(event.target.value.slice(0, nameMaxLength))}
                   className="pr-16"
                 />
                 <span className="text-body-small text-text-normal-alternative absolute top-1/2 right-3 -translate-y-1/2">

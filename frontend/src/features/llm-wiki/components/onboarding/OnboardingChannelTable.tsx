@@ -44,7 +44,7 @@ export default function OnboardingChannelTable({
         </thead>
         <tbody role="rowgroup" className="block">
           {rows.map((row) => (
-            <tr key={row.channel.id} role="row" className={cn(ONBOARDING_CHANNEL_TABLE_GRID, 'py-3')}>
+            <tr key={row.channel.credentialId} role="row" className={cn(ONBOARDING_CHANNEL_TABLE_GRID, 'py-3')}>
               <td role="cell" className="flex min-w-0 items-center gap-3">
                 <IconTagChannel className="text-icon-normal-neutral size-5.5 shrink-0" />
                 <span className="text-body-small text-text-normal-neutral truncate">{row.channel.name}</span>

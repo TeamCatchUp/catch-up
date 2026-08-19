@@ -26,7 +26,7 @@ const meta = {
       states: ['default', 'loading', 'empty', 'error', 'narrow-slot'],
       dataNotes: [
         '행 카피(채널명·2025-01-23)는 시안 필러라 카피 미정(TBD) — 스토리명에 반영.',
-        '채널 mock은 백엔드 ChannelListItemResponse(id·name·workspace_id·is_admin·document_count·folders) 모양을 지킨다. "최근 수정일"은 대응 API 필드가 없어 [SPEC] 별도 필드로 격리(감사 §3 백엔드 계약 갭).',
+        '표의 채널은 위키 채널이 아니라 채널톡 채널이다 — mock은 GET /automations/credentials 응답(credential_id·external_id·is_configured) 모양을 지키고 행 key도 credentialId다. "최근 수정일"은 대응 API 필드가 없어 [SPEC] 별도 필드로 격리(감사 §3 백엔드 계약 갭).',
         '⚠️ 로딩·빈·에러는 Figma 근거가 없다 — 2026-08-13 사용자 승인으로 구현했다(로딩은 스켈레톤 지정, 빈·에러는 구현 재량 위임). 디자이너 승인본이 아니므로 시안이 도착하면 교체 대상이다.',
         '선택 표시는 여전히 미구현 — 시안 UNKNOWN(감사 §7).',
       ],

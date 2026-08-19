@@ -92,7 +92,7 @@ interface WikiOnboardingSourceStepProps {
   channelPickerPlaceholder: string;
   /** 드롭다운에 뜨는 선택 가능한 채널. 이미 고른 채널은 목록에서 빠진다 */
   availableChannels?: readonly OnboardingChannelRow[];
-  onSelectChannel?: (channelId: string) => void;
+  onSelectChannel?: (credentialId: number) => void;
   onOpenChannelPicker?: () => void;
   channelTableHeaders: { name: string; lastModified: string };
   /** 표는 고른 채널의 목록이다 */
@@ -139,8 +139,8 @@ export default function WikiOnboardingSourceStep({
   onExit,
 }: WikiOnboardingSourceStepProps) {
   // 이미 고른 채널은 다시 고를 수 없다 — 표에 같은 채널이 두 번 들어가지 않게 한다
-  const selectedIds = new Set(channelRows.map((row) => row.channel.id));
-  const selectableChannels = (availableChannels ?? []).filter((row) => !selectedIds.has(row.channel.id));
+  const selectedIds = new Set(channelRows.map((row) => row.channel.credentialId));
+  const selectableChannels = (availableChannels ?? []).filter((row) => !selectedIds.has(row.channel.credentialId));
 
   const channelPickerTrigger = (
     <button
@@ -179,8 +179,8 @@ export default function WikiOnboardingSourceStep({
                 >
                   {selectableChannels.map((row) => (
                     <DropdownMenuItem
-                      key={row.channel.id}
-                      onSelect={() => onSelectChannel?.(row.channel.id)}
+                      key={row.channel.credentialId}
+                      onSelect={() => onSelectChannel?.(row.channel.credentialId)}
                       className="text-body-small text-text-normal-normal h-8 gap-3 px-2"
                     >
                       <IconTagChannel className="text-icon-normal-neutral size-5 shrink-0" />

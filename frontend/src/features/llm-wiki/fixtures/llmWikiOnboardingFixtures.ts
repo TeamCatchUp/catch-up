@@ -25,6 +25,7 @@ export const ONBOARDING_COMPLETE_HEADING = '설정이 거의 다 완료됐어요
 export const ONBOARDING_BASIC_INFO_TITLE = '기본 위키 정보';
 export const ONBOARDING_DOC_SETTING_TITLE = '문서 설정';
 
+// [BE] 이름은 1~20자다(POST /wiki/channels/onboarding) — 상한은 입력에서 막는다
 export const WIKI_NAME_FIELD = {
   label: '이름',
   placeholder: 'CS 응답, 제품 용어 사전',
@@ -133,17 +134,15 @@ export const CHANNEL_FIELD_CAPTION = '선택한 채널의 고객 상담만 읽�
 export const CHANNEL_PICKER_PLACEHOLDER = '채널톡 내 채널을 선택해주세요';
 export const CHANNEL_TABLE_HEADERS = { name: '채널명', lastModified: '최근 수정일' } as const;
 
-// 행 카피는 시안 필러(TBD). 채널 필드는 백엔드 계약 모양을 지킨다 — 수정일만 [SPEC]
+// 행 카피는 시안 필러(TBD). 채널은 채널톡 자격증명 계약 모양을 지킨다 — 수정일만 [SPEC]
 export const ONBOARDING_CHANNEL_ROWS: readonly OnboardingChannelRow[] = Array.from(
   { length: 5 },
   (_, index) => ({
     channel: {
-      id: `channel-${index + 1}`,
+      credentialId: index + 1,
       name: '채널명 text text text text text text text text text text text text text',
-      workspaceId: 1,
-      isAdmin: index === 0,
-      documentCount: index * 3,
-      folders: [],
+      externalId: `ct-channel-${index + 1}`,
+      isConfigured: true,
     },
     lastModifiedLabel: '2025.01.23',
   }),
