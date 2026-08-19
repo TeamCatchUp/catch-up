@@ -25,6 +25,7 @@ const meta = {
   /** 선택 행은 소비처(라우트)가 든다 — 스토리는 그 자리를 로컬 state로 대신한다. */
   render: function ReviewQueueStory(args) {
     const [selectedId, setSelectedId] = useState(args.selectedId);
+    const [rejectDialogOpen, setRejectDialogOpen] = useState(args.rejectDialogOpen);
 
     return (
       <div className="h-225">
@@ -34,6 +35,11 @@ const meta = {
           onSelectItem={(id) => {
             args.onSelectItem(id);
             setSelectedId(id);
+          }}
+          rejectDialogOpen={rejectDialogOpen}
+          onRejectDialogOpenChange={(open) => {
+            args.onRejectDialogOpenChange(open);
+            setRejectDialogOpen(open);
           }}
         />
       </div>
@@ -68,6 +74,10 @@ const meta = {
     onApproveBlock: fn(),
     onRejectBlock: fn(),
     onPublish: fn(),
+    onApproveAll: fn(),
+    rejectDialogOpen: false,
+    onRejectDialogOpenChange: fn(),
+    onRejectAll: fn(),
   },
   parameters: {
     ...catchupParameters({
@@ -88,17 +98,19 @@ const meta = {
         'undecided-blocks',
         'no-review-permission',
         'no-reject-path',
+        'reject-reason',
         'empty-queue',
         'empty-by-filter',
       ],
       reuseNotes: [
-        'ReviewQueueListHeader·ReviewQueueRow·ReviewQueueFilterDropdown·WikiPageHeader(detail)·ChangeSummaryCard·BlockDiffSection·DocumentLocationCard·ReviewParticipantsCard·ReviewPublishBar를 조립만 한다.',
+        'ReviewQueueListHeader·ReviewQueueRow·ReviewQueueFilterDropdown·WikiPageHeader(detail)·ChangeSummaryCard·BlockDiffSection·DocumentLocationCard·ReviewParticipantsCard·ReviewPublishBar·RejectReasonDialog를 조립만 한다.',
       ],
       dataNotes: [
         '화면은 데이터를 props로만 받는다 — 큐·상세 조회와 판정·발행 요청은 라우트가 낸다. 스토리는 MSW 없이 fixture를 주입한다.',
         'diff 카드 짝짓기는 서버 block_changes가 정한다. 프론트는 자리만 따라가고 단어 강조만 만든다 — 같은 안건이 소비자마다 다르게 보이지 않기 위해서다.',
         '발행 버튼은 항상 열려 있다(사용자 확정). 변경 없는 블록은 판정할 카드가 없어 미판정으로 잠그면 발행이 영영 막혔다. 서버가 미판정을 거부하면 그 메시지를 토스트로 보인다 — 일괄 처리(undecided)는 사람이 보지 않은 블록을 자동 승인하게 되어 쓰지 않는다.',
-        '반려는 사유가 필수인데 사유 입력 시안이 없다 — 진입점을 닫아 보낼 수 없는 요청을 막는다(NoRejectPath). 시안이 오면 canReject만 켠다.',
+        '카드별 반려는 사유 입력 자리가 없어 진입점을 닫아 둔다(NoRejectPath). 변경안 통째 반려만 사유 입력 다이얼로그를 거쳐 나간다.',
+        '전체 승인·반려는 판정이 시작된 뒤에도 잠기지 않는다 — 서버가 409로 거절하고 그 메시지를 토스트로 보인다(발행 버튼과 같은 정책).',
         '채널·담당자 축은 서버가 하나씩만 받는다 — 둘 이상 고르면 파라미터로 나가지 않고 받은 쪽에서 좁힌다. 좁히기는 라우트가 맡고 화면은 관여하지 않는다.',
         '빈 큐는 시안이 없다(감사 MISSING·높음). 새 시각을 만들지 않고 대시보드 빈 표와 같은 일러스트·타이포를 쓰며, 필터 결과 0건도 같은 안내다 — 문구를 가르는 근거가 없다. 디자이너 확인 대상.',
         '목록이 비면 좌측 머리글과 필터는 남는다 — 필터로 비운 경우 되돌릴 경로가 사라지면 안 된다.',
@@ -106,6 +118,7 @@ const meta = {
       ],
       layoutNotes: [
         '좌 300 · 우 350 고정, 중앙이 남는 폭을 흡수한다. 높이는 셸이 준다 — 스토리가 900 슬롯을 흉내낸다.',
+        '헤더는 좌측 목록을 뺀 나머지 폭을 전부 덮는다 — 중앙과 우측 패널이 그 아래에 나란히 선다.',
       ],
     }),
   },
@@ -124,7 +137,19 @@ export const Default: Story = {
     await expect(canvas.getByRole('heading', { level: 2, name: selected.title })).toBeInTheDocument();
     await expect(canvas.getByText('환불 문서 병합 제안')).toBeInTheDocument();
 
+    // 헤더는 좌측 목록 오른쪽 전체를 덮는다 — 미리보기는 이 헤더의 마지막 액션이다
+    const header = canvas.getByRole('navigation', { name: '현재 위치' }).closest('header')!;
+    await expect(within(header).getByRole('button', { name: /미리보기/ })).toBeInTheDocument();
+    await expect(within(header).getByRole('button', { name: '다음 변경사항' })).toBeInTheDocument();
+    await userEvent.click(within(header).getByRole('button', { name: /미리보기/ }));
+    await expect(args.onPreview).toHaveBeenCalled();
+
+    // 헤더가 우측 패널 위까지 뻗는지는 눈이 아니라 기하로 본다
+    const sidePanel = canvas.getByText('문서 위치').closest('aside')!;
+    await expect(header.getBoundingClientRect().right).toBeGreaterThanOrEqual(sidePanel.getBoundingClientRect().right);
+
     // 중앙 — 요약과 diff 카드 3장
+    await expect(canvas.getByText('변경 내용')).toBeInTheDocument();
     await expect(canvas.getByText('이렇게 바뀌었어요')).toBeInTheDocument();
     await expect(canvas.getByText('재시도 정책')).toBeInTheDocument();
     await expect(canvas.getByText('PG 점검 시간 예외')).toBeInTheDocument();
@@ -135,6 +160,9 @@ export const Default: Story = {
     await expect(args.onApproveBlock).toHaveBeenCalledWith(
       expect.objectContaining({ blockIndex: 0, blockContentHash: expect.stringMatching(/^sha256:/) }),
     );
+
+    await userEvent.click(canvas.getByRole('button', { name: '전체 승인' }));
+    await expect(args.onApproveAll).toHaveBeenCalled();
 
     await userEvent.click(canvas.getByRole('button', { name: '최종 내보내기' }));
     await expect(args.onPublish).toHaveBeenCalled();
@@ -168,8 +196,11 @@ export const NoReviewPermission: Story = {
 
     await expect(canvas.queryAllByRole('button', { name: '승인' })).toHaveLength(0);
     await expect(canvas.queryAllByRole('button', { name: '반려' })).toHaveLength(0);
+    await expect(canvas.queryByRole('button', { name: '전체 승인' })).toBeNull();
+    await expect(canvas.queryByRole('button', { name: '전체 반려' })).toBeNull();
     await expect(canvas.queryByRole('button', { name: '최종 내보내기' })).toBeNull();
     // 열람은 그대로다
+    await expect(canvas.getByRole('button', { name: /미리보기/ })).toBeInTheDocument();
     await expect(canvas.getByText('재시도 정책')).toBeInTheDocument();
   },
 };
@@ -182,6 +213,24 @@ export const NoRejectPath: Story = {
 
     await expect(canvas.queryAllByRole('button', { name: '반려' })).toHaveLength(0);
     await expect(canvas.getAllByRole('button', { name: '승인' }).length).toBeGreaterThan(0);
+  },
+};
+
+/** 전체 반려는 곧바로 나가지 않고 사유 입력을 거친다. */
+export const RejectReason: Story = {
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const portal = within(document.body);
+
+    await userEvent.click(canvas.getByRole('button', { name: '전체 반려' }));
+    await expect(args.onRejectDialogOpenChange).toHaveBeenCalledWith(true);
+
+    const dialog = within(await portal.findByRole('dialog'));
+    await expect(dialog.getByRole('button', { name: '전체 반려' })).toBeDisabled();
+
+    await userEvent.type(dialog.getByRole('textbox', { name: '반려 사유' }), '근거 문서가 없습니다');
+    await userEvent.click(dialog.getByRole('button', { name: '전체 반려' }));
+    await expect(args.onRejectAll).toHaveBeenCalledWith('근거 문서가 없습니다');
   },
 };
 

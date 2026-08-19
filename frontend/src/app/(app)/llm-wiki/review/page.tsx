@@ -20,6 +20,9 @@ import {
 } from '@/features/llm-wiki/components/review-queue/reviewQueueFilters';
 import ReviewQueuePage from '@/features/llm-wiki/components/review-queue/ReviewQueuePage';
 import {
+  REVIEW_TOAST_OPTIONS,
+  useApproveReviewProposalMutation,
+  useRejectReviewProposalMutation,
   useReviewBlockVerdictMutation,
   useReviewPublishMutation,
 } from '@/features/llm-wiki/queries/knowledgeReview.mutations';
@@ -28,6 +31,8 @@ import { wikiQueries } from '@/features/llm-wiki/queries/wiki.queries';
 import type { BlockDiffEntry } from '@/features/llm-wiki/types/llmWikiDiff';
 import type { DocumentBreadcrumb } from '@/features/llm-wiki/types/llmWikiModel';
 import { buildBlockDiff } from '@/features/llm-wiki/utils/diff/buildBlockDiff';
+import { buttonVariants } from '@/shared/components/ui/button';
+import { toast } from '@/shared/components/ui/toast';
 
 /** 큐는 서버 기본값과 같은 쪽 크기로 한 번만 가져온다 — 목록 패널에 쪽 컨트롤 시안이 없다 */
 const QUEUE_PAGE_SIZE = 50;
@@ -38,11 +43,15 @@ const QUEUE_PAGE_SIZE = 50;
  */
 const CAN_REJECT_BLOCK = false;
 
+/** 전역 토스트가 1초라 액션 버튼을 누를 시간이 없다 — 이 토스트만 길게 연다 */
+const ACTION_TOAST_DURATION = 6000;
+
 export default function Page() {
   const router = useRouter();
 
   const [filters, setFilters] = useState(INITIAL_REVIEW_QUEUE_FILTER_STATE);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
 
   const params = useMemo(
     () => buildReviewQueueParams(filters, { limit: QUEUE_PAGE_SIZE, offset: 0, now: new Date() }),
@@ -71,6 +80,8 @@ export default function Page() {
 
   const verdictMutation = useReviewBlockVerdictMutation(selectedRowId ?? '');
   const publishMutation = useReviewPublishMutation(selectedRowId ?? '');
+  const approveAllMutation = useApproveReviewProposalMutation(selectedRowId ?? '');
+  const rejectAllMutation = useRejectReviewProposalMutation(selectedRowId ?? '');
 
   const entries = useMemo(
     () => (detail ? buildBlockDiff(detail.baseBlocks, detail.blocks, detail.changes) : []),
@@ -109,13 +120,44 @@ export default function Page() {
     });
   };
 
-  const publish = () => {
-    if (detail) publishMutation.mutate({ base_revision_id: detail.baseRevisionId });
+  const approveAll = () => {
+    approveAllMutation.mutate(undefined, {
+      onSuccess: () => toast(`${entries.length}건 모두 승인했습니다`, REVIEW_TOAST_OPTIONS),
+    });
   };
 
-  // 미리보기 대상은 제안본이라 proposalId를 동봉한다 — 열람 전용 제안 뷰는 아직 없어 에디터 라우트가 대신한다
+  const rejectAll = (reason: string) => {
+    rejectAllMutation.mutate(
+      { reason },
+      {
+        onSuccess: () => {
+          setRejectDialogOpen(false);
+          toast(`${entries.length}건 모두 반려했습니다`, REVIEW_TOAST_OPTIONS);
+        },
+      },
+    );
+  };
+
+  const publish = () => {
+    if (!detail) return;
+    const { artifactId } = detail;
+    publishMutation.mutate(
+      { base_revision_id: detail.baseRevisionId },
+      {
+        onSuccess: () =>
+          toast('내보내기를 완료했습니다', {
+            ...REVIEW_TOAST_OPTIONS,
+            duration: ACTION_TOAST_DURATION,
+            action: { label: '열기', onClick: () => router.push(`/llm-wiki/${artifactId}`) },
+            classNames: { actionButton: buttonVariants({ variant: 'capsule-outline-mono', size: 'md' }) },
+          }),
+      },
+    );
+  };
+
+  // 발행본만 연다 — 검토 중 화면을 잃지 않도록 새 탭이고, 에디터 라우트로는 보내지 않는다
   const preview = () => {
-    if (detail) router.push(`/llm-wiki/${detail.artifactId}?proposalId=${detail.proposalId}`);
+    if (detail) window.open(`/llm-wiki/${detail.artifactId}`, '_blank', 'noopener');
   };
 
   return (
@@ -144,6 +186,11 @@ export default function Page() {
       onPreview={preview}
       onApproveBlock={approveBlock}
       onPublish={publish}
+      onApproveAll={approveAll}
+      rejectDialogOpen={rejectDialogOpen}
+      onRejectDialogOpenChange={setRejectDialogOpen}
+      onRejectAll={rejectAll}
+      rejectPending={rejectAllMutation.isPending}
     />
   );
 }

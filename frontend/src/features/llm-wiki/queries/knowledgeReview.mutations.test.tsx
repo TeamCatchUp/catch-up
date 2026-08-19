@@ -4,6 +4,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  REVIEW_TOAST_OPTIONS,
   useRejectReviewProposalMutation,
   useReviewBlockVerdictMutation,
   useReviewPublishMutation,
@@ -89,7 +90,7 @@ describe('useReviewBlockVerdictMutation', () => {
     result.current.mutate({ blockIndex: 2, verdict: 'approved', block_content_hash: 'stale' });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(toastMock).toHaveBeenCalledWith('다른 검토자가 먼저 판정했어요.');
+    expect(toastMock).toHaveBeenCalledWith('다른 검토자가 먼저 판정했어요.', REVIEW_TOAST_OPTIONS);
     expect(invalidatedKeys()).toEqual([detailKey]);
   });
 
@@ -101,7 +102,7 @@ describe('useReviewBlockVerdictMutation', () => {
     result.current.mutate({ blockIndex: 2, verdict: 'approved', block_content_hash: 'h-2' });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(toastMock).toHaveBeenCalledWith('검토 권한이 없어요.');
+    expect(toastMock).toHaveBeenCalledWith('검토 권한이 없어요.', REVIEW_TOAST_OPTIONS);
     expect(invalidatedKeys()).toEqual([]);
   });
 });
@@ -140,7 +141,7 @@ describe('useReviewPublishMutation', () => {
     result.current.mutate({ base_revision_id: 'rv-8' });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(toastMock).toHaveBeenCalledWith('아직 판정하지 않은 블록이 있어요.');
+    expect(toastMock).toHaveBeenCalledWith('아직 판정하지 않은 블록이 있어요.', REVIEW_TOAST_OPTIONS);
     expect(invalidatedKeys()).toEqual([detailKey]);
   });
 
@@ -152,7 +153,7 @@ describe('useReviewPublishMutation', () => {
     result.current.mutate({ base_revision_id: 'rv-8' });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(toastMock).toHaveBeenCalledWith('발행 권한이 없어요.');
+    expect(toastMock).toHaveBeenCalledWith('발행 권한이 없어요.', REVIEW_TOAST_OPTIONS);
     expect(invalidatedKeys()).toEqual([]);
   });
 });
@@ -198,7 +199,7 @@ describe('useRejectReviewProposalMutation', () => {
     result.current.mutate({ reason: '근거가 부족해요.' });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(toastMock).toHaveBeenCalledWith('이미 판정된 변경안이에요.');
+    expect(toastMock).toHaveBeenCalledWith('이미 판정된 변경안이에요.', REVIEW_TOAST_OPTIONS);
     expect(invalidatedKeys()).toEqual([]);
   });
 });

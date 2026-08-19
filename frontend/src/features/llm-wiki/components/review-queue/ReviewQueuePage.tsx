@@ -3,6 +3,7 @@
 import IconArrowDown from '@/public/icons/icon/arrow_down.svg';
 import IconArrowUp from '@/public/icons/icon/arrow_up.svg';
 import IconCalendarClock from '@/public/icons/icon/calendar_clock.svg';
+import IconOpenInNew from '@/public/icons/icon/open_in_new_24.svg';
 import IconPerson from '@/public/icons/icon/person.svg';
 import IconPersonFilled from '@/public/icons/icon/person_filled.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
@@ -16,6 +17,7 @@ import WikiPageHeader from '../header/WikiPageHeader';
 import ChangeSummaryCard from './ChangeSummaryCard';
 import BlockDiffSection from './diff/BlockDiffSection';
 import DocumentLocationCard from './DocumentLocationCard';
+import RejectReasonDialog from './RejectReasonDialog';
 import ReviewParticipantsCard, { type ReviewParticipant } from './ReviewParticipantsCard';
 import ReviewPublishBar from './ReviewPublishBar';
 import ReviewQueueFilterDropdown, {
@@ -52,7 +54,7 @@ export interface ReviewQueuePageProps {
   entries: readonly BlockDiffEntry[];
   /** [BE] can_review. 판정·발행 진입점 노출을 정한다 */
   canReview: boolean;
-  /** 반려 진입점. 사유 입력 자리가 없으면 꺼진다 */
+  /** 카드별 반려 진입점. 사유 입력 자리가 없으면 꺼진다 */
   canReject?: boolean;
   /** 미판정 블록이 남았는지. 남으면 발행 버튼이 잠긴다 */
   publishDisabled: boolean;
@@ -67,10 +69,19 @@ export interface ReviewQueuePageProps {
   /** canReject가 꺼져 있으면 호출되지 않는다 */
   onRejectBlock?: (entry: BlockDiffEntry) => void;
   onPublish: () => void;
+
+  /** 변경안 통째 승인 */
+  onApproveAll: () => void;
+  /** 사유 입력 다이얼로그의 열림 상태. 요청 성패를 아는 소비처가 든다 */
+  rejectDialogOpen: boolean;
+  onRejectDialogOpenChange: (open: boolean) => void;
+  /** 변경안 통째 반려. 사유는 이미 트림돼 있다 */
+  onRejectAll: (reason: string) => void;
+  rejectPending?: boolean;
 }
 
 /**
- * 검토 큐 화면 — 좌측 목록 · 중앙 제안 상세 · 우측 문서 위치·담당자.
+ * 검토 큐 화면 — 좌측 목록 · 헤더 아래로 중앙 제안 상세와 우측 문서 위치·담당자.
  * 데이터와 동작은 전부 props다. 로딩·에러 시각은 시안이 없어 두지 않는다.
  */
 export default function ReviewQueuePage({
@@ -96,6 +107,11 @@ export default function ReviewQueuePage({
   onApproveBlock,
   onRejectBlock,
   onPublish,
+  onApproveAll,
+  rejectDialogOpen,
+  onRejectDialogOpenChange,
+  onRejectAll,
+  rejectPending = false,
 }: ReviewQueuePageProps) {
   const selectedIndex = items.findIndex((item) => item.id === selectedId);
   // 목록이 비면 그릴 상세가 없다 — 좌측 머리글·필터만 남기고 안내로 대체한다
@@ -172,75 +188,90 @@ export default function ReviewQueuePage({
       {isEmpty ? (
         <ReviewQueueEmptyState />
       ) : (
-        <>
-          {/* 중앙 — 제안 상세 */}
-          <div className="flex min-w-0 flex-1 flex-col">
-            <WikiPageHeader
-              variant="detail"
-              breadcrumbs={breadcrumbs}
-              actions={
-                <>
-                  <Button
-                    variant="icon-only-gray"
-                    size="md"
-                    aria-label="다음 변경사항"
-                    disabled={selectedIndex < 0 || selectedIndex >= items.length - 1}
-                    onClick={() => moveSelection(1)}
-                  >
-                    <IconArrowDown aria-hidden className="size-6" />
-                  </Button>
-                  <Button
-                    variant="icon-only-gray"
-                    size="md"
-                    aria-label="이전 변경사항"
-                    disabled={selectedIndex <= 0}
-                    onClick={() => moveSelection(-1)}
-                  >
-                    <IconArrowUp aria-hidden className="size-6" />
-                  </Button>
-                </>
-              }
-            />
+        // 헤더는 중앙과 우측 패널을 함께 덮는다 — 좌측 목록만 자기 열을 지킨다
+        <div className="flex min-w-0 flex-1 flex-col">
+          <WikiPageHeader
+            variant="detail"
+            breadcrumbs={breadcrumbs}
+            actions={
+              <>
+                <Button
+                  variant="icon-only-gray"
+                  size="md"
+                  aria-label="다음 변경사항"
+                  disabled={selectedIndex < 0 || selectedIndex >= items.length - 1}
+                  onClick={() => moveSelection(1)}
+                >
+                  <IconArrowDown aria-hidden className="size-6" />
+                </Button>
+                <Button
+                  variant="icon-only-gray"
+                  size="md"
+                  aria-label="이전 변경사항"
+                  disabled={selectedIndex <= 0}
+                  onClick={() => moveSelection(-1)}
+                >
+                  <IconArrowUp aria-hidden className="size-6" />
+                </Button>
+                <Button variant="box-outline-gray" size="md" onClick={onPreview}>
+                  미리보기
+                  <IconOpenInNew aria-hidden className="size-5" />
+                </Button>
+              </>
+            }
+          />
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <div className="flex flex-col gap-9 px-9 py-9">
-                <div className="flex flex-col gap-3">
-                  <h2 className="text-heading-xlarge text-text-normal-strong">{title}</h2>
-                  {/* 작성자 줄은 없다 — LLM 제안이라 큐 응답에 작성자가 실리지 않는다 */}
-                  <span className="text-body-xsmall text-text-normal-alternative">{waitingLabel}</span>
+          <div className="flex min-h-0 flex-1">
+            {/* 중앙 — 제안 상세 */}
+            <div className="flex min-w-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <div className="flex flex-col gap-9 px-9 py-9">
+                  <div className="flex flex-col gap-3">
+                    <h2 className="text-heading-xlarge text-text-normal-strong">{title}</h2>
+                    {/* 작성자 줄은 없다 — LLM 제안이라 큐 응답에 작성자가 실리지 않는다 */}
+                    <span className="text-body-xsmall text-text-normal-alternative">{waitingLabel}</span>
+                  </div>
+
+                  <ChangeSummaryCard changeCount={entries.length} body={summary} />
+
+                  <BlockDiffSection
+                    entries={entries}
+                    canReview={canReview}
+                    canReject={canReject}
+                    onApprove={(id) => {
+                      const entry = entries.find((item) => item.id === id);
+                      if (entry) onApproveBlock(entry);
+                    }}
+                    onReject={(id) => {
+                      const entry = entries.find((item) => item.id === id);
+                      if (entry) onRejectBlock?.(entry);
+                    }}
+                    onApproveAll={onApproveAll}
+                    onRejectAll={() => onRejectDialogOpenChange(true)}
+                  />
                 </div>
-
-                <ChangeSummaryCard changeCount={entries.length} body={summary} />
-
-                <BlockDiffSection
-                  entries={entries}
-                  onPreview={onPreview}
-                  canReview={canReview}
-                  canReject={canReject}
-                  onApprove={(id) => {
-                    const entry = entries.find((item) => item.id === id);
-                    if (entry) onApproveBlock(entry);
-                  }}
-                  onReject={(id) => {
-                    const entry = entries.find((item) => item.id === id);
-                    if (entry) onRejectBlock?.(entry);
-                  }}
-                />
               </div>
+
+              <ReviewPublishBar canReview={canReview} disabled={publishDisabled} onPublish={onPublish} />
             </div>
 
-            <ReviewPublishBar canReview={canReview} disabled={publishDisabled} onPublish={onPublish} />
+            {/* 우측 — 문서 위치·담당자 */}
+            <aside className="border-line-normal-neutral flex w-87.5 shrink-0 flex-col overflow-y-auto border-l">
+              <DocumentLocationCard breadcrumbs={locationBreadcrumbs} />
+              <ReviewParticipantsCard
+                participants={participants}
+                stackAvatars={participants.map((participant) => ({ src: participant.avatarSrc ?? null }))}
+              />
+            </aside>
           </div>
 
-          {/* 우측 — 문서 위치·담당자 */}
-          <aside className="border-line-normal-neutral flex w-87.5 shrink-0 flex-col overflow-y-auto border-l">
-            <DocumentLocationCard breadcrumbs={locationBreadcrumbs} />
-            <ReviewParticipantsCard
-              participants={participants}
-              stackAvatars={participants.map((participant) => ({ src: participant.avatarSrc ?? null }))}
-            />
-          </aside>
-        </>
+          <RejectReasonDialog
+            open={rejectDialogOpen}
+            onOpenChange={onRejectDialogOpenChange}
+            submitting={rejectPending}
+            onSubmit={onRejectAll}
+          />
+        </div>
       )}
     </div>
   );
