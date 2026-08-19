@@ -150,6 +150,9 @@ export const HomeExpanded: Story = {
       await expect(iconLeft(rows[2]) - left(rows[2])).toBe(50);
     });
 
+    // 로고는 홈 진입점이다 — 접기 버튼과 나란히 있어도 역할이 다르다
+    await expect(canvas.getByRole('link', { name: '홈으로 이동' })).toHaveAttribute('href', '/');
+
     await userEvent.click(canvas.getByRole('button', { name: '사이드바 접기' }));
     await expect(args.onCollapse).toHaveBeenCalledTimes(1);
   },

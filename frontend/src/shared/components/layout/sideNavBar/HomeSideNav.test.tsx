@@ -66,9 +66,6 @@ describe('HomeSideNav 펼침', () => {
     await user.click(menuRow('새 채팅'));
     expect(mockPush).toHaveBeenCalledWith('/');
 
-    await user.click(screen.getByRole('button', { name: '검색' }));
-    expect(mockPush).toHaveBeenCalledWith('/search');
-
     await user.click(screen.getByRole('button', { name: '문의 대응' }));
     expect(mockPush).toHaveBeenCalledWith('/agent-studio');
 
@@ -135,11 +132,23 @@ describe('HomeSideNav 펼침', () => {
   });
 
   it('현재 경로에 따라 활성 메뉴가 갈린다', () => {
-    mockUsePathname.mockReturnValue('/search');
+    mockUsePathname.mockReturnValue('/agent-studio');
     render(<HomeSideNav />);
 
-    expect(screen.getByRole('button', { name: '검색' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: '문의 대응' })).toHaveAttribute('aria-current', 'page');
     expect(menuRow('새 채팅')).not.toHaveAttribute('aria-current');
+  });
+
+  it('검색 메뉴를 렌더하지 않는다', () => {
+    render(<HomeSideNav />);
+
+    expect(screen.queryByRole('button', { name: '검색' })).toBeNull();
+  });
+
+  it('로고가 홈으로 가는 링크다', () => {
+    render(<HomeSideNav />);
+
+    expect(screen.getByRole('link', { name: '홈으로 이동' })).toHaveAttribute('href', '/');
   });
 
   it('문서 탐색 모드에서는 새 채팅이 활성이 아니다', () => {
@@ -162,21 +171,19 @@ describe('HomeSideNav 닫힘', () => {
     mockSidebarState.isSidebarOpen = false;
   });
 
-  it('Rail 5항목이 시안 순서대로 배치된다', () => {
+  it('Rail 4항목이 시안 순서대로 배치된다', () => {
     render(<HomeSideNav />);
 
-    const labels = ['새 채팅', '검색', '요청됨', '문의 대응', '최근 채팅'];
+    const labels = ['새 채팅', '요청됨', '문의 대응', '최근 채팅'];
     labels.forEach((label) => expect(screen.getByRole('button', { name: label })).toBeInTheDocument());
     // 문서 탐색은 닫힘 시안에서 빠졌다 — 펼침에만 남는다
     expect(screen.queryByRole('button', { name: '문서 탐색' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '검색' })).toBeNull();
   });
 
   it('Rail 항목이 펼침과 같은 목적지로 이동한다', async () => {
     const user = userEvent.setup();
     render(<HomeSideNav />);
-
-    await user.click(screen.getByRole('button', { name: '검색' }));
-    expect(mockPush).toHaveBeenCalledWith('/search');
 
     await user.click(screen.getByRole('button', { name: '요청됨' }));
     expect(mockPush).toHaveBeenCalledWith('/llm-wiki/review');
