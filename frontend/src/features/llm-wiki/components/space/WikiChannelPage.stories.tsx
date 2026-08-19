@@ -33,13 +33,14 @@ const meta = {
         nodeId: '17724:185191',
       },
       viewport: { width: 1200, height: 1440 },
-      states: ['default', 'long-names-narrow-viewport'],
+      states: ['default', 'folder-rows-without-meta', 'long-names-narrow-viewport'],
       reuseNotes: [
         'WikiPageHeader(detail·채널 1마디)·DashboardDocumentTableHeader·FolderDocumentRow·공용 Pagination을 조립만 한다 — 전부 무수정 소비.',
         '표 열은 대시보드와 같은 상수(DASHBOARD_DOCUMENT_META_GRID) 공유라 이 화면에서 재정의하지 않는다.',
       ],
       dataNotes: [
         '채널 mock은 ChannelListItemResponse 정합(WikiChannelListItem 소비) — 폴더 행의 담당자·상태·최근 활동과 작성자는 목록 API 미동봉(협상 대상, 감사 8/13 부록).',
+        '실 라우트는 그 네 칸을 빈 값으로 넘긴다 — FolderRowsWithoutMeta가 그때의 표 모습이다.',
         '상단 200px 커버는 바탕색만 시안값이고 콘텐츠는 미정(사진 가능성) — 안은 비워 둔다. 페이지 크기 옵션 목록은 미도시라 정적 표시가 기본이다.',
         '헤더 우측 kebab 버튼은 두 시안에 있으나 동작 정의가 없어 렌더하지 않는다(actions 슬롯 비움) — 디자이너 질문.',
         '빈 채널·로딩·에러 스토리는 만들지 않는다 — 디자인 MISSING 유지.',
@@ -102,6 +103,36 @@ export const Default: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '2' }));
     await expect(args.onPageChange).toHaveBeenCalledWith(2);
+  },
+};
+
+/** 실 라우트가 넘기는 모습 — 폴더에 대응 필드가 없는 칸은 비고 작성자 줄은 서지 않는다. */
+export const FolderRowsWithoutMeta: Story = {
+  args: {
+    authorName: undefined,
+    folderRows: CHANNEL_FOLDER_ROW_FIXTURES.map(({ id, name }) => ({
+      id,
+      name,
+      owners: [],
+      status: '',
+      lastActivityLabel: '',
+    })),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // 작성자 줄이 통째로 빠져도 제목 블록은 남는다.
+    await expect(canvas.getByRole('heading', { level: 1, name: '결제' })).toBeInTheDocument();
+    await expect(canvas.queryByText('작성자')).toBeNull();
+
+    // 빈 칸이 열을 무너뜨리면 안 된다 — 머리글과 행의 메타 열 좌표가 계속 맞아야 한다.
+    const header = canvas.getByText('최근 활동');
+    const row = canvas.getByRole('button', { name: /승인·실패 처리/ });
+    const meta = row.lastElementChild as HTMLElement;
+    const activityCell = meta.lastElementChild as HTMLElement;
+    await expect(activityCell.getBoundingClientRect().width).toBe(96);
+    await expect(activityCell.getBoundingClientRect().left).toBeCloseTo(header.getBoundingClientRect().left, 0);
+    await expect(canvas.queryByText('검토 완료')).toBeNull();
   },
 };
 

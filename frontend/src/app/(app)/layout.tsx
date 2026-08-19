@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 
+import WikiSideNavContainer from '@/features/llm-wiki/components/navigation/WikiSideNavContainer';
 import InboxPanel from '@/shared/components/layout/panels/InboxPanel';
 import QuestionsHistoryPanel from '@/shared/components/layout/panels/QuestionsHistoryPanel';
 import SettingsPanel from '@/shared/components/layout/panels/SettingsPanel';
@@ -59,7 +60,8 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
         */}
         {!isSettingsRoute && (
           <aside className="shrink-0">
-            <AppSideNav />
+            {/* 위키 SNB만 데이터 주입이 필요해 features 컨테이너를 넘긴다 */}
+            <AppSideNav wikiNav={<WikiSideNavContainer />} />
           </aside>
         )}
         <div

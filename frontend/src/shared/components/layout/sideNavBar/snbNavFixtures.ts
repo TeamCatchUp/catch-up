@@ -14,7 +14,8 @@ import IconStar from '@/public/icons/icon/star.svg';
 import IconTeamspace from '@/public/icons/icon/teamspace.svg';
 import IconUpdate from '@/public/icons/icon/update.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
-import type { NavTreeNode } from '@/shared/components/navigation/NavTree';
+
+import type { WikiSideNavFavorite, WikiTreeNode } from './WikiSideNav';
 
 /** 전역 SNB 조립 스토리가 쓰는 시안 데이터. 라벨은 대부분 placeholder다. */
 export interface SnbNavFixtureItem {
@@ -82,12 +83,12 @@ export const WIKI_DROPDOWN_ITEMS: readonly SnbNavFixtureItem[] = [
 ];
 
 /** 위키 펼침의 즐겨찾기 섹션. 시안은 문서 5행이다 */
-export const WIKI_FAVORITE_ITEMS: readonly SnbNavFixtureItem[] = [
-  { id: 'wiki-fav-1', label: '채널명 text text text text text text', Icon: IconFile },
-  { id: 'wiki-fav-2', label: '채널명 text text text text text text', Icon: IconFile },
-  { id: 'wiki-fav-3', label: '채널명 text text text text text text', Icon: IconFile },
-  { id: 'wiki-fav-4', label: '채널명 text text text text text text', Icon: IconFile },
-  { id: 'wiki-fav-5', label: '채널명 text text text text text text', Icon: IconFile },
+export const WIKI_FAVORITE_ITEMS: readonly WikiSideNavFavorite[] = [
+  { id: 'wiki-fav-1', label: '채널명 text text text text text text', href: '/llm-wiki/wiki-fav-1' },
+  { id: 'wiki-fav-2', label: '채널명 text text text text text text', href: '/llm-wiki/wiki-fav-2' },
+  { id: 'wiki-fav-3', label: '채널명 text text text text text text', href: '/llm-wiki/wiki-fav-3' },
+  { id: 'wiki-fav-4', label: '채널명 text text text text text text', href: '/llm-wiki/wiki-fav-4' },
+  { id: 'wiki-fav-5', label: '채널명 text text text text text text', href: '/llm-wiki/wiki-fav-5' },
 ];
 
 export const WIKI_RAIL_ITEMS: readonly SnbNavFixtureItem[] = [
@@ -98,17 +99,6 @@ export const WIKI_RAIL_ITEMS: readonly SnbNavFixtureItem[] = [
   { id: 'favorites', label: '즐겨찾기', Icon: IconStar },
   { id: 'recent-wiki', label: '최근 위키', Icon: IconFolder },
 ];
-
-/** SNB 트리 노드에 위키 도메인 사실을 얹는다. NavTree는 이 두 필드를 모른다 */
-export interface WikiTreeNode extends NavTreeNode {
-  /** 소속 채널. 관리 권한은 채널 단위라 하위 노드도 자기 채널을 들고 있다 */
-  channelId: string;
-  /** 즐겨찾기 여부. 케밥 항목 라벨이 이 값으로 갈린다 */
-  favorite?: boolean;
-  /** 케밥 하단 부가 정보(최종 편집자·시각). 없으면 그 줄과 구분선이 함께 빠진다 */
-  metaLines?: readonly string[];
-  children?: readonly WikiTreeNode[];
-}
 
 /** 최종 편집자·시각에 대응하는 API 필드가 없어 시안 문구를 표본으로 둔다 */
 const SAMPLE_EDIT_META: readonly string[] = ['팀원G 최종 편집', '오늘 오전 12:30'];
@@ -124,7 +114,9 @@ export const WIKI_CHANNEL_ADMINS: Readonly<Record<string, boolean>> = {
 export const PROJECT_TREE_NODES: readonly WikiTreeNode[] = [
   {
     id: 'channel-1',
+    kind: 'channel',
     channelId: 'channel-1',
+    href: '/llm-wiki/channel/channel-1',
     label: '채널명 text text text text text text text text',
     Icon: IconWikiChannel,
     canAddChild: true,
@@ -132,7 +124,9 @@ export const PROJECT_TREE_NODES: readonly WikiTreeNode[] = [
     children: [
       {
         id: 'folder-1',
+        kind: 'folder',
         channelId: 'channel-1',
+        href: '/llm-wiki/folder/folder-1',
         label: '폴더명 text text text text text text text',
         Icon: IconFolder,
         canAddChild: true,
@@ -140,7 +134,9 @@ export const PROJECT_TREE_NODES: readonly WikiTreeNode[] = [
         children: [
           {
             id: 'file-1',
+            kind: 'document',
             channelId: 'channel-1',
+            href: '/llm-wiki/file-1',
             label: '파일명texttexttexttext',
             Icon: IconFile,
             favorite: true,
@@ -150,7 +146,9 @@ export const PROJECT_TREE_NODES: readonly WikiTreeNode[] = [
       },
       {
         id: 'folder-2',
+        kind: 'folder',
         channelId: 'channel-1',
+        href: '/llm-wiki/folder/folder-2',
         label: '폴더명 text text text text text text text',
         Icon: IconFolder,
         canAddChild: true,
@@ -159,42 +157,20 @@ export const PROJECT_TREE_NODES: readonly WikiTreeNode[] = [
   },
   {
     id: 'channel-2',
+    kind: 'channel',
     channelId: 'channel-2',
+    href: '/llm-wiki/channel/channel-2',
     label: '채널명 text text text text text text text text',
     Icon: IconWikiChannel,
     canAddChild: true,
   },
   {
     id: 'channel-3',
+    kind: 'channel',
     channelId: 'channel-3',
+    href: '/llm-wiki/channel/channel-3',
     label: '채널명 text text text text text text text text',
     Icon: IconWikiChannel,
     canAddChild: true,
   },
 ];
-
-/** 트리 노드 id로 노드를 찾는다. 케밥 메뉴가 즐겨찾기·소속 채널을 물을 때 쓴다 */
-export function findWikiTreeNode(id: string): WikiTreeNode | undefined {
-  const walk = (nodes: readonly WikiTreeNode[]): WikiTreeNode | undefined => {
-    for (const node of nodes) {
-      if (node.id === id) return node;
-      const hit = node.children ? walk(node.children) : undefined;
-      if (hit) return hit;
-    }
-    return undefined;
-  };
-  return walk(PROJECT_TREE_NODES);
-}
-
-/** 트리 노드 id → 라우트. id 접두사가 fixture 규칙이라 실제 체계가 잡히면 여기만 바꾼다 */
-export function projectTreeHref(id: string): string {
-  if (id.startsWith('channel-')) return `/llm-wiki/channel/${id}`;
-  if (id.startsWith('folder-')) return `/llm-wiki/folder/${id}`;
-  return `/llm-wiki/${id}`;
-}
-
-/** 현재 경로에 해당하는 트리 노드 id. 없으면 undefined */
-export function findActiveTreeId(pathname: string): string | undefined {
-  const flatten = (node: NavTreeNode): string[] => [node.id, ...(node.children ?? []).flatMap(flatten)];
-  return PROJECT_TREE_NODES.flatMap(flatten).find((id) => pathname === projectTreeHref(id));
-}

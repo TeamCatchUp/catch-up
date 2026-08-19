@@ -26,19 +26,7 @@ import SideNavShell from './SideNavShell';
 import SnbBoxButton from './SnbBoxButton';
 import SnbDropdownMenu from './SnbDropdownMenu';
 import SnbFooter from './SnbFooter';
-import {
-  findActiveTreeId,
-  findWikiTreeNode,
-  PROJECT_TREE_NODES,
-  projectTreeHref,
-  REQUESTED_COUNT,
-  SPACE_HOME_ICON,
-  SPACE_WIKI_ICON,
-  TEAMSPACE_ICON,
-  WIKI_CHANNEL_ADMINS,
-  WIKI_FAVORITE_ITEMS,
-  type WikiTreeNode,
-} from './snbNavFixtures';
+import { REQUESTED_COUNT, SPACE_HOME_ICON, SPACE_WIKI_ICON, TEAMSPACE_ICON } from './snbNavFixtures';
 import SnbNavRow from './SnbNavRow';
 import SnbRailFooter from './SnbRailFooter';
 import SnbRailItem from './SnbRailItem';
@@ -57,22 +45,75 @@ export type KnownSnbMenuActionId =
   | 'channel';
 export type SnbMenuActionId = KnownSnbMenuActionId | (string & {});
 
+/** 트리 행의 종류. 케밥 머리 라벨이 이 값으로 갈린다 */
+export type WikiTreeNodeKind = 'channel' | 'folder' | 'document';
+
+/** SNB 트리 노드에 위키 도메인 사실을 얹는다. NavTree는 이 필드들을 모른다 */
+export interface WikiTreeNode extends NavTreeNode {
+  kind: WikiTreeNodeKind;
+  /** 소속 채널. 관리 권한은 채널 단위라 하위 노드도 자기 채널을 들고 있다 */
+  channelId: string;
+  /** 행을 눌렀을 때의 목적지 */
+  href: string;
+  /** 즐겨찾기 여부. 케밥 항목 라벨이 이 값으로 갈린다 */
+  favorite?: boolean;
+  /** 케밥 하단 부가 정보(최종 편집자·시각). 없으면 그 줄과 구분선이 함께 빠진다 */
+  metaLines?: readonly string[];
+  children?: readonly WikiTreeNode[];
+}
+
+/** 즐겨찾기 섹션의 한 행. href가 없으면 갈 곳이 없어 비활성이다 */
+export interface WikiSideNavFavorite {
+  id: string;
+  label: string;
+  href?: string;
+}
+
+// 기본값을 리터럴로 두면 렌더마다 새 참조가 되어 아래 useMemo가 매번 다시 돈다
+const NO_NODES: readonly WikiTreeNode[] = [];
+const NO_FAVORITES: readonly WikiSideNavFavorite[] = [];
+const NO_ADMINS: Readonly<Record<string, boolean>> = {};
+
+const NODE_KIND_LABEL: Record<WikiTreeNodeKind, string> = {
+  channel: '채널',
+  folder: '폴더',
+  document: '파일',
+};
+
+/** 트리에서 id로 노드를 찾는다. 케밥 메뉴가 즐겨찾기·소속 채널을 물을 때 쓴다 */
+function findTreeNode(nodes: readonly WikiTreeNode[], id: string): WikiTreeNode | undefined {
+  for (const node of nodes) {
+    if (node.id === id) return node;
+    const hit = node.children ? findTreeNode(node.children, id) : undefined;
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
 export interface WikiSideNavProps {
   /** 위키 생성 진입점은 플랫폼 관리자만 본다. 전역 role 판정 전까지 소비처가 넘긴다 */
   canCreateWiki?: boolean;
   /** 채널 id → 관리자 여부. 채널마다 따로 판정된다 — 전역 플래그가 아니다 */
   channelAdmins?: Readonly<Record<string, boolean>>;
+  /** 위키 섹션 트리. 문서 노드는 펼쳐서 받아온 채널의 것만 실린다 */
+  treeNodes?: readonly WikiTreeNode[];
+  favorites?: readonly WikiSideNavFavorite[];
+  /** 트리 행 접기·펼치기. 펼칠 때 하위 문서를 받아오는 소비처가 쓴다 */
+  onNodeToggle?: (nodeId: string, expanded: boolean) => void;
   /** 메뉴 항목 선택 통로. 섹션 머리글에서 연 메뉴는 대상 노드가 없어 undefined다 */
   onMenuAction?: (nodeId: string | undefined, actionId: SnbMenuActionId) => void;
 }
 
 /**
- * LLM Wiki 경로 전용 사이드 내비. 목록·트리는 fixture이고,
+ * LLM Wiki 경로 전용 사이드 내비. 트리·즐겨찾기는 소비처가 넘기고,
  * 로딩·빈·에러 표시는 시안이 없어 만들지 않는다.
  */
 export default function WikiSideNav({
   canCreateWiki = false,
-  channelAdmins = WIKI_CHANNEL_ADMINS,
+  channelAdmins = NO_ADMINS,
+  treeNodes: nodes = NO_NODES,
+  favorites = NO_FAVORITES,
+  onNodeToggle,
   onMenuAction,
 }: WikiSideNavProps = {}) {
   const router = useRouter();
@@ -91,7 +132,6 @@ export default function WikiSideNav({
   const isDashboard = pathname === '/llm-wiki';
   const isReview = pathname.startsWith('/llm-wiki/review');
   const isOnboarding = pathname.startsWith('/llm-wiki/onboarding');
-  const activeTreeId = findActiveTreeId(pathname);
   const profileMenu = <UserMenuContent userName={user?.name} userEmail={user?.email} />;
 
   // 트리 행·섹션 머리글에서 연 메뉴. 앵커는 눌린 버튼이라 호출부가 넘겨준다
@@ -106,8 +146,6 @@ export default function WikiSideNav({
   const [favoritesOpen, setFavoritesOpen] = useState(true);
   const [wikiOpen, setWikiOpen] = useState(true);
 
-  const treeNodeKind = (id: string) => (id.startsWith('channel-') ? '채널' : id.startsWith('folder-') ? '폴더' : '파일');
-
   // 메뉴가 열린 동안 액션이 사라지면 앵커가 0×0이 되므로 어느 행이 열렸는지 트리에 알린다
   const openRowMenu =
     menu && menu.nodeId && menu.kind !== 'section-add'
@@ -115,17 +153,21 @@ export default function WikiSideNav({
       : undefined;
 
   const isChannelAdmin = (channelId: string) => channelAdmins[channelId] === true;
+  const activeTreeId = useMemo(() => {
+    const flatten = (node: WikiTreeNode): WikiTreeNode[] => [node, ...(node.children ?? []).flatMap(flatten)];
+    return nodes.flatMap(flatten).find((node) => node.href === pathname)?.id;
+  }, [nodes, pathname]);
 
   // 하위 추가(+)는 그 채널의 관리자에게만 남긴다 — 구조상 가능해도 권한이 없으면 어포던스가 없다
   const treeNodes = useMemo(() => {
-    const gate = (nodes: readonly WikiTreeNode[]): NavTreeNode[] =>
-      nodes.map((node) => ({
+    const gate = (items: readonly WikiTreeNode[]): NavTreeNode[] =>
+      items.map((node) => ({
         ...node,
         canAddChild: node.canAddChild === true && channelAdmins[node.channelId] === true,
         children: node.children ? gate(node.children) : undefined,
       }));
-    return gate(PROJECT_TREE_NODES);
-  }, [channelAdmins]);
+    return gate(nodes);
+  }, [nodes, channelAdmins]);
 
   const select = (actionId: SnbMenuActionId) => () => {
     onMenuAction?.(menu?.nodeId, actionId);
@@ -155,14 +197,14 @@ export default function WikiSideNav({
         ],
       };
     }
-    const node = menu?.nodeId ? findWikiTreeNode(menu.nodeId) : undefined;
+    const node = menu?.nodeId ? findTreeNode(nodes, menu.nodeId) : undefined;
     const favoriteItem = node?.favorite
       ? { id: 'unfavorite', label: '즐겨찾기 해제', Icon: IconStarOff, onSelect: select('unfavorite') }
       : { id: 'favorite', label: '즐겨찾기에 추가', Icon: IconStar, onSelect: select('favorite') };
     // 이름 바꾸기 같은 관리 항목은 그 노드가 속한 채널의 관리자에게만 보인다
     const canManage = node ? isChannelAdmin(node.channelId) : false;
     return {
-      categoryLabel: menu?.nodeId ? treeNodeKind(menu.nodeId) : undefined,
+      categoryLabel: node ? NODE_KIND_LABEL[node.kind] : undefined,
       groups: [
         [favoriteItem],
         [
@@ -281,10 +323,16 @@ export default function WikiSideNav({
           expanded={favoritesOpen}
           onToggleCollapse={() => setFavoritesOpen((open) => !open)}
         />
-        {/* 즐겨찾기 행은 목적지가 없다 — 문서 id 체계가 잡히면 트리와 같은 규칙을 쓴다 */}
         {favoritesOpen &&
-          WIKI_FAVORITE_ITEMS.map((item) => (
-            <SnbNavRow key={item.id} Icon={item.Icon} label={item.label} disabled />
+          favorites.map((item) => (
+            <SnbNavRow
+              key={item.id}
+              Icon={IconFile}
+              label={item.label}
+              selected={item.href !== undefined && item.href === pathname}
+              disabled={item.href === undefined}
+              onClick={item.href === undefined ? undefined : go(item.href)}
+            />
           ))}
       </div>
       <div className="flex flex-col gap-1.5">
@@ -308,9 +356,12 @@ export default function WikiSideNav({
           <NavTree
             nodes={treeNodes}
             activeId={activeTreeId}
-            defaultExpandedIds={['channel-1', 'folder-1']}
             openActionMenu={openRowMenu}
-            onNodeClick={(id) => router.push(projectTreeHref(id))}
+            onNodeClick={(id) => {
+              const node = findTreeNode(nodes, id);
+              if (node) go(node.href)();
+            }}
+            onNodeToggle={onNodeToggle}
             onNodeMore={(nodeId, anchor) => setMenu({ kind: 'row-more', nodeId, anchor })}
             onNodeAdd={(nodeId, anchor) => setMenu({ kind: 'row-add', nodeId, anchor })}
           />

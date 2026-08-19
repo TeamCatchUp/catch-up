@@ -34,6 +34,8 @@ interface NavTreeProps {
   onNodeAdd?: (id: string, trigger: HTMLElement) => void;
   /** 메뉴가 열려 있는 행. 그 동안 액션이 hover 없이도 보이고 누른 버튼이 강조된다 */
   openActionMenu?: { nodeId: string; kind: 'more' | 'add' };
+  /** 접기·펼치기 알림. 펼칠 때 하위 데이터를 받아오는 소비처가 쓴다 */
+  onNodeToggle?: (id: string, expanded: boolean) => void;
   className?: string;
 }
 
@@ -99,18 +101,22 @@ export default function NavTree({
   onNodeMore,
   onNodeAdd,
   openActionMenu,
+  onNodeToggle,
   className,
 }: NavTreeProps) {
   const isStatic = onNodeClick === undefined;
   const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(() => new Set(defaultExpandedIds));
 
-  const toggle = (id: string) =>
+  const toggle = (id: string) => {
+    const expanded = !expandedIds.has(id);
     setExpandedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (expanded) next.add(id);
+      else next.delete(id);
       return next;
     });
+    onNodeToggle?.(id, expanded);
+  };
 
   const renderRow = (node: NavTreeNode, depth: number, hasChildren: boolean, expanded: boolean) => {
     // 표시형은 선택 개념이 없다 — 경로 조각을 보여주는 것이 전부다
