@@ -33,7 +33,7 @@ const meta = {
         nodeId: '18495:97053',
       },
       viewport: { width: 320, height: 280 },
-      states: ['context-menu', 'add-sub-page', 'view-options', 'no-category-label'],
+      states: ['context-menu', 'non-admin-context-menu', 'add-sub-page', 'view-options', 'no-category-label'],
       reuseNotes: [
         '시안의 Category label·Dropdown menu 항목·divider·Meta info 4종을 props 조합으로 표현한다. 조합마다 컴포넌트를 나누지 않는다.',
         '팝오버 배치·열림 상태·트리거는 소비처 몫이다. 이 컴포넌트는 마크업만 낸다.',
@@ -42,7 +42,10 @@ const meta = {
         'hover는 CSS 상태라 스토리로 고정하지 않는다.',
         '로딩·빈 목록·에러 상태는 시안에 없어 만들지 않는다.',
       ],
-      interactionNotes: ['항목 클릭은 onSelect만 호출한다 — 메뉴를 닫는 책임은 소비처에 있다.'],
+      interactionNotes: [
+        '항목 클릭은 onSelect만 호출한다 — 메뉴를 닫는 책임은 소비처에 있다.',
+        '즐겨찾기 라벨 토글과 관리 항목 노출 여부는 소비처가 groups로 정한다. 이 컴포넌트는 권한도 즐겨찾기 상태도 모른다.',
+      ],
       tokenNotes: [
         '정렬/보기 메뉴의 항목 라벨은 시안이 세 줄 모두 같은 placeholder다. 실제 정렬 옵션이 정해지기 전까지 props로만 받는다.',
         '아이콘은 소비처가 주입한다 — 시안이 조합별 아이콘을 확정하지 않아 스토리 값은 예시다.',
@@ -60,6 +63,7 @@ const Frame = ({ children }: { children: React.ReactNode }) => (
 );
 
 const onFavorite = fn();
+const onUnfavorite = fn();
 const onCopyLink = fn();
 const onRename = fn();
 
@@ -143,6 +147,37 @@ export const FileContextMenu: Story = {
     await expect(rename.getBoundingClientRect().height).toBe(31);
     await userEvent.click(rename);
     await expect(onRename).toHaveBeenCalled();
+  },
+};
+
+/** 관리자가 아닌 채널의 노드 — 관리 항목이 빠지고, 즐겨찾기된 노드라 라벨이 뒤집힌다 */
+export const NonAdminContextMenu: Story = {
+  args: {
+    categoryLabel: '파일',
+    groups: [
+      [{ id: 'unfavorite', label: '즐겨찾기 해제', Icon: IconStar, onSelect: onUnfavorite }],
+      [{ id: 'copy-link', label: '링크 복사', Icon: IconLink, onSelect: onCopyLink }],
+    ],
+  },
+  render: (args) => (
+    <Frame>
+      <SnbDropdownMenu {...args} />
+    </Frame>
+  ),
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+
+    // 관리 항목은 그 노드가 속한 채널의 관리자에게만 남는다
+    await expect(canvas.queryByRole('button', { name: '이름 바꾸기' })).toBeNull();
+    await expect(canvas.getAllByRole('button')).toHaveLength(2);
+
+    // 즐겨찾기된 노드에서는 해제 라벨만 뜬다
+    await expect(canvas.queryByRole('button', { name: '즐겨찾기' })).toBeNull();
+    const unfavorite = canvas.getByRole('button', { name: '즐겨찾기 해제' });
+    await expect(canvas.getAllByTestId('snb-dropdown-menu-divider')).toHaveLength(1);
+
+    await userEvent.click(unfavorite);
+    await expect(onUnfavorite).toHaveBeenCalled();
   },
 };
 

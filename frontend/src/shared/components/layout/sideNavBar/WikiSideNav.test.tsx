@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -194,7 +194,7 @@ describe('WikiSideNav 펼침', () => {
 
   it('위키 머리글의 + 는 채널 추가 메뉴를 연다', async () => {
     const user = userEvent.setup();
-    render(<WikiSideNav />);
+    render(<WikiSideNav canCreateWiki />);
 
     await user.click(screen.getByRole('button', { name: '추가하기' }));
 
@@ -202,6 +202,82 @@ describe('WikiSideNav 펼침', () => {
     // 섹션에서는 채널만 만든다 — 파일·폴더는 채널 아래에서만 생긴다
     expect(screen.getByRole('button', { name: '채널' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '파일' })).toBeNull();
+  });
+
+  it('메뉴 항목을 고르면 노드 id와 항목 키가 밖으로 나가고 메뉴가 닫힌다', async () => {
+    const user = userEvent.setup();
+    const onMenuAction = vi.fn();
+    render(<WikiSideNav onMenuAction={onMenuAction} />);
+
+    const channelLabel = '채널명 text text text text text text text text';
+    await user.click(screen.getAllByRole('button', { name: `${channelLabel} 추가 작업` })[0]);
+    await user.click(screen.getByRole('button', { name: '링크 복사' }));
+
+    expect(onMenuAction).toHaveBeenCalledWith('channel-1', 'copy-link');
+    expect(screen.queryByTestId('snb-dropdown-menu')).toBeNull();
+  });
+
+  it('즐겨찾기된 노드는 항목 라벨이 즐겨찾기 해제로 뒤집힌다', async () => {
+    const user = userEvent.setup();
+    const onMenuAction = vi.fn();
+    render(<WikiSideNav onMenuAction={onMenuAction} />);
+
+    await user.click(screen.getByRole('button', { name: '파일명texttexttexttext 추가 작업' }));
+
+    // 섹션 머리글에도 같은 이름의 버튼이 있어 메뉴 안으로 좁힌다
+    const menu = within(screen.getByTestId('snb-dropdown-menu'));
+    expect(menu.getByRole('button', { name: '즐겨찾기 해제' })).toBeInTheDocument();
+    expect(menu.queryByRole('button', { name: '즐겨찾기' })).toBeNull();
+
+    await user.click(menu.getByRole('button', { name: '즐겨찾기 해제' }));
+    expect(onMenuAction).toHaveBeenCalledWith('file-1', 'unfavorite');
+  });
+
+  it('관리자가 아닌 채널의 케밥에는 즐겨찾기·링크 복사만 남는다', async () => {
+    const user = userEvent.setup();
+    render(<WikiSideNav />);
+
+    // 픽스처의 채널 3개는 라벨이 같다 — 세 번째가 비관리자 채널이다
+    const channelLabel = '채널명 text text text text text text text text';
+    await user.click(screen.getAllByRole('button', { name: `${channelLabel} 추가 작업` })[2]);
+
+    const menu = within(screen.getByTestId('snb-dropdown-menu'));
+    expect(menu.getByRole('button', { name: '즐겨찾기' })).toBeInTheDocument();
+    expect(menu.getByRole('button', { name: '링크 복사' })).toBeInTheDocument();
+    expect(menu.queryByRole('button', { name: '이름 바꾸기' })).toBeNull();
+  });
+
+  it('하위 추가(+)는 관리자 채널 행에만 붙고 판정은 prop을 따른다', () => {
+    const channelLabel = '채널명 text text text text text text text text';
+    const addButtons = () => screen.queryAllByRole('button', { name: `${channelLabel} 하위 페이지 추가` });
+
+    const { unmount } = render(<WikiSideNav />);
+    expect(addButtons()).toHaveLength(2);
+    unmount();
+
+    // 같은 노드라도 채널 관리자 판정이 바뀌면 어포던스가 따라 바뀐다
+    render(<WikiSideNav channelAdmins={{ 'channel-1': false, 'channel-2': false, 'channel-3': true }} />);
+    expect(addButtons()).toHaveLength(1);
+  });
+
+  it('새 위키·섹션 추가는 플랫폼 관리자에게만 보인다', () => {
+    render(<WikiSideNav />);
+
+    expect(screen.queryByRole('button', { name: '추가하기' })).toBeNull();
+    // SnbFooter가 CSS로 감춘다. jsdom엔 Tailwind가 없어 클래스로 검사한다
+    expect(screen.getByRole('button', { name: '새 위키' }).parentElement).toHaveClass('hidden');
+  });
+
+  it('플랫폼 관리자는 새 위키로 온보딩에 진입한다', async () => {
+    const user = userEvent.setup();
+    render(<WikiSideNav canCreateWiki />);
+
+    const newWiki = screen.getByRole('button', { name: '새 위키' });
+    expect(newWiki.parentElement).not.toHaveClass('hidden');
+    expect(screen.getByRole('button', { name: '추가하기' })).toBeInTheDocument();
+
+    await user.click(newWiki);
+    expect(mockPush).toHaveBeenCalledWith('/llm-wiki/onboarding');
   });
 
   it('로딩·빈 목록·에러 문구를 만들지 않는다', () => {

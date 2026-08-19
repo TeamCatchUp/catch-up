@@ -99,27 +99,78 @@ export const WIKI_RAIL_ITEMS: readonly SnbNavFixtureItem[] = [
   { id: 'recent-wiki', label: '최근 위키', Icon: IconFolder },
 ];
 
+/** SNB 트리 노드에 위키 도메인 사실을 얹는다. NavTree는 이 두 필드를 모른다 */
+export interface WikiTreeNode extends NavTreeNode {
+  /** 소속 채널. 관리 권한은 채널 단위라 하위 노드도 자기 채널을 들고 있다 */
+  channelId: string;
+  /** 즐겨찾기 여부. 케밥 항목 라벨이 이 값으로 갈린다 */
+  favorite?: boolean;
+  children?: readonly WikiTreeNode[];
+}
+
+/** 채널 id → 그 채널의 관리자 여부. 전역 플래그가 아니다 — 채널마다 따로다 */
+export const WIKI_CHANNEL_ADMINS: Readonly<Record<string, boolean>> = {
+  'channel-1': true,
+  'channel-2': true,
+  'channel-3': false,
+};
+
 /** 시안 라벨은 전부 placeholder다 — 실제 데이터 형태가 아니다 */
-export const PROJECT_TREE_NODES: readonly NavTreeNode[] = [
+export const PROJECT_TREE_NODES: readonly WikiTreeNode[] = [
   {
     id: 'channel-1',
+    channelId: 'channel-1',
     label: '채널명 text text text text text text text text',
     Icon: IconWikiChannel,
     canAddChild: true,
     children: [
       {
         id: 'folder-1',
+        channelId: 'channel-1',
         label: '폴더명 text text text text text text text',
         Icon: IconFolder,
         canAddChild: true,
-        children: [{ id: 'file-1', label: '파일명texttexttexttext', Icon: IconFile }],
+        children: [
+          { id: 'file-1', channelId: 'channel-1', label: '파일명texttexttexttext', Icon: IconFile, favorite: true },
+        ],
       },
-      { id: 'folder-2', label: '폴더명 text text text text text text text', Icon: IconFolder, canAddChild: true },
+      {
+        id: 'folder-2',
+        channelId: 'channel-1',
+        label: '폴더명 text text text text text text text',
+        Icon: IconFolder,
+        canAddChild: true,
+      },
     ],
   },
-  { id: 'channel-2', label: '채널명 text text text text text text text text', Icon: IconWikiChannel, canAddChild: true },
-  { id: 'channel-3', label: '채널명 text text text text text text text text', Icon: IconWikiChannel, canAddChild: true },
+  {
+    id: 'channel-2',
+    channelId: 'channel-2',
+    label: '채널명 text text text text text text text text',
+    Icon: IconWikiChannel,
+    canAddChild: true,
+  },
+  {
+    id: 'channel-3',
+    channelId: 'channel-3',
+    label: '채널명 text text text text text text text text',
+    Icon: IconWikiChannel,
+    canAddChild: true,
+  },
 ];
+
+/** 트리 노드 id로 노드를 찾는다. 케밥 메뉴가 즐겨찾기·소속 채널을 물을 때 쓴다 */
+export function findWikiTreeNode(id: string): WikiTreeNode | undefined {
+  const walk = (nodes: readonly WikiTreeNode[]): WikiTreeNode | undefined => {
+    for (const node of nodes) {
+      if (node.id === id) return node;
+      const hit = node.children ? walk(node.children) : undefined;
+      if (hit) return hit;
+    }
+    return undefined;
+  };
+  return walk(PROJECT_TREE_NODES);
+}
 
 /** 트리 노드 id → 라우트. id 접두사가 fixture 규칙이라 실제 체계가 잡히면 여기만 바꾼다 */
 export function projectTreeHref(id: string): string {

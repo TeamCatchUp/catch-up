@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 
 import IconAdd400 from '@/public/icons/icon/add_small_400.svg';
@@ -15,7 +15,7 @@ import IconStar from '@/public/icons/icon/star.svg';
 import IconUpdate from '@/public/icons/icon/update.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
 import { UserMenuContent } from '@/shared/components/layout/sideNavBar/modal/UserModal';
-import NavTree from '@/shared/components/navigation/NavTree';
+import NavTree, { type NavTreeNode } from '@/shared/components/navigation/NavTree';
 import { Popover, PopoverAnchor, PopoverContent } from '@/shared/components/ui/popover';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { useUserStore } from '@/shared/store/userStore';
@@ -27,13 +27,16 @@ import SnbDropdownMenu from './SnbDropdownMenu';
 import SnbFooter from './SnbFooter';
 import {
   findActiveTreeId,
+  findWikiTreeNode,
   PROJECT_TREE_NODES,
   projectTreeHref,
   REQUESTED_COUNT,
   SPACE_HOME_ICON,
   SPACE_WIKI_ICON,
   TEAMSPACE_ICON,
+  WIKI_CHANNEL_ADMINS,
   WIKI_FAVORITE_ITEMS,
+  type WikiTreeNode,
 } from './snbNavFixtures';
 import SnbNavRow from './SnbNavRow';
 import SnbRailFooter from './SnbRailFooter';
@@ -42,11 +45,35 @@ import SnbSectionHeader, { SnbSectionAction } from './SnbSectionHeader';
 import SnbSpaceSwitcher from './SnbSpaceSwitcher';
 import SnbTeamspaceCard from './SnbTeamspaceCard';
 
+/** 트리·섹션 메뉴 항목 키. 항목이 늘어도 소비처가 깨지지 않게 열어둔다 */
+export type KnownSnbMenuActionId =
+  | 'favorite'
+  | 'unfavorite'
+  | 'copy-link'
+  | 'rename'
+  | 'file'
+  | 'folder'
+  | 'channel';
+export type SnbMenuActionId = KnownSnbMenuActionId | (string & {});
+
+export interface WikiSideNavProps {
+  /** 위키 생성 진입점은 플랫폼 관리자만 본다. 전역 role 판정 전까지 소비처가 넘긴다 */
+  canCreateWiki?: boolean;
+  /** 채널 id → 관리자 여부. 채널마다 따로 판정된다 — 전역 플래그가 아니다 */
+  channelAdmins?: Readonly<Record<string, boolean>>;
+  /** 메뉴 항목 선택 통로. 섹션 머리글에서 연 메뉴는 대상 노드가 없어 undefined다 */
+  onMenuAction?: (nodeId: string | undefined, actionId: SnbMenuActionId) => void;
+}
+
 /**
  * LLM Wiki 경로 전용 사이드 내비. 목록·트리는 fixture이고,
  * 로딩·빈·에러 표시는 시안이 없어 만들지 않는다.
  */
-export default function WikiSideNav() {
+export default function WikiSideNav({
+  canCreateWiki = false,
+  channelAdmins = WIKI_CHANNEL_ADMINS,
+  onMenuAction,
+}: WikiSideNavProps = {}) {
   const router = useRouter();
   const pathname = usePathname();
   const { isSidebarOpen, setSidebarOpen, setActivePanel } = useSidebarStore();
@@ -86,6 +113,24 @@ export default function WikiSideNav() {
       ? { nodeId: menu.nodeId, kind: menu.kind === 'row-more' ? ('more' as const) : ('add' as const) }
       : undefined;
 
+  const isChannelAdmin = (channelId: string) => channelAdmins[channelId] === true;
+
+  // 하위 추가(+)는 그 채널의 관리자에게만 남긴다 — 구조상 가능해도 권한이 없으면 어포던스가 없다
+  const treeNodes = useMemo(() => {
+    const gate = (nodes: readonly WikiTreeNode[]): NavTreeNode[] =>
+      nodes.map((node) => ({
+        ...node,
+        canAddChild: node.canAddChild === true && channelAdmins[node.channelId] === true,
+        children: node.children ? gate(node.children) : undefined,
+      }));
+    return gate(PROJECT_TREE_NODES);
+  }, [channelAdmins]);
+
+  const select = (actionId: SnbMenuActionId) => () => {
+    onMenuAction?.(menu?.nodeId, actionId);
+    closeMenu();
+  };
+
   /*
    * 메뉴 항목의 목적지가 아직 없다. 시안의 하단 메타(최종 편집자·시각)도 백엔드
    * 계약에 대응 필드가 없어 넣지 않는다 — 지어내면 승인된 값처럼 굳는다.
@@ -93,26 +138,37 @@ export default function WikiSideNav() {
   const menuProps = () => {
     // 섹션의 + 는 채널만 만든다. 파일·폴더는 채널 아래에서만 생긴다
     if (menu?.kind === 'section-add') {
-      return { categoryLabel: '하위 페이지 추가', groups: [[{ id: 'channel', label: '채널', Icon: IconWikiChannel }]] };
+      return {
+        categoryLabel: '하위 페이지 추가',
+        groups: [[{ id: 'channel', label: '채널', Icon: IconWikiChannel, onSelect: select('channel') }]],
+      };
     }
     if (menu?.kind === 'row-add') {
       return {
         categoryLabel: '하위 페이지 추가',
         groups: [
           [
-            { id: 'file', label: '파일', Icon: IconFile },
-            { id: 'folder', label: '폴더', Icon: IconFolder },
+            { id: 'file', label: '파일', Icon: IconFile, onSelect: select('file') },
+            { id: 'folder', label: '폴더', Icon: IconFolder, onSelect: select('folder') },
           ],
         ],
       };
     }
+    const node = menu?.nodeId ? findWikiTreeNode(menu.nodeId) : undefined;
+    const favoriteItem = node?.favorite
+      ? { id: 'unfavorite', label: '즐겨찾기 해제', Icon: IconStar, onSelect: select('unfavorite') }
+      : { id: 'favorite', label: '즐겨찾기', Icon: IconStar, onSelect: select('favorite') };
+    // 이름 바꾸기 같은 관리 항목은 그 노드가 속한 채널의 관리자에게만 보인다
+    const canManage = node ? isChannelAdmin(node.channelId) : false;
     return {
       categoryLabel: menu?.nodeId ? treeNodeKind(menu.nodeId) : undefined,
       groups: [
-        [{ id: 'favorite', label: '즐겨찾기', Icon: IconStar }],
+        [favoriteItem],
         [
-          { id: 'copy-link', label: '링크 복사', Icon: IconLink },
-          { id: 'rename', label: '이름 바꾸기', Icon: IconEditSquare },
+          { id: 'copy-link', label: '링크 복사', Icon: IconLink, onSelect: select('copy-link') },
+          ...(canManage
+            ? [{ id: 'rename', label: '이름 바꾸기', Icon: IconEditSquare, onSelect: select('rename') }]
+            : []),
         ],
       ],
     };
@@ -212,6 +268,8 @@ export default function WikiSideNav() {
           userRole={user?.email ?? ''}
           onSettingsClick={goSettings}
           profileMenu={profileMenu}
+          onNewClick={go('/llm-wiki/onboarding')}
+          hideNewButton={!canCreateWiki}
         />
       }
     >
@@ -234,17 +292,19 @@ export default function WikiSideNav() {
           onToggleCollapse={() => setWikiOpen((open) => !open)}
           actionsOpen={menu?.kind === 'section-add'}
           actions={
-            <SnbSectionAction
-              label="추가하기"
-              Icon={IconAdd400}
-              active={menu?.kind === 'section-add'}
-              onClick={(anchor) => setMenu({ kind: 'section-add', anchor })}
-            />
+            canCreateWiki ? (
+              <SnbSectionAction
+                label="추가하기"
+                Icon={IconAdd400}
+                active={menu?.kind === 'section-add'}
+                onClick={(anchor) => setMenu({ kind: 'section-add', anchor })}
+              />
+            ) : undefined
           }
         />
         {wikiOpen && (
           <NavTree
-            nodes={PROJECT_TREE_NODES}
+            nodes={treeNodes}
             activeId={activeTreeId}
             defaultExpandedIds={['channel-1', 'folder-1']}
             openActionMenu={openRowMenu}
