@@ -383,3 +383,15 @@ def test_layout_for_kind_returns_none_for_unknown() -> None:
     """모르는 종류를 물으면 레이아웃이 없다고 답한다."""
     assert layout_for_kind("no_such_kind") is None
     assert layout_for_kind("feature_request_status") is not None
+
+
+def test_every_table_group_key_is_listed_in_sections() -> None:
+    """표로 합칠 칸이 전부 sections 순서에도 올라 있는지 본다."""
+    for domain in PRESET_DOMAINS:
+        for preset_kind in domain.kinds:
+            layout = preset_kind.layout
+            assert layout is not None, preset_kind.kind
+            section_keys = {key for key, _ in layout.sections}
+            for group in layout.table_groups:
+                missing = set(group.section_keys) - section_keys
+                assert not missing, (preset_kind.kind, group.key, missing)

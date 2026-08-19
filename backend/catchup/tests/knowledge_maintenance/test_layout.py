@@ -88,8 +88,8 @@ def test_table_group_merges_blocks_into_one_item() -> None:
     assert table.heading == "사용 상황"
     assert table.block_indexes == (1, 0)
     assert table.rows == (
-        ("usage_context", "모바일에서 쓴다"),
-        ("frequency", "주 3회"),
+        ("사용 상황", "모바일에서 쓴다"),
+        ("빈도", "주 3회"),
     )
 
 

@@ -72,8 +72,9 @@ class LayoutItem:
         block_index: block 항목이 가리키는 원래 블록의 위치다. 표와
             자리표시는 None이다.
         block_indexes: table 항목이 합친 블록들의 원래 위치를 담는다.
-        rows: table 항목의 행을 (열 제목, 값)으로 담는다. 열 제목은 합친
-            블록의 heading이고, 값은 산문이 있으면 산문, 없으면 본문이다.
+        rows: table 항목의 행을 (열 제목, 값)으로 담는다. 열 제목은
+            sections에 적힌 표시 제목이고, 값은 산문이 있으면 산문,
+            없으면 본문이다.
         text: placeholder 항목에 넣을 문구다.
     """
 
@@ -165,6 +166,10 @@ def _table_item(
 ) -> LayoutItem | None:
     """표 묶음 하나를 표 항목이나 자리표시로 만든다.
 
+    행의 열 제목은 sections에 적힌 표시 제목을 쓴다. 표로 합쳐도 읽는
+    사람이 보는 칸 이름은 양식이 정한 이름 그대로여야 하기 때문이다.
+    sections에 없는 key는 key를 그대로 쓴다.
+
     묶음에 속한 블록이 하나도 없으면 always_show일 때만 자리표시를 내고,
     아니면 아무 항목도 내지 않는다.
 
@@ -177,13 +182,15 @@ def _table_item(
     Returns:
         표 항목이나 자리표시 항목이다. 낼 항목이 없으면 None이다.
     """
+    titles = dict(layout.sections)
     indexes: list[int] = []
     rows: list[tuple[str, str]] = []
     for section_key in group.section_keys:
+        label = titles.get(section_key, section_key)
         for index in indexes_by_heading.get(section_key, []):
             block = blocks[index]
             indexes.append(index)
-            rows.append((block.heading, block.narrative or block.body))
+            rows.append((label, block.narrative or block.body))
     if indexes:
         return LayoutItem(
             ITEM_TABLE,
