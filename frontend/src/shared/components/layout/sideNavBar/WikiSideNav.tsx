@@ -30,6 +30,7 @@ import { SPACE_HOME_ICON, SPACE_WIKI_ICON, TEAMSPACE_ICON } from './snbNavFixtur
 import SnbNavRow from './SnbNavRow';
 import SnbRailFooter from './SnbRailFooter';
 import SnbRailItem from './SnbRailItem';
+import SnbRenamePopover from './SnbRenamePopover';
 import SnbSectionHeader, { SnbSectionAction } from './SnbSectionHeader';
 import SnbSpaceSwitcher from './SnbSpaceSwitcher';
 import SnbTeamspaceCard from './SnbTeamspaceCard';
@@ -80,6 +81,9 @@ const NODE_KIND_LABEL: Record<WikiTreeNodeKind, string> = {
   document: '파일',
 };
 
+// 껍데기는 메뉴·이름 입력이 직접 그린다. overflow-visible이 없으면 그림자가 잘린다
+const POPOVER_SHELL_CLASS = 'overflow-visible border-0 bg-transparent p-0 shadow-none';
+
 /** 트리에서 id로 노드를 찾는다. 케밥 메뉴가 즐겨찾기·소속 채널을 물을 때 쓴다 */
 function findTreeNode(nodes: readonly WikiTreeNode[], id: string): WikiTreeNode | undefined {
   for (const node of nodes) {
@@ -102,6 +106,8 @@ export interface WikiSideNavProps {
   onNodeToggle?: (nodeId: string, expanded: boolean) => void;
   /** 메뉴 항목 선택 통로. 섹션 머리글에서 연 메뉴는 대상 노드가 없어 undefined다 */
   onMenuAction?: (nodeId: string | undefined, actionId: SnbMenuActionId) => void;
+  /** 이름 바꾸기 제출. 보낼 경로가 종류·소속 채널로 갈려 노드째 넘긴다 */
+  onRenameSubmit?: (node: WikiTreeNode, name: string) => void;
 }
 
 /**
@@ -115,6 +121,7 @@ export default function WikiSideNav({
   favorites = NO_FAVORITES,
   onNodeToggle,
   onMenuAction,
+  onRenameSubmit,
 }: WikiSideNavProps = {}) {
   const router = useRouter();
   const pathname = usePathname();
@@ -142,17 +149,24 @@ export default function WikiSideNav({
   } | null>(null);
   const closeMenu = () => setMenu(null);
 
+  // 이름 바꾸기 입력. 케밥에서 이어 열려 앵커를 그대로 물려받는다
+  const [rename, setRename] = useState<{ node: WikiTreeNode; anchor: HTMLElement } | null>(null);
+
   // 섹션 접기는 로컬 상태다 — 서버에 보존할 계약이 없다
   const [favoritesOpen, setFavoritesOpen] = useState(true);
   const [wikiOpen, setWikiOpen] = useState(true);
 
-  // 메뉴가 열린 동안 액션이 사라지면 앵커가 0×0이 되므로 어느 행이 열렸는지 트리에 알린다
-  const openRowMenu =
-    menu && menu.nodeId && menu.kind !== 'section-add'
+  // 메뉴·입력이 열린 동안 액션이 사라지면 앵커가 0×0이 되므로 어느 행이 열렸는지 트리에 알린다
+  const openRowMenu = rename
+    ? { nodeId: rename.node.id, kind: 'more' as const }
+    : menu && menu.nodeId && menu.kind !== 'section-add'
       ? { nodeId: menu.nodeId, kind: menu.kind === 'row-more' ? ('more' as const) : ('add' as const) }
       : undefined;
 
   const isChannelAdmin = (channelId: string) => channelAdmins[channelId] === true;
+  /** 문서는 이름 변경 API가 없고, 채널·폴더는 그 채널 관리자만 바꿀 수 있다 */
+  const canRename = (node?: WikiTreeNode): node is WikiTreeNode =>
+    node !== undefined && node.kind !== 'document' && isChannelAdmin(node.channelId);
   const activeTreeId = useMemo(() => {
     const flatten = (node: WikiTreeNode): WikiTreeNode[] => [node, ...(node.children ?? []).flatMap(flatten)];
     return nodes.flatMap(flatten).find((node) => node.href === pathname)?.id;
@@ -170,6 +184,9 @@ export default function WikiSideNav({
   }, [nodes, channelAdmins]);
 
   const select = (actionId: SnbMenuActionId) => () => {
+    const node = menu?.nodeId ? findTreeNode(nodes, menu.nodeId) : undefined;
+    // 이름 바꾸기는 케밥 자리에 입력 팝오버를 이어 띄운다 — 보낼 수 없는 노드에서는 열지 않는다
+    if (actionId === 'rename' && menu && canRename(node)) setRename({ node, anchor: menu.anchor });
     onMenuAction?.(menu?.nodeId, actionId);
     closeMenu();
   };
@@ -198,18 +215,22 @@ export default function WikiSideNav({
       };
     }
     const node = menu?.nodeId ? findTreeNode(nodes, menu.nodeId) : undefined;
-    const favoriteItem = node?.favorite
-      ? { id: 'unfavorite', label: '즐겨찾기 해제', Icon: IconStarOff, onSelect: select('unfavorite') }
-      : { id: 'favorite', label: '즐겨찾기에 추가', Icon: IconStar, onSelect: select('favorite') };
-    // 이름 바꾸기 같은 관리 항목은 그 노드가 속한 채널의 관리자에게만 보인다
-    const canManage = node ? isChannelAdmin(node.channelId) : false;
+    // 즐겨찾기는 artifact 단위 API라 문서 행에만 건다 — 채널·폴더에는 보낼 경로가 없다
+    const favoriteItems =
+      node?.kind === 'document'
+        ? [
+            node.favorite
+              ? { id: 'unfavorite', label: '즐겨찾기 해제', Icon: IconStarOff, onSelect: select('unfavorite') }
+              : { id: 'favorite', label: '즐겨찾기에 추가', Icon: IconStar, onSelect: select('favorite') },
+          ]
+        : [];
     return {
       categoryLabel: node ? NODE_KIND_LABEL[node.kind] : undefined,
       groups: [
-        [favoriteItem],
+        favoriteItems,
         [
           { id: 'copy-link', label: '링크 복사', Icon: IconLink, onSelect: select('copy-link') },
-          ...(canManage
+          ...(canRename(node)
             ? [{ id: 'rename', label: '이름 바꾸기', Icon: IconEditSquare, onSelect: select('rename') }]
             : []),
         ],
@@ -371,14 +392,31 @@ export default function WikiSideNav({
       {menu && (
         <Popover open onOpenChange={(open) => !open && closeMenu()}>
           <PopoverAnchor virtualRef={{ current: menu.anchor }} />
-          {/* 껍데기는 메뉴가 직접 그린다. overflow-visible이 없으면 메뉴 그림자가 잘린다 */}
           <PopoverContent
             align="start"
             side="right"
-            className="overflow-visible border-0 bg-transparent p-0 shadow-none"
+            className={POPOVER_SHELL_CLASS}
             onCloseAutoFocus={(event) => event.preventDefault()}
           >
             <SnbDropdownMenu {...menuProps()} />
+          </PopoverContent>
+        </Popover>
+      )}
+
+      {/* 이름 입력도 케밥과 같은 앵커에 같은 방식으로 붙는다 */}
+      {rename && (
+        <Popover open onOpenChange={(open) => !open && setRename(null)}>
+          <PopoverAnchor virtualRef={{ current: rename.anchor }} />
+          <PopoverContent align="start" side="right" className={POPOVER_SHELL_CLASS}>
+            <SnbRenamePopover
+              kind={rename.node.kind}
+              defaultValue={rename.node.label}
+              onSubmit={(name) => {
+                onRenameSubmit?.(rename.node, name);
+                setRename(null);
+              }}
+              onCancel={() => setRename(null)}
+            />
           </PopoverContent>
         </Popover>
       )}
