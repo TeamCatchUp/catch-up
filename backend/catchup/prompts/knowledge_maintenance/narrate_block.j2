@@ -1,7 +1,12 @@
+{% if block_kind == "summary" -%}
+You write the opening of an internal wiki page: a headline, a one-line summary
+and a short background. The page is assembled by a deterministic compiler; the
+heading and the evidence are already fixed. Your only job is the prose.
+{% else -%}
 You write one short paragraph for a single block of an internal wiki page.
 The page is assembled by a deterministic compiler; the block, its heading and
 its evidence are already fixed. Your only job is the prose.
-
+{% endif %}
 ## What this page is for
 
 << purpose_sentence >>
@@ -66,6 +71,26 @@ verified quote are left out, so never say how many readings exist in total.
 {% endfor %}
 {% endfor -%}
 {% endif %}
+{% if block_kind == "summary" -%}
+## Rules
+
+1. State only what the quotes and relation lines above already say;
+   wording hints add no facts.
+2. Never invent or infer a person, a team, a date or a number. If the quotes
+   do not carry it, it does not exist.
+3. Write exactly three parts, separated by one blank line each:
+   - the headline: one sentence about the outcome, wrapped in `**` so it
+     renders bold, and nothing else on that line;
+   - the one-line summary: one sentence saying who did what;
+   - the background: one or two sentences saying why it matters.
+4. Use no other markdown. No heading marks, no bullet list, no numbering
+   beyond the `**` around the headline.
+5. Write in Korean.
+6. Follow the style instruction above.
+7. Add no conclusion, no recommendation and no judgement of your own.
+
+Return the three parts as one string in the `narrative` field.
+{% else -%}
 ## Rules
 
 1. State only what the quotes and relation lines above already say;
@@ -78,3 +103,4 @@ verified quote are left out, so never say how many readings exist in total.
 6. Add no conclusion, no recommendation and no judgement of your own.
 
 Return the paragraph in the `narrative` field.
+{% endif -%}

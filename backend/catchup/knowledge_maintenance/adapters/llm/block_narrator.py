@@ -9,7 +9,9 @@ from langchain_core.language_models import BaseChatModel
 from catchup.knowledge_maintenance.adapters.llm.prompt_versioning import (
     versioned_prompt,
 )
+from catchup.knowledge_maintenance.contracts.block_narration import ChangeReasonContract
 from catchup.knowledge_maintenance.contracts.block_narration import NarrativeContract
+from catchup.knowledge_maintenance.ports.narrator import ChangeExplanationRequest
 from catchup.knowledge_maintenance.ports.narrator import NarrationError
 from catchup.knowledge_maintenance.ports.narrator import NarrationRequest
 from catchup.observability.logging import get_logger
@@ -17,6 +19,8 @@ from catchup.prompts.loader import prompt_loader
 
 TEMPLATE_PATH = "knowledge_maintenance/narrate_block.j2"
 PROMPT_VERSION = versioned_prompt(TEMPLATE_PATH)
+EXPLAIN_TEMPLATE_PATH = "knowledge_maintenance/explain_block_change.j2"
+EXPLAIN_PROMPT_VERSION = versioned_prompt(EXPLAIN_TEMPLATE_PATH)
 
 logger = get_logger(__name__)
 
@@ -35,6 +39,11 @@ class LlmBlockNarrator:
     def __init__(self, llm: BaseChatModel) -> None:
         self._structured = llm.with_structured_output(
             NarrativeContract,
+            method="function_calling",
+            include_raw=True,
+        )
+        self._reason_structured = llm.with_structured_output(
+            ChangeReasonContract,
             method="function_calling",
             include_raw=True,
         )
@@ -127,3 +136,85 @@ class LlmBlockNarrator:
             **call_context,
         )
         return narrative
+
+    def explain_change(self, request: ChangeExplanationRequest) -> str:
+        """바뀐 블록의 수정 이유를 한 문장으로 받는다.
+
+        로그 규칙은 산문과 같다. 판본과 개수만 남기고 이전·이후 문장,
+        새 인용, 받아 온 이유는 남기지 않는다. 실패도 예외 종류만 남기고
+        예외 메시지와 역추적은 남기지 않는다.
+
+        Raises:
+            NarrationError: 프롬프트를 만들지 못했거나 호출이 터졌거나
+                계약을 어겼거나 빈 문장을 받았을 때 던진다.
+        """
+        call_context = {
+            "prompt_version": EXPLAIN_PROMPT_VERSION,
+            "before_count": len(request.before_statements),
+            "after_count": len(request.after_statements),
+            "new_source_count": len(request.new_sources),
+        }
+        logger.info("block_change_explanation_started", **call_context)
+
+        try:
+            rendered = prompt_loader.get_prompt(
+                EXPLAIN_TEMPLATE_PATH,
+                heading=request.heading,
+                before_statements=list(request.before_statements),
+                after_statements=list(request.after_statements),
+                new_sources=list(request.new_sources),
+                style_instruction=request.style_instruction,
+                purpose_sentence=request.purpose_sentence,
+            )
+        except Exception as error:
+            logger.warning(
+                "block_change_explanation_failed",
+                reason="prompt_render_error",
+                error_type=type(error).__name__,
+                **call_context,
+            )
+            raise NarrationError("블록 변경 이유 프롬프트를 만들지 못했다.") from error
+
+        started = time.perf_counter()
+        try:
+            response = self._reason_structured.invoke(rendered)
+        except Exception as error:
+            logger.warning(
+                "block_change_explanation_failed",
+                reason="llm_call_error",
+                error_type=type(error).__name__,
+                elapsed=round(time.perf_counter() - started, 3),
+                **call_context,
+            )
+            raise NarrationError("블록 변경 이유 호출이 실패했다.") from error
+        elapsed = round(time.perf_counter() - started, 3)
+
+        parsed = response.get("parsed")
+        if parsed is None:
+            error = response.get("parsing_error")
+            logger.warning(
+                "block_change_explanation_failed",
+                reason="contract_violation",
+                error_type=type(error).__name__ if error is not None else "unknown",
+                elapsed=elapsed,
+                **call_context,
+            )
+            raise NarrationError("블록 변경 이유 계약이 깨졌다.")
+
+        reason = parsed.reason.strip()
+        if not reason:
+            logger.warning(
+                "block_change_explanation_failed",
+                reason="empty_reason",
+                elapsed=elapsed,
+                **call_context,
+            )
+            raise NarrationError("블록 변경 이유가 비었다.")
+
+        logger.info(
+            "block_change_explanation_completed",
+            elapsed=elapsed,
+            reason_length=len(reason),
+            **call_context,
+        )
+        return reason

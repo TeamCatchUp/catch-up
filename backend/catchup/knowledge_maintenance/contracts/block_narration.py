@@ -21,3 +21,15 @@ class NarrativeContract(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     narrative: str
+
+
+class ChangeReasonContract(BaseModel):
+    """바뀐 블록 하나의 수정 이유 한 문장을 담는다.
+
+    Attributes:
+        reason: 왜 이 블록이 바뀌었는지 알리는 한 문장을 담는다.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    reason: str

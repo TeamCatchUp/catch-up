@@ -57,6 +57,32 @@ class NarrationRequest:
     hints: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class ChangeExplanationRequest:
+    """바뀐 블록 하나의 수정 이유를 묻는 데 필요한 재료를 담는다.
+
+    문서를 다시 여는 사람이 가장 먼저 묻는 것은 "무엇이 달라졌나"가 아니라
+    "왜 달라졌나"다. 앞뒤 문장과 새로 붙은 인용만 주면 그 답을 쓸 수 있고,
+    제안 id나 검수자 같은 운영 정보는 답에 필요하지 않아 아예 주지 않는다.
+
+    Attributes:
+        heading: 바뀐 블록의 제목을 담는다.
+        before_statements: 바뀌기 전 블록이 담고 있던 문장을 담는다.
+        after_statements: 바뀐 뒤 블록이 담고 있는 문장을 담는다.
+        new_sources: 이번에 새로 붙은 검증된 인용 원문을 담는다. 무엇이
+            변경을 불러왔는지 말할 수 있는 유일한 근거다.
+        style_instruction: 어떤 문체로 쓸지 알리는 지시 한 문단이다.
+        purpose_sentence: 이 문서가 무엇에 쓰이는지 알리는 한 줄이다.
+    """
+
+    heading: str
+    before_statements: tuple[str, ...]
+    after_statements: tuple[str, ...]
+    new_sources: tuple[str, ...]
+    style_instruction: str
+    purpose_sentence: str
+
+
 class BlockNarrator(Protocol):
     """블록 하나를 산문 한 문단으로 옮기는 기능을 정의한다."""
 
@@ -68,5 +94,16 @@ class BlockNarrator(Protocol):
 
         Raises:
             NarrationError: 산문을 받아 오지 못했을 때 던진다.
+        """
+        ...
+
+    def explain_change(self, request: ChangeExplanationRequest) -> str:
+        """바뀐 블록의 수정 이유 한 문장을 받는다.
+
+        산문과 마찬가지로 빈 문장을 성공으로 돌려주지 않는다. 바뀐 것이
+        없는 블록은 애초에 부르지 않는다.
+
+        Raises:
+            NarrationError: 이유를 받아 오지 못했을 때 던진다.
         """
         ...
