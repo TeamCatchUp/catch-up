@@ -1,10 +1,11 @@
 import IconAddSmall from '@/public/icons/icon/add_small.svg';
 import { cn } from '@/shared/utils/cn';
 
-import type { ReviewQueueItemData } from '../../types/llmWikiModel';
+import type { ReviewQueueRowData } from '../../api/knowledgeReviewMappers';
 
 interface ReviewQueueRowProps {
-  item: ReviewQueueItemData;
+  /** 목록 응답 한 줄. baseRevisionId는 상세에서만 오므로 행 계약에 없다 */
+  item: ReviewQueueRowData;
   selected?: boolean;
   onSelect?: (id: string) => void;
   /**

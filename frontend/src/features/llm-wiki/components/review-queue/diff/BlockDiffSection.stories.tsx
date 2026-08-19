@@ -2,11 +2,15 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { catchupParameters } from '../../../../../../.storybook/catchupStoryParameters';
-import { BASE_WIKI_BLOCKS, PROPOSED_WIKI_BLOCKS } from '../../../fixtures/llmWikiDiffFixtures';
-import { computeBlockDiff } from '../../../utils/diff/computeBlockDiff';
+import {
+  BASE_WIKI_BLOCKS,
+  PROPOSED_BLOCK_CHANGES,
+  PROPOSED_WIKI_BLOCKS,
+} from '../../../fixtures/llmWikiDiffFixtures';
+import { buildBlockDiff } from '../../../utils/diff/buildBlockDiff';
 import BlockDiffSection from './BlockDiffSection';
 
-const entries = computeBlockDiff(BASE_WIKI_BLOCKS, PROPOSED_WIKI_BLOCKS);
+const entries = buildBlockDiff(BASE_WIKI_BLOCKS, PROPOSED_WIKI_BLOCKS, PROPOSED_BLOCK_CHANGES);
 
 const meta = {
   title: 'Compositions/LLM Wiki/ReviewQueue/BlockDiffSection',

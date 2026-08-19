@@ -1,4 +1,4 @@
-import type { WikiBlock } from '../types/llmWikiDiff';
+import type { BlockChange, WikiBlock } from '../types/llmWikiDiff';
 
 /**
  * diff 뷰 스토리용 base/proposed blocks[] 쌍. 백엔드 BlockResponse 형태를 따른다.
@@ -61,7 +61,7 @@ export const PROPOSED_WIKI_BLOCKS: readonly WikiBlock[] = [
         citationVerified: true,
       },
     ],
-    reason: '8월 VOC 3건에서 재시도 횟수를 늘려달라는 요구가 반복 확인됨',
+    reason: '근거 1건 추가·0건 폐기',
   }),
   block({
     blockIndex: 1,
@@ -76,17 +76,18 @@ export const PROPOSED_WIKI_BLOCKS: readonly WikiBlock[] = [
         citationVerified: null,
       },
     ],
-    reason: '점검 시간대 재시도 실패 문의가 신규 근거 VOC로 유입됨',
+    reason: '새 섹션',
   }),
-  // 삭제 tombstone — 원문은 base에서 가져오므로 body는 비운다
-  block({
-    blockIndex: 2,
-    heading: '수동 재시도 안내',
-    body: '',
-    claimIds: ['c-manual-1'],
-    removed: true,
-    reason: '자동 재시도가 3회로 늘면서 상담원 수동 안내 절차가 폐지됨',
-  }),
+];
+
+/**
+ * 기본 쌍의 변경 목록. 서버가 짝짓기를 마친 결과 모양이다 —
+ * 빠진 블록은 변경안에 자리가 없어 blockIndex가 null이고 사유도 붙지 않는다.
+ */
+export const PROPOSED_BLOCK_CHANGES: readonly BlockChange[] = [
+  { kind: 'modified', blockIndex: 0, baseBlockIndex: 0 },
+  { kind: 'added', blockIndex: 1, baseBlockIndex: null },
+  { kind: 'removed', blockIndex: null, baseBlockIndex: 1 },
 ];
 
 /** 다툼 블록 — sources를 비우고 variants에만 근거를 싣는 계약을 표본으로 남긴다 */
@@ -122,7 +123,7 @@ export const CONTESTED_PROPOSED_BLOCKS: readonly WikiBlock[] = [
         ],
       },
     ],
-    reason: '재시도 상한을 두고 상담 답변이 갈림',
+    reason: '근거 1건 추가·0건 폐기',
   }),
 ];
 
@@ -133,7 +134,7 @@ export const JUDGED_PROPOSED_BLOCKS: readonly WikiBlock[] = [
     heading: '재시도 정책',
     body: '결제 승인 실패 시 3회까지 재시도한다.\n재시도 간격은 30초다.',
     claimIds: ['c-retry-1'],
-    reason: '8월 VOC 3건에서 재시도 횟수를 늘려달라는 요구가 반복 확인됨',
+    reason: '산문 갱신',
     verdict: {
       proposalId: 'prop-payment-retry',
       blockIndex: 0,
@@ -163,6 +164,11 @@ export const LONG_PROPOSED_WIKI_BLOCKS: readonly WikiBlock[] = [
     heading: '고객 안내 문구 표준',
     body: '결제 승인이 실패한 경우 고객에게는 결제 수단과 한도를 확인해 달라는 안내 문구를 노출하고, 동일 카드로 두 번 이상 실패가 발생하면 상담 채널로 연결되는 배너를 함께 보여 준다. 이 문구는 PG사별로 다르게 표기하지 않는다.',
     claimIds: ['c-copy-1'],
-    reason: '한도 초과 문의가 안내 문구 개선 요구로 반복 유입됨',
+    reason: '근거 2건 추가·1건 폐기',
   }),
+];
+
+/** 한 자리만 바뀐 쌍 — 긴 문단·이미 판정된 블록 스토리가 함께 쓴다 */
+export const SINGLE_MODIFIED_BLOCK_CHANGES: readonly BlockChange[] = [
+  { kind: 'modified', blockIndex: 0, baseBlockIndex: 0 },
 ];

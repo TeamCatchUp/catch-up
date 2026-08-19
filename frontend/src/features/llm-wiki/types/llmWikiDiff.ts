@@ -1,6 +1,6 @@
 /**
- * 검토 큐 diff 뷰 타입. WikiBlock 계열만 [BE] 계약이고,
- * 나머지는 computeBlockDiff가 만드는 프론트 값이라 닫힌 union을 쓴다.
+ * 검토 큐 diff 뷰 타입. WikiBlock·BlockChange는 [BE] 계약이고,
+ * DiffLine 계열은 표시용 파생이라 닫힌 union을 쓴다.
  */
 
 /** [BE] 블록 본문 한 줄의 근거 인용. citationVerified는 검증/대조 실패/근거 없음 3값이다 */
@@ -32,7 +32,7 @@ export interface BlockVerdict {
 
 /**
  * [BE] 제안·발행판 blocks[]의 원소.
- * 블록 고유 ID가 없어 base↔proposed 페어링 키는 claimIds뿐이다 — 매칭 규칙은 백엔드 미확정.
+ * 블록 고유 ID가 없어 base↔proposed 짝짓기는 서버가 계산해 blockChanges로 내려준다.
  */
 export interface WikiBlock {
   /** [BE] 목록에서의 자리. 블록 판정 요청 경로에 그대로 실린다 */
@@ -44,7 +44,7 @@ export interface WikiBlock {
   body: string;
   /** [BE] 사람용 산문. 이쪽이 표시 정본이고 body는 값 표기다 — 없으면(옛 데이터) body로 폴백한다 */
   narrative: string | null;
-  /** [BE] 페어링 키이자 블록 단위 Read Set */
+  /** [BE] 블록 단위 Read Set */
   claimIds: readonly string[];
   proposalIds: readonly string[];
   ontologyVersion: string | null;
@@ -56,16 +56,23 @@ export interface WikiBlock {
   variants: readonly BlockVariant[] | null;
   /** [BE] 저장된 결정. 미판정이면 null */
   verdict: BlockVerdict | null;
-  /** [SPEC] "수정된 이유" — 백엔드 대응 컬럼 없음, 계약 협상 대상 */
+  /** [BE] change_reason. 서버가 변경 종류·근거 증감에서 만든 요약 문구다 */
   reason?: string | null;
-  /**
-   * [SPEC] 삭제 제안 표식. proposed 배열에 tombstone으로 실린다 — 삭제된 블록도 사유를 갖기 때문이다.
-   * 원문은 페어링된 base 블록에서 가져오므로 tombstone의 body는 비워도 된다.
-   */
-  removed?: boolean;
 }
 
 export type BlockChangeKind = 'added' | 'removed' | 'modified';
+
+/**
+ * [BE] 발행판과 견준 블록 하나의 변경. 바뀐 블록만 실리고 순서가 카드 순서다.
+ * 자리가 두 축인 이유는 added·removed에 한쪽 짝이 없기 때문이다.
+ */
+export interface BlockChange {
+  kind: BlockChangeKind;
+  /** 변경안 blocks[] 안 자리. removed면 null */
+  blockIndex: number | null;
+  /** 발행판 baseBlocks[] 안 자리. added면 null */
+  baseBlockIndex: number | null;
+}
 
 export interface DiffSegment {
   text: string;
@@ -87,8 +94,8 @@ export interface BlockDiffEntry {
   after: readonly DiffLine[] | null; // removed면 null
   reason: string | null;
   /**
-   * [BE] 블록 판정 요청에 필요한 두 값. proposed 쪽 블록에서 온다.
-   * tombstone 없이 빠진 블록은 proposed에 자리가 없어 둘 다 null이고, 판정할 경로도 없다.
+   * [BE] 블록 판정 요청에 필요한 두 값. 변경안 블록에서 온다.
+   * removed 카드는 변경안에 자리가 없어 둘 다 null이고, 판정할 경로도 없다.
    */
   blockIndex: number | null;
   blockContentHash: string | null;

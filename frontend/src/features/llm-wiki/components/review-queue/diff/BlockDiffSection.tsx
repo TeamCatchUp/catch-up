@@ -10,6 +10,8 @@ export interface BlockDiffSectionProps {
   onPreview: () => void;
   /** [BE] can_review. 카드의 판정 버튼 노출 여부로 그대로 내려간다 */
   canReview?: boolean;
+  /** 반려 진입점. 사유 입력 자리가 없으면 꺼서 보낼 수 없는 요청을 막는다 */
+  canReject?: boolean;
   onApprove: (id: string) => void;
   /** 제안 기각 */
   onReject: (id: string) => void;
@@ -23,6 +25,7 @@ export default function BlockDiffSection({
   entries,
   onPreview,
   canReview = true,
+  canReject = true,
   onApprove,
   onReject,
 }: BlockDiffSectionProps) {
@@ -49,6 +52,7 @@ export default function BlockDiffSection({
           key={entry.id}
           entry={entry}
           canReview={canReview}
+          canReject={canReject}
           onApprove={onApprove}
           onReject={onReject}
         />
