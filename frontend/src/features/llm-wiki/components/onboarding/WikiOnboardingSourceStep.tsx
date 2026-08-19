@@ -27,6 +27,9 @@ import OnboardingFieldLabel from './OnboardingFieldLabel';
 import OnboardingStepper from './OnboardingStepper';
 import OnboardingTopBar from './OnboardingTopBar';
 
+/** 고를 채널이 하나도 없을 때 메뉴에 놓이는 안내. 미연동과 전부 추가를 한 문구로 덮는다 */
+export const CHANNEL_PICKER_EMPTY_TEXT = '추가할 수 있는 채널이 없어요';
+
 interface ScheduleTriggerFieldProps {
   field: ScheduleFieldData;
   onSelectOption?: (fieldId: string, optionId: string) => void;
@@ -180,16 +183,22 @@ export default function WikiOnboardingSourceStep({
                   sideOffset={2}
                   className="bg-fill-normal-normal flex max-h-80 w-[var(--radix-dropdown-menu-trigger-width)] min-w-0 flex-col gap-1 overflow-y-auto rounded-xl px-1.5 py-2"
                 >
-                  {selectableChannels.map((row) => (
-                    <DropdownMenuItem
-                      key={row.channel.credentialId}
-                      onSelect={() => onSelectChannel?.(row.channel.credentialId)}
-                      className="text-body-small text-text-normal-normal h-8 gap-3 px-2"
-                    >
-                      <IconTagChannel className="text-icon-normal-neutral size-5 shrink-0" />
-                      <span className="min-w-0 flex-1 truncate">{row.channel.name}</span>
+                  {selectableChannels.length === 0 ? (
+                    <DropdownMenuItem disabled className="text-body-small text-text-normal-assistive h-8 px-2">
+                      <span className="min-w-0 flex-1 truncate">{CHANNEL_PICKER_EMPTY_TEXT}</span>
                     </DropdownMenuItem>
-                  ))}
+                  ) : (
+                    selectableChannels.map((row) => (
+                      <DropdownMenuItem
+                        key={row.channel.credentialId}
+                        onSelect={() => onSelectChannel?.(row.channel.credentialId)}
+                        className="text-body-small text-text-normal-normal h-8 gap-3 px-2"
+                      >
+                        <IconTagChannel className="text-icon-normal-neutral size-5 shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">{row.channel.name}</span>
+                      </DropdownMenuItem>
+                    ))
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (

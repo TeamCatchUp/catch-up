@@ -18,7 +18,7 @@ import {
   SCHEDULE_FIELDS,
 } from '../../fixtures/llmWikiOnboardingFixtures';
 import { buildScheduleResultSentence } from '../../utils/onboarding/scheduleResultText';
-import WikiOnboardingSourceStep from './WikiOnboardingSourceStep';
+import WikiOnboardingSourceStep, { CHANNEL_PICKER_EMPTY_TEXT } from './WikiOnboardingSourceStep';
 
 // 스토리의 일정 필드는 픽스처 기본값이라 결과 문장도 그 선택에서 뽑는다
 const SCHEDULE_RESULT_TEXT = buildScheduleResultSentence({
@@ -68,7 +68,7 @@ const meta = {
         nodeId: '18071:83322',
       },
       viewport: { width: 1200 },
-      states: ['default', 'channel-list-loading', 'channel-list-error'],
+      states: ['default', 'channel-picker-empty', 'channel-list-loading', 'channel-list-error'],
       dataNotes: [
         '**8/14 델타 반영**: 일정 필드가 2열+별도줄 → 3열 한 줄, 배너 아이콘 info_filled → megaphone.',
         '**채널 표의 "최근 수정일" 열은 제거됐다(사용자 확정).** 대응 API 필드가 없어 늘 빈 값이었다 — 표는 채널명 1열이다.',
@@ -77,8 +77,12 @@ const meta = {
         '주기만 드롭다운이 열린다(6시간마다/12시간마다/매일/주 1회). 백필은 선택지 라벨이 기획에 확정돼 있지 않고(“최근 N개월”의 N 미정), 실행 시각은 기획이 “시각 선택, 기본 자정”까지만 정해 둘 다 트리거만 그린다.',
         '채널 목록의 로딩·빈·에러는 8/14 시안에도 없다 — 8/13 사용자 승인 구현분을 유지한다.',
         '표의 채널은 위키 채널이 아니라 채널톡 채널이다 — mock은 GET /automations/credentials 응답(credential_id·external_id·is_configured) 모양을 지키고, 선택 식별자도 credentialId다.',
+        `**채널 피커의 빈 상태 문구 "${CHANNEL_PICKER_EMPTY_TEXT}"는 시안 없이 자작한 카피다(승인 전).** 미연동(후보 0개)과 전부 추가(선택 가능분 0개)를 한 문구로 덮는다 — 두 경우 모두 사용자가 할 수 있는 일이 같기 때문이다.`,
       ],
-      layoutNotes: ['일정 3열 grid-cols-3 gap-4 — 시안 필드 폭 325.33은 (1008−32)/3의 결과값이라 고정하지 않는다.'],
+      layoutNotes: [
+        '일정 3열 grid-cols-3 gap-4 — 시안 필드 폭 325.33은 (1008−32)/3의 결과값이라 고정하지 않는다.',
+        '**상단 바·하단 액션 바는 sticky다(시안 없음, 사용자 지시).** 공용 OnboardingTopBar/OnboardingActionBar 한 곳에 얹어 3단계가 함께 받는다 — 배경은 페이지와 같은 fill-normal-assistive, 레이어는 z-base뿐이고 그림자·보더 같은 새 시각은 넣지 않았다.',
+      ],
     }),
   },
 } satisfies Meta<typeof WikiOnboardingSourceStep>;
@@ -104,6 +108,14 @@ export const Default: Story = {
     // 기본값이 기획대로다 — 시안 필러 "1분"이 아니다
     await expect(canvas.getByText('매일')).toBeInTheDocument();
     await expect(canvas.getByText('자정')).toBeInTheDocument();
+
+    // 상단 바·하단 액션 바는 스크롤에서 빠진다 — 사이 콘텐츠만 움직인다
+    const topBar = canvas.getByRole('button', { name: '뒤로 가기' }).parentElement!;
+    const actionBar = canvas.getByRole('button', { name: ONBOARDING_FINISH_LABEL }).parentElement!;
+    await expect(getComputedStyle(topBar).position).toBe('sticky');
+    await expect(getComputedStyle(topBar).top).toBe('0px');
+    await expect(getComputedStyle(actionBar).position).toBe('sticky');
+    await expect(getComputedStyle(actionBar).bottom).toBe('0px');
 
     // 하단 액션 바 2개 — 8/13 MISSING이 FOUND로 뒤집힌 지점
     await userEvent.click(canvas.getByRole('button', { name: ONBOARDING_BACK_LABEL }));
@@ -153,6 +165,38 @@ export const ChannelPickerHidesPicked: Story = {
 
     const menu = await within(document.body).findByRole('menu');
     await expect(within(menu).getAllByRole('menuitem')).toHaveLength(ONBOARDING_CHANNEL_ROWS.length - 1);
+  },
+};
+
+/** 연동된 채널톡 채널이 하나도 없는 경우. 빈 팝오버 대신 안내가 놓이고 고를 항목은 없다 */
+export const ChannelPickerEmpty: Story = {
+  args: { ...baseArgs, channelRows: [], availableChannels: [], onSelectChannel: fn() },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: new RegExp(CHANNEL_PICKER_PLACEHOLDER) }));
+
+    const menu = await within(document.body).findByRole('menu');
+    await expect(within(menu).getByText(CHANNEL_PICKER_EMPTY_TEXT)).toBeInTheDocument();
+    // 안내는 클릭에 반응하지 않는 비활성 항목이다
+    await expect(within(menu).getByRole('menuitem')).toHaveAttribute('data-disabled');
+  },
+};
+
+/** 후보를 전부 추가한 경우. 거르고 나면 남는 게 없어 미연동과 같은 안내가 놓인다 */
+export const ChannelPickerAllPicked: Story = {
+  args: {
+    ...baseArgs,
+    channelRows: ONBOARDING_CHANNEL_ROWS,
+    availableChannels: ONBOARDING_CHANNEL_ROWS,
+    onSelectChannel: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: new RegExp(CHANNEL_PICKER_PLACEHOLDER) }));
+
+    const menu = await within(document.body).findByRole('menu');
+    await expect(within(menu).getByText(CHANNEL_PICKER_EMPTY_TEXT)).toBeInTheDocument();
+    await expect(within(menu).getAllByRole('menuitem')).toHaveLength(1);
   },
 };
 

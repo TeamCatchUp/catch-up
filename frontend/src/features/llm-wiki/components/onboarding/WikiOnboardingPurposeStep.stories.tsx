@@ -95,6 +95,7 @@ const meta = {
       layoutNotes: [
         '이름 라벨 슬롯 w-[157px] — 시안 Textfield 시작 x에서 유도한 값이라 고정한다.',
         '하단 CTA는 공용 OnboardingActionBar(1단계는 다음 버튼만).',
+        '**상단 바·하단 액션 바는 sticky다(시안 없음, 사용자 지시).** 공용 컴포넌트 한 곳에 얹혀 3단계가 함께 받는다 — 배경 fill-normal-assistive + z-base뿐이고 그림자·보더는 더하지 않았다.',
       ],
     }),
   },

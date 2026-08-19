@@ -99,6 +99,7 @@ const meta = {
       layoutNotes: [
         '요약 행은 라벨 80 고정(w-20) + 값 영역. 문서 종류·채널처럼 값이 여러 개인 행이 있어 값을 flex-wrap으로 나란히 놓는다.',
         '하단 액션 바는 3단계 공용 OnboardingActionBar — 콘텐츠 패딩 밖 형제라 상단 테두리가 전폭을 긋는다.',
+        '**상단 바·하단 액션 바는 sticky다(시안 없음, 사용자 지시).** 이 화면만 배경이 토큰이 아니라 그라디언트 상수라, 고정 바에는 그 base(#FFFFFF와 같은 값인 fill-normal-assistive)를 깔았다 — 스크롤 시 그라디언트 일부가 바 뒤로 가려진다(알파 0.2라 차이는 미미).',
       ],
       tokenNotes: [
         '"위키를 만들면" 카드 = bg-fill-primary-normal-assistive(#F7FBFF) + 제목·항목 text-text-primary-normal(#005EEB) + 체크 icon-primary-assistive(#3385FF).',
