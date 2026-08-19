@@ -2,15 +2,14 @@ import { queryOptions } from '@tanstack/react-query';
 
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
-
 import type {
   AutomationConnector,
   AutomationCredentialsResponse,
   AutomationTargetsResponse,
-} from '../types/automationApi';
+} from '@/shared/types/automationApi';
 
 export const automationCredentialsQueries = {
-  all: () => ['agent-studio', 'automation-credentials'] as const,
+  all: () => ['automation-credentials'] as const,
 
   credentials: (connector: AutomationConnector) =>
     queryOptions({
