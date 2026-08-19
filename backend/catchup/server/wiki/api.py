@@ -109,6 +109,7 @@ from catchup.server.wiki.schemas import PresetStyleResponse
 from catchup.server.wiki.schemas import TestKnowledgeMaintenanceSettingListResponse
 from catchup.server.wiki.schemas import TestKnowledgeMaintenanceSettingRequest
 from catchup.server.wiki.schemas import TestKnowledgeMaintenanceSettingResponse
+from catchup.server.wiki.schemas import WorkspaceMemberListResponse
 from catchup.utils.scheduler import apply_test_knowledge_maintenance_schedule
 
 router = APIRouter(
@@ -928,6 +929,7 @@ def _to_list_item(
         channel_id=None if row.channel_id is None else str(row.channel_id),
         folder_id=None if row.folder_id is None else str(row.folder_id),
         created_at=row.created_at,
+        last_activity_at=row.last_activity_at,
         status=wiki_queries.artifact_status(row),
         pending_proposal_count=row.pending_proposal_count,
         latest_revision=latest,
@@ -964,11 +966,31 @@ def list_artifacts(
     owner_user_id: int | None = Query(
         None, description="해당 사용자가 담당자인 문서만 조회한다."
     ),
+    unassigned: bool = Query(
+        False,
+        description=(
+            "담당자가 아무도 없는 문서만 조회한다. owner_user_id와 "
+            "함께 줄 수 없다."
+        ),
+    ),
+    q: str | None = Query(
+        None, description="제목에 이 글자가 들어간 문서만 조회한다."
+    ),
     created_after: datetime | None = Query(
         None, description="해당 시각 이후에 만들어진 문서만 조회한다."
     ),
     created_before: datetime | None = Query(
         None, description="해당 시각 이전에 만들어진 문서만 조회한다."
+    ),
+    sort: Literal["last_activity", "created_at"] = Query(
+        "last_activity",
+        description=(
+            "정렬 키다. last_activity는 마지막 활동 시각, created_at은 "
+            "문서 생성 시각이다."
+        ),
+    ),
+    order: Literal["asc", "desc"] = Query(
+        "desc", description="정렬 방향이다."
     ),
     limit: int = Query(
         50, ge=1, le=200, description="한 페이지에 담을 문서 수"
@@ -984,7 +1006,23 @@ def list_artifacts(
 
     total은 limit·offset을 걸기 전의 수다. 이 쪽에 실린 개수로는 소비자가
     쪽 수를 계산할 수 없다.
+
+    기본 정렬은 마지막 활동 시각 내림차순이다. 대시보드를 여는 사람이 가장
+    먼저 찾는 것이 최근에 움직인 문서이기 때문이다.
+
+    Raises:
+        HTTPException: owner_user_id와 unassigned를 함께 주면 422를 던진다.
     """
+    if unassigned and owner_user_id is not None:
+        # 두 조건은 서로 반대라 겹치는 문서가 없다. 빈 목록을 돌려주면
+        # 소비자가 요청이 잘못된 것인지 정말 문서가 없는 것인지 가릴 수
+        # 없다.
+        raise review_error(
+            422,
+            code="CONFLICTING_OWNER_FILTERS",
+            message="owner_user_id와 unassigned는 함께 쓸 수 없습니다.",
+        )
+
     rows, total = wiki_queries.list_artifacts(
         db,
         workspace_id=context.workspace_id,
@@ -993,8 +1031,12 @@ def list_artifacts(
         kind=kind,
         status=status_filter,
         owner_user_id=owner_user_id,
+        unassigned=unassigned,
+        q=q,
         created_after=created_after,
         created_before=created_before,
+        sort=sort,
+        order=order,
         limit=limit,
         offset=offset,
     )
@@ -1015,6 +1057,41 @@ def list_artifacts(
         total=total,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.get(
+    path="/members",
+    response_model=WorkspaceMemberListResponse,
+    description=(
+        "워크스페이스의 활성 멤버 목록을 담당자 지정 응답과 같은 모양으로 "
+        "돌려준다."
+    ),
+)
+def list_workspace_members(
+    context: MemberContext = Depends(resolve_member_workspace),
+    db: Session = Depends(get_db),
+) -> WorkspaceMemberListResponse:
+    """워크스페이스의 활성 구성원을 이름 순으로 돌려준다.
+
+    담당자를 고르는 화면이 후보 명단을 얻는 자리다. 비활성·삭제된 사용자는
+    빠진다. 이미 떠난 사람을 담당자로 지정할 수 있으면 문서에 책임자가
+    있는 것처럼 보이지만 실제로는 아무도 보지 않는 상태가 된다.
+
+    구성원 수는 워크스페이스 하나 규모라 쪽을 나누지 않는다.
+    """
+    rows = wiki_queries.list_workspace_members(
+        db, workspace_id=context.workspace_id
+    )
+    return WorkspaceMemberListResponse(
+        items=[
+            OwnerResponse(
+                user_id=row.user_id,
+                display_name=row.display_name,
+                profile_image_url=row.profile_image_url,
+            )
+            for row in rows
+        ]
     )
 
 

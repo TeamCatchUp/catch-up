@@ -35,6 +35,7 @@ from catchup.db.models import KnowledgeArtifactChangeProposal
 from catchup.db.models import KnowledgeArtifactRevision
 from catchup.db.models import User
 from catchup.db.models import UserRole
+from catchup.db.models import UserStatus
 from catchup.db.models import UserWorkspace
 from catchup.db.models import WikiArtifactFavorite
 
@@ -447,6 +448,47 @@ def list_owners_by_artifact(
     return dict(grouped)
 
 
+@dataclass(frozen=True, slots=True)
+class WorkspaceMemberRow:
+    """워크스페이스 구성원 한 명을 화면에 그릴 만큼만 담는다.
+
+    OwnerRow와 필드가 같지만 따로 둔다. 그쪽은 artifact_id를 함께 갖는
+    "어느 문서의 담당자"라, 아직 어느 문서에도 붙지 않은 구성원에는 채울
+    값이 없다.
+    """
+
+    user_id: int
+    display_name: str
+    profile_image_url: str | None
+
+
+def list_workspace_members(
+    db: Session, *, workspace_id: int
+) -> list[WorkspaceMemberRow]:
+    """이 workspace의 활성 구성원을 이름 순으로 읽는다.
+
+    비활성·삭제된 사용자는 뺀다. 담당자로 지정할 사람을 고르는 자리에서
+    쓰이므로, 이미 떠난 사람이 후보로 보이면 안 된다.
+
+    이름이 같은 사람이 있을 수 있어 id로 한 번 더 세운다. 순서가 흔들리면
+    같은 목록을 두 번 열었을 때 항목이 자리를 바꾼다.
+    """
+    rows = db.execute(
+        select(User.id, User.name, User.picture)
+        .join(UserWorkspace, UserWorkspace.user_id == User.id)
+        .where(
+            UserWorkspace.workspace_id == workspace_id,
+            User.status == UserStatus.ACTIVE,
+        )
+        .order_by(User.name, User.id)
+    ).all()
+
+    return [
+        WorkspaceMemberRow(user_id, name, picture)
+        for user_id, name, picture in rows
+    ]
+
+
 def get_artifact_locations(
     db: Session, *, artifact_ids: Sequence[uuid.UUID]
 ) -> dict[uuid.UUID, tuple[uuid.UUID | None, uuid.UUID | None]]:
@@ -611,6 +653,16 @@ def list_definitions_by_workspace(
 # ======================= 문서 목록 =======================
 
 
+def _escape_like(text: str) -> str:
+    """LIKE 패턴에서 특별한 뜻을 갖는 글자를 글자 그대로 찾도록 바꾼다.
+
+    사용자가 친 검색어에 %나 _가 들어 있으면 LIKE는 그것을 "아무 글자"로
+    읽는다. 제목에 실제로 들어 있는 %를 찾으려는 사람에게 엉뚱한 문서가
+    걸리므로, 앞에 \\를 붙여 글자로 되돌린다. \\ 자체도 먼저 바꾼다.
+    """
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @dataclass(frozen=True, slots=True)
 class ArtifactListRow:
     """문서 목록 한 줄이다. 상태는 컬럼이 아니라 아래 두 값에서 계산한다."""
@@ -625,6 +677,9 @@ class ArtifactListRow:
     latest_revision_id: uuid.UUID | None
     latest_revision_number: int | None
     latest_published_at: datetime | None
+    # 마지막 활동 시각이다. 발행과 제안 도착 중 늦은 쪽이고, 둘 다 없으면
+    # 문서 생성 시각이다. 항상 값이 있다.
+    last_activity_at: datetime
 
 
 def artifact_status(row: ArtifactListRow) -> str:
@@ -645,15 +700,27 @@ def list_artifacts(
     kind: str | None = None,
     status: str | None = None,
     owner_user_id: int | None = None,
+    unassigned: bool = False,
+    q: str | None = None,
     created_after: datetime | None = None,
     created_before: datetime | None = None,
+    sort: str = "last_activity",
+    order: str = "desc",
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[ArtifactListRow], int]:
     """문서 목록 한 쪽과 필터 뒤 전체 수를 돌려준다.
 
     계류 제안 수와 최신 판은 상관 서브쿼리로 붙인다. 상태 필터는 그 두 값
-    위에서 계산한 CASE 식에 건다. 정렬은 created_at desc, 같으면 id다.
+    위에서 계산한 CASE 식에 건다.
+
+    정렬 키는 last_activity(마지막 활동 시각)와 created_at 둘 중 하나이고
+    방향은 asc·desc다. 값이 같은 문서끼리는 언제나 id 오름차순으로 세운다.
+    동률 순서를 고정하지 않으면 같은 조건으로 다음 쪽을 요청했을 때 앞
+    쪽에서 이미 본 문서가 다시 나오거나 아예 빠질 수 있다.
+
+    owner_user_id와 unassigned를 함께 받으면 결과가 반드시 비지만, 여기서는
+    막지 않고 받은 대로 건다. 잘못된 조합을 거르는 일은 서버 계층의 몫이다.
     """
     pending_count = (
         select(func.count(KnowledgeArtifactChangeProposal.id))
@@ -676,6 +743,20 @@ def list_artifacts(
         .subquery()
     )
     latest_row = aliased(KnowledgeArtifactRevision)
+    latest_proposal_at = (
+        select(func.max(KnowledgeArtifactChangeProposal.created_at))
+        .where(
+            KnowledgeArtifactChangeProposal.artifact_id == KnowledgeArtifact.id
+        )
+        .correlate(KnowledgeArtifact)
+        .scalar_subquery()
+    )
+    # 제안은 status를 가리지 않고 센다. 반려된 제안이라도 도착했다는 것
+    # 자체가 문서가 움직인 사실이고, 화면은 그 움직임을 보여 준다.
+    last_activity_expr = func.greatest(
+        func.coalesce(latest_row.created_at, KnowledgeArtifact.created_at),
+        func.coalesce(latest_proposal_at, KnowledgeArtifact.created_at),
+    )
     status_expr = case(
         (pending_count > 0, ARTIFACT_STATUS_PENDING_REVIEW),
         (latest_row.id.is_not(None), ARTIFACT_STATUS_PUBLISHED),
@@ -693,6 +774,7 @@ def list_artifacts(
             latest_row.id.label("latest_revision_id"),
             latest_row.revision_number.label("latest_revision_number"),
             latest_row.created_at.label("latest_published_at"),
+            last_activity_expr.label("last_activity_at"),
         )
         .outerjoin(latest, latest.c.artifact_id == KnowledgeArtifact.id)
         .outerjoin(
@@ -718,14 +800,34 @@ def list_artifacts(
                 )
             )
         )
+    if unassigned:
+        statement = statement.where(
+            ~select(ArtifactOwner.artifact_id)
+            .where(ArtifactOwner.artifact_id == KnowledgeArtifact.id)
+            .correlate(KnowledgeArtifact)
+            .exists()
+        )
+    if q is not None and q.strip():
+        statement = statement.where(
+            KnowledgeArtifact.title.ilike(
+                f"%{_escape_like(q.strip())}%", escape="\\"
+            )
+        )
     if created_after is not None:
         statement = statement.where(KnowledgeArtifact.created_at >= created_after)
     if created_before is not None:
         statement = statement.where(KnowledgeArtifact.created_at <= created_before)
 
+    sort_expr = (
+        KnowledgeArtifact.created_at
+        if sort == "created_at"
+        else last_activity_expr
+    )
+    ordered = sort_expr.asc() if order == "asc" else sort_expr.desc()
+
     total = db.scalar(select(func.count()).select_from(statement.subquery()))
     rows = db.execute(
-        statement.order_by(KnowledgeArtifact.created_at.desc(), KnowledgeArtifact.id)
+        statement.order_by(ordered, KnowledgeArtifact.id)
         .limit(limit)
         .offset(offset)
     ).all()

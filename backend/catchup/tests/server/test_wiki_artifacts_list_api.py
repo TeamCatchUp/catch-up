@@ -13,6 +13,7 @@ import uuid
 from collections.abc import Callable
 from collections.abc import Iterator
 from datetime import datetime
+from datetime import timedelta
 from datetime import timezone
 
 import pytest
@@ -593,3 +594,104 @@ def test_move_unknown_artifact_is_four_hundred_four(client, member):
 
     assert response.status_code == 404
     assert response.json()["detail"]["code"] == "ARTIFACT_NOT_FOUND"
+
+
+# ======================= 대시보드 필터·정렬 =======================
+
+
+def _titles(response) -> list[str]:
+    """응답에 실린 문서 제목을 순서 그대로 뽑는다."""
+    return [item["title"] for item in response.json()["items"]]
+
+
+def test_list_artifacts_unassigned_filter(
+    client, member, db, workspace_id, two_artifacts
+):
+    """unassigned=true는 담당자가 아무도 없는 문서만 남긴다."""
+    response = client.get("/api/v1/wiki/artifacts?unassigned=true")
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+    assert _titles(response) == ["B"]
+
+
+def test_list_artifacts_rejects_unassigned_with_owner(
+    client, member, db, workspace_id, two_artifacts
+):
+    """담당자 지정 필터와 미지정 필터를 함께 주면 422다.
+
+    둘은 서로 반대라 겹치는 결과가 없다. 빈 목록을 돌려주면 소비자는
+    자기 요청이 잘못된 것인지 정말 문서가 없는 것인지 가릴 수 없다.
+    """
+    response = client.get(
+        f"/api/v1/wiki/artifacts?unassigned=true&owner_user_id={member.id}"
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "CONFLICTING_OWNER_FILTERS"
+
+
+def test_list_artifacts_searches_title(
+    client, member, db, workspace_id, two_artifacts
+):
+    """q는 제목 부분일치로 거르고, 공백뿐이면 거르지 않는다."""
+    _make_artifact(db, workspace_id=workspace_id, title="결제 오류")
+    db.flush()
+
+    hit = client.get("/api/v1/wiki/artifacts?q=오류")
+
+    assert hit.status_code == 200
+    assert _titles(hit) == ["결제 오류"]
+
+    blank = client.get("/api/v1/wiki/artifacts?q=%20%20")
+
+    assert blank.json()["total"] == 3
+
+
+def test_list_artifacts_sorts_by_created_at_ascending(
+    client, member, db, workspace_id
+):
+    """sort·order를 주면 그 키와 방향으로 정렬한다."""
+    base = datetime(2026, 3, 1, tzinfo=timezone.utc)
+    for index, title in enumerate(("첫째", "둘째", "셋째")):
+        artifact_id = _make_artifact(
+            db, workspace_id=workspace_id, title=title
+        )
+        db.get(KnowledgeArtifact, artifact_id).created_at = base + timedelta(
+            days=index
+        )
+    db.flush()
+
+    response = client.get("/api/v1/wiki/artifacts?sort=created_at&order=asc")
+
+    assert response.status_code == 200
+    assert _titles(response) == ["첫째", "둘째", "셋째"]
+
+
+def test_list_artifacts_rejects_unknown_sort(client, member):
+    """모르는 정렬 키는 422다."""
+    response = client.get("/api/v1/wiki/artifacts?sort=title")
+
+    assert response.status_code == 422
+
+
+def test_list_artifacts_carries_last_activity_at(
+    client, member, db, workspace_id
+):
+    """마지막 활동 시각은 항상 실리고, 활동이 없으면 생성 시각과 같다."""
+    base = datetime(2026, 4, 1, tzinfo=timezone.utc)
+    quiet_id = _make_artifact(db, workspace_id=workspace_id, title="조용함")
+    db.get(KnowledgeArtifact, quiet_id).created_at = base
+    busy_id = _make_artifact(db, workspace_id=workspace_id, title="바쁨")
+    db.get(KnowledgeArtifact, busy_id).created_at = base
+    _add_pending_proposal(db, workspace_id=workspace_id, artifact_id=busy_id)
+    db.flush()
+
+    response = client.get("/api/v1/wiki/artifacts")
+
+    assert response.status_code == 200
+    items = {item["title"]: item for item in response.json()["items"]}
+    assert items["조용함"]["last_activity_at"] == items["조용함"]["created_at"]
+    assert items["바쁨"]["last_activity_at"] > items["바쁨"]["created_at"]
+    # 활동이 늦은 문서가 기본 정렬에서 앞선다.
+    assert _titles(response) == ["바쁨", "조용함"]
