@@ -737,6 +737,9 @@ def _propose_node_blocks(
             )
             suppressed += dropped_summary
             blocks = (*kept, *blocks)
+            # 다시 센 요약도 근거 계약을 거친다. 되살린 열린 질문과 같은
+            # 자리다 — 여기서 만든 블록은 입구의 검사를 거치지 않았다.
+            validate_blocks(blocks)
     if not blocks:
         # 남은 문장이 없으면 빈 카드 규칙과 같이 건너뛴다. 다만 큐에
         # 남은 계류는 접는다. 그 계류가 담은 본문이 바로 방금 반려된
@@ -1118,7 +1121,7 @@ def _build_blocks(
 
 
 # 요약 블록이 나르는 근거 인용의 상한이다. 근거 수를 제한하는 것은 산문
-# 입력 길이를 묶기 위해서다.
+# 입력 길이를 묶기 위해서다. 넘치면 최근 것부터 남긴다.
 _SUMMARY_SOURCE_LIMIT = 40
 
 
@@ -1143,6 +1146,11 @@ def _summary_block(
     claim 근거가 하나도 없으면 만들지 않는다. 관계만 있는 문서가 그런
     경우인데, 요약은 claim 장부를 요구하는 블록이라 빈 장부로 세우면
     근거 계약에 걸린다.
+
+    근거가 상한을 넘으면 최근 것부터 남긴다. 요약 산문은 이 문서가 지금
+    어떤 상태인지를 말해야 하는데, 오래된 쪽을 남기면 본문이 적은 최근
+    보고 시각과 산문이 읽은 근거가 어긋난다. 본문의 최초·최근 보고
+    시각은 자르기 전 근거 전체에서 센다.
     """
     if not blocks:
         return None
@@ -1191,7 +1199,7 @@ def _summary_block(
         claim_ids=tuple(claim_ids),
         proposal_ids=(),
         ontology_version=ontology_version,
-        sources=tuple(sources[:_SUMMARY_SOURCE_LIMIT]),
+        sources=tuple(sources[-_SUMMARY_SOURCE_LIMIT:]),
     )
 
 
