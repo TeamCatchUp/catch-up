@@ -204,6 +204,37 @@ class ArtifactRepository(Protocol):
         """
         ...
 
+    def find_latest_revision_blocks(
+        self,
+        *,
+        artifact_id: uuid.UUID,
+    ) -> tuple[ArtifactBlock, ...] | None:
+        """최신 발행 판의 블록을 돌려준다. 발행 판이 없으면 None이다.
+
+        무엇이 바뀌었는지 말하려면 비교할 이전 내용이 있어야 한다. 판이
+        없다는 것은 아직 사람 앞에 놓인 내용이 없다는 뜻이므로, 빈 튜플이
+        아니라 None으로 알린다. 빈 튜플이면 "블록이 하나도 없는 판"과
+        구분되지 않는다.
+        """
+        ...
+
+    def list_reusable_change_reasons(
+        self,
+        *,
+        artifact_id: uuid.UUID,
+        base_revision_id: uuid.UUID,
+    ) -> dict[str, str]:
+        """같은 기준 판 위에 선 계류 변경안에서 수정 이유를 모아 온다.
+
+        키는 블록 내용 지문이고 값은 그 블록에 붙어 있던 수정 이유다.
+        기준 판이 같으면 짝지을 이전 블록도 같으므로, 이전 블록과 새 블록
+        두 지문을 짝으로 들고 다니지 않고 새 블록 지문 하나만 키로 쓴다.
+
+        반려된 변경안의 이유는 넣지 않는다. 사람이 그 변경안을 물렸으므로
+        거기 붙은 문장도 다시 쓸 것이 아니다.
+        """
+        ...
+
     def find_latest_content_hashes(
         self,
         *,

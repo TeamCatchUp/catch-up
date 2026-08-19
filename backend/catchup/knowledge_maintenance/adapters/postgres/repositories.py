@@ -2657,6 +2657,60 @@ class SqlAlchemyArtifactRepository:
             ) in self._session.execute(statement).all()
         )
 
+    def find_latest_revision_blocks(
+        self,
+        *,
+        artifact_id: uuid.UUID,
+    ) -> tuple[ArtifactBlock, ...] | None:
+        """최신 발행 판의 블록을 돌려준다. 발행 판이 없으면 None이다.
+
+        최신 판을 고르는 기준은 `find_latest_revision_id_and_number`와 같은
+        판 번호 최대값이다. 기준이 갈리면 같은 문서를 두 코드가 다르게
+        가리킨다.
+        """
+        raw = self._session.scalar(
+            select(KnowledgeArtifactRevisionRow.blocks)
+            .where(
+                KnowledgeArtifactRevisionRow.workspace_id
+                == self._workspace_id,
+                KnowledgeArtifactRevisionRow.artifact_id == artifact_id,
+            )
+            .order_by(KnowledgeArtifactRevisionRow.revision_number.desc())
+            .limit(1)
+        )
+        if raw is None:
+            return None
+        return deserialize_blocks(raw)
+
+    def list_reusable_change_reasons(
+        self,
+        *,
+        artifact_id: uuid.UUID,
+        base_revision_id: uuid.UUID,
+    ) -> dict[str, str]:
+        """같은 기준 판 위에 선 계류 변경안에서 수정 이유를 모아 온다.
+
+        재료는 계류 변경안뿐이다. 발행 판의 블록에 붙은 이유는 그 판을
+        만들 때 비교한 더 앞의 판을 두고 쓴 문장이라, 지금 기준 판과
+        짝짓는 이유로 다시 쓸 수 없다.
+        """
+        found: dict[str, str] = {}
+        for raw in self._session.scalars(
+            select(KnowledgeArtifactChangeProposalRow.blocks).where(
+                KnowledgeArtifactChangeProposalRow.workspace_id
+                == self._workspace_id,
+                KnowledgeArtifactChangeProposalRow.artifact_id
+                == artifact_id,
+                KnowledgeArtifactChangeProposalRow.status == "pending",
+                KnowledgeArtifactChangeProposalRow.base_revision_id
+                == base_revision_id,
+            )
+        ):
+            for block in deserialize_blocks(raw):
+                if block.change_reason is not None:
+                    found[block_content_hash(block)] = block.change_reason
+        return found
+
     def find_latest_content_hashes(
         self,
         *,

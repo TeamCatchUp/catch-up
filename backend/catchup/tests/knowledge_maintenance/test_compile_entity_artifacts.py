@@ -297,6 +297,41 @@ class FakeArtifactRepository:
         )
         return hashes
 
+    def find_latest_revision_blocks(
+        self, *, artifact_id: uuid.UUID
+    ) -> tuple[ArtifactBlock, ...] | None:
+        """최신 판의 블록을 돌려준다. 판이 없으면 None이다."""
+        rows = [
+            row
+            for row in self.revisions
+            if row["artifact_id"] == artifact_id
+        ]
+        if not rows:
+            return None
+        latest = max(rows, key=lambda row: row["revision_number"])
+        return deserialize_blocks(latest["blocks"])
+
+    def list_reusable_change_reasons(
+        self, *, artifact_id: uuid.UUID, base_revision_id: uuid.UUID
+    ) -> dict[str, str]:
+        """같은 기준 판 위에 선 계류 변경안의 수정 이유를 모은다.
+
+        실 저장소와 같이 계류 변경안만 본다. 반려·접힌 행은 빼야 사람이
+        물린 문장이 되살아나지 않는다.
+        """
+        found: dict[str, str] = {}
+        for row in self.by_key.values():
+            if row["artifact_id"] != artifact_id:
+                continue
+            if row["status"] != "pending":
+                continue
+            if row["base_revision_id"] != base_revision_id:
+                continue
+            for block in row["blocks"]:
+                if block.change_reason is not None:
+                    found[block_content_hash(block)] = block.change_reason
+        return found
+
     def list_reusable_narratives(
         self, *, artifact_id: uuid.UUID
     ) -> dict[str, str]:

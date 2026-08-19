@@ -9,6 +9,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from collections.abc import Iterator
+from dataclasses import replace
 from datetime import datetime
 from datetime import timezone
 
@@ -42,6 +43,7 @@ from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlockError
 from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.artifact import artifact_idempotency_key
+from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConflict
 from catchup.tests.knowledge_maintenance.test_artifact_definition_schema import (
@@ -1100,3 +1102,80 @@ def test_legacy_blocks_without_sources_still_load(
     assert stored is not None
     assert stored.blocks[0].sources == ()
     assert stored.blocks[0].body == "2026-09"
+
+
+def test_find_latest_revision_blocks_returns_none_then_blocks(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """판이 없으면 None이고, 판을 내면 그 판의 블록이 돌아온다."""
+    artifact_id = _artifact_id(uow_factory, session_factory, workspace_id)
+
+    with uow_factory() as uow:
+        assert (
+            uow.artifacts.find_latest_revision_blocks(artifact_id=artifact_id)
+            is None
+        )
+
+    with uow_factory() as uow:
+        _publish_revision(uow, artifact_id, 1, "옛 판")
+        _publish_revision(uow, artifact_id, 2, "새 판")
+        uow.commit()
+
+    with uow_factory() as uow:
+        blocks = uow.artifacts.find_latest_revision_blocks(
+            artifact_id=artifact_id
+        )
+
+    assert blocks is not None
+    assert len(blocks) == 1
+    assert blocks[0].body == "새 판"
+    assert blocks[0].block_kind == BLOCK_KIND_CLAIM_SECTION
+    assert isinstance(blocks[0].claim_ids[0], uuid.UUID)
+
+
+def test_list_reusable_change_reasons_keyed_by_block_hash_same_base(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """같은 기준 판의 계류안 수정 이유만 블록 지문에 걸려 돌아온다."""
+    artifact_id = _artifact_id(uow_factory, session_factory, workspace_id)
+
+    kept = tuple(
+        replace(block, change_reason="근거가 하나 늘었다")
+        for block in _blocks("계류")
+    )
+    refused = tuple(
+        replace(block, change_reason="사람이 물린 이유")
+        for block in _blocks("반려")
+    )
+
+    with uow_factory() as uow:
+        base_id = _publish_revision(uow, artifact_id, 1, "1판")
+        _add(uow, artifact_id, kept, base_revision_id=base_id)
+        refused_id, _ = _add(
+            uow, artifact_id, refused, base_revision_id=base_id
+        )
+        uow.artifacts.mark_rejected(
+            proposal_id=refused_id,
+            reviewer="tester",
+            reason="근거가 부족하다",
+        )
+        other_id = _publish_revision(uow, artifact_id, 2, "2판")
+        uow.commit()
+
+    with uow_factory() as uow:
+        found = uow.artifacts.list_reusable_change_reasons(
+            artifact_id=artifact_id,
+            base_revision_id=base_id,
+        )
+        elsewhere = uow.artifacts.list_reusable_change_reasons(
+            artifact_id=artifact_id,
+            base_revision_id=other_id,
+        )
+
+    assert found == {block_content_hash(kept[0]): "근거가 하나 늘었다"}
+    assert block_content_hash(refused[0]) not in found
+    assert elsewhere == {}
