@@ -931,7 +931,8 @@ def _to_detail(
     """변경안 하나를 상세 응답으로 옮긴다.
 
     변경 사유는 블록 자리로 짚어 붙인다. changes에는 바뀐 블록만 들어
-    있으므로, 목록에 없는 자리의 블록은 사유가 없음이 된다.
+    있으므로, 목록에 없는 자리의 블록은 사유가 없음이 된다. 발행판이 없는
+    신규 문서는 사유를 아예 붙이지 않는다.
 
     읽기 레이아웃은 변경안 블록과 발행판 블록에 각각 따로 만든다. 둘은 블록
     구성이 다르므로 한쪽의 자리 번호를 다른 쪽에 쓸 수 없다. kind를 모르면
@@ -939,13 +940,19 @@ def _to_detail(
     """
     contains_conflict = _has_contested(proposal)
     by_index = {verdict.block_index: verdict for verdict in verdicts}
-    reasons = {
-        change.block_index: change_reason(
-            change, base=base_blocks, proposed=proposal.blocks
-        )
-        for change in changes
-        if change.block_index is not None
-    }
+    # 발행판이 없으면 문서 전체가 새것이라 블록마다 사유를 붙여도
+    # 같은 말이 되풀이될 뿐이라 붙이지 않는다.
+    reasons = (
+        {
+            change.block_index: change_reason(
+                change, base=base_blocks, proposed=proposal.blocks
+            )
+            for change in changes
+            if change.block_index is not None
+        }
+        if base_blocks
+        else {}
+    )
     claim_ids: dict[str, None] = {}
     proposal_ids: dict[str, None] = {}
     relation_ids: dict[str, None] = {}

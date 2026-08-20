@@ -94,7 +94,13 @@ def change_reason(
     앞뒤 내용을 보고 받아 둔 문장이라 여기서 세는 근거 개수보다 사람에게
     훨씬 많은 것을 알려 준다. 그 문장이 없는 블록만 개수를 세어 문구를
     만든다. 새로 생긴 블록과 빠진 블록은 짝이 없어 수정 이유를 받지
-    않으므로 예전 문구를 그대로 쓴다.
+    않으므로 정해진 문구를 쓴다.
+
+    문구는 모두 검토자에게 말을 거는 존댓말 문장이다. 화면에서는 컴파일이
+    받아 둔 수정 이유와 이 문구가 같은 자리에 섞여 나오므로, 문체가 다르면
+    한쪽만 기계가 붙인 말처럼 읽힌다. 예를 들어 근거가 늘기만 했으면
+    "근거 1건이 추가되었습니다."이고, 늘고 줄었으면
+    "근거 1건이 추가되고 1건이 빠졌습니다."다.
 
     Args:
         change: 사유를 붙일 변경이다.
@@ -105,7 +111,7 @@ def change_reason(
         사유 문구다. removed는 붙일 사유가 없어서 None이다.
     """
     if change.change == CHANGE_ADDED:
-        return "새 섹션"
+        return "새로 추가된 섹션입니다."
     if change.change == CHANGE_REMOVED:
         return None
     stored = proposed[change.block_index].change_reason
@@ -115,8 +121,12 @@ def change_reason(
     after = set(proposed[change.block_index].claim_ids)
     added, dropped = len(after - before), len(before - after)
     if added == 0 and dropped == 0:
-        return "산문 갱신"
-    return f"근거 {added}건 추가·{dropped}건 폐기"
+        return "산문 표현만 다듬었습니다."
+    if dropped == 0:
+        return f"근거 {added}건이 추가되었습니다."
+    if added == 0:
+        return f"근거 {dropped}건이 빠졌습니다."
+    return f"근거 {added}건이 추가되고 {dropped}건이 빠졌습니다."
 
 
 def block_markdown(block: ArtifactBlock) -> str:

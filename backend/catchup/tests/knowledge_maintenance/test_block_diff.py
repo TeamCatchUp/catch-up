@@ -93,10 +93,13 @@ def test_change_reason_counts_claim_diff():
     base = [_block(claim_ids=[c1, c2])]
     prop = [_block(body="n", claim_ids=[c2, c3])]
     change = diff_blocks(base, prop)[0]
-    assert change_reason(change, base=base, proposed=prop) == "근거 1건 추가·1건 폐기"
+    assert (
+        change_reason(change, base=base, proposed=prop)
+        == "근거 1건이 추가되고 1건이 빠졌습니다."
+    )
     assert (
         change_reason(BlockChange("added", 0, None), base=[], proposed=prop)
-        == "새 섹션"
+        == "새로 추가된 섹션입니다."
     )
     assert (
         change_reason(BlockChange("removed", None, 0), base=base, proposed=[]) is None
@@ -104,7 +107,18 @@ def test_change_reason_counts_claim_diff():
     same = [_block(body="n", claim_ids=[c1, c2])]
     assert (
         change_reason(diff_blocks(base, same)[0], base=base, proposed=same)
-        == "산문 갱신"
+        == "산문 표현만 다듬었습니다."
+    )
+
+
+def test_change_reason_counts_only_dropped_claims():
+    """근거가 빠지기만 했으면 빠진 건수만 말한다."""
+    c1, c2 = uuid.uuid4(), uuid.uuid4()
+    base = [_block(claim_ids=[c1, c2])]
+    prop = [_block(body="n", claim_ids=[c1])]
+    change = diff_blocks(base, prop)[0]
+    assert (
+        change_reason(change, base=base, proposed=prop) == "근거 1건이 빠졌습니다."
     )
 
 
@@ -141,5 +155,5 @@ def test_change_reason_falls_back_when_stored_missing():
     change = diff_blocks(base, prop)[0]
     assert (
         change_reason(change, base=base, proposed=prop)
-        == "근거 1건 추가·0건 폐기"
+        == "근거 1건이 추가되었습니다."
     )

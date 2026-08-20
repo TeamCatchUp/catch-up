@@ -1507,8 +1507,8 @@ def test_detail_embeds_base_blocks_and_block_changes(
         {"change": "modified", "block_index": 0, "base_block_index": 0},
         {"change": "added", "block_index": 1, "base_block_index": None},
     ]
-    assert data["blocks"][0]["change_reason"] == "산문 갱신"
-    assert data["blocks"][1]["change_reason"] == "새 섹션"
+    assert data["blocks"][0]["change_reason"] == "산문 표현만 다듬었습니다."
+    assert data["blocks"][1]["change_reason"] == "새로 추가된 섹션입니다."
     assert data["blocks"][0]["markdown"].startswith("## 속도 제한")
 
 
@@ -1519,7 +1519,10 @@ def test_detail_without_revision_has_empty_base_blocks(
     reviewer: User,
     workspace_ids: tuple[int, int],
 ) -> None:
-    """발행판이 없는 문서는 base_blocks가 비고 모든 블록이 새 블록이다."""
+    """발행판이 없는 문서는 base_blocks가 비고 모든 블록이 새 블록이다.
+
+    문서 전체가 새것이므로 블록마다 붙는 수정 이유는 내려보내지 않는다.
+    """
     workspace_id, _ = workspace_ids
     artifact_id = _make_artifact(db, workspace_id=workspace_id)
     proposal_id = uuid.uuid4()
@@ -1543,6 +1546,7 @@ def test_detail_without_revision_has_empty_base_blocks(
         "added",
         "added",
     ]
+    assert [item["change_reason"] for item in data["blocks"]] == [None, None]
 
 
 def test_detail_missing_proposal_returns_404(

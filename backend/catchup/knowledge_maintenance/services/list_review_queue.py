@@ -32,8 +32,6 @@ from typing import Protocol
 from typing import Self
 
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
-from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_SUMMARY
-from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactRepository
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
 from catchup.observability.logging import get_logger
@@ -170,7 +168,7 @@ def _to_item(proposal: StoredArtifactProposal) -> ReviewQueueItem:
         artifact_id=proposal.artifact_id,
         title=proposal.title,
         status=proposal.status,
-        summary=_summary(proposal.blocks),
+        summary=_summary(proposal),
         origin=proposal.origin,
         contains_conflict=any(
             block.block_kind == BLOCK_KIND_CONTESTED
@@ -180,48 +178,26 @@ def _to_item(proposal: StoredArtifactProposal) -> ReviewQueueItem:
     )
 
 
-def _summary(blocks: tuple[ArtifactBlock, ...]) -> str:
-    """큐 한 줄에 실을 요약을 고른다.
+def _summary(proposal: StoredArtifactProposal) -> str:
+    """큐 한 줄에 실을 요약을 만든다.
 
-    첫 블록이 summary 블록이고 산문(narrative)이 있으면, 산문의 첫 줄을
-    요약으로 쓴다. 그 줄이 문서 전체를 한 문장으로 말하는 자리이기
-    때문이다. 강조 표시로 감싼 `**`는 벗겨 낸다.
+    이 자리는 검토자에게 "무엇을 봐 달라"고 말을 거는 자리다. 그래서
+    문서 본문 문체(~한다)가 아니라 존댓말 문장을 쓴다. 문서를 한 문장으로
+    말하는 헤드라인은 상세 화면의 summary 블록 머리말이 이미 보여 주므로,
+    목록에서 그것을 되풀이할 이유가 없다.
 
-    첫 블록이 summary인데 산문이 없으면 그 블록을 건너뛰고 다음 블록에
-    아래 규칙을 적용한다. 산문 없는 summary 블록의 본문은 claim과 관계
-    개수, 최초 보고 시각 같은 집계 한 줄이라 목록에서 안건을 가리는 데
-    쓸모가 없다.
-
-    그 밖의 블록은 제목과 본문 첫 줄을 이어 붙인다. 제목만으로는 같은
-    속성을 다루는 안건들이 구별되지 않고, 본문 전체는 목록에 실을 수
-    없다. 첫 줄까지가 "무엇이 달라졌나"를 가리는 최소 단위다.
-
-    고를 블록이 없으면 빈 문자열이다.
+    규칙은 셋이다. base_revision_id가 없으면 발행판이 없는 신규 문서라
+    새 초안이라고 알린다. 발행판이 있으면 블록에 적힌 첫 수정 이유를
+    그대로 쓴다. 컴파일이 앞뒤 내용을 보고 받아 둔 존댓말 문장이고,
+    검토자가 가장 먼저 알아야 할 것이 거기 적혀 있다. 수정 이유가
+    한 건도 없는 자동 경로는 바뀌었다는 사실만 알린다.
     """
-    if not blocks:
-        return ""
-    if blocks[0].block_kind == BLOCK_KIND_SUMMARY:
-        headline = _headline(blocks[0].narrative)
-        if headline:
-            return _clamp(headline)
-        blocks = blocks[1:]
-        if not blocks:
-            return ""
-    block = blocks[0]
-    lines = [line.strip() for line in block.body.splitlines() if line.strip()]
-    parts = [part for part in (block.heading.strip(), *lines[:1]) if part]
-    return _clamp(": ".join(parts))
-
-
-def _headline(narrative: str | None) -> str:
-    """산문의 첫 비어 있지 않은 줄을 강조 표시 없이 돌려준다."""
-    if not narrative:
-        return ""
-    for line in narrative.splitlines():
-        stripped = line.strip()
-        if stripped:
-            return stripped.strip("*").strip()
-    return ""
+    if proposal.base_revision_id is None:
+        return "새 문서 초안입니다."
+    for block in proposal.blocks:
+        if block.change_reason:
+            return _clamp(block.change_reason)
+    return "문서 내용이 바뀌었습니다."
 
 
 def _clamp(summary: str) -> str:
