@@ -1,0 +1,82 @@
+import { Canvas, Meta } from '@storybook/addon-docs/blocks';
+
+import * as DocumentStories from '../components/document/WikiDocumentPage.stories';
+import * as BlockDiffStories from '../components/review-queue/diff/BlockDiffSection.stories';
+import * as RejectDialogStories from '../components/review-queue/RejectReasonDialog.stories';
+import * as QueueStories from '../components/review-queue/ReviewQueuePage.stories';
+
+<Meta title="Flows/LLM Wiki/검토큐 진행" />
+
+# 검토큐 진행 flow
+
+안건 하나를 끝내는 길은 셋이다. 누가 어느 길을 쓸 수 있는지는
+[검토큐 권한 flow](?path=/docs/flows-llm-wiki-검토큐-권한--docs)에 있고, 여기서는 그 길을 걸었을 때
+무엇이 일어나는지만 본다.
+
+| 경로 | 끝나는 방식 | 뒤에 남는 단계 |
+| --- | --- | --- |
+| (a) 블록별 판정 | 판정만 쌓인다 | 최종 내보내기를 따로 누른다 |
+| (b) 전체 승인 | 그 자체가 발행이다(revision 생성) | 없음 |
+| (b) 전체 반려 | 변경안이 폐기된다 | 없음 |
+| (c) 비담당자 | 열람에서 끝난다 | — |
+
+(a)와 (b)는 **배타**다. 블록 판정을 하나라도 시작하면 전체 승인·반려를 서버가 409로 막는다.
+화면은 잠그지 않는다 — 잠글 근거를 프론트가 다시 계산하면 서버 판단과 어긋난다.
+
+## (a) 담당자 — 블록별 경로
+
+목록에서 안건을 고르면 중앙이 그 안건의 diff로 바뀐다. 카드마다 승인하고, 끝에 하단 바를 누른다.
+
+<Canvas of={QueueStories.Default} />
+
+| 자리 | 지금 상태 | 이유 |
+| --- | --- | --- |
+| 카드 승인 | 열림 | |
+| 카드 반려 | 진입점이 닫혀 있다 | 사유가 필수(422)인데 사유 입력 시안이 없다 — [NoRejectPath](?path=/story/screens-llm-wiki-reviewqueuepage--no-reject-path) |
+| 최종 내보내기 | 항상 활성 | 미판정 블록이 남으면 서버가 409로 거절하고, 그 메시지가 토스트로 뜬다 |
+
+<Canvas of={BlockDiffStories.PartiallyDecided} />
+
+위에서 판정이 끝난 블록은 둘이다 — "재시도 정책"은 승인, "PG 점검 시간 예외"는 반려. 그런데 배지가
+서는 것은 반려뿐이다. **승인한 블록은 미판정 블록과 똑같이 보인다**(승인 표시 시안이 없어 만들지
+않았다). 어디까지 봤는지를 화면이 알려주지 않는 알려진 구멍이다.
+
+## (b) 담당자 — 일괄 경로
+
+<Canvas of={RejectDialogStories.Playground} />
+
+전체 반려는 사유가 필수라 다이얼로그를 먼저 연다(위 버튼으로 열어 볼 수 있다). 전체 승인에는 확인
+절차가 없다.
+
+| 액션 | 서버에서 일어나는 일 | 큐 |
+| --- | --- | --- |
+| 전체 승인 | 새 revision을 발행한다 | 줄이 빠진다. 뒤에 발행 단계가 없다 |
+| 전체 반려 | 변경안을 폐기한다 | 줄이 빠진다 |
+
+**이름과 달리 전체 승인은 곧 발행이다.** (a)의 카드 승인은 판정만 쌓고 발행을 따로 눌러야 하는데,
+전체 승인은 한 번에 끝난다 — 그래서 두 경로를 섞을 수 없다.
+
+## (c) 비담당자 — 조회
+
+`can_review=false`면 판정 진입점 세 층이 함께 빠지고, 열람은 하나도 줄지 않는다.
+
+<Canvas of={QueueStories.NoReviewPermission} />
+
+| 층 | 빠지는 것 | 남는 것 |
+| --- | --- | --- |
+| diff 카드 | 승인·반려 | 좌우 본문·수정된 이유 |
+| 섹션 헤더 | 전체 승인·반려 | 제목·변경 건수 |
+| 하단 바 | 최종 내보내기 | 바 자체가 사라진다 |
+
+목록·요약·미리보기는 그대로다. 층을 하나씩 떼어 본 화면은 권한 flow에 있다.
+
+## 미리보기가 닿는 곳
+
+헤더의 미리보기는 **발행본**을 새 탭으로 연다 — 지금 보는 제안본이 아니다. 제안본을 문서 모양으로
+보는 표면은 없다. 발행에 성공했을 때 토스트의 "열기"도 같은 화면으로 간다.
+
+<Canvas of={DocumentStories.Default} />
+
+아직 발행된 판이 없는 문서를 미리보기하면 새 탭에 빈 화면이 뜬다(404 `ARTIFACT_NOT_PUBLISHED`).
+[Unpublished](?path=/story/screens-llm-wiki-documentpage--unpublished)가 그 모습이고, 시안 없는
+알려진 구멍이라 안내 화면을 만들지 않았다.

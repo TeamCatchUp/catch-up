@@ -148,6 +148,26 @@ export const JUDGED_PROPOSED_BLOCKS: readonly WikiBlock[] = [
   }),
 ];
 
+/**
+ * 판정이 절반 진행된 변경안 — 0번은 승인, 1번은 반려.
+ * 승인 판정은 카드에 대응 표시가 없어 미판정과 같은 모습으로 남는다.
+ */
+export const PARTIALLY_JUDGED_PROPOSED_BLOCKS: readonly WikiBlock[] = PROPOSED_WIKI_BLOCKS.map(
+  (wikiBlock, index): WikiBlock => ({
+    ...wikiBlock,
+    verdict: {
+      proposalId: 'prop-payment-retry',
+      blockIndex: wikiBlock.blockIndex,
+      blockContentHash: wikiBlock.blockContentHash,
+      verdict: index === 0 ? 'approved' : 'rejected',
+      rejectionReason: index === 0 ? null : '점검 시간 근거가 한 건뿐이라 더 모으고 싶습니다',
+      chosenWinnerClaimId: null,
+      reviewer: '직원10',
+      reviewedAt: '2026-08-19T02:00:00Z',
+    },
+  }),
+);
+
 /** LongText 스토리용 — 긴 문단에서 자연 줄바꿈·단어 강조가 함께 보이는 쌍 */
 export const LONG_BASE_WIKI_BLOCKS: readonly WikiBlock[] = [
   block({

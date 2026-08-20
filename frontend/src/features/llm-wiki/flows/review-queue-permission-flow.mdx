@@ -11,7 +11,8 @@ import * as QueueStories from '../components/review-queue/ReviewQueuePage.storie
 
 한 화면이 두 갈래로 갈린다. 갈림의 재료는 하나 — 서버가 안건마다 계산해 내려주는 `can_review`다.
 누가 어떤 값을 받는지는 [권한 개요](?path=/docs/flows-llm-wiki-권한-개요--docs)에 있고,
-여기서는 그 값이 화면을 어떻게 바꾸는지만 본다.
+여기서는 그 값이 화면을 어떻게 바꾸는지만 본다. 진입점이 열린 다음의 진행 — 블록별·일괄·조회 세
+갈래 — 은 [검토큐 진행 flow](?path=/docs/flows-llm-wiki-검토큐-진행--docs)로 나눠 두었다.
 
 ## 1. 진입 — 목록과 상세는 모두에게 열린다
 
