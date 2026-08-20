@@ -90,6 +90,12 @@ def change_reason(
 ) -> str | None:
     """변경 하나를 검토자가 읽을 짧은 사유 문구로 옮긴다.
 
+    내용이 바뀐 블록은 거기 적혀 있는 수정 이유를 먼저 쓴다. 컴파일이
+    앞뒤 내용을 보고 받아 둔 문장이라 여기서 세는 근거 개수보다 사람에게
+    훨씬 많은 것을 알려 준다. 그 문장이 없는 블록만 개수를 세어 문구를
+    만든다. 새로 생긴 블록과 빠진 블록은 짝이 없어 수정 이유를 받지
+    않으므로 예전 문구를 그대로 쓴다.
+
     Args:
         change: 사유를 붙일 변경이다.
         base: 발행판 블록들이다.
@@ -102,6 +108,9 @@ def change_reason(
         return "새 섹션"
     if change.change == CHANGE_REMOVED:
         return None
+    stored = proposed[change.block_index].change_reason
+    if stored is not None:
+        return stored
     before = set(base[change.base_block_index].claim_ids)
     after = set(proposed[change.block_index].claim_ids)
     added, dropped = len(after - before), len(before - after)

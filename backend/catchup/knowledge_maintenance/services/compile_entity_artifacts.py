@@ -65,6 +65,8 @@ from catchup.knowledge_maintenance.domain.artifact_definition import SelectionSp
 from catchup.knowledge_maintenance.domain.artifact_definition import (
     validate_selection_spec,
 )
+from catchup.knowledge_maintenance.domain.block_diff import CHANGE_MODIFIED
+from catchup.knowledge_maintenance.domain.block_diff import diff_blocks
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.domain.preset_catalog import DEFAULT_PURPOSE_SENTENCE
 from catchup.knowledge_maintenance.domain.preset_catalog import (
@@ -93,6 +95,7 @@ from catchup.knowledge_maintenance.ports.mutation_proposals import (
 )
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPendingProposal
 from catchup.knowledge_maintenance.ports.narrator import BlockNarrator
+from catchup.knowledge_maintenance.ports.narrator import ChangeExplanationRequest
 from catchup.knowledge_maintenance.ports.narrator import NarrationError
 from catchup.knowledge_maintenance.ports.narrator import NarrationRequest
 from catchup.knowledge_maintenance.ports.relations import RelationRepository
@@ -196,6 +199,10 @@ class ArtifactCompileResult:
             중간 집계는 버리므로 실제 LLM 호출 수보다 작을 수 있다.
         blocks_narrative_reused: 지난 산문을 그대로 다시 쓴 블록 수를
             나타낸다. 이 수가 클수록 검수자가 볼 산문 diff가 작다.
+        blocks_explained: 이번 실행이 새로 수정 이유를 받은 블록 수를
+            나타낸다. 발행 판과 짝이 맞으면서 내용이 달라진 블록만 센다.
+        blocks_explanation_reused: 지난 수정 이유를 그대로 다시 쓴 블록
+            수를 나타낸다.
     """
 
     definitions_considered: int = 0
@@ -209,6 +216,8 @@ class ArtifactCompileResult:
     nodes_failed: int = 0
     blocks_narrated: int = 0
     blocks_narrative_reused: int = 0
+    blocks_explained: int = 0
+    blocks_explanation_reused: int = 0
 
 
 def compile_definition_artifacts(
@@ -251,6 +260,8 @@ def compile_definition_artifacts(
     nodes_failed = 0
     narrated = 0
     reused = 0
+    explained = 0
+    explanations_reused = 0
     now = (clock or _utcnow)()
     with uow:
         definitions = uow.artifact_definitions.list_definitions()
@@ -407,6 +418,8 @@ def compile_definition_artifacts(
                 suppressed += outcome.suppressed
                 narrated += outcome.narrated
                 reused += outcome.reused
+                explained += outcome.explained
+                explanations_reused += outcome.explanations_reused
 
         uow.commit()
 
@@ -422,6 +435,8 @@ def compile_definition_artifacts(
         nodes_failed=nodes_failed,
         blocks_narrated=narrated,
         blocks_narrative_reused=reused,
+        blocks_explained=explained,
+        blocks_explanation_reused=explanations_reused,
     )
     logger.info(
         "artifact_compile_completed",
@@ -437,6 +452,8 @@ def compile_definition_artifacts(
         nodes_failed=result.nodes_failed,
         blocks_narrated=result.blocks_narrated,
         blocks_narrative_reused=result.blocks_narrative_reused,
+        blocks_explained=result.blocks_explained,
+        blocks_explanation_reused=result.blocks_explanation_reused,
     )
     return result
 
@@ -644,6 +661,9 @@ class _NodeOutcome:
         suppressed: 반려 장부에 걸려 카드에서 뺀 블록 수를 나타낸다.
         narrated: 새로 산문을 받은 블록 수를 나타낸다.
         reused: 지난 산문을 그대로 다시 쓴 블록 수를 나타낸다.
+        explained: 새로 수정 이유를 받은 블록 수를 나타낸다.
+        explanations_reused: 지난 수정 이유를 그대로 다시 쓴 블록 수를
+            나타낸다.
     """
 
     created: int = 0
@@ -654,6 +674,8 @@ class _NodeOutcome:
     suppressed: int = 0
     narrated: int = 0
     reused: int = 0
+    explained: int = 0
+    explanations_reused: int = 0
 
 
 def _propose_node_blocks(
@@ -681,8 +703,8 @@ def _propose_node_blocks(
     요약 자체를 물린 판단은 그대로 살아 있다.
 
     Raises:
-        NarrationError: 블록 산문을 받아 오지 못했을 때 그대로 올라간다.
-            부르는 쪽이 이 문서 하나만 접는다.
+        NarrationError: 블록 산문이나 수정 이유를 받아 오지 못했을 때
+            그대로 올라간다. 부르는 쪽이 이 문서 하나만 접는다.
     """
     rejected = uow.block_verdicts.find_rejected_hashes(
         artifact_id=artifact_id,
@@ -771,6 +793,14 @@ def _propose_node_blocks(
             suppressed=suppressed,
         )
 
+    # 기준 판은 두 자리에서 쓴다. 수정 이유를 다시 쓸 수 있는지 고를 때와
+    # 변경안에 기준 판을 적을 때다. 두 자리가 같은 판을 봐야 재사용 규칙과
+    # 멱등 키 규칙이 어긋나지 않으므로 한 번만 읽어 나눠 쓴다.
+    latest = uow.artifacts.find_latest_revision_id_and_number(
+        artifact_id=artifact_id,
+    )
+    base_revision_id = None if latest is None else latest[0]
+
     # 지문 비교를 지나 "이번에 새로 올린다"가 정해진 뒤에만 서술한다.
     # 앞에 두면 무변경 재컴파일에서도 LLM이 돈다. 산문이 붙어도 위에서
     # 구한 content_hash는 그대로다 — 지문 계산이 산문을 빼고 세므로 다시
@@ -802,13 +832,22 @@ def _propose_node_blocks(
             narrated += 1
         blocks = tuple(narrated_blocks)
 
+    explained = 0
+    explanations_reused = 0
+    if narrator is not None and base_revision_id is not None:
+        blocks, explained, explanations_reused = _explain_changed_blocks(
+            uow,
+            artifact_id=artifact_id,
+            blocks=blocks,
+            base_revision_id=base_revision_id,
+            narrator=narrator,
+            style_instruction=style_instruction,
+            purpose_sentence=purpose_sentence,
+        )
+
     replaced = uow.artifacts.abandon_pending_proposals(
         artifact_id=artifact_id,
     )
-    latest = uow.artifacts.find_latest_revision_id_and_number(
-        artifact_id=artifact_id,
-    )
-    base_revision_id = None if latest is None else latest[0]
     try:
         proposal_id = uow.artifacts.add_or_revive_proposal(
             artifact_id=artifact_id,
@@ -839,6 +878,8 @@ def _propose_node_blocks(
             suppressed=suppressed,
             narrated=narrated,
             reused=reused,
+            explained=explained,
+            explanations_reused=explanations_reused,
         )
 
     logger.info(
@@ -857,6 +898,122 @@ def _propose_node_blocks(
         suppressed=suppressed,
         narrated=narrated,
         reused=reused,
+        explained=explained,
+        explanations_reused=explanations_reused,
+    )
+
+
+def _explain_changed_blocks(
+    uow: ArtifactCompileUnitOfWork,
+    *,
+    artifact_id: uuid.UUID,
+    blocks: tuple[ArtifactBlock, ...],
+    base_revision_id: uuid.UUID,
+    narrator: BlockNarrator,
+    style_instruction: str,
+    purpose_sentence: str,
+) -> tuple[tuple[ArtifactBlock, ...], int, int]:
+    """발행 판과 짝이 맞으면서 내용이 달라진 블록에 수정 이유를 붙인다.
+
+    짝이 있는 블록만 대상이다. 새로 생긴 절은 비교할 이전 내용이 없고 빠진
+    절은 변경안에 자리가 없으므로, 둘 다 물어볼 것이 없다. 화면에 붙는
+    문구는 읽는 쪽이 결정론으로 만들어 채운다.
+
+    기준 판이 같은 계류 변경안에 같은 지문의 블록이 있으면 거기 적힌
+    문장을 그대로 다시 쓴다. 기준 판이 같으면 짝지을 이전 블록도 같으므로
+    다시 물어도 같은 것을 묻는 셈이다.
+
+    Args:
+        uow: 문서 저장소를 담은 작업 단위다.
+        artifact_id: 이유를 붙일 문서다.
+        blocks: 이번에 올릴 블록들이다.
+        base_revision_id: 이 변경안이 딛고 선 발행 판이다.
+        narrator: 수정 이유를 받아 올 서술기다.
+        style_instruction: 어떤 문체로 쓸지 알리는 지시다.
+        purpose_sentence: 이 문서가 무엇에 쓰이는지 알리는 한 줄이다.
+
+    Returns:
+        이유를 붙인 블록들과, 새로 받은 수, 다시 쓴 수다.
+
+    Raises:
+        NarrationError: 수정 이유를 받아 오지 못했을 때 그대로 올라간다.
+    """
+    base = uow.artifacts.find_latest_revision_blocks(artifact_id=artifact_id)
+    if base is None:
+        return blocks, 0, 0
+    reusable = uow.artifacts.list_reusable_change_reasons(
+        artifact_id=artifact_id,
+        base_revision_id=base_revision_id,
+    )
+    explained = 0
+    reused = 0
+    updated = list(blocks)
+    for change in diff_blocks(base, blocks):
+        if change.change != CHANGE_MODIFIED:
+            continue
+        block = updated[change.block_index]
+        found = reusable.get(block_content_hash(block))
+        if found is not None:
+            updated[change.block_index] = replace(block, change_reason=found)
+            reused += 1
+            continue
+        request = _change_explanation_request(
+            block,
+            base[change.base_block_index],
+            style_instruction=style_instruction,
+            purpose_sentence=purpose_sentence,
+        )
+        updated[change.block_index] = replace(
+            block, change_reason=narrator.explain_change(request)
+        )
+        explained += 1
+    return tuple(updated), explained, reused
+
+
+def _change_explanation_request(
+    block: ArtifactBlock,
+    paired: ArtifactBlock,
+    *,
+    style_instruction: str,
+    purpose_sentence: str,
+) -> ChangeExplanationRequest:
+    """짝지어진 두 블록을 수정 이유 요청으로 옮긴다.
+
+    앞뒤 사실 입력은 검증된 인용뿐이다. 블록 본문과 제목은 색인용 라벨에서
+    온 문장이라 근거가 아니고, 검증되지 않은 인용은 아직 근거가 아니다.
+    새로 붙은 인용은 뒤에만 있는 문장으로 계산한다. 그것이 이번 변경을
+    불러온 것을 말할 수 있는 유일한 재료다.
+
+    Args:
+        block: 이번에 올릴 블록이다.
+        paired: 발행 판에서 짝지어진 블록이다.
+        style_instruction: 어떤 문체로 쓸지 알리는 지시다.
+        purpose_sentence: 이 문서가 무엇에 쓰이는지 알리는 한 줄이다.
+
+    Returns:
+        수정 이유를 묻는 요청이다.
+    """
+    before = _verified_statements(paired)
+    after = _verified_statements(block)
+    seen = set(before)
+    return ChangeExplanationRequest(
+        heading=block.heading,
+        before_statements=before,
+        after_statements=after,
+        new_sources=tuple(
+            statement for statement in after if statement not in seen
+        ),
+        style_instruction=style_instruction,
+        purpose_sentence=purpose_sentence,
+    )
+
+
+def _verified_statements(block: ArtifactBlock) -> tuple[str, ...]:
+    """블록이 담은 인용 중 대조를 통과한 원문만 차례대로 모은다."""
+    return tuple(
+        source.statement
+        for source in block.sources
+        if source.citation_verified
     )
 
 
@@ -918,11 +1075,7 @@ def _narration_request(
             purpose_sentence=purpose_sentence,
             hints=hints,
         )
-    statements = tuple(
-        source.statement
-        for source in block.sources
-        if source.citation_verified
-    )
+    statements = _verified_statements(block)
     variants = tuple(
         (body, verified)
         for body, verified in (

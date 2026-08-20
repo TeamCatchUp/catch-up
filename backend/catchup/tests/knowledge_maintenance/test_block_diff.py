@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.block_diff import BlockChange
@@ -113,3 +114,32 @@ def test_block_markdown_prefers_narrative():
         == "## 상태\n\n산문"
     )
     assert block_markdown(_block(heading="상태", body="b")) == "## 상태\n\nb"
+
+
+def test_change_reason_prefers_stored_value():
+    """블록에 저장된 수정 이유가 있으면 그 문장을 먼저 돌려준다."""
+    c1, c2 = uuid.uuid4(), uuid.uuid4()
+    base = [_block(body="x", claim_ids=(c1,))]
+    prop = [
+        replace(
+            _block(body="y", claim_ids=(c1, c2)),
+            change_reason="새 회의록이 붙어 값이 갱신됐다.",
+        )
+    ]
+    change = diff_blocks(base, prop)[0]
+    assert (
+        change_reason(change, base=base, proposed=prop)
+        == "새 회의록이 붙어 값이 갱신됐다."
+    )
+
+
+def test_change_reason_falls_back_when_stored_missing():
+    """저장된 수정 이유가 없으면 기존 결정론 문구로 돌아간다."""
+    c1, c2 = uuid.uuid4(), uuid.uuid4()
+    base = [_block(body="x", claim_ids=(c1,))]
+    prop = [_block(body="y", claim_ids=(c1, c2))]
+    change = diff_blocks(base, prop)[0]
+    assert (
+        change_reason(change, base=base, proposed=prop)
+        == "근거 1건 추가·0건 폐기"
+    )

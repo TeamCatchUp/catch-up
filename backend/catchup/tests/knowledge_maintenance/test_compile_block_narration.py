@@ -24,6 +24,7 @@ from catchup.knowledge_maintenance.domain.preset_catalog import (
     DEFAULT_STYLE_INSTRUCTION,
 )
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPendingProposal
+from catchup.knowledge_maintenance.ports.narrator import ChangeExplanationRequest
 from catchup.knowledge_maintenance.ports.narrator import NarrationError
 from catchup.knowledge_maintenance.ports.narrator import NarrationRequest
 from catchup.knowledge_maintenance.ports.relations import StoredRelationEdge
@@ -66,17 +67,34 @@ def _content_headings(narrator) -> list[str]:
 
 
 class _FakeNarrator:
-    """호출을 기록하고 고정 문장을 돌려주는 서술기다."""
+    """호출을 기록하고 고정 문장을 돌려주는 서술기다.
 
-    def __init__(self, error: Exception | None = None) -> None:
+    산문 요청과 수정 이유 요청을 따로 담는다. 두 요청은 부르는 조건이
+    다르므로 한 목록에 섞으면 어느 규칙이 깨졌는지 가릴 수 없다.
+    """
+
+    def __init__(
+        self,
+        error: Exception | None = None,
+        *,
+        explain_error: Exception | None = None,
+    ) -> None:
         self.requests: list[NarrationRequest] = []
+        self.explanations: list[ChangeExplanationRequest] = []
         self.error = error
+        self.explain_error = explain_error
 
     def narrate(self, request: NarrationRequest) -> str:
         self.requests.append(request)
         if self.error is not None:
             raise self.error
         return f"{request.heading} 절을 설명하는 문장이다."
+
+    def explain_change(self, request: ChangeExplanationRequest) -> str:
+        self.explanations.append(request)
+        if self.explain_error is not None:
+            raise self.explain_error
+        return f"{request.heading} 블록이 바뀐 이유다."
 
 
 def _verified(claim: StoredClaimCandidate) -> StoredClaimCandidate:
