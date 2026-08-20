@@ -25,6 +25,7 @@ import pytest
 
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_SUMMARY
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import ContestedVariant
 from catchup.knowledge_maintenance.domain.artifact import deserialize_blocks
@@ -70,6 +71,24 @@ def _contested_blocks(heading: str, body: str) -> tuple[ArtifactBlock, ...]:
     )
 
 
+def _summary_block(
+    *,
+    narrative: str | None,
+    heading: str = "결제 기능",
+    body: str = "claim 3건 · 관계 1건 · 최초 보고 2026-06-03T07:59:38.407000+00:00",
+) -> ArtifactBlock:
+    """문서 맨 앞에 오는 summary 블록 하나를 만든다."""
+    return ArtifactBlock(
+        block_kind=BLOCK_KIND_SUMMARY,
+        heading=heading,
+        body=body,
+        claim_ids=(uuid.uuid4(),),
+        proposal_ids=(),
+        ontology_version="1",
+        narrative=narrative,
+    )
+
+
 @dataclass
 class FakeState:
     """변경안들을 담아 두는 공유 상태다."""
@@ -87,14 +106,19 @@ class FakeState:
         body: str = "9월 출시 예정입니다.",
         title: str = "결제 기능",
         artifact_id: uuid.UUID | None = None,
+        blocks: tuple[ArtifactBlock, ...] | None = None,
     ) -> uuid.UUID:
-        """검토를 기다리는 문서 변경안 한 건을 넣는다."""
+        """검토를 기다리는 문서 변경안 한 건을 넣는다.
+
+        blocks를 주면 heading·body·contested 대신 그 블록들을 그대로 담는다.
+        """
         proposal_id = uuid.uuid4()
-        blocks = (
-            _contested_blocks(heading, body)
-            if contested
-            else _blocks(heading, body)
-        )
+        if blocks is None:
+            blocks = (
+                _contested_blocks(heading, body)
+                if contested
+                else _blocks(heading, body)
+            )
         self.proposals.append(
             {
                 "id": proposal_id,
@@ -335,6 +359,55 @@ def test_queue_item_carries_origin_title_and_summary() -> None:
     assert item.created_at == BASE_TIME
     assert item.summary == "release_month: 9월 출시 예정입니다."
 
+
+def test_summary_uses_narrative_headline_of_summary_block() -> None:
+    """첫 summary 블록에 산문이 있으면 그 첫 줄이 요약이다."""
+    state = FakeState()
+    state.add_proposal(
+        blocks=(
+            _summary_block(
+                narrative="**결제 기능은 9월 출시를 목표로 한다**\n\n근거는 세 건이다.",
+            ),
+        )
+        + _blocks("release_month", "9월 출시 예정입니다."),
+    )
+
+    page = list_review_queue(
+        FakeUnitOfWork(state), workspace_id=WORKSPACE_ID
+    )
+
+    assert page.items[0].summary == "결제 기능은 9월 출시를 목표로 한다"
+
+
+def test_summary_skips_aggregate_line_when_narrative_missing() -> None:
+    """산문 없는 summary 블록은 건너뛰고 다음 블록으로 요약을 만든다."""
+    state = FakeState()
+    state.add_proposal(
+        blocks=(_summary_block(narrative=None),)
+        + _blocks("release_month", "9월 출시 예정입니다.\n둘째 줄."),
+    )
+
+    page = list_review_queue(
+        FakeUnitOfWork(state), workspace_id=WORKSPACE_ID
+    )
+
+    assert page.items[0].summary == "release_month: 9월 출시 예정입니다."
+
+
+def test_summary_is_empty_when_only_narrativeless_summary_block() -> None:
+    """건너뛸 다음 블록이 없으면 요약은 빈 문자열이다.
+
+    집계 한 줄에는 ISO 시각이 들어 있어, 그대로 실으면 검토 화면 배너가
+    기계 값을 보여 준다.
+    """
+    state = FakeState()
+    state.add_proposal(blocks=(_summary_block(narrative=None),))
+
+    page = list_review_queue(
+        FakeUnitOfWork(state), workspace_id=WORKSPACE_ID
+    )
+
+    assert page.items[0].summary == ""
 
 def test_negative_paging_is_refused() -> None:
     """음수 페이지 인자는 조용히 넘기지 않는다."""

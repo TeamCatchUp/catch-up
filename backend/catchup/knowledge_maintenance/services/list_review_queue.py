@@ -32,6 +32,7 @@ from typing import Protocol
 from typing import Self
 
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_SUMMARY
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactRepository
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
@@ -180,18 +181,51 @@ def _to_item(proposal: StoredArtifactProposal) -> ReviewQueueItem:
 
 
 def _summary(blocks: tuple[ArtifactBlock, ...]) -> str:
-    """첫 블록의 제목과 본문 첫 줄로 한 줄 요약을 조립한다.
+    """큐 한 줄에 실을 요약을 고른다.
 
-    제목만으로는 같은 속성을 다루는 안건들이 구별되지 않고, 본문 전체는
-    목록에 실을 수 없다. 첫 줄까지가 "무엇이 달라졌나"를 가리는 최소
-    단위다. 블록이 없으면 빈 문자열이다.
+    첫 블록이 summary 블록이고 산문(narrative)이 있으면, 산문의 첫 줄을
+    요약으로 쓴다. 그 줄이 문서 전체를 한 문장으로 말하는 자리이기
+    때문이다. 강조 표시로 감싼 `**`는 벗겨 낸다.
+
+    첫 블록이 summary인데 산문이 없으면 그 블록을 건너뛰고 다음 블록에
+    아래 규칙을 적용한다. 산문 없는 summary 블록의 본문은 claim과 관계
+    개수, 최초 보고 시각 같은 집계 한 줄이라 목록에서 안건을 가리는 데
+    쓸모가 없다.
+
+    그 밖의 블록은 제목과 본문 첫 줄을 이어 붙인다. 제목만으로는 같은
+    속성을 다루는 안건들이 구별되지 않고, 본문 전체는 목록에 실을 수
+    없다. 첫 줄까지가 "무엇이 달라졌나"를 가리는 최소 단위다.
+
+    고를 블록이 없으면 빈 문자열이다.
     """
     if not blocks:
         return ""
+    if blocks[0].block_kind == BLOCK_KIND_SUMMARY:
+        headline = _headline(blocks[0].narrative)
+        if headline:
+            return _clamp(headline)
+        blocks = blocks[1:]
+        if not blocks:
+            return ""
     block = blocks[0]
     lines = [line.strip() for line in block.body.splitlines() if line.strip()]
     parts = [part for part in (block.heading.strip(), *lines[:1]) if part]
-    summary = ": ".join(parts)
+    return _clamp(": ".join(parts))
+
+
+def _headline(narrative: str | None) -> str:
+    """산문의 첫 비어 있지 않은 줄을 강조 표시 없이 돌려준다."""
+    if not narrative:
+        return ""
+    for line in narrative.splitlines():
+        stripped = line.strip()
+        if stripped:
+            return stripped.strip("*").strip()
+    return ""
+
+
+def _clamp(summary: str) -> str:
+    """요약이 길이 상한을 넘으면 잘라 내고 말줄임표를 붙인다."""
     if len(summary) > SUMMARY_MAX_LENGTH:
         return summary[: SUMMARY_MAX_LENGTH - 1] + "…"
     return summary
