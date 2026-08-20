@@ -11,8 +11,13 @@ from __future__ import annotations
 import uuid
 from dataclasses import replace
 
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_RELATION_SECTION
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_SUMMARY
 from catchup.knowledge_maintenance.ports.narrator import NarrationError
+from catchup.knowledge_maintenance.ports.relations import StoredRelationEdge
+from catchup.knowledge_maintenance.services.traverse_relations import (
+    RELATION_HINT_PREFIX,
+)
 from catchup.tests.knowledge_maintenance.test_compile_block_narration import _blocks
 from catchup.tests.knowledge_maintenance.test_compile_block_narration import (
     _FakeNarrator,
@@ -21,7 +26,17 @@ from catchup.tests.knowledge_maintenance.test_compile_block_narration import _pe
 from catchup.tests.knowledge_maintenance.test_compile_block_narration import _run
 from catchup.tests.knowledge_maintenance.test_compile_block_narration import _uow
 from catchup.tests.knowledge_maintenance.test_compile_block_narration import _verified
+from catchup.tests.knowledge_maintenance.test_compile_definition_artifacts import (
+    FakeDefinitionUnitOfWork,
+)
+from catchup.tests.knowledge_maintenance.test_compile_definition_artifacts import (
+    FakeRelationRepository,
+)
 from catchup.tests.knowledge_maintenance.test_compile_definition_artifacts import _claim
+from catchup.tests.knowledge_maintenance.test_compile_definition_artifacts import (
+    _definition_row,
+)
+from catchup.tests.knowledge_maintenance.test_compile_definition_artifacts import _spec
 
 
 def _explained_headings(narrator: _FakeNarrator) -> list[str]:
@@ -232,3 +247,150 @@ def test_no_narrator_leaves_reason_none() -> None:
     assert result.blocks_explained == 0
     assert result.blocks_explanation_reused == 0
     assert all(reason is None for reason in _reasons(uow).values())
+
+
+def _edge(
+    *,
+    source_node_id: uuid.UUID,
+    target_display_name: str,
+    assertion_text: str,
+) -> StoredRelationEdge:
+    """관계 절 본문에 실릴 간선 하나를 만든다."""
+    return StoredRelationEdge(
+        id=uuid.uuid4(),
+        source_node_id=source_node_id,
+        target_node_id=uuid.uuid4(),
+        assertion_text=assertion_text,
+        source_display_name="요청 A",
+        target_display_name=target_display_name,
+    )
+
+
+def _relation_uow(node_id: uuid.UUID, edges) -> FakeDefinitionUnitOfWork:
+    """관계 절 하나를 쓰는 정의로 fake를 세운다."""
+    return FakeDefinitionUnitOfWork(
+        definitions=[
+            _definition_row(
+                spec=_spec(
+                    relation_paths=[
+                        {"steps": [{"type": "owned_by", "dir": "out"}]}
+                    ],
+                    predicate_sections=["status"],
+                )
+            )
+        ],
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[_verified(_claim(node_id=node_id))],
+        relations=FakeRelationRepository(
+            [("owned_by", edge) for edge in edges]
+        ),
+    )
+
+
+def _relation_heading(uow) -> str:
+    """계류 변경안에서 관계 절의 제목을 꺼낸다."""
+    return next(
+        block.heading
+        for block in _blocks(uow)
+        if block.block_kind == BLOCK_KIND_RELATION_SECTION
+    )
+
+
+def test_modified_relation_section_explains_from_edge_lines() -> None:
+    """관계 절이 바뀌면 앞뒤 사실 입력을 본문 간선 줄로 채운다."""
+    node_id = uuid.uuid4()
+    first = _edge(
+        source_node_id=node_id,
+        target_display_name="결제팀",
+        assertion_text="요청 A는 결제팀이 맡는다",
+    )
+    uow = _relation_uow(node_id, [first])
+    narrator = _FakeNarrator()
+    _run(uow, narrator)
+    _publish_pending(uow)
+    second = _edge(
+        source_node_id=node_id,
+        target_display_name="정산팀",
+        assertion_text="요청 A는 정산팀도 맡는다",
+    )
+    uow.relations.edges.append(("owned_by", second))
+
+    result = _run(uow, narrator)
+
+    heading = _relation_heading(uow)
+    request = next(
+        item for item in narrator.explanations if item.heading == heading
+    )
+    assert request.before_statements == ("요청 A → owned_by → 결제팀",)
+    assert set(request.after_statements) == {
+        "요청 A → owned_by → 결제팀",
+        "요청 A → owned_by → 정산팀",
+    }
+    assert request.new_sources == ("요청 A → owned_by → 정산팀",)
+    assert result.blocks_explained == 1
+    reasons = _reasons(uow)
+    assert reasons[heading] == f"{heading} 블록이 바뀐 이유다."
+
+
+def test_relation_explanation_drops_hint_lines() -> None:
+    """관계 절의 힌트 줄은 앞뒤 사실 입력에 넣지 않는다."""
+    node_id = uuid.uuid4()
+    first = _edge(
+        source_node_id=node_id,
+        target_display_name="결제팀",
+        assertion_text="요청 A는 결제팀이 맡는다",
+    )
+    uow = _relation_uow(node_id, [first])
+    narrator = _FakeNarrator()
+    _run(uow, narrator)
+    _publish_pending(uow)
+    second = _edge(
+        source_node_id=node_id,
+        target_display_name="정산팀",
+        assertion_text="요청 A는 정산팀도 맡는다",
+    )
+    uow.relations.edges.append(("owned_by", second))
+
+    _run(uow, narrator)
+
+    heading = _relation_heading(uow)
+    request = next(
+        item for item in narrator.explanations if item.heading == heading
+    )
+    lines = (
+        *request.before_statements,
+        *request.after_statements,
+        *request.new_sources,
+    )
+    assert lines
+    assert all(not line.startswith(RELATION_HINT_PREFIX) for line in lines)
+    assert all("맡는다" not in line for line in lines)
+
+
+def test_modified_block_without_any_statement_is_not_explained() -> None:
+    """앞뒤가 모두 비면 묻지 않고 수정 이유를 비워 둔다."""
+    node_id = uuid.uuid4()
+    uow = _uow(
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[replace(_claim(node_id=node_id), citation_verified=False)],
+    )
+    narrator = _FakeNarrator()
+    _run(uow, narrator)
+    _publish_pending(uow)
+    uow.knowledge_candidates.claims.append(
+        replace(
+            _claim(
+                node_id=node_id,
+                predicate="status",
+                value="검토 중",
+                minutes=5,
+            ),
+            citation_verified=False,
+        )
+    )
+
+    result = _run(uow, narrator)
+
+    assert narrator.explanations == []
+    assert result.blocks_explained == 0
+    assert _reasons(uow)["status"] is None

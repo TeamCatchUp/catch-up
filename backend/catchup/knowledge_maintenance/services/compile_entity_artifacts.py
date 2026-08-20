@@ -968,6 +968,12 @@ def _explain_changed_blocks(
             style_instruction=style_instruction,
             purpose_sentence=purpose_sentence,
         )
+        if not request.before_statements and not request.after_statements:
+            # 앞뒤 사실 입력이 모두 비면 무엇이 달라졌는지 말할 재료가
+            # 없다. 그대로 물으면 프롬프트가 빈 앞면을 "이 블록은 전에
+            # 없었다"로 읽어 거짓 전제를 만든다. 이유를 비워 두면 읽는
+            # 쪽이 결정론 문구로 채운다.
+            continue
         updated[change.block_index] = replace(
             block, change_reason=narrator.explain_change(request)
         )
@@ -984,7 +990,13 @@ def _change_explanation_request(
 ) -> ChangeExplanationRequest:
     """짝지어진 두 블록을 수정 이유 요청으로 옮긴다.
 
-    앞뒤 사실 입력은 검증된 인용뿐이다. 블록 본문과 제목은 색인용 라벨에서
+    관계 절은 사실 입력이 다르다. 그 블록은 인용을 갖지 않고 본문의 간선
+    줄이 곧 사실이므로, 앞뒤를 간선 줄로 만든다. 인용만 읽으면 관계 절의
+    앞뒤가 언제나 비어 프롬프트가 빈 앞면을 "이 블록은 전에 없었다"로
+    읽는다. 들여쓴 힌트 줄은 관계에 붙은 원문 문장이라 그 말을 한 사람이
+    관계의 상대 노드로 읽힐 자리가 있으므로 서술 때와 같이 뺀다.
+
+    나머지 블록의 앞뒤 사실 입력은 검증된 인용뿐이다. 블록 본문과 제목은 색인용 라벨에서
     온 문장이라 근거가 아니고, 검증되지 않은 인용은 아직 근거가 아니다.
     새로 붙은 인용은 뒤에만 있는 문장으로 계산한다. 그것이 이번 변경을
     불러온 것을 말할 수 있는 유일한 재료다.
@@ -998,8 +1010,12 @@ def _change_explanation_request(
     Returns:
         수정 이유를 묻는 요청이다.
     """
-    before = _verified_statements(paired)
-    after = _verified_statements(block)
+    if block.block_kind == BLOCK_KIND_RELATION_SECTION:
+        before = _relation_edge_lines(paired)
+        after = _relation_edge_lines(block)
+    else:
+        before = _verified_statements(paired)
+        after = _verified_statements(block)
     seen = set(before)
     return ChangeExplanationRequest(
         heading=block.heading,
@@ -1010,6 +1026,19 @@ def _change_explanation_request(
         ),
         style_instruction=style_instruction,
         purpose_sentence=purpose_sentence,
+    )
+
+
+def _relation_edge_lines(block: ArtifactBlock) -> tuple[str, ...]:
+    """관계 절 본문에서 간선 줄만 차례대로 모은다.
+
+    본문은 간선 줄과 들여쓴 힌트 줄이 섞여 있다. 힌트 줄은 관계에 붙은
+    원문 문장이라 사실 입력이 아니므로 접두로 갈라 뺀다.
+    """
+    return tuple(
+        line
+        for line in block.body.split("\n")
+        if line.strip() and not line.startswith(RELATION_HINT_PREFIX)
     )
 
 
@@ -1054,21 +1083,14 @@ def _narration_request(
     않는 것이지 오류가 아니므로 예외가 아니라 None으로 알린다.
     """
     if block.block_kind == BLOCK_KIND_RELATION_SECTION:
-        lines = tuple(
-            line for line in block.body.split("\n") if line.strip()
-        )
-        if not lines:
-            return None
-        edges = tuple(
-            line
-            for line in lines
-            if not line.startswith(RELATION_HINT_PREFIX)
-        )
+        edges = _relation_edge_lines(block)
         hints = tuple(
             line[len(RELATION_HINT_PREFIX) :]
-            for line in lines
+            for line in block.body.split("\n")
             if line.startswith(RELATION_HINT_PREFIX)
         )
+        if not edges and not hints:
+            return None
         return NarrationRequest(
             block_kind=block.block_kind,
             heading=block.heading,
