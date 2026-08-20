@@ -9,6 +9,7 @@ import { Button } from '@/shared/components/ui/button';
 import type { DocumentRowData, KnownDocumentStatus, ReviewStatCardData } from '../../types/llmWikiModel';
 import DashboardDocumentRow, { DashboardDocumentTableHeader } from '../document/DashboardDocumentRow';
 import DocumentTableEmptyState from '../document/states/DocumentTableEmptyState';
+import DocumentTableSkeleton from '../document/states/DocumentTableSkeleton';
 import WikiPageHeader from '../header/WikiPageHeader';
 import type { ReviewQueueFilterOption } from '../review-queue/ReviewQueueFilterSearchPanel';
 import WikiSpaceTableFooter from '../space/WikiSpaceTableFooter';
@@ -29,6 +30,8 @@ interface WikiDashboardPageProps {
   stats: readonly ReviewStatCardData[];
   /** 서버가 이미 좁혀 준 한 쪽. 화면은 다시 거르지 않는다. */
   documents: readonly DocumentRowData[];
+  /** 첫 조회가 끝나기 전인지. 쪽 이동은 이전 쪽을 그대로 두므로 여기 해당하지 않는다. */
+  documentsLoading?: boolean;
   /** limit·offset을 걸기 전 문서 수 — 쪽 수 계산의 유일한 재료다. */
   totalCount: number;
   /** 담당자 후보. id는 담당자 user_id 문자열이다. */
@@ -49,6 +52,7 @@ interface WikiDashboardPageProps {
 export default function WikiDashboardPage({
   stats,
   documents,
+  documentsLoading = false,
   totalCount,
   assigneeOptions,
   myUserId,
@@ -147,7 +151,9 @@ export default function WikiDashboardPage({
           <div className="flex flex-col gap-8">
             <div className="flex flex-col">
               <DashboardDocumentTableHeader />
-              {documents.length === 0 ? (
+              {documentsLoading ? (
+                <DocumentTableSkeleton withPath />
+              ) : documents.length === 0 ? (
                 <DocumentTableEmptyState />
               ) : (
                 <div className="flex flex-col gap-1">

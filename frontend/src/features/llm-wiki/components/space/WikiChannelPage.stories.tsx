@@ -17,6 +17,7 @@ const meta = {
     currentPage: 1,
     totalPages: 5,
     onPageChange: fn(),
+    onPageSizeChange: fn(),
     onFolderClick: fn(),
   },
   parameters: {
@@ -33,7 +34,7 @@ const meta = {
         nodeId: '17724:185191',
       },
       viewport: { width: 1200, height: 1440 },
-      states: ['default', 'folder-rows-without-meta', 'long-names-narrow-viewport', 'empty'],
+      states: ['default', 'folder-rows-without-meta', 'long-names-narrow-viewport', 'empty', 'page-size-dropdown'],
       reuseNotes: [
         'WikiPageHeader(detail·채널 1마디)·DashboardDocumentTableHeader·FolderDocumentRow·공용 Pagination을 조립만 한다 — 전부 무수정 소비.',
         '표 열은 대시보드와 같은 상수(DASHBOARD_DOCUMENT_META_GRID) 공유라 이 화면에서 재정의하지 않는다.',
@@ -42,10 +43,11 @@ const meta = {
       dataNotes: [
         '채널 mock은 ChannelListItemResponse 정합(WikiChannelListItem 소비) — 폴더 행의 담당자·상태·최근 활동과 작성자는 목록 API 미동봉(협상 대상, 감사 8/13 부록).',
         '실 라우트는 그 네 칸을 빈 값으로 넘긴다 — FolderRowsWithoutMeta가 그때의 표 모습이다.',
-        '상단 200px 커버는 바탕색만 시안값이고 콘텐츠는 미정(사진 가능성) — 안은 비워 둔다. 페이지 크기 옵션 목록은 미도시라 정적 표시가 기본이다.',
+        '상단 200px 커버는 바탕색만 시안값이고 콘텐츠는 미정(사진 가능성) — 안은 비워 둔다.',
+        '쪽 크기 드롭다운은 대시보드와 같은 5종(10/20/30/40/50)이고 기본 20이다 — 옵션 목록은 미도시라 사용자 확정분이다. 폴더는 채널 목록 응답에 전량 실려 와 크기 변경이 slice 구간만 바꾼다.',
         '헤더 우측 kebab 버튼은 두 시안에 있으나 동작 정의가 없어 렌더하지 않는다(actions 슬롯 비움) — 디자이너 질문.',
         '빈 채널 문구 "폴더가 없어요"는 시안 없이 지었다 — 대시보드 승인 문구 "문서가 없어요"의 어형을 그대로 따랐다(디자이너 확인 대상).',
-        '로딩·에러 스토리는 만들지 않는다 — 디자인 MISSING 유지. 폴더는 채널 목록 응답에 전량 실려 와 빈 표는 폴더 0개일 때만 뜬다.',
+        '이 화면의 첫 로딩은 채널 이름조차 없는 단계라 표가 아니라 페이지째 골격이다 — 라우트가 WikiSpacePageSkeleton으로 덮고 그 스토리가 따로 있다. 에러 스토리는 만들지 않는다(디자인 MISSING 유지, 토스트로만 알린다).',
       ],
       tokenNotes: [
         '채널명 #1E2124 = text-text-normal-strong + heading(sb)/xlarge. 작성자 라벨 #6D7882 = alternative, 이름 #464C53 = neutral, body(md)/xsmall.',
@@ -99,12 +101,28 @@ export const Default: Story = {
     await userEvent.click(canvas.getByRole('button', { name: /환불/ }));
     await expect(args.onFolderClick).toHaveBeenCalledWith('folder-refund');
 
-    // 푸터: 페이지 크기는 핸들러가 없으면 버튼이 아니다(옵션 시안 부재 — 죽은 버튼 방지).
+    // 푸터: 쪽 크기 표시가 곧 드롭다운 트리거다.
     await expect(canvas.getByText('씩 나열')).toBeInTheDocument();
-    await expect(canvas.getByText('20').closest('button')).toBeNull();
+    await expect(canvas.getByRole('button', { name: '20' })).toBeInTheDocument();
 
     await userEvent.click(canvas.getByRole('button', { name: '2' }));
     await expect(args.onPageChange).toHaveBeenCalledWith(2);
+  },
+};
+
+/** 쪽 크기 드롭다운. 대시보드 푸터와 같은 부품·같은 5종이고 고른 값은 소비처로 나간다. */
+export const PageSizeDropdown: Story = {
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    await userEvent.click(canvas.getByRole('button', { name: '20' }));
+
+    const items = await body.findAllByRole('menuitem');
+    await expect(items.map((item) => item.textContent)).toEqual(['10', '20', '30', '40', '50']);
+
+    await userEvent.click(items[4]);
+    await expect(args.onPageSizeChange).toHaveBeenCalledWith(50);
   },
 };
 

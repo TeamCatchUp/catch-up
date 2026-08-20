@@ -7,10 +7,13 @@ import { mapWikiArtifactDocument, type WikiDocumentData } from '../api/wikiDocum
 import { createWikiLocationIndex, resolveDocumentBreadcrumbs } from '../api/wikiMappers';
 import { wikiQueries } from '../queries/wiki.queries';
 import type { DocumentBreadcrumb } from '../types/llmWikiModel';
+import { useQueryErrorToast } from './useQueryErrorToast';
 
 interface UseWikiDocumentModelReturn {
   /** 발행판이 오기 전이거나 조회가 실패하면 null이다 */
   document: WikiDocumentData | null;
+  /** 발행판을 아직 기다리는 중인지. 미발행 404는 여기 서지 않는다 */
+  isPending: boolean;
   /** 채널 > 폴더 > 문서. 마지막 마디가 현재 페이지다 */
   breadcrumbs: readonly DocumentBreadcrumb[];
 }
@@ -22,6 +25,8 @@ interface UseWikiDocumentModelReturn {
 export function useWikiDocumentModel(documentId: string): UseWikiDocumentModelReturn {
   const documentQuery = useQuery(wikiQueries.artifact(documentId));
   const channelsQuery = useQuery(wikiQueries.channels());
+
+  useQueryErrorToast(documentQuery.error ?? channelsQuery.error);
 
   const document = useMemo(
     () => (documentQuery.data ? mapWikiArtifactDocument(documentQuery.data) : null),
@@ -44,5 +49,5 @@ export function useWikiDocumentModel(documentId: string): UseWikiDocumentModelRe
     [document, locationIndex],
   );
 
-  return { document, breadcrumbs };
+  return { document, isPending: documentQuery.isPending, breadcrumbs };
 }

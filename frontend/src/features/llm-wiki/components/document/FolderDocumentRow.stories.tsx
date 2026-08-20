@@ -46,14 +46,14 @@ const meta = {
         '2026-08-13 재실측(채널 17724:185191·폴더 17762:104787): 8/5의 VOC·고객사 아이콘 쌍 행이 담당자·상태·최근 활동 열로 교체됐다.',
         '행 상태는 시안에 도시된 검토 완료만 픽스처로 쓴다 — 다른 상태 행·폴더 배지 집계 의미는 미도시(디자이너 질문 유지).',
         '담당자 이름·이미지, 최근 활동은 목록 API 미동봉(협상 대상) — 감사 8/13 부록 참조.',
-        '담당자는 문서 행과 같은 owners[] 복수 계약이다. 2인 이상 표시는 시안 대기 — 아바타 그룹·+N 배지를 발명하지 않고 첫 담당자만 렌더한다.',
+        '담당자는 문서 행과 같은 owners[] 복수 계약이다. 2인 이상은 세로 스택으로 전원 렌더한다(사용자 확정) — 대시보드 행과 같은 표기이고 시안 없이 정한 자작분이다.',
       ],
       tokenNotes: [
         '이름 #33363D = text-text-normal-normal + heading(sb)/small. 아이콘 셸 #F7F7F8 = bg-fill-normal-strong, 아이콘 #B1B8BE = text-icon-normal-alternative.',
         '최근 활동 #6D7882 = text-text-normal-alternative + body(md)/small 우측 정렬 — 대시보드 행과 동일 매핑.',
       ],
       layoutNotes: [
-        '경로 줄이 없는 1줄 행이라 행 높이 52는 결과값(6+40+6)이다 — h-*를 두지 않는다.',
+        '경로 줄이 없는 1줄 행이라 행 높이 52는 결과값(6+40+6)이다 — h-*를 두지 않는다. 담당자가 2인 이상이면 스택 높이가 아이콘 40을 넘겨 행이 그만큼 자란다.',
         '폭 흡수는 이름 열 하나뿐이고 메타 그리드 140/160/96·gap 16은 고정 — 검산 6+564+36+140+16+160+16+96+6=1040.',
       ],
     }),
@@ -97,7 +97,7 @@ export const DocumentRow: Story = {
   },
 };
 
-/** 담당자 2인 이상. 표시 시안이 없어 첫 담당자만 렌더하고 초과 인원은 렌더하지 않는다. */
+/** 담당자 2인 이상. 전원을 세로로 쌓고 행 높이가 그만큼 늘어난다(사용자 확정). */
 export const MultipleOwners: Story = {
   args: {
     kind: 'folder',
@@ -110,11 +110,17 @@ export const MultipleOwners: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const first = canvas.getByText('팀원F');
+    const second = canvas.getByText('남궁현');
 
-    await expect(canvas.getByText('팀원F')).toBeInTheDocument();
-    // 초과 인원이 새어 나오면 시안 없는 UI를 발명한 것이다.
-    await expect(canvas.queryByText('남궁현')).toBeNull();
-    await expect(canvasElement.querySelectorAll('.border-line-normal-assistive')).toHaveLength(1);
+    await expect(canvasElement.querySelectorAll('.border-line-normal-assistive')).toHaveLength(2);
+
+    // 가로가 아니라 세로로 쌓인다 — 좌변이 같고 둘째 줄이 아래에 온다.
+    await expect(second.getBoundingClientRect().left).toBeCloseTo(first.getBoundingClientRect().left, 1);
+    await expect(second.getBoundingClientRect().top).toBeGreaterThan(first.getBoundingClientRect().bottom);
+
+    // 1줄 행의 52를 넘겨 행이 자란다 — 아이콘 40보다 스택이 높아진 결과다.
+    await expect(canvas.getByRole('button').getBoundingClientRect().height).toBeGreaterThan(52);
   },
 };
 

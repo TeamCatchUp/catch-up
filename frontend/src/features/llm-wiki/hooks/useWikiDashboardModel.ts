@@ -16,6 +16,7 @@ import {
 import type { ReviewQueueFilterOption } from '../components/review-queue/ReviewQueueFilterSearchPanel';
 import { wikiQueries } from '../queries/wiki.queries';
 import type { DocumentRowData, ReviewStatCardData } from '../types/llmWikiModel';
+import { useQueryErrorToast } from './useQueryErrorToast';
 
 /** 지표는 집계 API가 없어 목록의 total만 읽는다 — 한 줄만 받아 버린다. */
 const STAT_LIMIT = 1;
@@ -26,6 +27,8 @@ interface UseWikiDashboardModelReturn {
   onQueryStateChange: (next: DashboardQueryState) => void;
   stats: readonly ReviewStatCardData[];
   documents: readonly DocumentRowData[];
+  /** 첫 조회 전인지. 쪽 이동은 이전 쪽을 유지하므로 여기 서지 않는다 */
+  documentsLoading: boolean;
   totalCount: number;
   assigneeOptions: readonly ReviewQueueFilterOption[];
   myUserId?: number;
@@ -73,6 +76,17 @@ export function useWikiDashboardModel(pageSize: number): UseWikiDashboardModelRe
   const unassignedStat = useQuery(wikiQueries.artifacts({ unassigned: true, limit: STAT_LIMIT }));
   const allWikiStat = useQuery(wikiQueries.artifacts({ limit: STAT_LIMIT }));
 
+  // 지표 4요청까지 한 신호로 합친다 — 화면 하나가 통째로 실패해도 토스트는 하나다
+  useQueryErrorToast(
+    listQuery.error ??
+      channelsQuery.error ??
+      membersQuery.error ??
+      pendingReviewStat.error ??
+      myAssignedStat.error ??
+      unassignedStat.error ??
+      allWikiStat.error,
+  );
+
   // 문서 응답은 채널·폴더 id만 준다 — 경로 이름은 채널 목록과의 join 결과다.
   const locationIndex = useMemo(
     () => createWikiLocationIndex(channelsQuery.data?.channels ?? []),
@@ -108,6 +122,7 @@ export function useWikiDashboardModel(pageSize: number): UseWikiDashboardModelRe
     onQueryStateChange: setQueryState,
     stats,
     documents,
+    documentsLoading: listQuery.isPending,
     totalCount: listQuery.data?.total ?? 0,
     assigneeOptions,
     myUserId,

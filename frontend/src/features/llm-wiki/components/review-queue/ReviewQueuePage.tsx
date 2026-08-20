@@ -37,12 +37,18 @@ import {
 } from './reviewQueueFilters';
 import ReviewQueueListHeader from './ReviewQueueListHeader';
 import ReviewQueueRow from './ReviewQueueRow';
+import ReviewQueueDetailSkeleton from './states/ReviewQueueDetailSkeleton';
 import ReviewQueueEmptyState from './states/ReviewQueueEmptyState';
+import ReviewQueueListSkeleton from './states/ReviewQueueListSkeleton';
 
 export interface ReviewQueuePageProps {
   items: readonly ReviewQueueRowData[];
   /** 목록 전체 건수. 쪽을 나눠 받으므로 items.length와 다를 수 있다 */
   totalCount: number;
+  /** 목록 첫 조회 전인지. 서면 좌측 목록과 상세가 함께 골격이 된다 */
+  listPending?: boolean;
+  /** 고른 안건의 상세를 기다리는 중인지 */
+  detailPending?: boolean;
   selectedId: string | null;
   onSelectItem: (proposalId: string) => void;
 
@@ -92,6 +98,8 @@ export interface ReviewQueuePageProps {
 export default function ReviewQueuePage({
   items,
   totalCount,
+  listPending = false,
+  detailPending = false,
   selectedId,
   onSelectItem,
   breadcrumbs,
@@ -120,7 +128,9 @@ export default function ReviewQueuePage({
 }: ReviewQueuePageProps) {
   const selectedIndex = items.findIndex((item) => item.id === selectedId);
   // 목록이 비면 그릴 상세가 없다 — 좌측 머리글·필터만 남기고 안내로 대체한다
-  const isEmpty = items.length === 0;
+  const isEmpty = items.length === 0 && !listPending;
+  // 목록을 아직 기다리는 동안에도 상세 자리는 골격으로 채운다
+  const showDetailSkeleton = listPending || detailPending;
 
   const prefersReducedMotion = usePrefersReducedMotion();
   // 상세가 넘어가는 방향. 목록에서 아래 안건을 고르면 아래에서, 위면 위에서 들어온다
@@ -191,9 +201,13 @@ export default function ReviewQueuePage({
           }
         />
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {items.map((item) => (
-            <ReviewQueueRow key={item.id} item={item} selected={item.id === selectedId} onSelect={onSelectItem} />
-          ))}
+          {listPending ? (
+            <ReviewQueueListSkeleton />
+          ) : (
+            items.map((item) => (
+              <ReviewQueueRow key={item.id} item={item} selected={item.id === selectedId} onSelect={onSelectItem} />
+            ))
+          )}
         </div>
       </aside>
 
@@ -240,7 +254,7 @@ export default function ReviewQueuePage({
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <AnimatePresence mode="wait" custom={swap.direction} initial={false}>
                   <motion.div
-                    key={selectedId ?? 'none'}
+                    key={showDetailSkeleton ? 'loading' : (selectedId ?? 'none')}
                     custom={swap.direction}
                     variants={prefersReducedMotion ? stepReplaceReduced : stepReplace}
                     initial={MotionState.Hidden}
@@ -248,29 +262,35 @@ export default function ReviewQueuePage({
                     exit={MotionState.Exit}
                     className="flex flex-col gap-9 px-9 py-9"
                   >
-                    <div className="flex flex-col gap-3">
-                      <h2 className="text-heading-xlarge text-text-normal-strong">{title}</h2>
-                      {/* 작성자 줄은 없다 — LLM 제안이라 큐 응답에 작성자가 실리지 않는다 */}
-                      <span className="text-body-xsmall text-text-normal-alternative">{waitingLabel}</span>
-                    </div>
+                    {showDetailSkeleton ? (
+                      <ReviewQueueDetailSkeleton />
+                    ) : (
+                      <>
+                        <div className="flex flex-col gap-3">
+                          <h2 className="text-heading-xlarge text-text-normal-strong">{title}</h2>
+                          {/* 작성자 줄은 없다 — LLM 제안이라 큐 응답에 작성자가 실리지 않는다 */}
+                          <span className="text-body-xsmall text-text-normal-alternative">{waitingLabel}</span>
+                        </div>
 
-                    <ChangeSummaryCard changeCount={entries.length} body={summary} />
+                        <ChangeSummaryCard changeCount={entries.length} body={summary} />
 
-                    <BlockDiffSection
-                      entries={entries}
-                      canReview={canReview}
-                      canReject={canReject}
-                      onApprove={(id) => {
-                        const entry = entries.find((item) => item.id === id);
-                        if (entry) onApproveBlock(entry);
-                      }}
-                      onReject={(id) => {
-                        const entry = entries.find((item) => item.id === id);
-                        if (entry) onRejectBlock?.(entry);
-                      }}
-                      onApproveAll={onApproveAll}
-                      onRejectAll={() => onRejectDialogOpenChange(true)}
-                    />
+                        <BlockDiffSection
+                          entries={entries}
+                          canReview={canReview}
+                          canReject={canReject}
+                          onApprove={(id) => {
+                            const entry = entries.find((item) => item.id === id);
+                            if (entry) onApproveBlock(entry);
+                          }}
+                          onReject={(id) => {
+                            const entry = entries.find((item) => item.id === id);
+                            if (entry) onRejectBlock?.(entry);
+                          }}
+                          onApproveAll={onApproveAll}
+                          onRejectAll={() => onRejectDialogOpenChange(true)}
+                        />
+                      </>
+                    )}
                   </motion.div>
                 </AnimatePresence>
               </div>

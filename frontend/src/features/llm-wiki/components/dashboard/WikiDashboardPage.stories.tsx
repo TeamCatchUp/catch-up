@@ -61,12 +61,14 @@ const meta = {
         'stat-card-filters-table',
         'empty-table',
         'empty-by-filter',
+        'first-load-skeleton',
         'paged',
         'page-size-dropdown',
         'narrow-viewport',
       ],
       reuseNotes: [
-        'WikiPageHeader(main)·ReviewStatCard·DashboardDocumentTableHeader·DashboardDocumentRow·WikiSpaceTableFooter를 조립만 한다. 푸터는 채널·폴더와 공유하는 부품이라 쪽 크기 선택을 optional prop으로만 열고 대시보드만 배선했다(채널·폴더는 종전과 같은 정적 표시).',
+        'WikiPageHeader(main)·ReviewStatCard·DashboardDocumentTableHeader·DashboardDocumentRow·WikiSpaceTableFooter를 조립만 한다. 푸터의 쪽 크기 선택은 optional prop이고 대시보드·채널·폴더 세 화면이 모두 배선한다.',
+        '첫 로딩 골격은 표 행과 같은 셸·열 상수를 쓰는 DocumentTableSkeleton이다 — 채널·폴더 표와 공유한다.',
         '필터 칩은 shared Chip(variant=square)이다 — 미선택 토큰(흰 배경·Line/Normal/Neutral·Text/Normal/Normal)과 선택 토큰(Fill/Primary/Normal/Assistive·Line/Primary/Normal·Text/Primary/Normal)이 시안과 그대로 일치해 새 칩을 만들지 않았다. 시안 gap 8·padding 10만 className으로 덮는다.',
         'align·progress·calendar·person·search_300·cancel_small·dropdown_down·dashboard·kebab_horizontal 전부 기존 에셋이고 Figma 컴포넌트명과 1:1 — 신규 export 없음.',
         '검색창만 직접 조립했다 — 공용 Input에 아이콘 슬롯이 없고, 시안 배경(Fill/Normal/Strong)·테두리(Line/Normal/Assistive)가 Input의 두 size 어느 쪽과도 다르다.',
@@ -76,7 +78,8 @@ const meta = {
         '필터·검색·정렬·쪽 이동은 전부 서버 파라미터로 나간다(q·status·owner_user_id|unassigned·created_after·created_before·sort·order·limit·offset). 그래서 스토리에서 필터를 걸어도 fixture 표는 좁혀지지 않는다 — 검증 대상은 방출되는 조회 상태다.',
         '담당자 2인 이상 선택만 서버 파라미터로 표현되지 않아 받은 쪽에서 한 번 더 좁힌다(owner_user_id는 한 명뿐). 그 좁히기는 훅이 맡고 화면은 관여하지 않는다.',
         '지표 4종은 집계 API가 없어 limit=1 목록의 total로 센다. "내 담당"은 내 user_id가 있어야 성립해서, 없으면 카드가 누를 수 없는 상태로 렌더된다.',
-        '빈 목록은 8/14 시안(18234:49957) 도착으로 구현했다 — 헤더는 남고 행 자리에 안내가 들어간다. 필터 결과 0건도 같은 안내를 쓴다(시안이 하나뿐이라 문구를 가르지 않는다). 로딩·에러는 여전히 MISSING이라 만들지 않는다 — 로딩은 이전 쪽 유지, 에러는 빈 표다.',
+        '빈 목록은 8/14 시안(18234:49957) 도착으로 구현했다 — 헤더는 남고 행 자리에 안내가 들어간다. 필터 결과 0건도 같은 안내를 쓴다(시안이 하나뿐이라 문구를 가르지 않는다).',
+        '첫 로딩만 골격을 세운다(사용자 확정) — 시안 MISSING이라 행 기하만 근사한 자작 골격이다. 쪽 이동은 이전 쪽을 그대로 두므로 골격이 서지 않는다. 에러는 빈 표를 유지하고 토스트로만 알린다.',
         '지표 카드를 누르면 아래 표에 같은 이름의 필터가 걸린다(사용자 확정 8/14). 매핑과 파라미터 변환은 순수 모듈 dashboardFilters가 갖고 unit이 지킨다 — 카드·드롭다운이 같은 필터 자리를 놓고 서로를 덮어쓴다.',
         '필터 축은 한 번에 하나만 걸린다. 축을 겹쳐 거는 계약은 시안에 없어 만들지 않았고, 해제 경로는 시안에 있는 "필터 초기화"뿐이다.',
         '검색은 제목 부분 일치(q)다 — 본문·태그 검색은 계약이 없다.',
@@ -221,6 +224,38 @@ export const EmptyByFilter: Story = {
     await expect(args.onQueryStateChange).toHaveBeenLastCalledWith(
       expect.objectContaining({ keyword: '존재하지않는문서제목!', page: 1 }),
     );
+  },
+};
+
+/**
+ * 첫 조회를 기다리는 동안. 표 헤더·푸터는 남고 행 자리만 골격이 된다.
+ * 시안이 없어 행 기하만 근사한 자작 골격이라, 열이 데이터 행과 어긋나지 않는지를 좌표로 잰다.
+ */
+export const FirstLoadSkeleton: Story = {
+  args: { documentsLoading: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const status = canvas.getByRole('status', { name: '목록 불러오는 중' });
+
+    // 골격이 서는 동안 실제 행도, 빈 안내도 나오지 않는다.
+    await expect(canvas.queryByText('결제 승인 실패 시 재시도 정책')).toBeNull();
+    await expect(canvas.queryByText('문서가 없어요')).toBeNull();
+
+    // 표 헤더·푸터는 남는다 — 골격이 표를 통째로 대체하지 않는다.
+    await expect(canvas.getByText('최근 활동')).toBeInTheDocument();
+    await expect(canvas.getByText('씩 나열')).toBeInTheDocument();
+
+    // 메타 셀 폭 428 = 140+16+160+16+96. 데이터 행과 같아야 로드 후 열이 움직이지 않는다.
+    const firstRow = status.firstElementChild as HTMLElement;
+    const metaCell = firstRow.lastElementChild as HTMLElement;
+    await expect(metaCell.getBoundingClientRect().width).toBe(428);
+    await expect(metaCell.getBoundingClientRect().right).toBeCloseTo(
+      canvas.getByText('최근 활동').getBoundingClientRect().right,
+      1,
+    );
+
+    // 행 높이도 데이터 행(65)에 붙어야 로드 순간 표가 튀지 않는다.
+    await expect(Math.abs(firstRow.getBoundingClientRect().height - 65)).toBeLessThanOrEqual(1);
   },
 };
 

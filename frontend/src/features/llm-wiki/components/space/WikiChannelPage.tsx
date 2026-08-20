@@ -18,6 +18,8 @@ interface WikiChannelPageProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+  /** 쪽 크기 선택. 주면 푸터 표시가 드롭다운으로 열린다 */
+  onPageSizeChange?: (pageSize: number) => void;
   onFolderClick?: (folderId: string) => void;
 }
 
@@ -31,6 +33,7 @@ export default function WikiChannelPage({
   currentPage,
   totalPages,
   onPageChange,
+  onPageSizeChange,
   onFolderClick,
 }: WikiChannelPageProps) {
   return (
@@ -67,6 +70,7 @@ export default function WikiChannelPage({
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={onPageChange}
+            onPageSizeChange={onPageSizeChange}
           />
         </div>
       </div>

@@ -106,6 +106,8 @@ const meta = {
         'reject-reason',
         'empty-queue',
         'empty-by-filter',
+        'list-first-load',
+        'detail-first-load',
       ],
       reuseNotes: [
         'ReviewQueueListHeader·ReviewQueueRow·ReviewQueueFilterDropdown·WikiPageHeader(detail)·ChangeSummaryCard·BlockDiffSection·DocumentLocationCard·ReviewParticipantsCard·ReviewPublishBar·RejectReasonDialog를 조립만 한다.',
@@ -119,7 +121,9 @@ const meta = {
         '채널·담당자 축은 서버가 하나씩만 받는다 — 둘 이상 고르면 파라미터로 나가지 않고 받은 쪽에서 좁힌다. 좁히기는 라우트가 맡고 화면은 관여하지 않는다.',
         '빈 큐는 시안이 없다(감사 MISSING·높음). 새 시각을 만들지 않고 대시보드 빈 표와 같은 일러스트·타이포를 쓰며, 필터 결과 0건도 같은 안내다 — 문구를 가르는 근거가 없다. 디자이너 확인 대상.',
         '목록이 비면 좌측 머리글과 필터는 남는다 — 필터로 비운 경우 되돌릴 경로가 사라지면 안 된다.',
-        '로딩·에러 시각은 시안이 없어 만들지 않는다 — 데이터가 없으면 상세 자리가 빈 채로 남는다.',
+        '첫 로딩은 좌측 목록과 상세 자리에 각각 골격을 세운다(사용자 확정) — 시안 MISSING이라 행·카드 기하만 근사한 자작분이다. 목록을 기다리는 동안에는 빈 안내 대신 골격이 서서 "없음"으로 오독되지 않는다.',
+        '상세 골격은 안건 교체와 같은 모션 상자(stepReplace) 안에서 상태만 갈아 끼운다 — 로딩이 별도 레이어로 튀지 않는다.',
+        '에러 시각은 시안이 없어 만들지 않는다 — 조회 실패는 판정 토스트와 같은 자리(우하단)에 문구만 띄운다.',
       ],
       layoutNotes: [
         '좌 300 · 우 350 고정, 중앙이 남는 폭을 흡수한다. 높이는 셸이 준다 — 스토리가 900 슬롯을 흉내낸다.',
@@ -312,5 +316,43 @@ export const EmptyByFilter: Story = {
 
     await expect(canvas.getByText('요청된 변경사항이 없어요')).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: '필터' })).toBeInTheDocument();
+  },
+};
+
+/**
+ * 큐 첫 조회를 기다리는 동안. 좌측 목록과 상세 자리가 함께 골격이 된다.
+ * 빈 안내가 서면 "처리할 게 없음"으로 읽히므로, 로딩과 빈 상태를 가르는 것이 이 스토리의 핵심이다.
+ */
+export const ListFirstLoad: Story = {
+  args: { items: [], totalCount: 0, selectedId: null, entries: [], participants: [], listPending: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByRole('status', { name: '변경사항 목록 불러오는 중' })).toBeInTheDocument();
+    await expect(canvas.getByRole('status', { name: '변경사항 불러오는 중' })).toBeInTheDocument();
+
+    // 빈 안내는 서지 않는다 — 로딩과 "없음"이 같은 시각이면 안 된다.
+    await expect(canvas.queryByText('요청된 변경사항이 없어요')).toBeNull();
+
+    // 좌측 머리글과 필터는 남는다 — 골격이 패널을 통째로 대체하지 않는다.
+    await expect(canvas.getByText('요청된 변경사항')).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: '필터' })).toBeInTheDocument();
+  },
+};
+
+/** 목록은 왔고 고른 안건의 상세만 기다리는 동안. 좌측 행은 실물이고 중앙만 골격이다. */
+export const DetailFirstLoad: Story = {
+  args: { detailPending: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // 좌측 행은 실물이다 — 목록에만 있는 다른 안건 제목으로 집는다.
+    await expect(canvas.getByText('환불 문서 병합 제안')).toBeInTheDocument();
+    await expect(canvas.getByRole('status', { name: '변경사항 불러오는 중' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('status', { name: '변경사항 목록 불러오는 중' })).toBeNull();
+
+    // 상세 본문·판정 진입점은 아직 서지 않는다.
+    await expect(canvas.queryByText('이렇게 바뀌었어요')).toBeNull();
+    await expect(canvas.queryByRole('heading', { level: 2, name: selected.title })).toBeNull();
   },
 };

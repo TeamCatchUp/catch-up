@@ -30,6 +30,7 @@ import { wikiQueries } from '../queries/wiki.queries';
 import type { BlockDiffEntry } from '../types/llmWikiDiff';
 import type { DocumentBreadcrumb } from '../types/llmWikiModel';
 import { buildBlockDiff } from '../utils/diff/buildBlockDiff';
+import { useQueryErrorToast } from './useQueryErrorToast';
 
 /** 큐는 서버 기본값과 같은 쪽 크기로 한 번만 가져온다 — 목록 패널에 쪽 컨트롤 시안이 없다 */
 const QUEUE_PAGE_SIZE = 50;
@@ -59,9 +60,12 @@ export function useReviewQueueModel(): ReviewQueuePageProps {
     [filters],
   );
 
-  const { data: queue } = useQuery(knowledgeReviewQueries.queue(params));
-  const { data: channels } = useQuery(wikiQueries.channels());
-  const { data: members } = useQuery(wikiQueries.members());
+  const queueQuery = useQuery(knowledgeReviewQueries.queue(params));
+  const channelsQuery = useQuery(wikiQueries.channels());
+  const membersQuery = useQuery(wikiQueries.members());
+  const queue = queueQuery.data;
+  const channels = channelsQuery.data;
+  const members = membersQuery.data;
 
   // 서버가 하나씩만 받는 축의 다중 선택분을 응답 위에서 좁힌다
   const clientFilter = resolveClientQueueFilter(filters);
@@ -76,8 +80,15 @@ export function useReviewQueueModel(): ReviewQueuePageProps {
   const selectedRow = rows.find((row) => row.id === selectedRowId);
   const selectedItem = queueItems.find((item) => item.proposal_id === selectedRowId);
 
-  const { data: detailDto } = useQuery(knowledgeReviewQueries.queueItem(selectedRowId ?? ''));
+  const detailQuery = useQuery(knowledgeReviewQueries.queueItem(selectedRowId ?? ''));
+  const detailDto = detailQuery.data;
   const detail = useMemo(() => (detailDto ? mapReviewProposalDetail(detailDto) : null), [detailDto]);
+
+  // 이 화면의 조회 실패는 판정 토스트와 같은 자리(우하단)에 한 번만 뜬다
+  useQueryErrorToast(
+    queueQuery.error ?? detailQuery.error ?? channelsQuery.error ?? membersQuery.error,
+    REVIEW_TOAST_OPTIONS,
+  );
 
   const verdictMutation = useReviewBlockVerdictMutation(selectedRowId ?? '');
   const publishMutation = useReviewPublishMutation(selectedRowId ?? '');
@@ -160,6 +171,8 @@ export function useReviewQueueModel(): ReviewQueuePageProps {
   return {
     items: rows,
     totalCount: clientNarrowed ? rows.length : (queue?.total ?? 0),
+    listPending: queueQuery.isPending,
+    detailPending: selectedRowId !== null && detailQuery.isPending,
     selectedId: selectedRowId,
     onSelectItem: setSelectedId,
     breadcrumbs,

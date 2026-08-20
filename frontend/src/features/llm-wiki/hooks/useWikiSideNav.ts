@@ -6,6 +6,7 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import type { WikiArtifactListItemDto, WikiChannelListItemDto } from '../api/wikiDto';
 import { wikiQueries } from '../queries/wiki.queries';
 import { buildWikiChannelAdmins, buildWikiFavorites, buildWikiNavTree } from '../utils/wikiNavTree';
+import { useQueryErrorToast } from './useQueryErrorToast';
 
 /** 트리 한 채널이 실을 문서 상한. 목록 API 최대치라 잘림이 가장 늦게 시작된다 */
 const TREE_ARTIFACT_LIMIT = 200;
@@ -24,15 +25,20 @@ export function useWikiSideNav() {
   const favoritesQuery = useQuery(wikiQueries.favorites());
   const channels = channelsQuery.data?.channels ?? EMPTY_CHANNELS;
 
-  const documentsByChannel = useQueries({
+  const tree = useQueries({
     queries: openedChannelIds.map((channelId) =>
       wikiQueries.artifacts({ channel_id: channelId, limit: TREE_ARTIFACT_LIMIT }),
     ),
-    combine: (results) =>
-      new Map<string, readonly WikiArtifactListItemDto[]>(
+    combine: (results) => ({
+      documentsByChannel: new Map<string, readonly WikiArtifactListItemDto[]>(
         results.map((result, index) => [openedChannelIds[index], result.data?.items ?? []]),
       ),
+      error: results.find((result) => result.error)?.error,
+    }),
   });
+  const { documentsByChannel } = tree;
+
+  useQueryErrorToast(channelsQuery.error ?? favoritesQuery.error ?? tree.error);
 
   const treeNodes = useMemo(() => buildWikiNavTree(channels, documentsByChannel), [channels, documentsByChannel]);
   const channelAdmins = useMemo(() => buildWikiChannelAdmins(channels), [channels]);
