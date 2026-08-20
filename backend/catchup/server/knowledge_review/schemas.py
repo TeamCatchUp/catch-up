@@ -17,6 +17,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from catchup.server.wiki.schemas import LayoutItemResponse
 from catchup.server.wiki.schemas import OwnerResponse
 
 
@@ -253,6 +254,11 @@ class ProposalDetailResponse(BaseModel):
     견준 변경 목록이다. 아직 발행된 판이 없으면 base_blocks는 비고 변경안의
     모든 블록이 added가 된다. 계산을 백엔드에서 하는 이유는 블록 짝짓기
     규칙이 화면마다 달라지면 같은 안건이 소비자마다 다르게 보이기 때문이다.
+
+    layout과 base_layout은 각각 blocks와 base_blocks를 문서 종류의 양식
+    순서로 읽는 방법이다. 블록 배열 자체는 재배치하지 않는다. 저장된 순서가
+    곧 블록 판정과 변경 목록이 가리키는 자리이기 때문이다. 발행판이 없으면
+    base_layout도 빈 목록이다.
     """
 
     proposal_id: str
@@ -265,7 +271,9 @@ class ProposalDetailResponse(BaseModel):
     owners: list[OwnerResponse] = []
     can_review: bool
     blocks: list[BlockResponse]
+    layout: list[LayoutItemResponse] = []
     base_blocks: list[BaseBlockResponse] = []
+    base_layout: list[LayoutItemResponse] = []
     block_changes: list[BlockChangeResponse] = []
     read_set: ReadSetResponse
     conflicts: list[ConflictResponse]

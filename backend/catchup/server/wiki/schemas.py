@@ -303,6 +303,37 @@ class ArtifactDocumentBlockResponse(BaseModel):
     sources: list[ArtifactBlockSourceResponse]
 
 
+class LayoutTableRowResponse(BaseModel):
+    """읽기 레이아웃이 만든 표의 행 하나를 담는다."""
+
+    label: str
+    value: str
+
+
+class LayoutItemResponse(BaseModel):
+    """읽기 레이아웃이 만든 표시 항목 하나를 담는다.
+
+    blocks를 대신하지 않고 blocks 옆에 함께 실린다. 이 목록은 어떤 순서와
+    어떤 이름으로 읽힐지만 정하고, 블록의 내용과 근거는 blocks에 그대로
+    있다.
+
+    block_index는 언제나 blocks 배열에서의 자리다. 표시 순서에 맞춰 번호를
+    다시 매기지 않는다. 블록 판정과 변경 목록이 그 자리로 블록을 가리키기
+    때문이다.
+
+    item_kind가 table이면 여러 블록을 한 표로 묶은 항목이라 block_index가
+    없고 block_indexes와 rows가 찬다. placeholder는 값이 아직 없다는 사실을
+    알리는 항목이라 가리킬 블록이 없고 text만 있다.
+    """
+
+    item_kind: Literal["block", "table", "placeholder"]
+    heading: str
+    block_index: int | None = None
+    block_indexes: list[int] = []
+    rows: list[LayoutTableRowResponse] = []
+    text: str | None = None
+
+
 class ArtifactDocumentResponse(BaseModel):
     """지금 발행된 판 하나를 문서 정보와 함께 담는다.
 
@@ -324,6 +355,7 @@ class ArtifactDocumentResponse(BaseModel):
     revision_id: str
     published_at: datetime
     blocks: list[ArtifactDocumentBlockResponse]
+    layout: list[LayoutItemResponse] = []
 
 
 class LatestRevisionResponse(BaseModel):

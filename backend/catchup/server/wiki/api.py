@@ -73,6 +73,7 @@ from catchup.server.wiki.dependencies import MemberContext
 from catchup.server.wiki.dependencies import deny_reviewer
 from catchup.server.wiki.dependencies import resolve_member_workspace
 from catchup.server.wiki.dependencies import review_error
+from catchup.server.wiki.layout import layout_items
 from catchup.server.wiki.owners import owners_by_artifact
 from catchup.server.wiki.roles import can_manage_owners
 from catchup.server.wiki.roles import load_wiki_roles
@@ -1222,6 +1223,10 @@ def get_artifact_document(
     아직 발행된 판이 없으면 없는 것으로 답한다. 계류 중인 변경안은 사람이
     승인하지 않은 내용이라 읽기 표면에 실릴 자리가 아니고, 그것을 여기서
     보여 주면 검수 게이트를 우회하는 길이 된다.
+
+    layout은 blocks 옆에 함께 나간다. 블록을 재배치해 내보내지 않는 이유는
+    저장된 순서가 곧 판정과 변경 목록이 가리키는 자리이기 때문이다. 읽는
+    쪽은 layout으로 순서와 이름만 바꿔 그린다.
     """
     artifact = _load_artifact(
         db, artifact_id=artifact_id, workspace_id=context.workspace_id
@@ -1235,6 +1240,7 @@ def get_artifact_document(
             code="ARTIFACT_NOT_PUBLISHED",
             message="아직 발행된 판이 없습니다.",
         )
+    blocks = deserialize_blocks(revision.blocks)
     return ArtifactDocumentResponse(
         artifact_id=str(artifact.id),
         channel_id=(
@@ -1275,8 +1281,9 @@ def get_artifact_document(
                     for source in block.sources
                 ],
             )
-            for index, block in enumerate(deserialize_blocks(revision.blocks))
+            for index, block in enumerate(blocks)
         ],
+        layout=layout_items(blocks, kind=artifact.kind),
     )
 
 

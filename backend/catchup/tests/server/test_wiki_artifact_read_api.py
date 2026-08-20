@@ -197,12 +197,17 @@ def outsider(
 # ======================= 문서·판 헬퍼 =======================
 
 
-def _block(narrative: str | None) -> ArtifactBlock:
+def _block(
+    narrative: str | None,
+    *,
+    heading: str = "request_status",
+    block_kind: str = BLOCK_KIND_CLAIM_SECTION,
+) -> ArtifactBlock:
     """근거 인용이 붙은 claim 절 블록 하나를 만든다."""
     claim_id = uuid.uuid4()
     return ArtifactBlock(
-        block_kind=BLOCK_KIND_CLAIM_SECTION,
-        heading="request_status",
+        block_kind=block_kind,
+        heading=heading,
         body="검토 중 (2026-08-15 관찰)",
         claim_ids=(claim_id,),
         proposal_ids=(),
@@ -219,7 +224,9 @@ def _block(narrative: str | None) -> ArtifactBlock:
     )
 
 
-def _artifact_without_revision(db: Session, *, workspace_id: int) -> uuid.UUID:
+def _artifact_without_revision(
+    db: Session, *, workspace_id: int, kind: str = "feature_request_status"
+) -> uuid.UUID:
     """판이 하나도 없는 문서 한 편을 만든다."""
     node = KnowledgeNode(
         id=uuid.uuid4(),
@@ -235,7 +242,7 @@ def _artifact_without_revision(db: Session, *, workspace_id: int) -> uuid.UUID:
     artifact = KnowledgeArtifact(
         id=uuid.uuid4(),
         workspace_id=workspace_id,
-        kind="feature_request_status",
+        kind=kind,
         subject_node_id=node.id,
         title="요청 현황: 요청 A",
     )
@@ -251,6 +258,8 @@ def _publish(
     narrative: str | None,
     artifact_id: uuid.UUID | None = None,
     revision_number: int = 1,
+    blocks: list[ArtifactBlock] | None = None,
+    kind: str = "feature_request_status",
 ) -> tuple[uuid.UUID, uuid.UUID]:
     """문서 하나를 발행 상태까지 만들어 (문서 id, 판 id)를 돌려준다.
 
@@ -258,15 +267,19 @@ def _publish(
     표면이 최신 판을 어떻게 고르는가이지 승인 규칙이 아니다.
     """
     if artifact_id is None:
-        artifact_id = _artifact_without_revision(db, workspace_id=workspace_id)
-    blocks = serialize_blocks([_block(narrative)])
+        artifact_id = _artifact_without_revision(
+            db, workspace_id=workspace_id, kind=kind
+        )
+    stored_blocks = serialize_blocks(
+        [_block(narrative)] if blocks is None else blocks
+    )
     proposal_id = uuid.uuid4()
     db.add(
         KnowledgeArtifactChangeProposal(
             id=proposal_id,
             workspace_id=workspace_id,
             artifact_id=artifact_id,
-            blocks=blocks,
+            blocks=stored_blocks,
             status="approved",
             content_hash=uuid.uuid4().hex,
             idempotency_key=uuid.uuid4().hex,
@@ -283,7 +296,7 @@ def _publish(
             workspace_id=workspace_id,
             artifact_id=artifact_id,
             revision_number=revision_number,
-            blocks=blocks,
+            blocks=stored_blocks,
             source_proposal_id=proposal_id,
         )
     )
@@ -418,3 +431,84 @@ def test_document_without_owner_or_favorite(client, member, db, workspace_id):
 
     assert body["owners"] == []
     assert body["is_favorite"] is False
+
+
+# ======================= 읽기 레이아웃 =======================
+
+
+def _layout_blocks() -> list[ArtifactBlock]:
+    """요약 블록과 양식이 이름을 댄 절 블록들을 만든다.
+
+    저장 순서를 양식 순서와 일부러 어긋나게 둔다. 응답의 layout이 저장
+    순서가 아니라 양식 순서를 따르는지 보려면 두 순서가 달라야 한다.
+    """
+    return [
+        _block("요약 문장이다.", heading="요청 현황: 요청 A", block_kind="summary"),
+        _block("마지막 보고는 8월이다.", heading="last_reported_at"),
+        _block("상태는 검토 중이다.", heading="request_status"),
+    ]
+
+
+def test_document_read_includes_layout_in_catalog_order(
+    client, member, db, workspace_id
+):
+    """발행판 응답에 양식 순서로 정렬한 layout이 함께 실린다."""
+    artifact_id, _ = _publish(
+        db,
+        workspace_id=workspace_id,
+        narrative=None,
+        blocks=_layout_blocks(),
+    )
+
+    body = client.get(f"/api/v1/wiki/artifacts/{artifact_id}").json()
+
+    items = body["layout"]
+    assert items[0]["item_kind"] == "block"
+    first = body["blocks"][items[0]["block_index"]]
+    assert first["block_kind"] == "summary"
+    headings = [item["heading"] for item in items]
+    assert headings.index("요청 상태") < headings.index("최근 보고")
+    assert headings.index("요청 상태") < headings.index("우회 방법")
+    assert any(
+        item["item_kind"] == "placeholder" and item["heading"] == "우회 방법"
+        for item in items
+    )
+
+
+def test_document_layout_keeps_original_block_indexes(
+    client, member, db, workspace_id
+):
+    """layout 항목의 block_index는 저장된 블록 배열의 자리 그대로다."""
+    artifact_id, _ = _publish(
+        db,
+        workspace_id=workspace_id,
+        narrative=None,
+        blocks=_layout_blocks(),
+    )
+
+    body = client.get(f"/api/v1/wiki/artifacts/{artifact_id}").json()
+
+    for item in body["layout"]:
+        if item["item_kind"] != "block":
+            assert item["block_index"] is None
+            continue
+        block = body["blocks"][item["block_index"]]
+        assert block["block_index"] == item["block_index"]
+
+
+def test_document_layout_without_catalog_kind_keeps_block_order(
+    client, member, db, workspace_id
+):
+    """양식에 없는 kind면 layout이 저장된 블록 순서 그대로다."""
+    artifact_id, _ = _publish(
+        db,
+        workspace_id=workspace_id,
+        narrative=None,
+        blocks=_layout_blocks(),
+        kind="entity_summary",
+    )
+
+    body = client.get(f"/api/v1/wiki/artifacts/{artifact_id}").json()
+
+    assert [item["block_index"] for item in body["layout"]] == [0, 1, 2]
+    assert all(item["item_kind"] == "block" for item in body["layout"])
