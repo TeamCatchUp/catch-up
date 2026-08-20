@@ -654,8 +654,12 @@ def _node(node_id: uuid.UUID, name: str = "결제 기능") -> _NodeRow:
 
 
 def _title(name: str = "결제 기능") -> str:
-    """정의가 그 이름의 노드에 지을 문서 제목을 만든다."""
-    return f"{DEFINITION_KIND}: {name}"
+    """정의가 그 이름의 노드에 지을 문서 제목을 만든다.
+
+    제목은 엔티티 이름을 그대로 쓴다. 문서 종류는 kind 칸이 들고 있어
+    제목에 종류 문자열을 덧붙이지 않는다.
+    """
+    return name
 
 
 def _run(uow: FakeUnitOfWork):
@@ -792,6 +796,26 @@ def test_entity_without_pending_proposal_gets_claim_sections_only() -> None:
     artifact_id = uow.artifacts.definition_artifacts[(DEFINITION_ID, node_id)]
     assert row["artifact_id"] == artifact_id
     assert uow.artifacts.titles[artifact_id] == _title()
+
+
+def test_title_is_entity_name_without_kind_prefix() -> None:
+    """문서 제목과 요약 heading이 엔티티 이름과 같고 종류를 섞지 않는다."""
+    node_id = uuid.uuid4()
+    uow = FakeUnitOfWork(
+        nodes=[_node(node_id, name="Google Workspace 연동 지원")],
+        claims=[_claim(node_id=node_id, value=60)],
+    )
+
+    _run(uow)
+
+    row = _only_pending(uow)
+    artifact_id = uow.artifacts.definition_artifacts[(DEFINITION_ID, node_id)]
+    title = uow.artifacts.titles[artifact_id]
+    assert title == "Google Workspace 연동 지원"
+    assert DEFINITION_KIND not in title
+    summary = row["blocks"][0]
+    assert summary.block_kind == BLOCK_KIND_SUMMARY
+    assert summary.heading == title
 
 
 def test_predicate_order_follows_dictionary_then_name() -> None:

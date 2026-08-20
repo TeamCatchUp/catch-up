@@ -464,11 +464,14 @@ def _definition_title(
 ) -> str:
     """정의가 만드는 문서의 제목을 짓는다.
 
-    정의가 정한 앞자리에 대상 이름을 잇는다. 같은 대상에 여러 정의가
-    문서를 만들 수 있어, 이름만으로는 검토자가 어느 정의의 문서인지
-    가릴 수 없기 때문이다.
+    제목은 대상 엔티티의 이름을 그대로 쓴다. 제목은 명사구이고, 문서
+    종류를 가리는 일은 응답의 kind 필드가 맡는다. 종류 문자열을 제목
+    앞에 덧붙이면 사람이 읽는 이름 자리에 기계용 값이 섞인다.
+
+    LLM이 쓰는 문장형 헤드라인은 summary 블록의 narrative에만 두고
+    제목으로는 쓰지 않는다.
     """
-    return f"{definition.title_prefix}: {source.display_name}"
+    return source.display_name
 
 
 def _style_instruction(

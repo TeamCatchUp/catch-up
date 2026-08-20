@@ -326,8 +326,8 @@ def test_definition_loop_creates_proposal_per_matching_entity() -> None:
     assert uow.committed == 1
     titles = set(_pending_by_title(uow))
     assert titles == {
-        f"{DEFINITION_KIND}: 요청 A",
-        f"{DEFINITION_KIND}: 요청 B",
+        "요청 A",
+        "요청 B",
     }
     # 정의가 고르지 않은 종류의 노드는 문서를 얻지 못한다.
     assert all("결제팀" not in title for title in titles)
@@ -398,7 +398,7 @@ def test_predicate_sections_orders_and_filters() -> None:
 
     _run(uow)
 
-    row = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]
+    row = _pending_by_title(uow)["요청 A"]
     headings = [block.heading for block in _content_blocks(row["blocks"])]
     # 어휘 차례는 status·summary·priority지만 정의의 차례가 이긴다.
     assert headings == ["summary", "status"]
@@ -418,7 +418,7 @@ def test_no_predicate_sections_keeps_dictionary_order() -> None:
 
     _run(uow)
 
-    row = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]
+    row = _pending_by_title(uow)["요청 A"]
     assert [
         block.heading for block in _content_blocks(row["blocks"])
     ] == [
@@ -469,7 +469,7 @@ def test_empty_predicate_sections_drops_claim_sections() -> None:
 
     _run(uow)
 
-    row = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]
+    row = _pending_by_title(uow)["요청 A"]
     assert [block.block_kind for block in row["blocks"]] == [
         BLOCK_KIND_RELATION_SECTION
     ]
@@ -516,7 +516,7 @@ def test_preset_feature_request_kind_compiles_request_count_section() -> None:
         uow, workspace_id=WORKSPACE, vocabulary=vocabulary
     )
 
-    row = _pending_by_title(uow)[f"{preset_kind.kind}: 요청 A"]
+    row = _pending_by_title(uow)["요청 A"]
     counts = [
         block
         for block in row["blocks"]
@@ -663,8 +663,8 @@ def test_truncated_path_failure_does_not_stop_other_nodes() -> None:
     result = _run(uow)
 
     titles = _pending_by_title(uow)
-    assert f"{DEFINITION_KIND}: 요청 A" not in titles
-    assert f"{DEFINITION_KIND}: 요청 B" in titles
+    assert "요청 A" not in titles
+    assert "요청 B" in titles
     assert result.nodes_considered == 2
     assert result.nodes_failed == 1
     assert result.proposals_created == 1
@@ -743,7 +743,7 @@ def test_dead_path_without_truncation_stays_silent() -> None:
 
     result = _run(uow)
 
-    blocks = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]["blocks"]
+    blocks = _pending_by_title(uow)["요청 A"]["blocks"]
     assert [
         block.block_kind for block in _content_blocks(blocks)
     ] == [BLOCK_KIND_CLAIM_SECTION]
@@ -787,7 +787,7 @@ def test_relation_blocks_included_with_ledger() -> None:
 
     _run(uow)
 
-    blocks = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]["blocks"]
+    blocks = _pending_by_title(uow)["요청 A"]["blocks"]
     assert [block.block_kind for block in _content_blocks(blocks)] == [
         BLOCK_KIND_CLAIM_SECTION,
         BLOCK_KIND_RELATION_SECTION,
@@ -823,7 +823,7 @@ def test_relation_path_without_edges_leaves_no_block() -> None:
 
     _run(uow)
 
-    blocks = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]["blocks"]
+    blocks = _pending_by_title(uow)["요청 A"]["blocks"]
     assert [
         block.block_kind for block in _content_blocks(blocks)
     ] == [BLOCK_KIND_CLAIM_SECTION]
@@ -1240,8 +1240,8 @@ def test_same_input_twice_all_skipped(
             {"workspace": workspace_id},
         ).all()
     assert [row.title for row in stored] == [
-        f"{DEFINITION_KIND}: 요청 A",
-        f"{DEFINITION_KIND}: 요청 B",
+        "요청 A",
+        "요청 B",
     ]
     for row in stored:
         assert row.definition_id == FIRST_DEFINITION_ID
@@ -1255,7 +1255,7 @@ def test_same_input_twice_all_skipped(
                 " JOIN knowledge_artifacts a ON a.id = p.artifact_id"
                 " WHERE p.workspace_id = :workspace AND a.title = :title"
             ),
-            {"workspace": workspace_id, "title": f"{DEFINITION_KIND}: 요청 A"},
+            {"workspace": workspace_id, "title": "요청 A"},
         ).scalar_one()
     relation_blocks = [
         block
