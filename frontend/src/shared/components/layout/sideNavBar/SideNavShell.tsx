@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import IconClose from '@/public/icons/icon/close.svg';
 import CatchupLogo from '@/public/icons/logo/logo_catchup.svg';
 import CatchupLogoLetter from '@/public/icons/logo/logo_catchup_letter.svg';
@@ -38,12 +40,13 @@ export default function SideNavShell({
     >
       <div className="flex min-h-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center justify-between p-2">
-          <span className="flex items-center gap-1.5">
-            <span className="flex size-10 items-center justify-center rounded-xl">
+          {/* 로고는 홈 진입점이다 — 링크라 새 탭·미들클릭이 살아 있다 */}
+          <Link href="/" aria-label="홈으로 이동" className="flex cursor-pointer items-center gap-1.5">
+            <span className="hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed flex size-10 items-center justify-center rounded-xl transition-colors">
               <CatchupLogo aria-hidden className="h-7.5 w-7" />
             </span>
             <CatchupLogoLetter aria-hidden className="h-5 w-auto" />
-          </span>
+          </Link>
           <button
             type="button"
             aria-label="사이드바 접기"

@@ -7,8 +7,8 @@ const AI_GRADIENT =
 
 interface ChangeSummaryCardProps {
   changeCount: number;
-  /** "영향 문서 N건" — 백엔드 대응 값이 없어 표시 문자열째 받는다 */
-  affectedDocumentsLabel: string;
+  /** "영향 문서 N건" — 백엔드 대응 값이 없어 표시 문자열째 받고, 없으면 자리째 빠진다 */
+  affectedDocumentsLabel?: string;
   body: string;
 }
 
@@ -24,8 +24,12 @@ export default function ChangeSummaryCard({ changeCount, affectedDocumentsLabel,
         <h3 className="text-body-small text-text-normal-alternative min-w-0 flex-1 truncate">이렇게 바뀌었어요</h3>
         <div className="text-body-xsmall text-text-primary-assistive flex shrink-0 items-center gap-1.5">
           <span>변경 {changeCount}건</span>
-          <span aria-hidden className="bg-fill-primary-normal-interaction-inactive size-1 rounded-full" />
-          <span>{affectedDocumentsLabel}</span>
+          {affectedDocumentsLabel && (
+            <>
+              <span aria-hidden className="bg-fill-primary-normal-interaction-inactive size-1 rounded-full" />
+              <span>{affectedDocumentsLabel}</span>
+            </>
+          )}
         </div>
       </div>
       <p className="text-heading-small text-text-normal-neutral">{body}</p>

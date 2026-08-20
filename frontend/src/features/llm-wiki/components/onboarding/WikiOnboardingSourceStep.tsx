@@ -27,6 +27,9 @@ import OnboardingFieldLabel from './OnboardingFieldLabel';
 import OnboardingStepper from './OnboardingStepper';
 import OnboardingTopBar from './OnboardingTopBar';
 
+/** 고를 채널이 하나도 없을 때 메뉴에 놓이는 안내. 미연동과 전부 추가를 한 문구로 덮는다 */
+export const CHANNEL_PICKER_EMPTY_TEXT = '추가할 수 있는 채널이 없어요';
+
 interface ScheduleTriggerFieldProps {
   field: ScheduleFieldData;
   onSelectOption?: (fieldId: string, optionId: string) => void;
@@ -92,9 +95,9 @@ interface WikiOnboardingSourceStepProps {
   channelPickerPlaceholder: string;
   /** 드롭다운에 뜨는 선택 가능한 채널. 이미 고른 채널은 목록에서 빠진다 */
   availableChannels?: readonly OnboardingChannelRow[];
-  onSelectChannel?: (channelId: string) => void;
+  onSelectChannel?: (credentialId: number) => void;
   onOpenChannelPicker?: () => void;
-  channelTableHeaders: { name: string; lastModified: string };
+  channelTableHeaders: { name: string };
   /** 표는 고른 채널의 목록이다 */
   channelRows: readonly OnboardingChannelRow[];
   channelListStatus?: OnboardingChannelListStatus;
@@ -109,6 +112,8 @@ interface WikiOnboardingSourceStepProps {
   onBack?: () => void;
   nextLabel: string;
   onNext?: () => void;
+  /** 소스 채널을 하나도 고르지 않으면 잠긴다 — 수집 설정은 채널마다 저장된다 */
+  nextDisabled?: boolean;
   /** 상단 바 뒤로가기 — 하단 "이전"(단계 후퇴)과 달리 온보딩을 벗어난다 */
   onExit?: () => void;
 }
@@ -136,11 +141,12 @@ export default function WikiOnboardingSourceStep({
   onBack,
   nextLabel,
   onNext,
+  nextDisabled,
   onExit,
 }: WikiOnboardingSourceStepProps) {
   // 이미 고른 채널은 다시 고를 수 없다 — 표에 같은 채널이 두 번 들어가지 않게 한다
-  const selectedIds = new Set(channelRows.map((row) => row.channel.id));
-  const selectableChannels = (availableChannels ?? []).filter((row) => !selectedIds.has(row.channel.id));
+  const selectedIds = new Set(channelRows.map((row) => row.channel.credentialId));
+  const selectableChannels = (availableChannels ?? []).filter((row) => !selectedIds.has(row.channel.credentialId));
 
   const channelPickerTrigger = (
     <button
@@ -177,16 +183,22 @@ export default function WikiOnboardingSourceStep({
                   sideOffset={2}
                   className="bg-fill-normal-normal flex max-h-80 w-[var(--radix-dropdown-menu-trigger-width)] min-w-0 flex-col gap-1 overflow-y-auto rounded-xl px-1.5 py-2"
                 >
-                  {selectableChannels.map((row) => (
-                    <DropdownMenuItem
-                      key={row.channel.id}
-                      onSelect={() => onSelectChannel?.(row.channel.id)}
-                      className="text-body-small text-text-normal-normal h-8 gap-3 px-2"
-                    >
-                      <IconTagChannel className="text-icon-normal-neutral size-5 shrink-0" />
-                      <span className="min-w-0 flex-1 truncate">{row.channel.name}</span>
+                  {selectableChannels.length === 0 ? (
+                    <DropdownMenuItem disabled className="text-body-small text-text-normal-assistive h-8 px-2">
+                      <span className="min-w-0 flex-1 truncate">{CHANNEL_PICKER_EMPTY_TEXT}</span>
                     </DropdownMenuItem>
-                  ))}
+                  ) : (
+                    selectableChannels.map((row) => (
+                      <DropdownMenuItem
+                        key={row.channel.credentialId}
+                        onSelect={() => onSelectChannel?.(row.channel.credentialId)}
+                        className="text-body-small text-text-normal-normal h-8 gap-3 px-2"
+                      >
+                        <IconTagChannel className="text-icon-normal-neutral size-5 shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">{row.channel.name}</span>
+                      </DropdownMenuItem>
+                    ))
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
@@ -224,7 +236,13 @@ export default function WikiOnboardingSourceStep({
         </div>
       </div>
 
-      <OnboardingActionBar backLabel={backLabel} onBack={onBack} nextLabel={nextLabel} onNext={onNext} />
+      <OnboardingActionBar
+        backLabel={backLabel}
+        onBack={onBack}
+        nextLabel={nextLabel}
+        onNext={onNext}
+        nextDisabled={nextDisabled}
+      />
     </div>
   );
 }

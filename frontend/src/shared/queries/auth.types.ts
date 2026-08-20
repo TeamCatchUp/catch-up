@@ -3,6 +3,8 @@ export type UserStatus = 'new' | 'active' | 'inactive' | 'deleted';
 
 /** GET /api/v1/auth/me 응답 */
 export interface AuthUser {
+  /** 가입 전(status=new) 사용자는 값이 없다 */
+  user_id?: number | null;
   name: string;
   email: string;
   picture?: string;

@@ -5,10 +5,12 @@ import { cn } from '@/shared/utils/cn';
 export interface ReviewParticipant {
   id: string;
   name: string;
-  /** 활동 설명(예: "1일 전 수정"). editing이면 파란색으로 강조된다 */
-  description: string;
-  editing: boolean;
+  /** 활동 설명(예: "1일 전 수정"). 대응 데이터가 없으면 줄째 빠진다 */
+  description?: string;
+  /** 편집 중 표시. 참여 상태 API가 없어 기본은 꺼짐이다 */
+  editing?: boolean;
   role: '작성자' | '리뷰어';
+  avatarSrc?: string | null;
 }
 
 interface ReviewParticipantsCardProps {
@@ -27,17 +29,19 @@ export default function ReviewParticipantsCard({ participants, stackAvatars }: R
       </div>
       {participants.map((participant) => (
         <div key={participant.id} className="flex items-center gap-4">
-          <Avatar size="xlarge" src={null} className="rounded-xl" />
+          <Avatar size="xlarge" src={participant.avatarSrc ?? null} className="rounded-xl" />
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="text-body-small text-text-normal-neutral truncate">{participant.name}</span>
-            <span
-              className={cn(
-                'text-body-small truncate',
-                participant.editing ? 'text-text-primary-normal' : 'text-text-normal-assistive',
-              )}
-            >
-              {participant.description}
-            </span>
+            {participant.description && (
+              <span
+                className={cn(
+                  'text-body-small truncate',
+                  participant.editing ? 'text-text-primary-normal' : 'text-text-normal-assistive',
+                )}
+              >
+                {participant.description}
+              </span>
+            )}
           </div>
           <span
             className={cn(

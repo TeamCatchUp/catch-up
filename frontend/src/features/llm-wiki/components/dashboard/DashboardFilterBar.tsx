@@ -91,6 +91,8 @@ function FilterDropdown({ trigger, width, children }: { trigger: ReactNode; widt
 }
 
 interface DashboardFilterBarProps {
+  /** 검색어. 소비처가 들고 있어야 "필터 초기화"가 입력까지 비운다. */
+  searchKeyword: string;
   sortId: DashboardSortId;
   onSortSelect: (sortId: DashboardSortId) => void;
   /** 생성일 범위. 공용 DateRangePicker가 캘린더를 그린다. */
@@ -110,6 +112,7 @@ interface DashboardFilterBarProps {
 
 /** 대시보드 문서 표 위의 검색·필터 바. 축 목록은 시안 실재 3종으로 고정이다. */
 export default function DashboardFilterBar({
+  searchKeyword,
   sortId,
   onSortSelect,
   createdAtRange,
@@ -132,6 +135,7 @@ export default function DashboardFilterBar({
         <IconSearch aria-hidden className="text-icon-normal-alternative size-5 shrink-0" />
         <input
           type="text"
+          value={searchKeyword}
           placeholder="검색어를 입력하세요."
           aria-label="문서 검색"
           onChange={(event) => onSearchChange?.(event.target.value)}

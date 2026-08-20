@@ -90,10 +90,12 @@ const meta = {
         '**8/14 시안 갱신 반영.** 헤딩("이 위키는…"), 카드2 제목("문서 형식"→"문서 설정"), CTA("다음단계"→"다음 단계로"), 스텝3 라벨("완료"→"확인 및 완료")이 모두 바뀌었다.',
         '렌더 컨텍스트가 뒤바뀌어 이제 1단계가 라이트다(8/13에는 다크). 구현은 전부 시맨틱 토큰이라 영향 없다.',
         '검증 실패·버튼 비활성은 여전히 시안에 없어 만들지 않는다(감사 §8).',
+        '이름 상한 20자는 백엔드 계약(POST /wiki/channels/onboarding, name 1~20)이다 — 초과분은 입력에서 잘리고 별도 에러 UI는 두지 않았다(시안 없음).',
       ],
       layoutNotes: [
         '이름 라벨 슬롯 w-[157px] — 시안 Textfield 시작 x에서 유도한 값이라 고정한다.',
         '하단 CTA는 공용 OnboardingActionBar(1단계는 다음 버튼만).',
+        '**상단 바·하단 액션 바는 sticky다(시안 없음, 사용자 지시).** 공용 컴포넌트 한 곳에 얹혀 3단계가 함께 받는다 — 배경 fill-normal-assistive + z-base뿐이고 그림자·보더는 더하지 않았다.',
       ],
     }),
   },
@@ -104,7 +106,7 @@ type Story = StoryObj<typeof WikiOnboardingPurposeStep>;
 
 export const Default: Story = {
   args: baseArgs,
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('heading', { level: 1, name: ONBOARDING_PURPOSE_HEADING })).toBeInTheDocument();
     await expect(canvas.getByRole('heading', { level: 2, name: ONBOARDING_BASIC_INFO_TITLE })).toBeInTheDocument();
@@ -117,6 +119,13 @@ export const Default: Story = {
 
     await expect(canvas.getByText('0/20')).toBeInTheDocument();
 
+    // 이름 상한(백엔드 1~20자) — 초과 붙여넣기는 입력에서 잘려 올라간다
+    const nameInput = canvas.getByRole('textbox', { name: WIKI_NAME_FIELD.label });
+    await expect(nameInput).toHaveAttribute('maxlength', String(WIKI_NAME_FIELD.maxLength));
+    await userEvent.click(nameInput);
+    await userEvent.paste('가'.repeat(WIKI_NAME_FIELD.maxLength + 10));
+    await expect(args.onNameChange).toHaveBeenCalledWith('가'.repeat(WIKI_NAME_FIELD.maxLength));
+
     // 상단 바에 뒤로가기가 있고, 더보기는 콜백이 없으면 그리지 않는다(죽은 버튼 방지)
     await expect(canvas.getByRole('button', { name: '뒤로 가기' })).toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: '더보기' })).not.toBeInTheDocument();
@@ -125,5 +134,15 @@ export const Default: Story = {
     await expect(canvas.queryByRole('button', { name: '이전' })).not.toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: ONBOARDING_NEXT_LABEL }));
     await expect(onNext).toHaveBeenCalled();
+  },
+};
+
+/** 필수 입력이 덜 찬 상태. 보낼 수 없는 요청을 만들지 않게 다음 버튼이 잠긴다. */
+export const NextLockedUntilRequiredFilled: Story = {
+  args: { ...baseArgs, nextDisabled: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByRole('button', { name: ONBOARDING_NEXT_LABEL })).toBeDisabled();
   },
 };

@@ -14,6 +14,7 @@ import IconFile from '@/public/icons/icon/file.svg';
 import IconHelp from '@/public/icons/icon/help.svg';
 import IconHistory from '@/public/icons/icon/history.svg';
 import IconRequest from '@/public/icons/icon/request.svg';
+import { cn } from '@/shared/utils/cn';
 
 import type { KnownDocKindIcon, WikiDocKindPreset } from '../../types/llmWikiOnboarding';
 import OnboardingFieldLabel from './OnboardingFieldLabel';
@@ -61,6 +62,7 @@ export default function DocKindSelectField({
         >
           {presets.map((preset) => {
             const checked = preset.id === selectedId;
+            const disabled = preset.disabled === true;
             const Icon = DOC_KIND_ICONS[preset.icon as KnownDocKindIcon] ?? IconFile;
 
             return (
@@ -69,16 +71,41 @@ export default function DocKindSelectField({
                 type="button"
                 role="radio"
                 aria-checked={checked}
+                disabled={disabled}
                 onClick={() => onSelect?.(preset.id)}
-                className="border-line-normal-neutral hover:bg-fill-normal-interaction-hover flex w-full shrink-0 cursor-pointer items-start gap-5 rounded-xl border p-4 text-left transition-colors"
+                className={cn(
+                  'border-line-normal-neutral flex w-full shrink-0 items-start gap-5 rounded-xl border p-4 text-left transition-colors',
+                  disabled
+                    ? 'border-line-normal-normal bg-fill-normal-interaction-inactive cursor-not-allowed'
+                    : 'hover:bg-fill-normal-interaction-hover cursor-pointer',
+                )}
               >
                 <span className="flex min-w-0 flex-1 flex-col gap-2">
                   <span className="flex items-center gap-2">
-                    <Icon className="text-icon-primary-normal size-5 shrink-0" />
-                    <span className="text-heading-small text-text-normal-normal truncate">{preset.label}</span>
+                    <Icon
+                      className={cn(
+                        'size-5 shrink-0',
+                        disabled ? 'text-icon-normal-assistive' : 'text-icon-primary-normal',
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        'text-heading-small truncate',
+                        disabled ? 'text-text-normal-assistive' : 'text-text-normal-normal',
+                      )}
+                    >
+                      {preset.label}
+                    </span>
                   </span>
                   {/* 줄바꿈은 띄어쓰기 단위로만 — 한글은 기본값이면 단어 중간에서도 끊긴다 */}
-                  <span className="text-body-small text-text-normal-alternative break-keep">{preset.description}</span>
+                  <span
+                    className={cn(
+                      'text-body-small break-keep',
+                      disabled ? 'text-text-normal-assistive' : 'text-text-normal-alternative',
+                    )}
+                  >
+                    {preset.description}
+                  </span>
                 </span>
                 {checked ? (
                   <IconCheckCircleFilled className="text-icon-primary-normal size-6 shrink-0" />

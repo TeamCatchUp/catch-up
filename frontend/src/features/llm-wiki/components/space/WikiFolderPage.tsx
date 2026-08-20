@@ -3,6 +3,8 @@ import IconFolderFilled from '@/public/icons/icon/folder_filled.svg';
 import type { DocumentBreadcrumb, WikiChannel, WikiFolder } from '../../types/llmWikiModel';
 import { DashboardDocumentTableHeader } from '../document/DashboardDocumentRow';
 import FolderDocumentRow, { type FolderDocumentRowItem } from '../document/FolderDocumentRow';
+import DocumentTableEmptyState from '../document/states/DocumentTableEmptyState';
+import DocumentTableSkeleton from '../document/states/DocumentTableSkeleton';
 import WikiPageHeader from '../header/WikiPageHeader';
 import WikiSpaceTableFooter from './WikiSpaceTableFooter';
 import WikiSpaceTitleBlock from './WikiSpaceTitleBlock';
@@ -12,13 +14,16 @@ interface WikiFolderPageProps {
   folder: WikiFolder;
   /** 문서 행 표시 데이터 — 담당자·상태 표시 필드는 목록 API 미동봉분이다 */
   documentRows: readonly FolderDocumentRowItem[];
+  /** 첫 조회가 끝나기 전인지. 쪽 이동은 이전 쪽을 그대로 두므로 여기 해당하지 않는다 */
+  documentsLoading?: boolean;
   authorName?: string;
   authorProfileImageUrl?: string | null;
   pageSize: number;
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
-  onPageSizeClick?: () => void;
+  /** 쪽 크기 선택. 주면 푸터 표시가 드롭다운으로 열린다 */
+  onPageSizeChange?: (pageSize: number) => void;
   onDocumentClick?: (documentId: string) => void;
   onBreadcrumbClick?: (crumb: DocumentBreadcrumb, index: number) => void;
 }
@@ -28,13 +33,14 @@ export default function WikiFolderPage({
   channel,
   folder,
   documentRows,
+  documentsLoading = false,
   authorName,
   authorProfileImageUrl,
   pageSize,
   currentPage,
   totalPages,
   onPageChange,
-  onPageSizeClick,
+  onPageSizeChange,
   onDocumentClick,
   onBreadcrumbClick,
 }: WikiFolderPageProps) {
@@ -63,11 +69,17 @@ export default function WikiFolderPage({
         <div className="flex flex-col gap-8">
           <div className="flex flex-col">
             <DashboardDocumentTableHeader />
-            <div className="flex flex-col gap-1">
-              {documentRows.map((row) => (
-                <FolderDocumentRow key={row.id} kind="document" item={row} onClick={onDocumentClick} />
-              ))}
-            </div>
+            {documentsLoading ? (
+              <DocumentTableSkeleton />
+            ) : documentRows.length === 0 ? (
+              <DocumentTableEmptyState />
+            ) : (
+              <div className="flex flex-col gap-1">
+                {documentRows.map((row) => (
+                  <FolderDocumentRow key={row.id} kind="document" item={row} onClick={onDocumentClick} />
+                ))}
+              </div>
+            )}
           </div>
 
           <WikiSpaceTableFooter
@@ -75,7 +87,7 @@ export default function WikiFolderPage({
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={onPageChange}
-            onPageSizeClick={onPageSizeClick}
+            onPageSizeChange={onPageSizeChange}
           />
         </div>
       </div>

@@ -126,3 +126,31 @@ export const panelStateFadeIn: Variants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: motionEase } },
   exit: { opacity: 0, transition: { duration: 0.15, ease: motionEase } },
 };
+
+/** 교체 전환의 이동 거리(px). 방향만 읽히면 되는 값이라 행 높이보다 작게 잡는다. */
+const STEP_REPLACE_SHIFT = 12;
+
+/** 순서가 있는 항목 사이를 오갈 때 내용 전체가 교체되는 전환.
+ *  custom에 1(다음)·-1(이전)을 주면 그 방향으로 들어오고 반대로 나간다. */
+export const stepReplace: Variants = {
+  hidden: (direction: number = 1) => ({ opacity: 0, y: direction * STEP_REPLACE_SHIFT }),
+  visible: { opacity: 1, y: 0, transition: { duration: 0.22, ease: motionEase } },
+  exit: (direction: number = 1) => ({
+    opacity: 0,
+    y: direction * -STEP_REPLACE_SHIFT,
+    transition: { duration: 0.12, ease: motionEase },
+  }),
+};
+
+/** 교체 전환의 reduced-motion 형태. 공간 이동을 빼고 상태 연속성을 지킬 만큼의 fade만 남긴다. */
+const reducedReplaceFade: Variants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { duration: 0.12, ease: motionEase } },
+  exit: { opacity: 0, transition: { duration: 0.08, ease: motionEase } },
+};
+
+/** stepReplace의 reduced-motion 변형. usePrefersReducedMotion()이 true일 때 호출부가 이쪽으로 교체한다. */
+export const stepReplaceReduced: Variants = reducedReplaceFade;
+
+/** panelStateFadeIn의 reduced-motion 변형. 위와 같은 이유로 y를 뺀다. */
+export const panelStateFadeInReduced: Variants = reducedReplaceFade;

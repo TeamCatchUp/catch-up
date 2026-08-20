@@ -1,9 +1,7 @@
 /**
  * LLM Wiki 온보딩(생성 마법사) 타입. 온보딩 제출 API가 백엔드에 없어 화면 계약은 mock이다.
- * 채널 [BE] 타입은 llmWikiModel이 원천이고, [SPEC]은 시안·명세에만 있는 값이다.
+ * [BE]는 실제 응답 계약을 따르는 값이고, [SPEC]은 시안·명세에만 있는 값이다.
  */
-
-import type { WikiChannelListItem } from './llmWikiModel';
 
 export interface OnboardingStepInfo {
   /** 1부터 시작하는 표시 번호 */
@@ -29,6 +27,8 @@ export interface WikiInfoCategory {
   id: string;
   label: string;
   icon: InfoCategoryIcon;
+  /** 아직 지원하지 않는 카테고리는 고를 수 없이 노출된다 */
+  disabled?: boolean;
 }
 
 // 문서 종류 아이콘. 시안 6종만 알려져 있고 나머지는 열어둔다 — 미지 아이콘은 file로 렌더
@@ -41,6 +41,8 @@ export interface WikiDocKindPreset {
   icon: DocKindIcon;
   label: string;
   description: string;
+  /** 아직 지원하지 않는 종류는 고를 수 없이 노출된다 */
+  disabled?: boolean;
 }
 
 /** 문체 카드(단일 선택). 예시 문장은 8/14 시안에서 실카피로 확보됐다 */
@@ -51,11 +53,20 @@ export interface WikiToneStyleOption {
   sampleText: string;
 }
 
-/** 채널 표의 행. 채널 실물은 llmWikiModel의 [BE] 타입을 그대로 소비한다 */
+/**
+ * [BE] 온보딩이 고르는 채널톡 채널. GET /automations/credentials 응답 한 줄이며,
+ * 위키 채널이 아니라 문서 수·폴더·관리자 여부를 갖지 않는다.
+ */
+export interface ChannelTalkChannel {
+  credentialId: number;
+  name: string;
+  externalId: string;
+  isConfigured: boolean;
+}
+
+/** 채널 표의 행. 표에 놓이는 채널은 위키 채널이 아니라 채널톡 채널이다 */
 export interface OnboardingChannelRow {
-  channel: WikiChannelListItem;
-  /** [SPEC] 시안의 "최근 수정일" 열 — 백엔드 계약에 대응 필드가 없다 */
-  lastModifiedLabel: string;
+  channel: ChannelTalkChannel;
 }
 
 /**

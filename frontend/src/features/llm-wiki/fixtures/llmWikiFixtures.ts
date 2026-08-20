@@ -1,5 +1,18 @@
 import type { ReviewQueueFilterOption } from '../components/review-queue/ReviewQueueFilterSearchPanel';
-import type { DocumentRowData, ReviewQueueItemData, ReviewStatCardData, TagItem } from '../types/llmWikiModel';
+import type {
+  DocumentOwner,
+  DocumentRowData,
+  ReviewQueueItemData,
+  ReviewStatCardData,
+  TagItem,
+} from '../types/llmWikiModel';
+
+/** 담당자 표본 한 명. userId는 픽스처 안에서만 유일하면 되고 실제 계정과 무관하다 */
+const documentOwner = (userId: number, displayName: string): DocumentOwner => ({
+  userId,
+  displayName,
+  profileImageUrl: null,
+});
 
 const BASE_DOCUMENT_ROW: DocumentRowData = {
   id: 'doc-payment-retry',
@@ -9,8 +22,7 @@ const BASE_DOCUMENT_ROW: DocumentRowData = {
     { kind: 'folder', label: '승인·실패 처리' },
   ],
   status: 'reviewed',
-  ownerName: '팀원F',
-  ownerProfileImageUrl: null,
+  owners: [documentOwner(1, '팀원F')],
   createdAt: '2024-09-02T01:00:00.000Z',
   lastActivityAt: '2024-12-15T06:00:00.000Z',
   lastActivityLabel: '3시간 전',
@@ -32,11 +44,12 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
       { kind: 'folder', label: '인증' },
     ],
     status: 'pending_review',
-    ownerName: '직원10',
+    owners: [documentOwner(2, '직원10')],
     createdAt: '2024-10-11T02:00:00.000Z',
     lastActivityAt: '2024-12-12T08:00:00.000Z',
     lastActivityLabel: '2024.12.12',
   }),
+  // 담당자 2인 행 — 행은 첫 명만 렌더하지만 복수 계약이 픽스처에 실재해야 한다
   createDocumentRow({
     id: 'doc-refund-window',
     title: '환불 가능 기간 안내',
@@ -44,7 +57,7 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
       { kind: 'channel', label: '결제' },
       { kind: 'folder', label: '환불' },
     ],
-    ownerName: '이진수',
+    owners: [documentOwner(3, '이진수'), documentOwner(12, '남궁현')],
     createdAt: '2024-08-20T03:00:00.000Z',
     lastActivityAt: '2024-12-14T09:00:00.000Z',
     lastActivityLabel: '어제',
@@ -59,11 +72,12 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
       { kind: 'folder', label: '인증' },
     ],
     status: 'pending_review',
-    ownerName: '김하은',
+    owners: [documentOwner(4, '김하은')],
     createdAt: '2024-11-01T04:00:00.000Z',
     lastActivityAt: '2024-12-12T05:00:00.000Z',
     lastActivityLabel: '2024.12.12',
   }),
+  // 담당자 3인 행 — 위와 같은 이유
   createDocumentRow({
     id: 'doc-invoice-issue',
     title: '세금계산서 발행 기준',
@@ -71,7 +85,7 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
       { kind: 'channel', label: '결제' },
       { kind: 'folder', label: '정산' },
     ],
-    ownerName: '최민우',
+    owners: [documentOwner(5, '최민우'), documentOwner(13, '서지호'), documentOwner(14, '임채원')],
     createdAt: '2024-07-15T05:00:00.000Z',
     lastActivityAt: '2024-12-13T07:00:00.000Z',
     lastActivityLabel: '3일 전',
@@ -84,7 +98,7 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
       { kind: 'folder', label: '구독' },
     ],
     status: 'pending_review',
-    ownerName: '팀원G',
+    owners: [documentOwner(6, '팀원G')],
     createdAt: '2024-11-20T06:00:00.000Z',
     lastActivityAt: '2024-12-11T04:00:00.000Z',
     lastActivityLabel: '2024.12.11',
@@ -96,7 +110,7 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
       { kind: 'channel', label: '계정' },
       { kind: 'folder', label: '데이터' },
     ],
-    ownerName: '직원30',
+    owners: [documentOwner(7, '직원30')],
     createdAt: '2024-06-30T07:00:00.000Z',
     lastActivityAt: '2024-12-10T03:00:00.000Z',
     lastActivityLabel: '2024.12.10',
@@ -109,7 +123,7 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
       { kind: 'folder', label: '발송 정책' },
     ],
     status: 'pending_review',
-    ownerName: '오세훈',
+    owners: [documentOwner(8, '오세훈')],
     createdAt: '2024-10-05T08:00:00.000Z',
     lastActivityAt: '2024-12-09T02:00:00.000Z',
     lastActivityLabel: '2024.12.09',
@@ -121,7 +135,7 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
       { kind: 'channel', label: '온보딩' },
       { kind: 'folder', label: '도입' },
     ],
-    ownerName: '문가영',
+    owners: [documentOwner(9, '문가영')],
     createdAt: '2024-05-18T09:00:00.000Z',
     lastActivityAt: '2024-12-08T01:00:00.000Z',
     lastActivityLabel: '2024.12.08',
@@ -134,7 +148,7 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
       { kind: 'folder', label: 'SLA' },
     ],
     status: 'pending_review',
-    ownerName: '배수지',
+    owners: [documentOwner(10, '배수지')],
     createdAt: '2024-09-27T10:00:00.000Z',
     lastActivityAt: '2024-12-05T10:00:00.000Z',
     lastActivityLabel: '2024.12.05',
@@ -146,7 +160,7 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
       { kind: 'channel', label: '결제' },
       { kind: 'folder', label: '수단 관리' },
     ],
-    ownerName: '강태호',
+    owners: [documentOwner(11, '강태호')],
     createdAt: '2024-04-09T11:00:00.000Z',
     lastActivityAt: '2024-12-03T11:00:00.000Z',
     lastActivityLabel: '2024.12.03',
@@ -159,12 +173,12 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
       { kind: 'folder', label: '탈퇴' },
     ],
     status: 'pending_review',
-    ownerName: '윤서아',
+    owners: [documentOwner(15, '윤서아')],
     createdAt: '2024-12-01T12:00:00.000Z',
     lastActivityAt: '2024-12-01T12:00:00.000Z',
     lastActivityLabel: '2024.12.01',
   }),
-  // 담당자 미지정 표본 — 지표 카드의 같은 이름 필터가 실제로 걸리는지 보려면 이 행이 있어야 한다
+  // 담당자 미지정(빈 배열) 표본 — 지표 카드의 같은 이름 필터가 실제로 걸리는지 보려면 이 행이 있어야 한다
   createDocumentRow({
     id: 'doc-webhook-retry',
     title: '웹훅 재전송 정책',
@@ -172,7 +186,7 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
       { kind: 'channel', label: '운영' },
       { kind: 'folder', label: '연동' },
     ],
-    ownerName: null,
+    owners: [],
     createdAt: '2024-03-14T13:00:00.000Z',
     lastActivityAt: '2024-11-28T13:00:00.000Z',
     lastActivityLabel: '2024.11.28',
@@ -183,14 +197,12 @@ const BASE_REVIEW_QUEUE_ITEM: ReviewQueueItemData = {
   id: 'proposal-payment-retry-v3',
   type: 'publish',
   title: '결제 승인 실패 시 재시도 정책 변경안',
-  authorName: '직원10',
-  authorProfileImageUrl: null,
   waitingLabel: '15시간 전',
-  confidence: 0.62,
   status: 'pending',
   rejectionReason: null,
   baseRevisionId: 'rev-0002',
   hasConflictIcon: false,
+  canReview: true,
 };
 
 export const createReviewQueueItem = (overrides?: Partial<ReviewQueueItemData>): ReviewQueueItemData => ({
@@ -201,12 +213,13 @@ export const createReviewQueueItem = (overrides?: Partial<ReviewQueueItemData>):
 // 모순(contradiction) 행 표본은 두지 않는다 — MVP 제외 결정, 유형·필드 계약은 보존
 export const REVIEW_QUEUE_ITEM_FIXTURES: readonly ReviewQueueItemData[] = [
   createReviewQueueItem(),
+  // 권한 없는 행 표본 — 권한은 제안마다 갈리므로(담당자 우선, 없으면 채널 관리자) 목록에 섞여 온다
   createReviewQueueItem({
     id: 'proposal-merge-refund',
     type: 'merge',
     title: '환불 문서 병합 제안',
-    confidence: 0.84,
     waitingLabel: '2일 전',
+    canReview: false,
   }),
   createReviewQueueItem({
     id: 'proposal-rejected-example',
@@ -238,6 +251,19 @@ export const REVIEW_QUEUE_ASSIGNEE_OPTIONS: readonly ReviewQueueFilterOption[] =
   { id: 'u-minu', label: '최민우', trailingLabel: 'BE' },
   // 직책이 비는 행 — trailingLabel이 optional임을 스토리가 밟는다
   { id: 'u-external', label: '외부 협력자' },
+];
+
+/**
+ * 대시보드 담당자 축 후보. id는 담당자 user_id 문자열이라 목록 API 파라미터로 그대로 나간다.
+ * 값은 DOCUMENT_ROW_FIXTURES의 담당자와 맞춰 둔다 — 필터 결과가 표와 어긋나면 안 된다.
+ */
+export const DASHBOARD_ASSIGNEE_OPTIONS: readonly ReviewQueueFilterOption[] = [
+  { id: '1', label: '팀원F', trailingLabel: 'FE' },
+  { id: '2', label: '직원10', trailingLabel: 'PM' },
+  { id: '3', label: '이진수', trailingLabel: 'BE' },
+  { id: '4', label: '김하은', trailingLabel: 'Design' },
+  { id: '5', label: '최민우', trailingLabel: 'BE' },
+  { id: '6', label: '팀원G', trailingLabel: 'FE' },
 ];
 
 /** 검토 큐 필터 대상 채널 축 표본. 채널은 직책이 없어 trailingLabel을 두지 않는다. */

@@ -6,16 +6,18 @@ import {
   BASE_WIKI_BLOCKS,
   LONG_BASE_WIKI_BLOCKS,
   LONG_PROPOSED_WIKI_BLOCKS,
+  PROPOSED_BLOCK_CHANGES,
   PROPOSED_WIKI_BLOCKS,
+  SINGLE_MODIFIED_BLOCK_CHANGES,
 } from '../../../fixtures/llmWikiDiffFixtures';
-import { computeBlockDiff } from '../../../utils/diff/computeBlockDiff';
+import { buildBlockDiff } from '../../../utils/diff/buildBlockDiff';
 import BlockDiffCard from './BlockDiffCard';
 
-const entries = computeBlockDiff(BASE_WIKI_BLOCKS, PROPOSED_WIKI_BLOCKS);
+const entries = buildBlockDiff(BASE_WIKI_BLOCKS, PROPOSED_WIKI_BLOCKS, PROPOSED_BLOCK_CHANGES);
 const modifiedEntry = entries.find((e) => e.kind === 'modified')!;
 const addedEntry = entries.find((e) => e.kind === 'added')!;
 const removedEntry = entries.find((e) => e.kind === 'removed')!;
-const [longEntry] = computeBlockDiff(LONG_BASE_WIKI_BLOCKS, LONG_PROPOSED_WIKI_BLOCKS);
+const [longEntry] = buildBlockDiff(LONG_BASE_WIKI_BLOCKS, LONG_PROPOSED_WIKI_BLOCKS, SINGLE_MODIFIED_BLOCK_CHANGES);
 
 const meta = {
   title: 'Compositions/LLM Wiki/ReviewQueue/BlockDiffCard',
@@ -36,7 +38,17 @@ const meta = {
         nodeId: '17849:106310',
       },
       viewport: { width: 700, height: 420 },
-      states: ['modified', 'added', 'removed', 'collapsed', 'rejected', 'long-text', 'no-reason'],
+      states: [
+        'modified',
+        'added',
+        'removed',
+        'collapsed',
+        'rejected',
+        'long-text',
+        'no-reason',
+        'no-review-permission',
+        'no-reject-path',
+      ],
       reuseNotes: [
         '버튼은 공용 Button(box-solid-primary/box-outline-gray/icon-only-gray)을 그대로 쓴다 — 시안의 Box Button small(30px)·Icon button small(28px) 대응. 아이콘 버튼 28px는 AgentCard 관례대로 size="sm" + size-7이다.',
         '헤더 배치: 셰브런 · 제목 · 반려 · 승인. 판정이 승인·반려 둘로 정리되면서 되돌리기(rotate)가 빠지고 삭제가 반려로 바뀌었다(8/7) — 백엔드 approve/reject와 1:1이다.',
@@ -46,11 +58,13 @@ const meta = {
         '연필 버튼의 aria-label은 "이 블록 수정"이다 — 섹션 헤더의 전역 "직접 수정"과 접근성 이름이 겹치면 안 된다.',
       ],
       dataNotes: [
-        '엔트리는 픽스처 blocks[] 쌍에 computeBlockDiff를 돌려 얻는다 — 계산과 표시가 같은 파이프라인을 지나는 것을 스토리가 상시 검증한다.',
+        '엔트리는 픽스처 blocks[] 쌍과 서버 변경 목록에 buildBlockDiff를 돌려 얻는다 — 계산과 표시가 같은 파이프라인을 지나는 것을 스토리가 상시 검증한다.',
         'removed 카드(빨강 단일 전폭)는 시안에 없는 프론트 잠정안이다 — added(초록 단일 전폭)의 거울상. design-request 9번으로 확인 요청 상태.',
         '카드 제목·"수정된 이유"의 실카피는 시안이 placeholder라 미정(감사 UNKNOWN 카피 미정). 빈 diff·로딩·에러 스토리는 만들지 않는다(MISSING).',
-        '삭제 블록도 사유를 갖는다(2026-08-07 계약 결정) — 그래서 삭제는 proposed에서 "빠짐"이 아니라 removed:true tombstone으로 온다. 빠짐만으로 온 블록은 사유 없는 카드가 되고, 그 빈 푸터가 계약 위반의 신호다(NoReason 스토리가 그 모습).',
-        '"수정된 이유"는 백엔드에 대응 컬럼이 없다 — 제안 테이블의 reason은 검토자용 rejection_reason뿐이다. 출처·단위(블록당 vs 제안서당)는 API 계약 협상 대상.',
+        'removed 카드에는 사유가 붙지 않는다 — 빠진 블록은 변경안에 자리가 없어 change_reason이 실릴 곳이 없다.',
+        '"수정된 이유"는 서버가 만든 요약 문구다(새 섹션·산문 갱신·근거 N건 추가·M건 폐기) — 사람이 쓴 설명이 아니다.',
+        '본문은 narrative(사람용 산문)가 정본이고, 없는 블록(옛 데이터)만 body로 폴백한다 — Modified가 산문 경로, Added가 폴백 경로를 밟는다.',
+        'canReview=false면 판정 버튼이 사라지고 열람만 남는다 — 값은 서버가 계산한 can_review이고 프론트는 재계산하지 않는다. 비활성+툴팁 안은 디자이너 미결이라 숨김으로 간다.',
       ],
       tokenNotes: [
         '패널 색은 8/7 실측 확정(17849:106867·17848:106179) — removed: bg-red-1(#FFFAFA)/좌측 바 2px red-40, added: bg-green-5(#E6FAF2)/좌측 바 2px green-60(#00985A). 패널 자체에는 padding도 radius도 없다.',
@@ -77,9 +91,13 @@ export const Modified: Story = {
     const canvas = within(canvasElement);
 
     await expect(canvas.getByText('재시도 정책')).toBeInTheDocument();
-    // 좌우 패널이 모두 있고, 바뀐 단어가 양쪽에서 강조된다
-    await expect(canvas.getByText('1회')).toBeInTheDocument();
-    await expect(canvas.getByText('3회까지')).toBeInTheDocument();
+    // 본문은 산문 축이다 — body의 값 표기(1회/3회까지)는 화면에 실리지 않는다
+    await expect(canvasElement.textContent).toContain('한 번 더');
+    await expect(canvasElement.textContent).toContain('세 번까지');
+    await expect(canvasElement.textContent).not.toContain('3회까지');
+    // 좌우 패널에서 바뀐 단어가 강조된다
+    await expect(canvasElement.querySelectorAll('[class*="bg-green-20"]').length).toBeGreaterThan(0);
+    await expect(canvasElement.querySelectorAll('[class*="bg-red-10"]').length).toBeGreaterThan(0);
     await expect(canvas.getByText(/수정된 이유/)).toBeInTheDocument();
 
     await userEvent.click(canvas.getByRole('button', { name: '승인' }));
@@ -100,6 +118,8 @@ export const Added: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('PG 점검 시간 예외')).toBeInTheDocument();
+    // 산문 없는 블록(옛 데이터)은 body로 폴백한다
+    await expect(canvasElement.textContent).toContain('PG사 정기 점검 시간에는 재시도를 수행하지 않는다.');
     // 단일 전폭 패널 — 빨강(before) 패널이 없어야 한다
     await expect(canvasElement.querySelectorAll('[class*="border-red"]')).toHaveLength(0);
   },
@@ -114,9 +134,19 @@ export const Removed: Story = {
     await expect(canvasElement.querySelectorAll('[class*="border-green"]')).toHaveLength(0);
     // 색만으로 삭제를 알리지 않는다 — 고지 문구가 패널 안에 있어야 한다.
     await expect(canvas.getByText('콘텐츠를 삭제함')).toBeInTheDocument();
-    // 삭제도 사유를 갖는다 — 지워지는 변경일수록 근거가 필요하다.
-    await expect(canvas.getByText(/수정된 이유/)).toBeInTheDocument();
-    await expect(canvas.getByText(/상담원 수동 안내 절차가 폐지/)).toBeInTheDocument();
+    // 빠진 블록은 변경안에 자리가 없어 사유가 실릴 곳도 판정 경로도 없다.
+    await expect(canvas.queryByText(/수정된 이유/)).toBeNull();
+  },
+};
+
+/** 반려 사유 입력 자리가 없을 때 — 반려 버튼이 사라지고 승인만 남는다. */
+export const NoRejectPath: Story = {
+  args: { entry: modifiedEntry, canReject: false },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    const names = canvas.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent);
+    await expect(names).toEqual(['접기', '승인']);
   },
 };
 
@@ -139,12 +169,12 @@ export const Collapsed: Story = {
     const canvas = within(canvasElement);
 
     // 접힌 상태 — 본문과 푸터가 없다
-    await expect(canvas.queryByText('1회')).toBeNull();
+    await expect(canvasElement.textContent).not.toContain('세 번까지');
     await expect(canvas.queryByText(/수정된 이유/)).toBeNull();
 
     // 셰브런으로 펼치면 본문이 돌아온다
     await userEvent.click(canvas.getByRole('button', { name: '펼치기' }));
-    await expect(canvas.getByText('1회')).toBeInTheDocument();
+    await expect(canvasElement.textContent).toContain('세 번까지');
   },
 };
 
@@ -156,6 +186,22 @@ export const LongText: Story = {
     // 긴 문단은 잘리지 않고 감긴다 — 가로 스크롤이 없어야 한다
     const card = canvasElement.querySelector('section')!;
     await expect(card.scrollWidth).toBeLessThanOrEqual(card.clientWidth);
+  },
+};
+
+/** 검토 권한 없음 — 판정 버튼이 사라지고 diff 열람만 남는다. */
+export const NoReviewPermission: Story = {
+  args: { entry: modifiedEntry, canReview: false },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // 결정 계열 버튼이 하나도 없다 — 남은 버튼은 접기 셰브런뿐이다
+    const names = canvas.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent);
+    await expect(names).toEqual(['접기']);
+
+    // 열람은 권한과 무관하다 — 본문과 근거가 그대로 보인다
+    await expect(canvasElement.textContent).toContain('세 번까지');
+    await expect(canvas.getByText(/수정된 이유/)).toBeInTheDocument();
   },
 };
 

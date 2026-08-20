@@ -3,6 +3,7 @@ import IconWikiChannelFilled from '@/public/icons/icon/wiki_channel_filled.svg';
 import type { WikiChannelListItem } from '../../types/llmWikiModel';
 import { DashboardDocumentTableHeader } from '../document/DashboardDocumentRow';
 import FolderDocumentRow, { type FolderDocumentRowItem } from '../document/FolderDocumentRow';
+import DocumentTableEmptyState from '../document/states/DocumentTableEmptyState';
 import WikiPageHeader from '../header/WikiPageHeader';
 import WikiSpaceTableFooter from './WikiSpaceTableFooter';
 import WikiSpaceTitleBlock from './WikiSpaceTitleBlock';
@@ -17,7 +18,8 @@ interface WikiChannelPageProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
-  onPageSizeClick?: () => void;
+  /** 쪽 크기 선택. 주면 푸터 표시가 드롭다운으로 열린다 */
+  onPageSizeChange?: (pageSize: number) => void;
   onFolderClick?: (folderId: string) => void;
 }
 
@@ -31,7 +33,7 @@ export default function WikiChannelPage({
   currentPage,
   totalPages,
   onPageChange,
-  onPageSizeClick,
+  onPageSizeChange,
   onFolderClick,
 }: WikiChannelPageProps) {
   return (
@@ -52,11 +54,15 @@ export default function WikiChannelPage({
         <div className="flex flex-col gap-8">
           <div className="flex flex-col">
             <DashboardDocumentTableHeader />
-            <div className="flex flex-col gap-1">
-              {folderRows.map((row) => (
-                <FolderDocumentRow key={row.id} kind="folder" item={row} onClick={onFolderClick} />
-              ))}
-            </div>
+            {folderRows.length === 0 ? (
+              <DocumentTableEmptyState message="폴더가 없어요" />
+            ) : (
+              <div className="flex flex-col gap-1">
+                {folderRows.map((row) => (
+                  <FolderDocumentRow key={row.id} kind="folder" item={row} onClick={onFolderClick} />
+                ))}
+              </div>
+            )}
           </div>
 
           <WikiSpaceTableFooter
@@ -64,7 +70,7 @@ export default function WikiChannelPage({
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={onPageChange}
-            onPageSizeClick={onPageSizeClick}
+            onPageSizeChange={onPageSizeChange}
           />
         </div>
       </div>

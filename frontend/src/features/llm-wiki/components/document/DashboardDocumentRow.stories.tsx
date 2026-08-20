@@ -24,7 +24,16 @@ const meta = {
         nodeId: '17606:149816',
       },
       viewport: { width: 1040, height: 240 },
-      states: ['default(reviewed)', 'pending-review', 'hover', 'table-alignment', 'long-title-narrow-slot'],
+      states: [
+        'default(reviewed)',
+        'pending-review',
+        'multiple-owners',
+        'multiple-owners-grow-row',
+        'unassigned-owner',
+        'hover',
+        'table-alignment',
+        'long-title-narrow-slot',
+      ],
       reuseNotes: [
         '상태 배지는 DocumentStatusBadge를 그대로 쓴다 — 새 표 행의 배지(18122:60892)가 기존 md 규격(px-2 py-1·gap-2·아이콘 20)과 일치함을 재실측.',
         '담당자 아바타는 공용 Avatar(size small=25) + 시안 인스턴스 오버라이드(radius 12·line-assistive 링) — ReviewQueueRow와 같은 조합(중복 감사 #2의 DS 드리프트 기록 참조).',
@@ -35,7 +44,8 @@ const meta = {
         '2026-08-13 재실측(대시보드 17595:148922): 태그 열이 소멸하고 담당자(아바타+이름) 열로 교체됐다 — tags·hasConflictIcon 계약 제거.',
         '충돌(error) 아이콘 행이 새 표 15행 어디에도 없다 — 구 "배지·에러 공존 규칙" 질문은 "충돌 표시 이동처" 질문으로 대체(design-request).',
         '담당자 미지정 행의 표시는 MISSING — 스탯 카드에 지표(담당자 미지정)는 있으나 행 시안이 없다. 발명하지 않고 디자이너 질문.',
-        '로딩·빈 상태 스토리는 만들지 않는다 — 디자인 MISSING 유지.',
+        '담당자는 실 API(GET /wiki/artifacts) owners[] 복수 계약이다. 2인 이상은 세로 스택으로 전원 렌더한다(사용자 확정) — 시안 MISSING이라 아바타 그룹·+N 배지 대신 1인 표기를 그대로 쌓은 자작 표기다.',
+        '로딩 골격은 표 단위(DocumentTableSkeleton)라 이 행에는 없다. 빈 상태 스토리도 만들지 않는다 — 디자인 MISSING 유지.',
       ],
       tokenNotes: [
         '제목 #33363D = text-text-normal-normal + heading(sb)/small 유지. 담당자명 #33363D + body(md)/small.',
@@ -100,6 +110,78 @@ export const PendingReview: Story = {
     await expect(canvas.getByText('직원10')).toBeInTheDocument();
     // 새 시안의 날짜형 표기도 같은 문자열 계약으로 흐른다.
     await expect(canvas.getByText('2024.12.12')).toBeInTheDocument();
+  },
+};
+
+/** 담당자 2인 이상. 전원을 세로로 쌓고 행 높이가 그만큼 늘어난다(사용자 확정). */
+export const MultipleOwners: Story = {
+  args: {
+    document: createDocumentRow({
+      owners: [
+        { userId: 1, displayName: '팀원F', profileImageUrl: null },
+        { userId: 12, displayName: '남궁현', profileImageUrl: null },
+      ],
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const first = canvas.getByText('팀원F');
+    const second = canvas.getByText('남궁현');
+
+    // 전원이 렌더되고 아바타도 인원수만큼 선다.
+    await expect(canvasElement.querySelectorAll('.border-line-normal-assistive')).toHaveLength(2);
+
+    // 가로가 아니라 세로로 쌓인다 — 좌변이 같고 둘째 줄이 아래에 온다.
+    await expect(second.getBoundingClientRect().left).toBeCloseTo(first.getBoundingClientRect().left, 1);
+    await expect(second.getBoundingClientRect().top).toBeGreaterThan(first.getBoundingClientRect().bottom);
+
+    // 고정폭 열은 담당자 수와 무관하게 그대로다.
+    await expect(canvas.getByText('3시간 전').getBoundingClientRect().width).toBe(96);
+  },
+};
+
+/** 담당자가 늘면 행이 높아지는 것을 허용한다 — 1인 행보다 커져야 스택이 잘린 게 아니다. */
+export const MultipleOwnersGrowRow: Story = {
+  args: { document: createDocumentRow() },
+  render: () => (
+    <div className="flex w-260 flex-col gap-1">
+      <DashboardDocumentRow document={createDocumentRow({ id: 'row-single' })} />
+      <DashboardDocumentRow
+        document={createDocumentRow({
+          id: 'row-triple',
+          title: '세 명이 맡은 문서',
+          owners: [
+            { userId: 1, displayName: '팀원F', profileImageUrl: null },
+            { userId: 12, displayName: '남궁현', profileImageUrl: null },
+            { userId: 13, displayName: '서지호', profileImageUrl: null },
+          ],
+        })}
+      />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const singleRow = canvas.getByRole('button', { name: '결제 승인 실패 시 재시도 정책' }).parentElement!;
+    const tripleRow = canvas.getByRole('button', { name: '세 명이 맡은 문서' }).parentElement!;
+
+    await expect(canvas.getByText('서지호')).toBeInTheDocument();
+    await expect(tripleRow.getBoundingClientRect().height).toBeGreaterThan(
+      singleRow.getBoundingClientRect().height,
+    );
+  },
+};
+
+/** 담당자 미지정(빈 배열). 표기 시안이 없어 자리만 비운다 — 열 폭은 유지된다. */
+export const UnassignedOwner: Story = {
+  args: { document: createDocumentRow({ owners: [] }) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.queryByText('팀원F')).toBeNull();
+    // 아바타까지 함께 빠져야 자리 비움이다 — 이름만 빠지면 빈 아바타가 남는다.
+    await expect(canvasElement.querySelector('.border-line-normal-assistive')).toBeNull();
+
+    await expect(canvas.getByText('3시간 전').getBoundingClientRect().width).toBe(96);
   },
 };
 

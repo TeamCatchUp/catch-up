@@ -14,7 +14,8 @@ import IconStar from '@/public/icons/icon/star.svg';
 import IconTeamspace from '@/public/icons/icon/teamspace.svg';
 import IconUpdate from '@/public/icons/icon/update.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
-import type { NavTreeNode } from '@/shared/components/navigation/NavTree';
+
+import type { WikiSideNavFavorite, WikiTreeNode } from './WikiSideNav';
 
 /** 전역 SNB 조립 스토리가 쓰는 시안 데이터. 라벨은 대부분 placeholder다. */
 export interface SnbNavFixtureItem {
@@ -32,15 +33,12 @@ export const SPACE_HOME_ICON = IconHomeFilled;
 export const SPACE_WIKI_ICON = IconStacksFilled;
 export const TEAMSPACE_ICON = IconTeamspace;
 
-/** 요청됨 배지 건수. 집계 API 계약이 없어 시안 값을 그대로 쓴다 */
-export const REQUESTED_COUNT = 1;
-
 // 문서 탐색은 시안에 없지만 구 사이드바 진입점이라 홈 펼침에만 남긴다
 export const HOME_PRIMARY_ITEMS: readonly SnbNavFixtureItem[] = [
   { id: 'new-chat', label: '새 채팅', Icon: IconAdd },
   { id: 'search', label: '검색', Icon: IconSearch300 },
   { id: 'doc-search', label: '문서 탐색', Icon: IconDocumentSearch, beta: true },
-  { id: 'requested', label: '요청됨', Icon: IconUpdate, selected: true, count: REQUESTED_COUNT },
+  { id: 'requested', label: '요청됨', Icon: IconUpdate, selected: true },
 ];
 
 export const HOME_AGENT_ITEMS: readonly SnbNavFixtureItem[] = [
@@ -74,7 +72,7 @@ export const HOME_RAIL_ITEMS: readonly SnbNavFixtureItem[] = [
 export const WIKI_PRIMARY_ITEMS: readonly SnbNavFixtureItem[] = [
   { id: 'new-chat', label: '새 채팅', Icon: IconAdd },
   { id: 'search', label: '검색', Icon: IconSearch300 },
-  { id: 'requested', label: '요청됨', Icon: IconUpdate, count: REQUESTED_COUNT },
+  { id: 'requested', label: '요청됨', Icon: IconUpdate },
 ];
 
 export const WIKI_DROPDOWN_ITEMS: readonly SnbNavFixtureItem[] = [
@@ -82,12 +80,12 @@ export const WIKI_DROPDOWN_ITEMS: readonly SnbNavFixtureItem[] = [
 ];
 
 /** 위키 펼침의 즐겨찾기 섹션. 시안은 문서 5행이다 */
-export const WIKI_FAVORITE_ITEMS: readonly SnbNavFixtureItem[] = [
-  { id: 'wiki-fav-1', label: '채널명 text text text text text text', Icon: IconFile },
-  { id: 'wiki-fav-2', label: '채널명 text text text text text text', Icon: IconFile },
-  { id: 'wiki-fav-3', label: '채널명 text text text text text text', Icon: IconFile },
-  { id: 'wiki-fav-4', label: '채널명 text text text text text text', Icon: IconFile },
-  { id: 'wiki-fav-5', label: '채널명 text text text text text text', Icon: IconFile },
+export const WIKI_FAVORITE_ITEMS: readonly WikiSideNavFavorite[] = [
+  { id: 'wiki-fav-1', label: '채널명 text text text text text text', href: '/llm-wiki/wiki-fav-1' },
+  { id: 'wiki-fav-2', label: '채널명 text text text text text text', href: '/llm-wiki/wiki-fav-2' },
+  { id: 'wiki-fav-3', label: '채널명 text text text text text text', href: '/llm-wiki/wiki-fav-3' },
+  { id: 'wiki-fav-4', label: '채널명 text text text text text text', href: '/llm-wiki/wiki-fav-4' },
+  { id: 'wiki-fav-5', label: '채널명 text text text text text text', href: '/llm-wiki/wiki-fav-5' },
 ];
 
 export const WIKI_RAIL_ITEMS: readonly SnbNavFixtureItem[] = [
@@ -99,37 +97,77 @@ export const WIKI_RAIL_ITEMS: readonly SnbNavFixtureItem[] = [
   { id: 'recent-wiki', label: '최근 위키', Icon: IconFolder },
 ];
 
+/** 최종 편집자·시각에 대응하는 API 필드가 없어 시안 문구를 표본으로 둔다 */
+const SAMPLE_EDIT_META: readonly string[] = ['팀원G 최종 편집', '오늘 오전 12:30'];
+
+/** 채널 id → 그 채널의 관리자 여부. 전역 플래그가 아니다 — 채널마다 따로다 */
+export const WIKI_CHANNEL_ADMINS: Readonly<Record<string, boolean>> = {
+  'channel-1': true,
+  'channel-2': true,
+  'channel-3': false,
+};
+
 /** 시안 라벨은 전부 placeholder다 — 실제 데이터 형태가 아니다 */
-export const PROJECT_TREE_NODES: readonly NavTreeNode[] = [
+export const PROJECT_TREE_NODES: readonly WikiTreeNode[] = [
   {
     id: 'channel-1',
+    kind: 'channel',
+    channelId: 'channel-1',
+    href: '/llm-wiki/channel/channel-1',
     label: '채널명 text text text text text text text text',
     Icon: IconWikiChannel,
     canAddChild: true,
+    metaLines: SAMPLE_EDIT_META,
     children: [
       {
         id: 'folder-1',
+        kind: 'folder',
+        channelId: 'channel-1',
+        href: '/llm-wiki/folder/folder-1',
         label: '폴더명 text text text text text text text',
         Icon: IconFolder,
         canAddChild: true,
-        children: [{ id: 'file-1', label: '파일명texttexttexttext', Icon: IconFile }],
+        metaLines: SAMPLE_EDIT_META,
+        children: [
+          {
+            id: 'file-1',
+            kind: 'document',
+            channelId: 'channel-1',
+            href: '/llm-wiki/file-1',
+            label: '파일명texttexttexttext',
+            Icon: IconFile,
+            favorite: true,
+            metaLines: SAMPLE_EDIT_META,
+          },
+        ],
       },
-      { id: 'folder-2', label: '폴더명 text text text text text text text', Icon: IconFolder, canAddChild: true },
+      {
+        id: 'folder-2',
+        kind: 'folder',
+        channelId: 'channel-1',
+        href: '/llm-wiki/folder/folder-2',
+        label: '폴더명 text text text text text text text',
+        Icon: IconFolder,
+        canAddChild: true,
+      },
     ],
   },
-  { id: 'channel-2', label: '채널명 text text text text text text text text', Icon: IconWikiChannel, canAddChild: true },
-  { id: 'channel-3', label: '채널명 text text text text text text text text', Icon: IconWikiChannel, canAddChild: true },
+  {
+    id: 'channel-2',
+    kind: 'channel',
+    channelId: 'channel-2',
+    href: '/llm-wiki/channel/channel-2',
+    label: '채널명 text text text text text text text text',
+    Icon: IconWikiChannel,
+    canAddChild: true,
+  },
+  {
+    id: 'channel-3',
+    kind: 'channel',
+    channelId: 'channel-3',
+    href: '/llm-wiki/channel/channel-3',
+    label: '채널명 text text text text text text text text',
+    Icon: IconWikiChannel,
+    canAddChild: true,
+  },
 ];
-
-/** 트리 노드 id → 라우트. id 접두사가 fixture 규칙이라 실제 체계가 잡히면 여기만 바꾼다 */
-export function projectTreeHref(id: string): string {
-  if (id.startsWith('channel-')) return `/llm-wiki/channel/${id}`;
-  if (id.startsWith('folder-')) return `/llm-wiki/folder/${id}`;
-  return `/llm-wiki/${id}`;
-}
-
-/** 현재 경로에 해당하는 트리 노드 id. 없으면 undefined */
-export function findActiveTreeId(pathname: string): string | undefined {
-  const flatten = (node: NavTreeNode): string[] => [node.id, ...(node.children ?? []).flatMap(flatten)];
-  return PROJECT_TREE_NODES.flatMap(flatten).find((id) => pathname === projectTreeHref(id));
-}

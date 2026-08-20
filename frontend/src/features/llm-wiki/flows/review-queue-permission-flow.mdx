@@ -1,0 +1,67 @@
+import { Canvas, Meta } from '@storybook/addon-docs/blocks';
+
+import * as BlockDiffStories from '../components/review-queue/diff/BlockDiffSection.stories';
+import * as RejectDialogStories from '../components/review-queue/RejectReasonDialog.stories';
+import * as PublishBarStories from '../components/review-queue/ReviewPublishBar.stories';
+import * as QueueStories from '../components/review-queue/ReviewQueuePage.stories';
+
+<Meta title="Flows/LLM Wiki/검토큐 권한" />
+
+# 검토큐 권한 flow
+
+한 화면이 두 갈래로 갈린다. 갈림의 재료는 하나 — 서버가 안건마다 계산해 내려주는 `can_review`다.
+누가 어떤 값을 받는지는 [권한 개요](?path=/docs/flows-llm-wiki-권한-개요--docs)에 있고,
+여기서는 그 값이 화면을 어떻게 바꾸는지만 본다. 진입점이 열린 다음의 진행 — 블록별·일괄·조회 세
+갈래 — 은 [검토큐 진행 flow](?path=/docs/flows-llm-wiki-검토큐-진행--docs)로 나눠 두었다.
+
+## 1. 진입 — 목록과 상세는 모두에게 열린다
+
+검토큐는 팀이 함께 보는 목록이다. 역할이 하나도 없는 구성원도 무엇이 올라와 있는지, 무엇이 어떻게
+바뀌는지 다 본다. 사라지는 것은 판정 진입점뿐이다.
+
+<Canvas of={QueueStories.NoReviewPermission} />
+
+목록·요약·diff 카드·미리보기는 그대로 남는다. 승인·반려, 전체 승인·전체 반려, 최종 내보내기가 빠진다.
+
+## 2. 판정 권한이 있을 때
+
+담당자(자기 문서)이거나 담당자 없는 문서의 채널 관리자면, 같은 화면에 판정 진입점이 세 층으로 붙는다 —
+블록마다 승인, 헤더에 전체 승인·전체 반려, 하단 바에 최종 내보내기.
+
+<Canvas of={QueueStories.Default} />
+
+## 3. 블록 층 — diff 섹션만 떼어 보기
+
+<Canvas of={BlockDiffStories.NoReviewPermission} />
+
+카드의 승인·반려와 헤더의 전체 판정이 **함께** 사라진다. 한쪽만 남으면 판정을 시작하고도 끝낼 수 없는
+화면이 된다.
+
+<Canvas of={BlockDiffStories.Default} />
+
+전체 승인·반려는 판정이 시작된 뒤에도 잠그지 않는다. 보낼 수 없는 요청은 서버가 409로 거절하고,
+그 메시지를 토스트로 보인다.
+
+## 4. 반려는 사유를 거친다
+
+전체 반려는 곧바로 나가지 않는다. 사유가 필수라 입력 창을 먼저 열고, 사유가 비어 있는 동안 제출을 잠근다.
+제출 중에도 잠긴 채로 남아 같은 요청이 두 번 나가지 않는다.
+
+<Canvas of={RejectDialogStories.Playground} />
+
+## 5. 발행 층
+
+<Canvas of={PublishBarStories.NoReviewPermission} />
+
+권한이 없으면 바 자체를 렌더하지 않는다. 액션이 하나뿐이라 버튼만 빼면 빈 띠가 남기 때문이다.
+
+<Canvas of={PublishBarStories.Default} />
+
+## 권한이 아닌 이유로 갈리는 두 자리
+
+같은 버튼이 사라지거나 잠기지만 역할과 무관한 경우가 둘 있다. 권한 문제로 읽지 않도록 따로 둔다.
+
+| 스토리 | 무엇이 갈리나 | 이유 |
+| --- | --- | --- |
+| [PublishLocked](?path=/story/screens-llm-wiki-reviewqueuepage--publish-locked) | 최종 내보내기가 잠긴다(사라지지 않는다) | 상세 응답이 아직 없다. 미판정 블록은 잠금 사유가 아니다 |
+| [NoRejectPath](?path=/story/screens-llm-wiki-reviewqueuepage--no-reject-path) | 블록 반려가 사라지고 승인만 남는다 | 블록 반려는 사유가 필수인데 사유 입력 시안이 없어 라우트가 진입점을 닫아 두었다 |

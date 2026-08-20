@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 
 import { useSidebarStore } from '@/shared/store/sidebarStore';
@@ -13,10 +13,15 @@ export function isWikiRoute(pathname: string): boolean {
   return pathname === '/llm-wiki' || pathname.startsWith('/llm-wiki/');
 }
 
+interface AppSideNavProps {
+  /** 위키 경로에서 쓸 SNB. 데이터 주입이 features 층이라 app 레이아웃이 넣어준다 */
+  wikiNav?: ReactNode;
+}
+
 /**
  * 경로로 SNB 모드를 고르는 진입점. 설정 경로에서는 레이아웃이 SNB 자체를 렌더하지 않는다.
  */
-export default function AppSideNav() {
+export default function AppSideNav({ wikiNav }: AppSideNavProps = {}) {
   const pathname = usePathname();
   const setSidebarOpen = useSidebarStore((state) => state.setSidebarOpen);
 
@@ -28,5 +33,6 @@ export default function AppSideNav() {
     setSidebarOpen(!isChatRoute && !isAgentEditorRoute);
   }, [isAgentEditorRoute, isChatRoute, setSidebarOpen]);
 
-  return isWikiRoute(pathname) ? <WikiSideNav /> : <HomeSideNav />;
+  if (!isWikiRoute(pathname)) return <HomeSideNav />;
+  return wikiNav ?? <WikiSideNav />;
 }

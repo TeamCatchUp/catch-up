@@ -1,8 +1,8 @@
 'use client';
 
-import { toast, Toaster } from 'sonner';
+import { type ExternalToast, toast, Toaster } from 'sonner';
 
-export { toast };
+export { type ExternalToast, toast };
 
 export default function Toast() {
   return (

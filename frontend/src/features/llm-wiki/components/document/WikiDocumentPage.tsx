@@ -1,66 +1,42 @@
-'use client';
-
-import type { JSONContent } from '@tiptap/react';
-
-import type { WikiDocumentFixture } from '../../fixtures/llmWikiDocumentFixtures';
-import WikiEditor from '../editor/WikiEditor';
+import { resolveDocumentBlockText, type WikiDocumentData } from '../../api/wikiDocumentMappers';
+import type { DocumentBreadcrumb } from '../../types/llmWikiModel';
 import WikiPageHeader from '../header/WikiPageHeader';
-import DevEditToggle from './DevEditToggle';
 import WikiDocumentMeta from './WikiDocumentMeta';
 
-export interface DocumentView {
-  mode: 'view' | 'edit';
-  doc: JSONContent;
-  canEdit: boolean;
+export interface WikiDocumentPageProps {
+  document: WikiDocumentData;
+  /** 채널 > 폴더 > 문서. 이름 join 결과라 문서 응답이 아니라 밖에서 받는다 */
+  breadcrumbs: readonly DocumentBreadcrumb[];
+  onBreadcrumbClick?: (crumb: DocumentBreadcrumb, index: number) => void;
 }
 
 /**
- * 편집 여부는 로컬 상태가 아니라 URL의 proposalId에서 파생된다 — 편집 대상은 제안본이기 때문이다.
- * proposalId 불일치·누락은 404가 아니라 열람 전용 강등이다.
+ * 문서 열람 화면. 발행판 블록을 읽기만 하고 편집·저장 경로를 두지 않는다.
+ * 블록의 근거(sources)는 표시 시안이 없어 렌더하지 않는다.
  */
-export function resolveDocumentView(document: WikiDocumentFixture, proposalId: string | null): DocumentView {
-  const matches = proposalId != null && proposalId.length > 0 && proposalId === document.proposalId;
-
-  return matches
-    ? { mode: 'edit', doc: document.proposalDoc, canEdit: true }
-    : { mode: 'view', doc: document.publishedDoc, canEdit: false };
-}
-
-export interface WikiDocumentPageProps {
-  document: WikiDocumentFixture;
-  proposalId: string | null;
-}
-
-export default function WikiDocumentPage({ document, proposalId }: WikiDocumentPageProps) {
-  const view = resolveDocumentView(document, proposalId);
-
+export default function WikiDocumentPage({ document, breadcrumbs, onBreadcrumbClick }: WikiDocumentPageProps) {
   return (
     <section className="flex min-h-full flex-col">
-      {/* 페이지 헤더. badge·actions·onBreadcrumbClick은 공급원·라우트가 없어 비워둔다. */}
-      <WikiPageHeader variant="detail" breadcrumbs={document.breadcrumbs} />
+      {/* actions 슬롯은 공급원이 없어 비워둔다 */}
+      <WikiPageHeader variant="detail" breadcrumbs={breadcrumbs} onBreadcrumbClick={onBreadcrumbClick} />
 
       <div className="mx-auto flex w-full max-w-260 flex-1 flex-col gap-6 px-6 py-9">
-        <WikiDocumentMeta
-          title={document.title}
-          authorName={document.authorName}
-          createdLabel={document.createdLabel}
-        >
-          <DevEditToggle
-            documentId={document.id}
-            proposalId={document.proposalId}
-            isEditing={view.mode === 'edit'}
-          />
-        </WikiDocumentMeta>
+        <WikiDocumentMeta title={document.title} publishedLabel={document.publishedLabel} />
 
-        {/* 편집 중에는 무엇을 보고 있는지 알려준다 — 모드에 따라 문서 내용 자체가 바뀐다 */}
-        {view.mode === 'edit' && (
-          <p className="text-label-small text-text-normal-alternative">
-            제안본을 편집 중입니다. 저장 기능은 아직 없어 새로고침하면 사라집니다.
-          </p>
-        )}
+        {/* 본문 타이포그래피는 공용 markdown.css를 재사용한다 — 에디터와 같은 읽기 규격이다 */}
+        <div className="markdown-body">
+          {document.blocks.map((block) => {
+            const text = resolveDocumentBlockText(block);
 
-        {/* key={view.mode} 필수 — WikiEditor는 uncontrolled라 재마운트하지 않으면 문서가 안 바뀐다. */}
-        <WikiEditor key={view.mode} initialContent={view.doc} editable={view.mode === 'edit'} />
+            return (
+              <article key={block.blockIndex}>
+                {block.heading.length > 0 && <h2>{block.heading}</h2>}
+                {/* 본문의 줄바꿈이 값 표기의 구분이라 접으면 안 된다 */}
+                {text.length > 0 && <p className="whitespace-pre-wrap">{text}</p>}
+              </article>
+            );
+          })}
+        </div>
       </div>
     </section>
   );

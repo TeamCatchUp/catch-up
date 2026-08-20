@@ -56,7 +56,8 @@ export default function EditMessageInput({ initialContent, onCancel, onSubmit }:
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
+          // 조합 중 Enter는 한글 확정이라 제출로 세지 않는다
+          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
             handleSubmit();
           } else if (e.key === 'Escape') {

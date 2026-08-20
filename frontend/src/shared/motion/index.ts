@@ -7,7 +7,11 @@ export {
   motionDuration,
   motionEase,
   MotionState,
+  panelStateFadeIn,
+  panelStateFadeInReduced,
   staggerListContainer,
+  stepReplace,
+  stepReplaceReduced,
   typewriterWord,
   typewriterWordsContainer,
 } from './presets';

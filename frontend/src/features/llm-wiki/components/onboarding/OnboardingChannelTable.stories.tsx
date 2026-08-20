@@ -25,8 +25,9 @@ const meta = {
       viewport: { width: 1008 },
       states: ['default', 'loading', 'empty', 'error', 'narrow-slot'],
       dataNotes: [
-        '행 카피(채널명·2025-01-23)는 시안 필러라 카피 미정(TBD) — 스토리명에 반영.',
-        '채널 mock은 백엔드 ChannelListItemResponse(id·name·workspace_id·is_admin·document_count·folders) 모양을 지킨다. "최근 수정일"은 대응 API 필드가 없어 [SPEC] 별도 필드로 격리(감사 §3 백엔드 계약 갭).',
+        '행 카피(채널명)는 시안 필러라 카피 미정(TBD) — 스토리명에 반영.',
+        '표의 채널은 위키 채널이 아니라 채널톡 채널이다 — mock은 GET /automations/credentials 응답(credential_id·external_id·is_configured) 모양을 지키고 행 key도 credentialId다.',
+        '**"최근 수정일" 열은 제거됐다(사용자 확정).** 대응 API 필드가 없어 늘 빈 값이었고, 정의 협의(감사 B9)가 서지 않아 열 자체를 걷어냈다 — 표는 채널명 1열이다.',
         '⚠️ 로딩·빈·에러는 Figma 근거가 없다 — 2026-08-13 사용자 승인으로 구현했다(로딩은 스켈레톤 지정, 빈·에러는 구현 재량 위임). 디자이너 승인본이 아니므로 시안이 도착하면 교체 대상이다.',
         '선택 표시는 여전히 미구현 — 시안 UNKNOWN(감사 §7).',
       ],
@@ -36,7 +37,7 @@ const meta = {
       ],
       layoutNotes: [
         '열 템플릿은 onboardingChannelTableGrid 상수 하나를 헤더·행이 공유한다 — 행별 독립 grid라 상수 없이는 열이 드리프트한다.',
-        '시안 두 열(채널명·최근 수정일)은 폭을 절반씩 나눈다 → minmax(0,1fr) 2개. 수정일 열은 우측 정렬.',
+        '채널명 한 열이 폭을 다 쓴다 → minmax(0,1fr) 1개. 이름이 길면 truncate로 수습된다.',
         '행 높이 47은 결과값(py-3 + 본문 23)이라 h-*로 고정하지 않는다.',
       ],
     }),
@@ -50,18 +51,20 @@ export const DefaultCopyTBD: Story = {
   args: { headers: CHANNEL_TABLE_HEADERS, rows: ONBOARDING_CHANNEL_ROWS },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getAllByRole('columnheader')).toHaveLength(2);
     await expect(canvas.getAllByRole('row')).toHaveLength(6);
+
+    // 열은 채널명 하나뿐이다 — "최근 수정일"은 제거됐다
+    const headers = canvas.getAllByRole('columnheader');
+    await expect(headers).toHaveLength(1);
+    await expect(headers[0]).toHaveTextContent(CHANNEL_TABLE_HEADERS.name);
+    await expect(canvas.queryByText('최근 수정일')).not.toBeInTheDocument();
 
     // 헤더·본문 행이 같은 열 템플릿을 쓰는지 — 상수 공유가 깨지면 여기서 갈린다
     const [headerRow, firstBodyRow] = canvas.getAllByRole('row');
     await expect(getComputedStyle(headerRow).gridTemplateColumns).toBe(
       getComputedStyle(firstBodyRow).gridTemplateColumns,
     );
-
-    // 수정일 열은 우측 정렬 (8/14 시안에서 표기가 점 구분으로 바뀌었다)
-    const dateCell = within(firstBodyRow).getByText(ONBOARDING_CHANNEL_ROWS[0].lastModifiedLabel);
-    await expect(getComputedStyle(dateCell).textAlign).toBe('right');
+    await expect(within(firstBodyRow).getAllByRole('cell')).toHaveLength(1);
   },
 };
 

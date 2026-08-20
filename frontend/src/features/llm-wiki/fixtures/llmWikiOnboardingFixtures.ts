@@ -25,6 +25,7 @@ export const ONBOARDING_COMPLETE_HEADING = '설정이 거의 다 완료됐어요
 export const ONBOARDING_BASIC_INFO_TITLE = '기본 위키 정보';
 export const ONBOARDING_DOC_SETTING_TITLE = '문서 설정';
 
+// [BE] 이름은 1~20자다(POST /wiki/channels/onboarding) — 상한은 입력에서 막는다
 export const WIKI_NAME_FIELD = {
   label: '이름',
   placeholder: 'CS 응답, 제품 용어 사전',
@@ -34,25 +35,26 @@ export const WIKI_NAME_FIELD = {
 export const INFO_CATEGORY_FIELD_LABEL = '어떤 정보를 정리하고 싶으세요?';
 export const PURPOSE_FIELD_LABEL = '이 위키를 어떻게 쓰실 건가요?';
 
+// VOC만 지원한다 — 나머지는 앞으로 열릴 자리라 고를 수 없이 노출된다
 export const WIKI_INFO_CATEGORIES: readonly WikiInfoCategory[] = [
   { id: 'voc', label: '고객 문의 (VOC)', icon: 'support-agent' },
-  { id: 'product', label: '제품과 기획', icon: 'lightbulb' },
-  { id: 'ops', label: '운영과 정책', icon: 'shield' },
-  { id: 'sales', label: '세일즈와 고객', icon: 'client' },
-  { id: 'dev', label: '개발과 기술', icon: 'database' },
-  { id: 'team-guide', label: '팀 가이드 및 온보딩', icon: 'group' },
+  { id: 'product', label: '제품과 기획', icon: 'lightbulb', disabled: true },
+  { id: 'ops', label: '운영과 정책', icon: 'shield', disabled: true },
+  { id: 'sales', label: '세일즈와 고객', icon: 'client', disabled: true },
+  { id: 'dev', label: '개발과 기술', icon: 'database', disabled: true },
+  { id: 'onboarding', label: '팀 가이드 및 온보딩', icon: 'group', disabled: true },
 ];
 
 /**
- * 목적 선택지. 시안은 VOC를 고른 상태만 그렸지만 카테고리별로 갈린다는 근거가 없어
- * 어느 칩을 골라도 같은 목록이 이어진다(8/14 사용자 확정).
+ * 목적 선택지. id는 서버 카탈로그 값이고 문구는 시안을 쓴다 — 서버 라벨은 더 짧다.
+ * 서버의 voc.request_status_tracking은 시안에 대응 항목이 없어 싣지 않는다.
  */
 export const WIKI_PURPOSE_OPTIONS: readonly WikiPurposeOption[] = [
-  { id: 'feature-demand', label: '어떤 기능을 가장 많이 요청하는지 모아보고 싶어요' },
-  { id: 'faq', label: '자주 들어오는 질문과 답변을 정리해두고 싶어요' },
-  { id: 'pain-point', label: '고객이 어디서 자주 불편해하는지 모아보고 싶어요' },
-  { id: 'client-request', label: '고객사별로 지금까지 나온 요청과 맥락을 보고 싶어요' },
-  { id: 'customer-needs', label: '상담에서 반복해서 보이는 고객 니즈를 모으고 싶어요' },
+  { id: 'voc.top_requests', label: '어떤 기능을 가장 많이 요청하는지 모아보고 싶어요' },
+  { id: 'voc.faq_consistency', label: '자주 들어오는 질문과 답변을 정리해두고 싶어요' },
+  { id: 'voc.complaint_patterns', label: '고객이 어디서 자주 불편해하는지 모아보고 싶어요' },
+  { id: 'voc.account_requests', label: '고객사별로 지금까지 나온 요청과 맥락을 보고 싶어요' },
+  { id: 'voc.customer_understanding', label: '상담에서 반복해서 보이는 고객 니즈를 모으고 싶어요' },
 ];
 
 export const DOC_KIND_FIELD_LABEL = '어떤 종류의 문서를 만들까요?';
@@ -60,67 +62,73 @@ export const DOC_KIND_SAMPLE_TITLE = '템플릿 예시';
 /** 목적이 수집 범위가 아니라 문서 종류·문체에만 쓰인다는 오해 방지 카피 */
 export const DOC_KIND_SAMPLE_CAPTION = '입력한 목적은 만들 문서의 종류와 문체를 정하는 데 쓰여요.';
 
+// 기능 요청 정리만 지원한다 — 나머지는 앞으로 열릴 자리라 고를 수 없이 노출된다
 export const WIKI_DOC_KIND_PRESETS: readonly WikiDocKindPreset[] = [
   {
-    id: 'feature-request',
+    id: 'feature_request_status',
     icon: 'request',
     label: '기능 요청 정리',
     description: '고객이 원하는 기능과 그 이유, 사용 상황을 정리한 문서',
   },
   {
-    id: 'pain-point',
+    id: 'complaint_topic_brief',
     icon: 'error',
     label: '고객 불편사항 정리',
     description: '고객이 어떤 상황에서 불편을 겪는지 정리한 문서',
+    disabled: true,
   },
   {
-    id: 'faq',
+    id: 'faq_answer',
     icon: 'help',
     label: '자주 묻는 질문 정리',
     description: '반복되는 질문과 현재 기준 답변을 정리한 문서',
+    disabled: true,
   },
   {
-    id: 'client-request',
+    id: 'customer_voice_profile',
     icon: 'client',
     label: '고객사별 요청사항 정리',
     description: '특정 고객사가 요청한 기능과 조건을 정리한 문서',
+    disabled: true,
   },
   {
-    id: 'client-history',
+    id: 'customer_history',
     icon: 'history',
     label: '고객사 히스토리 정리',
     description: '고객사와 오간 문의·요청·결정을 시간순으로 정리한 문서',
+    disabled: true,
   },
   {
     id: 'policy',
     icon: 'book',
     label: '정책 · 예외사항 정리',
     description: '현재 적용 기준과 예외로 처리되는 경우를 정리한 문서',
+    disabled: true,
   },
 ];
 
-// 앞 문장만 실카피, 뒤는 시안 필러 그대로 — 선택별로 갈리는지도 미정이다
+// 앞 문장만 실카피, 뒤는 시안 필러 그대로 — 발행본에는 처리 상태값을 남기지 않는다
 export const TEMPLATE_SAMPLE_TEXT_TBD =
-  '엑셀 내보내기 기능에 대한 요구. 5개 고객사에서 반복 접수되었으며 현재 상태는 검토 중이다. text text text text text text text text text text text text text text text text text text text text text text text text text text text text text text';
+  '엑셀 내보내기 기능 요청. 5개 고객사에서 반복 접수됐다. text text text text text text text text text text text text text text text text text text text text text text text text text text text text text text';
 
 export const TONE_STYLE_FIELD_LABEL = '문서를 어떤 문체로 쓸까요?';
 export const TONE_SAMPLE_TAG_LABEL = '예시';
 
 export const WIKI_TONE_STYLE_OPTIONS: readonly WikiToneStyleOption[] = [
   {
-    id: 'wiki-standard',
+    id: 'style.wiki_standard',
     label: '위키 표준체',
     description: '중립 서술체로 사실과 근거, 시점을 건조하게 기록',
-    sampleText: '엑셀 내보내기 기능에 대한 요구. 5개 고객사에서 반복 접수되었으며 현재 검토 중이다.',
+    sampleText: '엑셀 내보내기 기능에 대한 요구. 5개 고객사에서 반복 접수됐다.',
   },
   {
-    id: 'support-guide',
+    id: 'style.support_guide',
     label: '응대 가이드체',
     description: '고객에게 그대로 전달할 수 있는 해요체 표현',
-    sampleText: '엑셀 내보내기는 아직 지원하지 않아요. 검토 중이라고 안내해 주세요.',
+    sampleText: '엑셀 내보내기는 아직 지원하지 않아요. 현재 지원 범위를 그대로 안내해 주세요.',
   },
   {
-    id: 'report-summary',
+    id: 'style.report_summary',
     label: '보고 요약체',
     description: '두괄식 요약과 수치로 판단에 필요한 규모를 앞세움',
     sampleText: '엑셀 내보내기 요구 누적 5개사. 최근 한 달 접수 증가.',
@@ -131,23 +139,24 @@ export const CHANNEL_FIELD_LABEL = '어떤 채널톡 채널의 문의를 감지�
 /** 명세의 수집 범위 오해 방지 카피 */
 export const CHANNEL_FIELD_CAPTION = '선택한 채널의 고객 상담만 읽어요. 팀챗 등 내부 대화는 읽지 않아요.';
 export const CHANNEL_PICKER_PLACEHOLDER = '채널톡 내 채널을 선택해주세요';
-export const CHANNEL_TABLE_HEADERS = { name: '채널명', lastModified: '최근 수정일' } as const;
+export const CHANNEL_TABLE_HEADERS = { name: '채널명' } as const;
 
-// 행 카피는 시안 필러(TBD). 채널 필드는 백엔드 계약 모양을 지킨다 — 수정일만 [SPEC]
-export const ONBOARDING_CHANNEL_ROWS: readonly OnboardingChannelRow[] = Array.from(
-  { length: 5 },
-  (_, index) => ({
-    channel: {
-      id: `channel-${index + 1}`,
-      name: '채널명 text text text text text text text text text text text text text',
-      workspaceId: 1,
-      isAdmin: index === 0,
-      documentCount: index * 3,
-      folders: [],
-    },
-    lastModifiedLabel: '2025.01.23',
-  }),
-);
+// 행 카피는 시안 필러(TBD). 채널은 채널톡 자격증명 계약 모양을 지킨다
+export const ONBOARDING_CHANNEL_ROWS: readonly OnboardingChannelRow[] = Array.from({ length: 5 }, (_, index) => ({
+  channel: {
+    credentialId: index + 1,
+    name: '채널명 text text text text text text text text text text text text text',
+    externalId: `ct-channel-${index + 1}`,
+    isConfigured: true,
+  },
+}));
+
+/** 일정 필드 식별자. 제출 payload와 완료 화면이 같은 선택값을 이 키로 읽는다 */
+export const SCHEDULE_FIELD_IDS = {
+  pollingInterval: 'polling-interval',
+  backfillRange: 'backfill-range',
+  runTime: 'run-time',
+} as const;
 
 /**
  * 기본값과 주기 선택지는 기획 문서(Confluence 160301060 §3.2)가 원천이다 —
@@ -155,7 +164,7 @@ export const ONBOARDING_CHANNEL_ROWS: readonly OnboardingChannelRow[] = Array.fr
  */
 export const SCHEDULE_FIELDS: readonly ScheduleFieldData[] = [
   {
-    id: 'polling-interval',
+    id: SCHEDULE_FIELD_IDS.pollingInterval,
     label: '얼마나 자주 갱신할까요?',
     valueLabel: '매일',
     icon: 'calendar-clock',
@@ -167,7 +176,7 @@ export const SCHEDULE_FIELDS: readonly ScheduleFieldData[] = [
     ],
   },
   {
-    id: 'backfill-range',
+    id: SCHEDULE_FIELD_IDS.backfillRange,
     label: '언제부터의 상담을 가져올까요?',
     valueLabel: '지금부터',
     // 앞 둘은 추후 지원이라 고를 수 없이 노출된다(기획 §3.2, 시안 disabled)
@@ -178,7 +187,7 @@ export const SCHEDULE_FIELDS: readonly ScheduleFieldData[] = [
     ],
   },
   {
-    id: 'run-time',
+    id: SCHEDULE_FIELD_IDS.runTime,
     label: '몇 시에 실행할까요?',
     valueLabel: '자정',
     options: [
@@ -190,7 +199,21 @@ export const SCHEDULE_FIELDS: readonly ScheduleFieldData[] = [
   },
 ];
 
-export const SCHEDULE_RESULT_TEXT = '매일 자정에 새 상담을 확인하고 문서 초안을 만들어요.';
+/**
+ * 일정 필드의 기본 선택. 트리거에 그려진 값이 곧 초기값이라 라벨로 역산한다 —
+ * 보이는 값과 상태가 어긋나면 사용자가 고르지 않은 설정을 고른 줄 안다.
+ */
+export const INITIAL_SCHEDULE_SELECTION: Readonly<Record<string, string>> = Object.fromEntries(
+  SCHEDULE_FIELDS.flatMap((field) => {
+    const picked = field.options?.find((option) => option.label === field.valueLabel);
+    return picked ? [[field.id, picked.id] as const] : [];
+  }),
+);
+
+/** 2단계 결과 문장. 어형은 고정이고 주기·실행 시각 자리만 선택 라벨로 갈린다 */
+export const buildScheduleResultText = (intervalLabel: string, runTimeLabel: string) =>
+  `${intervalLabel} ${runTimeLabel}에 새 상담을 확인하고 문서 초안을 만들어요.`;
+
 export const BACKFILL_NOTICE_TEXT = '과거 이력 가져오기는 곧 지원돼요.';
 
 export const ONBOARDING_NEXT_LABEL = '다음 단계로';
@@ -225,9 +248,21 @@ export const ONBOARDING_SUMMARY_CHANNEL_LABEL = '연결한 채널톡 채널';
 
 export const ONBOARDING_NEXT_STEPS_TITLE = '위키를 만들면';
 
-/** 명세의 완료 화면 3요소 — ①② 시간 약속, ③ 검수 안내. 별도 철학 문단은 시안에 없다 */
-export const ONBOARDING_NEXT_STEPS: readonly string[] = [
-  '오늘 들어오는 상담부터 수집을 시작해요',
-  '내일 자정 첫 갱신 때 첫 문서 초안이 검토 큐에 도착해요',
-  '문서는 사람의 승인 없이는 바뀌지 않아요',
-];
+// 완료 화면 3요소의 조각. ①② 시간 약속은 선택값에서 파생되고 ③은 고정이다
+export const DEFAULT_BACKFILL_OPTION_ID = 'from-now';
+
+/** 백필 선택별 수집 시작 안내. 고를 수 있는 값은 "지금부터"뿐이고 나머지는 카피 미정(TBD) */
+export const ONBOARDING_BACKFILL_START_TEXTS: Readonly<Record<string, string>> = {
+  all: '지금까지 쌓인 상담 전체부터 수집을 시작해요',
+  'recent-months': '최근 몇 개월치 상담부터 수집을 시작해요',
+  [DEFAULT_BACKFILL_OPTION_ID]: '오늘 들어오는 상담부터 수집을 시작해요',
+};
+
+export const buildOnboardingFirstRunText = (when: string) => `${when} 첫 갱신 때 첫 문서 초안이 검토 큐에 도착해요`;
+
+/** 제품 원칙이라 선택과 무관하게 고정이다 */
+export const ONBOARDING_APPROVAL_PRINCIPLE_TEXT = '문서는 사람의 승인 없이는 바뀌지 않아요';
+
+/** 채널은 이미 만들어졌고 수집 설정 저장만 실패한 경우의 알림 */
+export const buildMaintenanceFailureText = (failedCount: number, message: string) =>
+  `채널 ${failedCount}개의 수집 설정을 저장하지 못했어요. ${message}`;

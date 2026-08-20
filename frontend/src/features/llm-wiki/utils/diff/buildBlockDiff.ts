@@ -1,6 +1,6 @@
 import { Diff } from 'diff';
 
-import type { BlockDiffEntry, DiffLine, DiffSegment, WikiBlock } from '../../types/llmWikiDiff';
+import type { BlockChange, BlockDiffEntry, DiffLine, DiffSegment, WikiBlock } from '../../types/llmWikiDiff';
 
 interface ChangePart {
   value: string;
@@ -35,7 +35,15 @@ function plainLines(body: string): DiffLine[] {
   return body.split('\n').map((text) => ({ segments: text.length > 0 ? [{ text, emphasized: false }] : [] }));
 }
 
-const sharesClaimId = (a: WikiBlock, b: WikiBlock) => a.claimIds.some((id) => b.claimIds.includes(id));
+/** 화면에 실리는 본문. 산문이 정본이고 없으면 값 표기로 폴백한다 */
+const displayBody = (block: WikiBlock) => block.narrative ?? block.body;
+
+/** 좌우 비교는 한 축에서만 한다 — 한쪽만 산문이면 축이 섞여 전부 바뀐 것처럼 보인다 */
+function comparedPair(base: WikiBlock, proposed: WikiBlock): [string, string] {
+  return base.narrative != null && proposed.narrative != null
+    ? [base.narrative, proposed.narrative]
+    : [base.body, proposed.body];
+}
 
 /** 판정 요청에 필요한 값들. 승인됨 배지는 시안이 없어 rejected만 내보낸다 */
 function verdictFields(proposed: WikiBlock) {
@@ -47,57 +55,57 @@ function verdictFields(proposed: WikiBlock) {
 }
 
 /**
- * base/proposed blocks[]에서 diff 카드 목록을 만든다. 페어링 키는 claimIds 교집합이다.
- * claimIds가 빈 블록은 페어링에 실패해 added+removed 두 카드로 갈라진다(의도된 동작).
+ * 서버가 계산한 변경 목록을 diff 카드로 옮긴다. 짝짓기는 하지 않고 자리만 따라간다 —
+ * 같은 안건이 소비자마다 다르게 보이지 않으려면 짝짓기 규칙이 한 곳에만 있어야 한다.
+ * 자리가 blocks 범위를 벗어난 변경은 카드를 만들지 않는다.
  */
-export function computeBlockDiff(
+export function buildBlockDiff(
   baseBlocks: readonly WikiBlock[],
   proposedBlocks: readonly WikiBlock[],
+  changes: readonly BlockChange[],
 ): BlockDiffEntry[] {
   const entries: BlockDiffEntry[] = [];
-  const usedBase = new Set<number>();
 
-  proposedBlocks.forEach((proposed, proposedIndex) => {
-    const baseIndex = baseBlocks.findIndex(
-      (candidate, index) => !usedBase.has(index) && sharesClaimId(candidate, proposed),
-    );
+  for (const change of changes) {
+    const base = change.baseBlockIndex === null ? undefined : baseBlocks[change.baseBlockIndex];
+    const proposed = change.blockIndex === null ? undefined : proposedBlocks[change.blockIndex];
 
-    // 삭제 tombstone — 사유를 실으려고 proposed에 명시로 온다. 원문은 페어링된 base 쪽이다
-    if (proposed.removed) {
-      if (baseIndex !== -1) usedBase.add(baseIndex);
-      const deleted = baseIndex === -1 ? proposed : baseBlocks[baseIndex];
+    if (change.kind === 'removed') {
+      // 변경안에 자리가 없어 사유도 판정 경로도 없다 — 발행판 원문만 보여 준다
+      if (!base) continue;
       entries.push({
-        id: `removed-${proposedIndex}`,
+        id: `removed-${change.baseBlockIndex}`,
         kind: 'removed',
-        title: deleted.heading,
-        before: plainLines(deleted.body),
+        title: base.heading,
+        before: plainLines(displayBody(base)),
         after: null,
-        reason: proposed.reason ?? null,
-        ...verdictFields(proposed),
+        reason: null,
+        blockIndex: null,
+        blockContentHash: null,
       });
-      return;
+      continue;
     }
 
-    if (baseIndex === -1) {
+    if (!proposed) continue;
+
+    if (change.kind === 'added') {
       entries.push({
-        id: `added-${proposedIndex}`,
+        id: `added-${change.blockIndex}`,
         kind: 'added',
         title: proposed.heading,
         before: null,
-        after: plainLines(proposed.body),
+        after: plainLines(displayBody(proposed)),
         reason: proposed.reason ?? null,
         ...verdictFields(proposed),
       });
-      return;
+      continue;
     }
 
-    usedBase.add(baseIndex);
-    const base = baseBlocks[baseIndex];
-    if (base.body === proposed.body) return; // 변경 없음 — heading 변경 감지는 범위 밖
-
-    const parts = wordDiff.diff(base.body, proposed.body);
+    if (!base) continue;
+    // 강조는 화면에 실린 본문 축에서만 낸다 — 변경 판정 자체는 서버가 이미 했다
+    const parts = wordDiff.diff(...comparedPair(base, proposed));
     entries.push({
-      id: `modified-${proposedIndex}`,
+      id: `modified-${change.blockIndex}`,
       kind: 'modified',
       title: proposed.heading,
       before: toLines(parts, 'before'),
@@ -105,23 +113,7 @@ export function computeBlockDiff(
       reason: proposed.reason ?? null,
       ...verdictFields(proposed),
     });
-  });
-
-  // tombstone 없이 빠진 블록. 계약 위반이지만 조용히 사라지는 것보다 사유 없는 카드로 드러낸다.
-  // proposed에 자리가 없어 판정 경로도 없다 — blockIndex·blockContentHash가 null인 이유다
-  baseBlocks.forEach((base, baseIndex) => {
-    if (usedBase.has(baseIndex)) return;
-    entries.push({
-      id: `removed-orphan-${baseIndex}`,
-      kind: 'removed',
-      title: base.heading,
-      before: plainLines(base.body),
-      after: null,
-      reason: null,
-      blockIndex: null,
-      blockContentHash: null,
-    });
-  });
+  }
 
   return entries;
 }

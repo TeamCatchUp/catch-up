@@ -144,5 +144,40 @@ export const API = {
     inquirySettings: (agentSpecId: number) => `${API_PREFIX}/automations/inquiries/${agentSpecId}/settings`, // PATCH 문의 자동화 설정
     publishInquiry: `${API_PREFIX}/automations/inquiries/publish`, // POST 문의 자동화 설정 생성 및 활성화
   },
+
+  // LLM Wiki — 채널·폴더·문서·담당자·즐겨찾기
+  wiki: {
+    channels: `${API_PREFIX}/wiki/channels`, // GET 채널 목록(폴더·정의·문서 수 동봉) / POST 채널 생성
+    channelsOnboarding: `${API_PREFIX}/wiki/channels/onboarding`, // POST preset 선택으로 채널·정의·폴더 일괄 생성
+    definitionPresets: `${API_PREFIX}/wiki/definition-presets`, // GET 온보딩 preset 카탈로그(도메인·목적·종류·문체)
+    channel: (channelId: string) => `${API_PREFIX}/wiki/channels/${channelId}`, // PATCH 채널 이름 변경 (채널 관리자)
+    folders: (channelId: string) => `${API_PREFIX}/wiki/channels/${channelId}/folders`, // POST 폴더 생성 (채널 관리자)
+    folder: (channelId: string, folderId: string) => `${API_PREFIX}/wiki/channels/${channelId}/folders/${folderId}`, // PATCH 이름 변경 / DELETE 삭제 (채널 관리자)
+    // 관리자 해제 경로는 백엔드에 없다 — 지정(PUT)만 열려 있다
+    channelAdmin: (channelId: string, userId: number) => `${API_PREFIX}/wiki/channels/${channelId}/admins/${userId}`, // PUT 채널 관리자 추가
+    members: `${API_PREFIX}/wiki/members`, // GET 워크스페이스 활성 멤버 목록 (담당자 피커 후보, 구성원이면 조회 가능)
+    artifacts: `${API_PREFIX}/wiki/artifacts`, // GET 문서 목록 (channel_id, folder_id, kind, status, owner_user_id | unassigned, q, created_after, created_before, sort, order, limit, offset)
+    artifact: (artifactId: string) => `${API_PREFIX}/wiki/artifacts/${artifactId}`, // GET 발행판 상세 / PATCH 폴더 이동
+    artifactOwner: (artifactId: string, userId: number) =>
+      `${API_PREFIX}/wiki/artifacts/${artifactId}/owners/${userId}`, // PUT 담당자 지정 / DELETE 해제
+    favorites: `${API_PREFIX}/wiki/favorites`, // GET 즐겨찾기 목록 (최근 등록 순)
+    favorite: (artifactId: string) => `${API_PREFIX}/wiki/favorites/${artifactId}`, // PUT 등록 / DELETE 해제 (둘 다 멱등)
+    // 경로 키는 채널톡 credential_id다 — 수집 설정은 위키가 아니라 소스 채널 단위로 저장된다
+    knowledgeMaintenanceSettings: (credentialId: number) =>
+      `${API_PREFIX}/wiki/knowledge-maintenance-settings/${credentialId}`, // PUT 수집 주기·실행 앵커 저장 (관리자)
+  },
+
+  // LLM Wiki 검수 루프 — 변경안 큐·블록 판정·발행
+  knowledgeReview: {
+    queue: `${API_PREFIX}/knowledge-review/queue`, // GET 검토 큐 (contains_conflict, channel_id, owner_user_id, created_after, created_before, limit, offset)
+    queueItem: (proposalId: string) => `${API_PREFIX}/knowledge-review/queue/${proposalId}`, // GET 변경안 상세 (블록·근거·발행판 대비 변경·충돌)
+    blockVerdict: (proposalId: string, blockIndex: number) =>
+      `${API_PREFIX}/knowledge-review/queue/${proposalId}/blocks/${blockIndex}/verdict`, // PUT 블록 승인/반려 (멱등)
+    publish: (proposalId: string) => `${API_PREFIX}/knowledge-review/queue/${proposalId}/publish`, // POST 블록 판정 마감 후 발행
+    // approve·reject는 blocks 경로가 아니라 artifacts 경로다 — 블록 판정이 시작된 변경안에는 쓸 수 없다
+    approve: (proposalId: string) => `${API_PREFIX}/knowledge-review/artifacts/${proposalId}/approve`, // POST 변경안 전체 승인
+    reject: (proposalId: string) => `${API_PREFIX}/knowledge-review/artifacts/${proposalId}/reject`, // POST 변경안 전체 반려 (사유 필수)
+  },
+
   version: `${API_PREFIX}/version`, // GET 현재 앱 버전
 } as const;

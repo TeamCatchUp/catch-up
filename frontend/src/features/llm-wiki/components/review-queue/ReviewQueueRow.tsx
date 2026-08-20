@@ -1,11 +1,11 @@
 import IconAddSmall from '@/public/icons/icon/add_small.svg';
-import { Avatar } from '@/shared/components/ui/avatar';
 import { cn } from '@/shared/utils/cn';
 
-import type { ReviewQueueItemData } from '../../types/llmWikiModel';
+import type { ReviewQueueRowData } from '../../api/knowledgeReviewMappers';
 
 interface ReviewQueueRowProps {
-  item: ReviewQueueItemData;
+  /** 목록 응답 한 줄. baseRevisionId는 상세에서만 오므로 행 계약에 없다 */
+  item: ReviewQueueRowData;
   selected?: boolean;
   onSelect?: (id: string) => void;
   /**
@@ -17,10 +17,10 @@ interface ReviewQueueRowProps {
 
 /**
  * 검토 큐 좌측 목록의 행. 충돌(모순) 아이콘은 MVP 제외라 렌더하지 않는다.
- * 신뢰도·유형·hover 채움은 시안 근거가 없어 렌더하지 않는다 — props로 받지도 않는다.
+ * 작성자·신뢰도·유형은 큐 응답에 없거나 시안 근거가 없어 렌더하지 않는다.
  */
 export default function ReviewQueueRow({ item, selected = false, onSelect, secondaryTitle }: ReviewQueueRowProps) {
-  const { id, title, authorName, authorProfileImageUrl, waitingLabel } = item;
+  const { id, title, waitingLabel } = item;
 
   // 행 높이는 결과값이다 — h-*로 못박지 않는다.
   return (
@@ -47,13 +47,7 @@ export default function ReviewQueueRow({ item, selected = false, onSelect, secon
         </span>
       )}
 
-      <span className="text-body-xsmall flex w-full min-w-0 items-center gap-3">
-        {/* 공용 Avatar에 이 화면만의 radius·링을 덮어씌운다.
-            alt를 비우는 이유는 옆에 작성자명이 이미 있어서다(중복 낭독 방지). */}
-        <Avatar size="small" src={authorProfileImageUrl} className="border-line-normal-assistive rounded-xl" />
-        <span className="text-text-normal-normal min-w-0 flex-1 truncate">{authorName}</span>
-        <span className="text-text-normal-assistive shrink-0">{waitingLabel}</span>
-      </span>
+      <span className="text-body-xsmall text-text-normal-assistive w-full truncate">{waitingLabel}</span>
     </button>
   );
 }

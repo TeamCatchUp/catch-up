@@ -21,6 +21,7 @@ interface WikiOnboardingPurposeStepProps {
   nameValue: string;
   onNameChange?: (next: string) => void;
   namePlaceholder: string;
+  /** [BE] 채널명은 1~20자 — 상한 초과 입력은 잘라서 올린다 */
   nameMaxLength: number;
   purpose: ComponentProps<typeof PurposeSelectField>;
   docSettingTitle: string;
@@ -28,6 +29,8 @@ interface WikiOnboardingPurposeStepProps {
   tone: ComponentProps<typeof ToneStyleField>;
   nextLabel: string;
   onNext?: () => void;
+  /** 필수 입력(이름·카테고리·목적·문서 종류·문체)이 덜 찼으면 잠긴다 */
+  nextDisabled?: boolean;
   /** 상단 바 뒤로가기 — 하단 "이전"(단계 후퇴)과 달리 온보딩을 벗어난다 */
   onExit?: () => void;
 }
@@ -48,6 +51,7 @@ export default function WikiOnboardingPurposeStep({
   tone,
   nextLabel,
   onNext,
+  nextDisabled,
   onExit,
 }: WikiOnboardingPurposeStepProps) {
   return (
@@ -71,7 +75,7 @@ export default function WikiOnboardingPurposeStep({
                   maxLength={nameMaxLength}
                   placeholder={namePlaceholder}
                   aria-label={nameLabel}
-                  onChange={(event) => onNameChange?.(event.target.value)}
+                  onChange={(event) => onNameChange?.(event.target.value.slice(0, nameMaxLength))}
                   className="pr-16"
                 />
                 <span className="text-body-small text-text-normal-alternative absolute top-1/2 right-3 -translate-y-1/2">
@@ -91,7 +95,7 @@ export default function WikiOnboardingPurposeStep({
         </div>
       </div>
 
-      <OnboardingActionBar nextLabel={nextLabel} onNext={onNext} />
+      <OnboardingActionBar nextLabel={nextLabel} onNext={onNext} nextDisabled={nextDisabled} />
     </div>
   );
 }

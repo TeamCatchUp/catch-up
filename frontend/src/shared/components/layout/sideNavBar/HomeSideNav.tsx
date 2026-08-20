@@ -9,8 +9,6 @@ import IconDocumentSearch from '@/public/icons/icon/document_search.svg';
 import IconHistory from '@/public/icons/icon/history.svg';
 import IconMore from '@/public/icons/icon/kebab_horizontal.svg';
 import IconList from '@/public/icons/icon/list.svg';
-import IconSearch300 from '@/public/icons/icon/search_300.svg';
-import IconSearch400 from '@/public/icons/icon/search_400.svg';
 import IconUpdate from '@/public/icons/icon/update.svg';
 import { UserMenuContent } from '@/shared/components/layout/sideNavBar/modal/UserModal';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
@@ -19,7 +17,7 @@ import { useUserStore } from '@/shared/store/userStore';
 import SideNavRail from './SideNavRail';
 import SideNavShell from './SideNavShell';
 import SnbFooter from './SnbFooter';
-import { REQUESTED_COUNT, SPACE_HOME_ICON, SPACE_WIKI_ICON } from './snbNavFixtures';
+import { SPACE_HOME_ICON, SPACE_WIKI_ICON } from './snbNavFixtures';
 import SnbNavRow from './SnbNavRow';
 import SnbRailFooter from './SnbRailFooter';
 import SnbRailItem from './SnbRailItem';
@@ -50,7 +48,6 @@ export default function HomeSideNav() {
 
   const isDocsMode = pathname === '/' && searchParams.get('mode') === 'docs';
   const isHome = pathname === '/' && !isDocsMode;
-  const isSearch = pathname === '/search';
   const isAgentStudio = pathname.startsWith('/agent-studio');
 
   // 섹션 접기는 로컬 상태다 — 서버에 보존할 계약이 없다
@@ -71,7 +68,6 @@ export default function HomeSideNav() {
         footer={<SnbRailFooter userName={user?.name ?? '이름없음'} onSettingsClick={goSettings} profileMenu={profileMenu} />}
       >
         <SnbRailItem Icon={IconAdd400} label="새 채팅" selected={isHome} onClick={go('/')} />
-        <SnbRailItem Icon={IconSearch400} label="검색" selected={isSearch} onClick={go('/search')} />
         <SnbRailItem Icon={IconUpdate} label="요청됨" onClick={go('/llm-wiki/review')} />
         <SnbRailItem Icon={IconAgent} label="문의 대응" selected={isAgentStudio} onClick={go('/agent-studio')} />
         <SnbRailItem
@@ -97,7 +93,6 @@ export default function HomeSideNav() {
       primaryItems={
         <div className="flex flex-col">
           <SnbNavRow Icon={IconAdd400} label="새 채팅" iconOnDisc selected={isHome} onClick={go('/')} />
-          <SnbNavRow Icon={IconSearch300} label="검색" selected={isSearch} onClick={go('/search')} />
           <SnbNavRow
             Icon={IconDocumentSearch}
             label="문서 탐색"
@@ -105,7 +100,7 @@ export default function HomeSideNav() {
             selected={isDocsMode}
             onClick={go('/?mode=docs')}
           />
-          <SnbNavRow Icon={IconUpdate} label="요청됨" count={REQUESTED_COUNT} onClick={go('/llm-wiki/review')} />
+          <SnbNavRow Icon={IconUpdate} label="요청됨" onClick={go('/llm-wiki/review')} />
         </div>
       }
       footer={
