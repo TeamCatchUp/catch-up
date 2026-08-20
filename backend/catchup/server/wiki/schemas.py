@@ -322,8 +322,9 @@ class LayoutItemResponse(BaseModel):
     때문이다.
 
     item_kind가 table이면 여러 블록을 한 표로 묶은 항목이라 block_index가
-    없고 block_indexes와 rows가 찬다. placeholder는 값이 아직 없다는 사실을
-    알리는 항목이라 가리킬 블록이 없고 text만 있다.
+    없고 block_indexes와 rows가 찬다. table 항목에서 rows[i]는
+    block_indexes[i]의 블록에서 나온다. 두 목록은 같은 순서다. placeholder는
+    값이 아직 없다는 사실을 알리는 항목이라 가리킬 블록이 없고 text만 있다.
     """
 
     item_kind: Literal["block", "table", "placeholder"]

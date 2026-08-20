@@ -760,7 +760,7 @@ def _propose_node_blocks(
             suppressed += dropped_summary
             blocks = (*kept, *blocks)
             # 다시 센 요약도 근거 계약을 거친다. 되살린 열린 질문과 같은
-            # 자리다 — 여기서 만든 블록은 입구의 검사를 거치지 않았다.
+            # 자리다. 여기서 만든 블록은 입구의 검사를 거치지 않았다.
             validate_blocks(blocks)
     if not blocks:
         # 남은 문장이 없으면 빈 카드 규칙과 같이 건너뛴다. 다만 큐에
@@ -952,6 +952,11 @@ def _explain_changed_blocks(
         if change.change != CHANGE_MODIFIED:
             continue
         block = updated[change.block_index]
+        if block.block_kind == BLOCK_KIND_SUMMARY:
+            # 요약 본문은 아래 블록을 센 값이라 문서 어디가 바뀌어도 함께
+            # 바뀐다. 무엇이 달라졌는지는 같은 실행이 새로 쓰는 요약 본문이
+            # 이미 말하므로, 여기서는 수정 이유를 붙이지 않는다.
+            continue
         found = reusable.get(block_content_hash(block))
         if found is not None:
             updated[change.block_index] = replace(block, change_reason=found)

@@ -104,23 +104,37 @@ def test_modified_block_gets_llm_reason_added_block_does_not() -> None:
     narrator = _FakeNarrator()
     _run(uow, narrator)
     _publish_pending(uow)
-    _add_priority_claim(uow, node_id)
+    _add_second_status_claim(uow, node_id)
 
     result = _run(uow, narrator)
 
     reasons = _reasons(uow)
-    # 요약은 아래 블록을 센 줄이라 절이 하나 늘면 함께 바뀐다.
+    assert _explained_headings(narrator) == ["status"]
+    assert reasons["status"] == "status 블록이 바뀐 이유다."
+    assert result.blocks_explained == 1
+    assert result.blocks_explanation_reused == 0
+
+
+def test_summary_block_gets_no_change_reason() -> None:
+    """요약은 아래 블록을 센 값이라 수정 이유를 붙이지 않는다."""
+    node_id = uuid.uuid4()
+    uow = _two_section_uow(node_id)
+    narrator = _FakeNarrator()
+    _run(uow, narrator)
+    _publish_pending(uow)
+    # 절이 하나 늘면 요약 본문도 함께 바뀐다.
+    _add_priority_claim(uow, node_id)
+
+    result = _run(uow, narrator)
+
     summary_heading = next(
         block.heading
         for block in _blocks(uow)
         if block.block_kind == BLOCK_KIND_SUMMARY
     )
-    assert _explained_headings(narrator) == [summary_heading]
-    assert reasons[summary_heading] == f"{summary_heading} 블록이 바뀐 이유다."
-    assert reasons["priority"] is None
-    assert reasons["status"] is None
-    assert result.blocks_explained == 1
-    assert result.blocks_explanation_reused == 0
+    assert _reasons(uow)[summary_heading] is None
+    assert summary_heading not in _explained_headings(narrator)
+    assert result.blocks_explained == 0
 
 
 def test_explanation_request_carries_before_and_after_statements() -> None:
@@ -182,14 +196,10 @@ def test_same_base_reuses_reason_without_call() -> None:
     result = _run(uow, narrator)
 
     reasons = _reasons(uow)
-    assert _explained_headings(narrator) == [
-        block.heading
-        for block in _blocks(uow)
-        if block.block_kind == BLOCK_KIND_SUMMARY
-    ]
+    assert _explained_headings(narrator) == []
     assert reasons["status"] == "계류에 실린 이유다."
     assert reasons["priority"] is None
-    assert result.blocks_explained == 1
+    assert result.blocks_explained == 0
     assert result.blocks_explanation_reused == 1
 
 
@@ -199,7 +209,7 @@ def test_explain_error_fails_node() -> None:
     uow = _two_section_uow(node_id)
     _run(uow, _FakeNarrator())
     _publish_pending(uow)
-    _add_priority_claim(uow, node_id)
+    _add_second_status_claim(uow, node_id)
 
     narrator = _FakeNarrator(explain_error=NarrationError("모델이 답하지 않았다"))
 
