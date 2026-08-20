@@ -109,7 +109,6 @@ class LlmBlockNarrator:
                 "before_statements": list(request.before_statements),
                 "after_statements": list(request.after_statements),
                 "new_sources": list(request.new_sources),
-                "style_instruction": request.style_instruction,
                 "purpose_sentence": request.purpose_sentence,
             },
             event_prefix="block_change_explanation",

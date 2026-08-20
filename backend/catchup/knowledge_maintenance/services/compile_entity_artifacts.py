@@ -844,7 +844,6 @@ def _propose_node_blocks(
             blocks=blocks,
             base_revision_id=base_revision_id,
             narrator=narrator,
-            style_instruction=style_instruction,
             purpose_sentence=purpose_sentence,
         )
 
@@ -913,7 +912,6 @@ def _explain_changed_blocks(
     blocks: tuple[ArtifactBlock, ...],
     base_revision_id: uuid.UUID,
     narrator: BlockNarrator,
-    style_instruction: str,
     purpose_sentence: str,
 ) -> tuple[tuple[ArtifactBlock, ...], int, int]:
     """발행 판과 짝이 맞으면서 내용이 달라진 블록에 수정 이유를 붙인다.
@@ -932,7 +930,6 @@ def _explain_changed_blocks(
         blocks: 이번에 올릴 블록들이다.
         base_revision_id: 이 변경안이 딛고 선 발행 판이다.
         narrator: 수정 이유를 받아 올 서술기다.
-        style_instruction: 어떤 문체로 쓸지 알리는 지시다.
         purpose_sentence: 이 문서가 무엇에 쓰이는지 알리는 한 줄이다.
 
     Returns:
@@ -968,7 +965,6 @@ def _explain_changed_blocks(
         request = _change_explanation_request(
             block,
             base[change.base_block_index],
-            style_instruction=style_instruction,
             purpose_sentence=purpose_sentence,
         )
         if not request.before_statements and not request.after_statements:
@@ -988,7 +984,6 @@ def _change_explanation_request(
     block: ArtifactBlock,
     paired: ArtifactBlock,
     *,
-    style_instruction: str,
     purpose_sentence: str,
 ) -> ChangeExplanationRequest:
     """짝지어진 두 블록을 수정 이유 요청으로 옮긴다.
@@ -1007,7 +1002,6 @@ def _change_explanation_request(
     Args:
         block: 이번에 올릴 블록이다.
         paired: 발행 판에서 짝지어진 블록이다.
-        style_instruction: 어떤 문체로 쓸지 알리는 지시다.
         purpose_sentence: 이 문서가 무엇에 쓰이는지 알리는 한 줄이다.
 
     Returns:
@@ -1027,7 +1021,6 @@ def _change_explanation_request(
         new_sources=tuple(
             statement for statement in after if statement not in seen
         ),
-        style_instruction=style_instruction,
         purpose_sentence=purpose_sentence,
     )
 

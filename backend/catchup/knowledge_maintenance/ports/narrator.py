@@ -65,13 +65,17 @@ class ChangeExplanationRequest:
     "왜 달라졌나"다. 앞뒤 문장과 새로 붙은 인용만 주면 그 답을 쓸 수 있고,
     제안 id나 검수자 같은 운영 정보는 답에 필요하지 않아 아예 주지 않는다.
 
+    문서 문체 지시는 받지 않는다. 수정 이유는 위키 본문 산문이 아니라
+    검토 화면에 붙는 안내 문구이고, 검토자에게 말을 거는 자리라 문서가
+    어떤 문체를 쓰든 존댓말로 쓴다. 문서 문체 preset은 본문 산문에만
+    적용한다.
+
     Attributes:
         heading: 바뀐 블록의 제목을 담는다.
         before_statements: 바뀌기 전 블록이 담고 있던 문장을 담는다.
         after_statements: 바뀐 뒤 블록이 담고 있는 문장을 담는다.
         new_sources: 이번에 새로 붙은 검증된 인용 원문을 담는다. 무엇이
             변경을 불러왔는지 말할 수 있는 유일한 근거다.
-        style_instruction: 어떤 문체로 쓸지 알리는 지시 한 문단이다.
         purpose_sentence: 이 문서가 무엇에 쓰이는지 알리는 한 줄이다.
     """
 
@@ -79,7 +83,6 @@ class ChangeExplanationRequest:
     before_statements: tuple[str, ...]
     after_statements: tuple[str, ...]
     new_sources: tuple[str, ...]
-    style_instruction: str
     purpose_sentence: str
 
 
@@ -102,6 +105,10 @@ class BlockNarrator(Protocol):
 
         산문과 마찬가지로 빈 문장을 성공으로 돌려주지 않는다. 바뀐 것이
         없는 블록은 애초에 부르지 않는다.
+
+        돌려주는 문장은 존댓말이다. 수정 이유는 검토 화면에 붙는 안내
+        문구라서 문서 본문 문체를 따르지 않고, 문서가 어떤 문체를 쓰든
+        검토자에게 존댓말로 말한다.
 
         Raises:
             NarrationError: 이유를 받아 오지 못했을 때 던진다.

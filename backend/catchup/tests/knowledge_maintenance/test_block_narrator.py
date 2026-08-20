@@ -379,7 +379,6 @@ def _change_request() -> ChangeExplanationRequest:
         before_statements=("요청은 3회다",),
         after_statements=("요청은 4회다",),
         new_sources=("C사도 CSV 내보내기를 요청했다",),
-        style_instruction="담백하게 쓴다.",
         purpose_sentence="이 문서는 요구의 현황을 보는 데 쓴다.",
     )
 
@@ -450,10 +449,29 @@ def test_explain_change_prompt_carries_before_after_and_sources() -> None:
     assert "요청은 3회다" in rendered
     assert "요청은 4회다" in rendered
     assert "C사도 CSV 내보내기를 요청했다" in rendered
-    assert "담백하게 쓴다." in rendered
     assert "이 문서는 요구의 현황을 보는 데 쓴다." in rendered
     assert "Write in Korean." in rendered
     assert "one sentence" in rendered.lower()
+
+
+def test_explain_change_prompt_asks_for_the_polite_ending() -> None:
+    """수정 이유 프롬프트는 존댓말 종결을 지시한다."""
+    llm = _FakeLlm(reason_response=_parsed_reason("이유입니다."))
+
+    LlmBlockNarrator(llm).explain_change(_change_request())
+
+    rendered = llm.reason_structured.prompts[0]
+    assert "-습니다" in rendered
+
+
+def test_explain_change_prompt_carries_no_style_instruction() -> None:
+    """문서 문체 preset은 수정 이유 프롬프트에 실리지 않는다."""
+    llm = _FakeLlm(reason_response=_parsed_reason("이유입니다."))
+
+    LlmBlockNarrator(llm).explain_change(_change_request())
+
+    rendered = llm.reason_structured.prompts[0]
+    assert "## Style" not in rendered
 
 
 def test_explain_change_empty_reason_is_an_error() -> None:
