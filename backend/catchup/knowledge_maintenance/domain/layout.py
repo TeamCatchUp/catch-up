@@ -19,12 +19,28 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_SUMMARY
+from catchup.knowledge_maintenance.domain.artifact import SUMMARY_SECTION_BACKGROUND
+from catchup.knowledge_maintenance.domain.artifact import (
+    SUMMARY_SECTION_DESIRED_OUTCOME,
+)
+from catchup.knowledge_maintenance.domain.artifact import (
+    SUMMARY_SECTION_ONE_LINE_SUMMARY,
+)
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 
 # 레이아웃이 내놓는 항목의 종류다.
 ITEM_BLOCK = "block"
 ITEM_TABLE = "table"
 ITEM_PLACEHOLDER = "placeholder"
+
+# 머리말 섹션 heading을 화면에 보여 줄 제목으로 바꾸는 표다. 머리말은
+# 문서 종류와 무관하게 같은 세 섹션이라 문서 종류별 레이아웃 카탈로그가
+# 아니라 이 모듈에 둔다.
+SUMMARY_SECTION_LABELS = {
+    SUMMARY_SECTION_ONE_LINE_SUMMARY: "한 줄 요약",
+    SUMMARY_SECTION_DESIRED_OUTCOME: "원하는 결과",
+    SUMMARY_SECTION_BACKGROUND: "요청 배경",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,9 +108,13 @@ def apply_layout(
     """블록 배열을 레이아웃 순서의 표시 항목으로 바꾼다.
 
     레이아웃이 없으면 블록을 원래 순서 그대로 낸다. 레이아웃이 있으면
-    요약 블록을 맨 앞에 놓고, sections 순서대로 항목을 만들고, 레이아웃이
-    이름을 대지 않은 블록을 원래 순서로 맨 뒤에 붙인다. 어느 경우에도
-    블록 자체는 바뀌지 않는다.
+    머리말 블록들을 저장 순서 그대로 맨 앞에 놓고, sections 순서대로
+    항목을 만들고, 레이아웃이 이름을 대지 않은 블록을 원래 순서로 맨 뒤에
+    붙인다. 어느 경우에도 블록 자체는 바뀌지 않는다.
+
+    머리말 블록의 제목은 SUMMARY_SECTION_LABELS로 바꿔 낸다. 표에 없는
+    heading은 머리말이 세 섹션으로 갈리기 전에 발행된 옛 판이므로 저장된
+    heading을 그대로 쓴다.
 
     Args:
         blocks: 문서에 저장된 블록 배열이다.
@@ -113,7 +133,11 @@ def apply_layout(
     for index, block in enumerate(blocks):
         if block.block_kind == BLOCK_KIND_SUMMARY:
             items.append(
-                LayoutItem(ITEM_BLOCK, block.heading, block_index=index)
+                LayoutItem(
+                    ITEM_BLOCK,
+                    SUMMARY_SECTION_LABELS.get(block.heading, block.heading),
+                    block_index=index,
+                )
             )
 
     indexes_by_heading: dict[str, list[int]] = {}

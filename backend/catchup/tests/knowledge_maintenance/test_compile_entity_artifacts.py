@@ -690,11 +690,15 @@ def _publish(uow: FakeUnitOfWork, *, revision_number: int) -> uuid.UUID:
     return proposal_id
 
 
-def _content_blocks(blocks) -> list:
-    """맨 앞의 요약 블록을 빼고 본문 블록만 남긴다.
+# 머리말 블록 셋이 맨 앞에 서므로 본문 첫 블록은 index 3이다.
+FIRST_CONTENT_INDEX = 3
 
-    요약은 아래 블록을 센 집계라 절의 차례·본문·근거를 보는 시험의
-    대상이 아니다. 요약 자체는 test_compile_summary_block.py가 본다.
+
+def _content_blocks(blocks) -> list:
+    """맨 앞의 머리말 블록 셋을 빼고 본문 블록만 남긴다.
+
+    머리말은 아래 블록을 센 집계라 절의 차례·본문·근거를 보는 시험의
+    대상이 아니다. 머리말 자체는 test_compile_summary_block.py가 본다.
     """
     return [
         block
@@ -799,7 +803,7 @@ def test_entity_without_pending_proposal_gets_claim_sections_only() -> None:
 
 
 def test_title_is_entity_name_without_kind_prefix() -> None:
-    """문서 제목과 요약 heading이 엔티티 이름과 같고 종류를 섞지 않는다."""
+    """문서 제목이 엔티티 이름과 같고 종류를 섞지 않는다."""
     node_id = uuid.uuid4()
     uow = FakeUnitOfWork(
         nodes=[_node(node_id, name="Google Workspace 연동 지원")],
@@ -813,9 +817,16 @@ def test_title_is_entity_name_without_kind_prefix() -> None:
     title = uow.artifacts.titles[artifact_id]
     assert title == "Google Workspace 연동 지원"
     assert DEFINITION_KIND not in title
-    summary = row["blocks"][0]
-    assert summary.block_kind == BLOCK_KIND_SUMMARY
-    assert summary.heading == title
+    # 머리말 블록의 heading은 문서 제목이 아니라 섹션 기계 키다.
+    assert [block.heading for block in row["blocks"][:FIRST_CONTENT_INDEX]] == [
+        "one_line_summary",
+        "desired_outcome",
+        "background",
+    ]
+    assert all(
+        block.block_kind == BLOCK_KIND_SUMMARY
+        for block in row["blocks"][:FIRST_CONTENT_INDEX]
+    )
 
 
 def test_predicate_order_follows_dictionary_then_name() -> None:
@@ -1637,8 +1648,9 @@ def test_rejected_block_is_dropped_from_the_next_compile() -> None:
         "release_month",
         "rate_limit",
     ]
-    # 요약이 맨 앞에 서므로 본문 첫 블록은 index 1이다.
-    _reject_block(uow, proposal_id=first["id"], block_index=1)
+    _reject_block(
+        uow, proposal_id=first["id"], block_index=FIRST_CONTENT_INDEX
+    )
 
     result = _run(uow)
 
@@ -1673,7 +1685,9 @@ def test_rejected_contested_block_reopens_its_question() -> None:
     assert [
         block.block_kind for block in _content_blocks(first["blocks"])
     ] == [BLOCK_KIND_CONTESTED]
-    _reject_block(uow, proposal_id=first["id"], block_index=1)
+    _reject_block(
+        uow, proposal_id=first["id"], block_index=FIRST_CONTENT_INDEX
+    )
 
     result = _run(uow)
 
@@ -1709,9 +1723,17 @@ def test_reopened_question_can_be_rejected_too() -> None:
         pending={node_id: [contradiction]},
     )
     _run(uow)
-    _reject_block(uow, proposal_id=_only_pending(uow)["id"], block_index=1)
+    _reject_block(
+        uow,
+        proposal_id=_only_pending(uow)["id"],
+        block_index=FIRST_CONTENT_INDEX,
+    )
     _run(uow)
-    _reject_block(uow, proposal_id=_only_pending(uow)["id"], block_index=1)
+    _reject_block(
+        uow,
+        proposal_id=_only_pending(uow)["id"],
+        block_index=FIRST_CONTENT_INDEX,
+    )
 
     result = _run(uow)
 
@@ -1733,7 +1755,11 @@ def test_changed_block_reappears_after_rejection() -> None:
         claims=[_claim(node_id=node_id, value=60), month],
     )
     _run(uow)
-    _reject_block(uow, proposal_id=_only_pending(uow)["id"], block_index=1)
+    _reject_block(
+        uow,
+        proposal_id=_only_pending(uow)["id"],
+        block_index=FIRST_CONTENT_INDEX,
+    )
     _run(uow)
 
     uow.knowledge_candidates.claims = [
@@ -1765,9 +1791,11 @@ def test_node_with_every_block_rejected_is_skipped() -> None:
     )
     _run(uow)
     stale_id = _only_pending(uow)["id"]
-    # 요약을 뺀 본문 블록을 물린다. 요약은 남은 본문을 다시 세어 서므로
-    # 본문이 통째로 빠지면 요약도 함께 사라진다.
-    _reject_block(uow, proposal_id=stale_id, block_index=1)
+    # 머리말을 뺀 본문 블록을 물린다. 머리말은 남은 본문을 다시 세어
+    # 서므로 본문이 통째로 빠지면 머리말도 함께 사라진다.
+    _reject_block(
+        uow, proposal_id=stale_id, block_index=FIRST_CONTENT_INDEX
+    )
 
     result = _run(uow)
 

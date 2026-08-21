@@ -111,7 +111,6 @@ from catchup.server.wiki.schemas import TestKnowledgeMaintenanceSettingListRespo
 from catchup.server.wiki.schemas import TestKnowledgeMaintenanceSettingRequest
 from catchup.server.wiki.schemas import TestKnowledgeMaintenanceSettingResponse
 from catchup.server.wiki.schemas import WorkspaceMemberListResponse
-from catchup.server.wiki.schemas import to_summary_sections
 from catchup.utils.scheduler import apply_test_knowledge_maintenance_schedule
 
 router = APIRouter(
@@ -1281,7 +1280,6 @@ def get_artifact_document(
                     )
                     for source in block.sources
                 ],
-                summary_sections=to_summary_sections(block),
             )
             for index, block in enumerate(blocks)
         ],

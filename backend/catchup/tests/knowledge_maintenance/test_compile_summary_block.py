@@ -1,7 +1,8 @@
-"""문서 맨 앞에 서는 summary 블록의 결정론과 서술 입력을 확인한다.
+"""문서 맨 앞에 서는 머리말 블록 셋의 결정론과 서술 입력을 확인한다.
 
-summary는 문서를 열자마자 읽는 첫 블록이라 본문이 실행마다 흔들리면 안
-된다. 본문·claim 장부·근거 순서를 입력 순서와 무관하게 고정하는 것이
+머리말은 한 줄 요약·원하는 결과·요청 배경 세 섹션이고, 각각 summary
+블록 하나로 선다. 문서를 열자마자 읽는 자리라 본문이 실행마다 흔들리면
+안 된다. 본문·claim 장부·근거 순서를 입력 순서와 무관하게 고정하는 것이
 여기서 지키려는 계약이고, 산문만 LLM이 쓴다.
 """
 
@@ -49,19 +50,26 @@ def _two_claims():
     return first, second
 
 
-def test_summary_block_is_first_and_aggregates_claims() -> None:
-    """summary가 맨 앞에 서고 모든 블록의 claim을 합쳐 가리킨다."""
+def test_summary_blocks_are_first_and_aggregate_claims() -> None:
+    """머리말 세 블록이 정해진 순서로 맨 앞에 서고 claim을 합쳐 가리킨다."""
     first, second = _two_claims()
     uow = _uow(nodes=[NODE], claims=[first, second])
 
     _run(uow)
 
-    blocks = _blocks(uow)
-    summary = blocks[0]
-    assert summary.block_kind == BLOCK_KIND_SUMMARY
-    assert set(summary.claim_ids) == {first.id, second.id}
-    assert summary.body.startswith("claim 2건")
-    assert summary.narrative is None
+    summaries = _blocks(uow)[:3]
+    assert [block.block_kind for block in summaries] == [
+        BLOCK_KIND_SUMMARY
+    ] * 3
+    assert [block.heading for block in summaries] == [
+        "one_line_summary",
+        "desired_outcome",
+        "background",
+    ]
+    for summary in summaries:
+        assert set(summary.claim_ids) == {first.id, second.id}
+        assert summary.body.startswith("claim 2건")
+        assert summary.narrative is None
 
 
 def test_summary_body_records_counts_and_report_window() -> None:
@@ -71,20 +79,13 @@ def test_summary_body_records_counts_and_report_window() -> None:
 
     _run(uow)
 
-    summary = _blocks(uow)[0]
-    assert summary.body == (
-        "claim 2건 · 관계 0건 · 열린 질문 0건"
-        f" · 최초 보고 {first.observed_at.isoformat()}"
-        f" · 최근 보고 {second.observed_at.isoformat()}"
-    )
-    assert summary.heading == _title(uow)
-
-
-def _title(uow) -> str:
-    """이번 컴파일이 문서에 붙인 제목을 꺼낸다."""
-    titles = list(uow.artifacts.titles.values())
-    assert len(titles) == 1
-    return titles[0]
+    # 세 블록에 같은 집계 한 줄이 실린다.
+    for summary in _blocks(uow)[:3]:
+        assert summary.body == (
+            "claim 2건 · 관계 0건 · 열린 질문 0건"
+            f" · 최초 보고 {first.observed_at.isoformat()}"
+            f" · 최근 보고 {second.observed_at.isoformat()}"
+        )
 
 
 def test_summary_body_is_deterministic_across_runs() -> None:
@@ -102,7 +103,7 @@ def test_summary_body_is_deterministic_across_runs() -> None:
 
 
 def test_summary_is_narrated_with_all_statements() -> None:
-    """summary 서술 요청에 문서의 검증된 인용이 모두 실린다."""
+    """머리말 서술 요청에 문서의 검증된 인용이 모두 실린다."""
     first, second = _two_claims()
     uow = _uow(nodes=[NODE], claims=[first, second])
     narrator = _FakeNarrator()
@@ -117,7 +118,7 @@ def test_summary_is_narrated_with_all_statements() -> None:
     assert _blocks(uow)[0].narrative
 
 
-def test_empty_document_makes_no_summary() -> None:
+def test_empty_document_makes_no_summary_blocks() -> None:
     """실을 내용이 없으면 문서 자체가 서지 않는다."""
     uow = _uow(nodes=[NODE], claims=[])
 
@@ -152,7 +153,7 @@ def test_summary_sources_keep_the_most_recent_within_the_limit() -> None:
 
 
 def test_same_source_in_two_blocks_is_carried_once() -> None:
-    """두 블록이 같은 인용을 가리키면 요약에는 한 번만 실린다."""
+    """두 블록이 같은 인용을 가리키면 머리말에는 한 번만 실린다."""
     node_id = NODE[0]
     claim = _claim(node_id=node_id)
     uow = _uow(nodes=[NODE], claims=[claim])
@@ -166,7 +167,7 @@ def test_same_source_in_two_blocks_is_carried_once() -> None:
 
     blocks = _blocks(uow)
     summary = blocks[0]
-    assert [block.block_kind for block in blocks[1:]] == [
+    assert [block.block_kind for block in blocks[3:]] == [
         "claim_section",
         "open_question",
     ]
@@ -176,9 +177,9 @@ def test_same_source_in_two_blocks_is_carried_once() -> None:
 
 
 def test_relation_only_document_stands_without_summary() -> None:
-    """claim 없이 관계만 있는 문서는 요약 없이 그대로 선다.
+    """claim 없이 관계만 있는 문서는 머리말 없이 그대로 선다.
 
-    요약은 claim 장부를 요구하는 블록이라 빈 장부로 세울 수 없다. 그
+    머리말은 claim 장부를 요구하는 블록이라 빈 장부로 세울 수 없다. 그
     자리에서 문서까지 접으면 관계만 아는 대상의 카드가 사라진다.
     """
     node_id = NODE[0]

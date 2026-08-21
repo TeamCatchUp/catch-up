@@ -84,7 +84,7 @@ def _section(heading: str, body: str) -> ArtifactBlock:
 def _layout_proposal(
     *, proposal_id: uuid.UUID, artifact_id: uuid.UUID
 ) -> StoredArtifactProposal:
-    """요약 블록과 양식이 이름을 댄 절 블록들을 담은 변경안을 만든다.
+    """머리말 블록 셋과 양식이 이름을 댄 절 블록들을 담은 변경안을 만든다.
 
     저장 순서를 양식 순서와 어긋나게 둔다. layout이 저장 순서가 아니라
     양식 순서를 따르는지 보려면 두 순서가 달라야 한다.
@@ -96,13 +96,20 @@ def _layout_proposal(
         title="요청 현황: 엑셀 내려받기",
         status="pending",
         blocks=(
-            ArtifactBlock(
-                block_kind=BLOCK_KIND_SUMMARY,
-                heading="요청 현황: 엑셀 내려받기",
-                body="claim 2건",
-                claim_ids=(uuid.uuid4(),),
-                proposal_ids=(),
-                ontology_version="v1",
+            *(
+                ArtifactBlock(
+                    block_kind=BLOCK_KIND_SUMMARY,
+                    heading=section_key,
+                    body="claim 2건",
+                    claim_ids=(uuid.uuid4(),),
+                    proposal_ids=(),
+                    ontology_version="v1",
+                )
+                for section_key in (
+                    "one_line_summary",
+                    "desired_outcome",
+                    "background",
+                )
             ),
             _section("last_reported_at", "2026-08-15에 다시 접수됐다"),
             _section("request_status", "상태는 검토중이다"),
@@ -214,3 +221,56 @@ def test_detail_without_revision_has_empty_base_layout(
 
     assert data["base_blocks"] == []
     assert data["base_layout"] == []
+
+
+def test_detail_layout_labels_the_summary_sections(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    reviewer: User,
+    workspace_ids: tuple[int, int],
+    artifact_id: uuid.UUID,
+) -> None:
+    """머리말 세 블록이 양식 제목을 달고 맨 앞 세 항목으로 나온다."""
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_layout_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+
+    data = client.get(
+        f"/api/v1/knowledge-review/queue/{proposal_id}"
+    ).json()
+
+    assert [
+        (item["heading"], item["block_index"])
+        for item in data["layout"][:3]
+    ] == [("한 줄 요약", 0), ("원하는 결과", 1), ("요청 배경", 2)]
+
+
+def test_detail_block_response_has_no_summary_sections_field(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    reviewer: User,
+    workspace_ids: tuple[int, int],
+    artifact_id: uuid.UUID,
+) -> None:
+    """블록이 곧 섹션이므로 파생 필드를 따로 싣지 않는다."""
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_layout_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+
+    data = client.get(
+        f"/api/v1/knowledge-review/queue/{proposal_id}"
+    ).json()
+
+    assert all("summary_sections" not in block for block in data["blocks"])

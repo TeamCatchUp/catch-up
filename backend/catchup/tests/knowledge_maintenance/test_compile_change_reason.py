@@ -131,7 +131,10 @@ def test_modified_block_gets_llm_reason_added_block_does_not() -> None:
 
 
 def test_summary_block_gets_no_change_reason() -> None:
-    """요약은 아래 블록을 센 값이라 수정 이유를 붙이지 않는다."""
+    """머리말은 아래 블록을 센 값이라 세 블록 모두 수정 이유가 없다.
+
+    제외 기준이 block_kind라 머리말이 몇 블록이든 함께 빠진다.
+    """
     node_id = uuid.uuid4()
     uow = _two_section_uow(node_id)
     narrator = _FakeNarrator()
@@ -142,13 +145,15 @@ def test_summary_block_gets_no_change_reason() -> None:
 
     result = _run(uow, narrator)
 
-    summary_heading = next(
+    summary_headings = [
         block.heading
         for block in _blocks(uow)
         if block.block_kind == BLOCK_KIND_SUMMARY
-    )
-    assert _reasons(uow)[summary_heading] is None
-    assert summary_heading not in _explained_headings(narrator)
+    ]
+    assert len(summary_headings) == 3
+    for heading in summary_headings:
+        assert _reasons(uow)[heading] is None
+        assert heading not in _explained_headings(narrator)
     assert result.blocks_explained == 0
 
 

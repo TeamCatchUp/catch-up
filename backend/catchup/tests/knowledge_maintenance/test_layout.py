@@ -103,7 +103,7 @@ def test_always_show_inserts_placeholder_without_index() -> None:
 
 
 def test_unknown_blocks_go_last_and_summary_first() -> None:
-    """요약은 맨 앞에, 레이아웃에 없는 블록은 맨 뒤에 놓는다."""
+    """머리말은 맨 앞에, 레이아웃에 없는 블록은 맨 뒤에 놓는다."""
     blocks = [
         _block("열린 질문: x", kind="open_question"),
         _block("요약", kind=BLOCK_KIND_SUMMARY),
@@ -112,3 +112,40 @@ def test_unknown_blocks_go_last_and_summary_first() -> None:
     items = apply_layout(blocks, LAYOUT)
     order = [i.block_index for i in items if i.item_kind == ITEM_BLOCK]
     assert order == [1, 2, 0]
+
+
+def test_summary_sections_are_labeled_and_come_first() -> None:
+    """머리말 세 블록이 양식 제목을 달고 저장 순서대로 맨 앞에 선다."""
+    blocks = [
+        _block("request_status"),
+        _block("one_line_summary", kind=BLOCK_KIND_SUMMARY),
+        _block("desired_outcome", kind=BLOCK_KIND_SUMMARY),
+        _block("background", kind=BLOCK_KIND_SUMMARY),
+    ]
+
+    items = apply_layout(blocks, LAYOUT)
+
+    assert [(i.heading, i.block_index) for i in items[:3]] == [
+        ("한 줄 요약", 1),
+        ("원하는 결과", 2),
+        ("요청 배경", 3),
+    ]
+
+
+def test_old_single_summary_keeps_its_heading() -> None:
+    """표에 없는 heading의 머리말은 저장된 제목 그대로 첫 항목이 된다.
+
+    머리말이 세 섹션으로 갈리기 전에 발행된 판이 그렇다. 그 판의 heading은
+    문서 제목이라 바꿔 붙일 이름이 없다.
+    """
+    blocks = [
+        _block("request_status"),
+        _block("요청 현황: 엑셀 내려받기", kind=BLOCK_KIND_SUMMARY),
+    ]
+
+    items = apply_layout(blocks, LAYOUT)
+
+    assert (items[0].heading, items[0].block_index) == (
+        "요청 현황: 엑셀 내려받기",
+        1,
+    )

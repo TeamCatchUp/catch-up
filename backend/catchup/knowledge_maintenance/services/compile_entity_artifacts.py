@@ -54,6 +54,7 @@ from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_OPEN_QUESTION
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_RELATION_SECTION
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_SUMMARY
+from catchup.knowledge_maintenance.domain.artifact import SUMMARY_SECTION_KEYS
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.artifact import ContestedVariant
@@ -349,7 +350,6 @@ def compile_definition_artifacts(
                     now=now,
                     allowed=definition.selection_spec.predicate_sections,
                     relation_blocks=relation_blocks,
-                    title=title,
                 )
                 if not blocks:
                     # 쓸 내용이 없으면 빈 문서를 만들지 않는다. 검토자에게
@@ -701,10 +701,10 @@ def _propose_node_blocks(
     여기가 정한다. 두 입구가 이 자리를 나눠 쓰므로 반려 억제와 지문
     비교와 멱등 키 규칙이 입구마다 갈리지 않는다.
 
-    요약 블록은 여기서 다시 센다. 요약은 아래 블록을 집계한 줄이라,
+    머리말 블록은 여기서 다시 센다. 머리말은 아래 블록을 집계한 줄이라,
     반려로 빠진 블록이 있는데 옛 집계를 그대로 두면 문서가 싣지 않은
     근거를 가리키게 된다. 다시 센 줄도 반려 장부를 거치므로 사람이
-    요약 자체를 물린 판단은 그대로 살아 있다.
+    머리말 자체를 물린 판단은 그대로 살아 있다.
 
     Raises:
         NarrationError: 블록 산문이나 수정 이유를 받아 오지 못했을 때
@@ -713,13 +713,16 @@ def _propose_node_blocks(
     rejected = uow.block_verdicts.find_rejected_hashes(
         artifact_id=artifact_id,
     )
-    summary = next(
+    summary_ontology_version = next(
         (
-            block
+            block.ontology_version
             for block in blocks
             if block.block_kind == BLOCK_KIND_SUMMARY
         ),
         None,
+    )
+    had_summary = any(
+        block.block_kind == BLOCK_KIND_SUMMARY for block in blocks
     )
     blocks = tuple(
         block for block in blocks if block.block_kind != BLOCK_KIND_SUMMARY
@@ -748,22 +751,21 @@ def _propose_node_blocks(
     if reopened:
         validate_blocks(reopened)
         blocks = (*blocks, *reopened)
-    if blocks and summary is not None:
-        rebuilt = _summary_block(
+    if blocks and had_summary:
+        rebuilt = _summary_blocks(
             blocks,
-            title=summary.heading,
-            ontology_version=summary.ontology_version,
+            ontology_version=summary_ontology_version,
         )
-        if rebuilt is not None:
+        if rebuilt:
             kept, dropped_summary, _ = _drop_rejected_blocks(
-                (rebuilt,),
+                rebuilt,
                 rejected,
                 workspace_id=workspace_id,
                 artifact_id=artifact_id,
             )
             suppressed += dropped_summary
             blocks = (*kept, *blocks)
-            # 다시 센 요약도 근거 계약을 거친다. 되살린 열린 질문과 같은
+            # 다시 센 머리말도 근거 계약을 거친다. 되살린 열린 질문과 같은
             # 자리다. 여기서 만든 블록은 입구의 검사를 거치지 않았다.
             validate_blocks(blocks)
     if not blocks:
@@ -815,12 +817,44 @@ def _propose_node_blocks(
         reusable = uow.artifacts.list_reusable_narratives(
             artifact_id=artifact_id,
         )
+        # 머리말 세 블록은 한 번의 서술로 함께 채운다. 세 섹션은 같은
+        # 집계 한 줄을 딛고 선 한 벌이라, 블록마다 따로 물으면 같은 질문을
+        # 세 번 하는 셈이고 세 섹션이 서로 어긋난 문장을 받을 수도 있다.
+        # 요청은 언제나 첫 머리말 블록으로 만들어, 어느 블록에서 재사용이
+        # 걸리든 같은 재료를 묻게 한다.
+        summary_request = _summary_narration_request(
+            blocks,
+            style_instruction=style_instruction,
+            purpose_sentence=purpose_sentence,
+        )
+        summary_narrative: SummaryNarrative | None = None
         narrated_blocks: list[ArtifactBlock] = []
         for block in blocks:
             found = reusable.get(block_content_hash(block))
             if found is not None:
                 narrated_blocks.append(replace(block, narrative=found))
                 reused += 1
+                continue
+            if block.block_kind == BLOCK_KIND_SUMMARY:
+                if (
+                    summary_request is None
+                    or block.heading not in SUMMARY_SECTION_KEYS
+                ):
+                    narrated_blocks.append(block)
+                    continue
+                if summary_narrative is None:
+                    summary_narrative = narrator.narrate_summary(
+                        summary_request
+                    )
+                # heading이 SummaryNarrative의 필드 이름과 같은 기계 키라
+                # 그대로 골라 담는다.
+                narrated_blocks.append(
+                    replace(
+                        block,
+                        narrative=getattr(summary_narrative, block.heading),
+                    )
+                )
+                narrated += 1
                 continue
             request = _narration_request(
                 block,
@@ -830,11 +864,9 @@ def _propose_node_blocks(
             if request is None:
                 narrated_blocks.append(block)
                 continue
-            if block.block_kind == BLOCK_KIND_SUMMARY:
-                narrative = _joined_summary(narrator.narrate_summary(request))
-            else:
-                narrative = narrator.narrate(request)
-            narrated_blocks.append(replace(block, narrative=narrative))
+            narrated_blocks.append(
+                replace(block, narrative=narrator.narrate(request))
+            )
             narrated += 1
         blocks = tuple(narrated_blocks)
 
@@ -956,9 +988,10 @@ def _explain_changed_blocks(
             continue
         block = updated[change.block_index]
         if block.block_kind == BLOCK_KIND_SUMMARY:
-            # 요약 본문은 아래 블록을 센 값이라 문서 어디가 바뀌어도 함께
-            # 바뀐다. 무엇이 달라졌는지는 같은 실행이 새로 쓰는 요약 본문이
-            # 이미 말하므로, 여기서는 수정 이유를 붙이지 않는다.
+            # 머리말 본문은 아래 블록을 센 값이라 문서 어디가 바뀌어도
+            # 함께 바뀐다. 무엇이 달라졌는지는 같은 실행이 새로 쓰는 머리말
+            # 산문이 이미 말하므로, 여기서는 수정 이유를 붙이지 않는다.
+            # 판정 기준이 block_kind라 머리말 세 블록이 모두 빠진다.
             continue
         found = reusable.get(block_content_hash(block))
         if found is not None:
@@ -1050,25 +1083,35 @@ def _verified_statements(block: ArtifactBlock) -> tuple[str, ...]:
     )
 
 
-def _joined_summary(narrative: SummaryNarrative) -> str:
-    """머리말 세 칸을 빈 줄로 이어 문자열 하나로 만든다.
+def _summary_narration_request(
+    blocks: Sequence[ArtifactBlock],
+    *,
+    style_instruction: str,
+    purpose_sentence: str,
+) -> NarrationRequest | None:
+    """머리말 세 블록을 대표하는 서술 요청 하나를 만든다.
 
-    저장하는 모양은 지금까지와 같은 문자열 하나다. 칸을 따로 저장하면
-    블록 지문과 산문 재사용 규칙이 함께 바뀌는데, 지금 바꾸려는 것은
-    화면이 칸 제목을 붙일 수 있게 하는 일뿐이다.
+    첫 머리말 블록으로 만든다. 세 블록은 heading만 다르고 본문과 근거가
+    같아 어느 블록으로 만들어도 사실 입력은 같지만, 만드는 자리를 첫
+    블록으로 못박아야 지난 산문 재사용이 어느 블록에서 걸리든 같은 요청이
+    나간다.
 
-    읽는 쪽은 빈 줄을 경계로 갈라 세 칸을 되찾는다. 칸 안에 개행이나 빈
-    줄이 남아 있으면 문단이 셋을 넘겨 그 복원이 깨지므로, 칸마다 연속된
-    공백과 개행을 공백 하나로 접은 뒤 잇는다. 이렇게 해야 문단 경계가
-    모델의 줄바꿈 습관과 무관하게 정해진다.
+    머리말 블록이 없거나 검증된 인용이 하나도 없으면 None이다.
     """
-    return "\n\n".join(
-        " ".join(value.split())
-        for value in (
-            narrative.one_line_summary,
-            narrative.desired_outcome,
-            narrative.background,
-        )
+    summary = next(
+        (
+            block
+            for block in blocks
+            if block.block_kind == BLOCK_KIND_SUMMARY
+        ),
+        None,
+    )
+    if summary is None:
+        return None
+    return _narration_request(
+        summary,
+        style_instruction=style_instruction,
+        purpose_sentence=purpose_sentence,
     )
 
 
@@ -1089,9 +1132,9 @@ def _narration_request(
     있다. 그래서 접두로 갈라 간선 줄만 사실로 넘기고 원문 문장은 표현
     힌트로 넘긴다. 잘린 걸음을 알리는 줄은 사실이므로 간선 쪽에 남는다.
 
-    claim 절·열린 질문·대조·요약 블록의 사실 입력은 검증된 인용뿐이다.
+    claim 절·열린 질문·대조·머리말 블록의 사실 입력은 검증된 인용뿐이다.
     블록 본문과 제목은 색인용 라벨에서 온 문장이라 근거가 아니라 주제
-    힌트로만 넘긴다. 요약 블록은 본문이 결정론 집계 한 줄이므로 그 줄이
+    힌트로만 넘긴다. 머리말 블록은 본문이 결정론 집계 한 줄이므로 그 줄이
     그대로 주제 힌트가 되고, 사실 입력은 문서 전체의 검증된 인용이다.
 
     대조 블록은 자기 sources를 비우고 근거를 후보마다 나눠 갖는다. 후보를
@@ -1277,7 +1320,6 @@ def _build_blocks(
     now: datetime,
     allowed: tuple[str, ...] | None = None,
     relation_blocks: tuple[ArtifactBlock, ...] = (),
-    title: str = "",
 ) -> tuple[ArtifactBlock, ...]:
     """카드 본문을 이룰 블록을 정해진 순서로 만든다.
 
@@ -1288,8 +1330,8 @@ def _build_blocks(
     무엇인지를, 뒤쪽은 사람에게 묻는 것을 말하므로, 대상과 이웃의
     관계는 그 사이에 온다.
 
-    실을 내용이 있으면 요약 블록을 맨 앞에 세운다. 문서를 열자마자 읽는
-    자리라 아래 블록들을 집계한 한 줄이 먼저 와야 한다.
+    실을 내용이 있으면 머리말 블록 셋을 맨 앞에 세운다. 문서를 열자마자
+    읽는 자리라 아래 블록들을 집계한 한 줄이 먼저 와야 한다.
     """
     ontology_version = vocabulary.snapshot_id or None
     sections = _claim_sections(
@@ -1311,56 +1353,63 @@ def _build_blocks(
         ontology_version,
     )
     body = tuple([*sections, *relation_blocks, *questions])
-    summary = _summary_block(
-        body,
-        title=title,
-        ontology_version=ontology_version,
+    return (
+        *_summary_blocks(body, ontology_version=ontology_version),
+        *body,
     )
-    if summary is None:
-        return body
-    return (summary, *body)
 
 
-# 요약 블록이 나르는 근거 인용의 상한이다. 근거 수를 제한하는 것은 산문
+# 머리말 블록이 나르는 근거 인용의 상한이다. 근거 수를 제한하는 것은 산문
 # 입력 길이를 묶기 위해서다. 넘치면 최근 것부터 남긴다.
 _SUMMARY_SOURCE_LIMIT = 40
 
 
-def _summary_block(
+def _summary_blocks(
     blocks: Sequence[ArtifactBlock],
     *,
-    title: str,
     ontology_version: str | None,
-) -> ArtifactBlock | None:
-    """문서 맨 앞에 세울 요약 블록을 만든다. 근거가 없으면 None이다.
+) -> tuple[ArtifactBlock, ...]:
+    """문서 맨 앞에 세울 머리말 블록 셋을 만든다. 근거가 없으면 빈 튜플이다.
 
-    본문은 아래 블록들을 센 집계 한 줄이다. LLM을 부르지 않고 세기만
-    하므로 같은 입력이면 같은 줄이 나온다. 집계 항목의 순서와 표기를
-    바꾸면 내용 지문이 달라져 사람이 이미 본 카드가 검토 큐에 다시
-    쌓이므로, 형식은 시험으로 고정한다.
+    머리말은 한 줄 요약·원하는 결과·요청 배경 세 섹션이다. 세 섹션은
+    본문의 다른 섹션과 같은 급의 최상위 섹션이므로 각각 블록 하나로
+    선다. 블록이 곧 검수 단위라, 셋을 한 블록에 묶으면 검토자가 세 섹션을
+    한 번에만 승인하거나 반려할 수 있다.
 
-    claim 장부와 근거는 모든 블록의 합집합이다. 요약이 문서 전체를
+    세 블록의 heading은 SUMMARY_SECTION_KEYS의 기계 키를 그대로 쓰고,
+    화면에 보여 줄 한글 제목은 읽기 레이아웃이 붙인다.
+
+    본문은 아래 블록들을 센 집계 한 줄이고, 세 블록에 같은 줄을 싣는다.
+    이 집계가 세 섹션이 함께 딛고 선 결정론 내용이고, 내용 지문이 같은
+    기준으로 움직여야 문서가 바뀔 때 세 섹션이 함께 다시 서술되기
+    때문이다. heading이 서로 달라 세 블록의 지문은 각각 다르다.
+
+    LLM을 부르지 않고 세기만 하므로 같은 입력이면 같은 줄이 나온다. 집계
+    항목의 순서와 표기를 바꾸면 내용 지문이 달라져 사람이 이미 본 카드가
+    검토 큐에 다시 쌓이므로, 형식은 시험으로 고정한다.
+
+    claim 장부와 근거는 모든 블록의 합집합이다. 머리말이 문서 전체를
     가리키는 블록이기 때문이다. 합칠 때는 정렬해 순서를 고정한다. 블록이
     들어온 차례나 저장소가 돌려준 차례에 기대면 같은 입력이 다른 지문을
     낳는다.
 
     claim 근거가 하나도 없으면 만들지 않는다. 관계만 있는 문서가 그런
-    경우인데, 요약은 claim 장부를 요구하는 블록이라 빈 장부로 세우면
+    경우인데, 머리말은 claim 장부를 요구하는 블록이라 빈 장부로 세우면
     근거 계약에 걸린다.
 
-    근거가 상한을 넘으면 최근 것부터 남긴다. 요약 산문은 이 문서가 지금
+    근거가 상한을 넘으면 최근 것부터 남긴다. 머리말 산문은 이 문서가 지금
     어떤 상태인지를 말해야 하는데, 오래된 쪽을 남기면 본문이 적은 최근
     보고 시각과 산문이 읽은 근거가 어긋난다. 본문의 최초·최근 보고
     시각은 자르기 전 근거 전체에서 센다.
     """
     if not blocks:
-        return None
+        return ()
     claim_ids = sorted(
         {claim_id for block in blocks for claim_id in block.claim_ids},
         key=str,
     )
     if not claim_ids:
-        return None
+        return ()
     relation_count = len(
         {
             relation_id
@@ -1387,20 +1436,24 @@ def _summary_block(
     else:
         first = "없음"
         last = "없음"
-    return ArtifactBlock(
-        block_kind=BLOCK_KIND_SUMMARY,
-        heading=title,
-        body=(
-            f"claim {len(claim_ids)}건"
-            f" · 관계 {relation_count}건"
-            f" · 열린 질문 {question_count}건"
-            f" · 최초 보고 {first}"
-            f" · 최근 보고 {last}"
-        ),
-        claim_ids=tuple(claim_ids),
-        proposal_ids=(),
-        ontology_version=ontology_version,
-        sources=tuple(sources[-_SUMMARY_SOURCE_LIMIT:]),
+    body = (
+        f"claim {len(claim_ids)}건"
+        f" · 관계 {relation_count}건"
+        f" · 열린 질문 {question_count}건"
+        f" · 최초 보고 {first}"
+        f" · 최근 보고 {last}"
+    )
+    return tuple(
+        ArtifactBlock(
+            block_kind=BLOCK_KIND_SUMMARY,
+            heading=section_key,
+            body=body,
+            claim_ids=tuple(claim_ids),
+            proposal_ids=(),
+            ontology_version=ontology_version,
+            sources=tuple(sources[-_SUMMARY_SOURCE_LIMIT:]),
+        )
+        for section_key in SUMMARY_SECTION_KEYS
     )
 
 
