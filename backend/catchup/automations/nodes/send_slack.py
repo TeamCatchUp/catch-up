@@ -21,6 +21,9 @@ logger = structlog.get_logger(__name__)
 _USER_CHAT_URL_RE = re.compile(
     r"https?://[^\s<|>]+/(?:user-chats|user_chats)/(?P<user_chat_id>[^\s<|>/?#]+)"
 )
+_CITATION_TITLE_MAX_LENGTH = 20
+_CITATION_TITLE_ELLIPSIS = "..."
+_WHITESPACE_RE = re.compile(r"\s+")
 _SEARCH_WINDOW_MINIMUM = timedelta(minutes=30)
 _SEARCH_WINDOW_BUFFER = timedelta(minutes=10)
 _SLACK_MARKDOWN_BLOCK_TEXT_LIMIT = 12_000
@@ -155,11 +158,32 @@ def _format_citation(citation: Any) -> str:
         if isinstance(citation, dict)
         else lambda key: getattr(citation, key, None)
     )
-    title = str(getter("title") or "출처").strip()
-    url = str(getter("url") or "").strip()
+    title = _build_citation_title(str(getter("title") or "출처"))
+    url = _WHITESPACE_RE.sub("", str(getter("url") or ""))
     index = getter("index")
     label = f"[{index}] {title}" if index is not None else title
     return f"- <{url}|{label}>" if url else f"- {label}"
+
+
+def _build_citation_title(title: str) -> str:
+    """
+    링크 라벨용 제목에서 줄바꿈을 삭제하고 길이를 20자로 제한
+    """
+    collapsed = _WHITESPACE_RE.sub(" ", title).strip()
+    if len(collapsed) > _CITATION_TITLE_MAX_LENGTH:
+        collapsed = (
+            collapsed[:_CITATION_TITLE_MAX_LENGTH].rstrip() + _CITATION_TITLE_ELLIPSIS
+        )
+    return _escape_slack_label(collapsed)
+
+
+def _escape_slack_label(text: str) -> str:
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("|", "&#124;")
+    )
 
 
 async def _find_linked_message(
