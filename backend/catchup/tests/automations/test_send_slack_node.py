@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
+from catchup.automations.nodes.send_slack import _format_citation
 from catchup.automations.nodes.send_slack import send_slack_node
 
 
@@ -274,3 +275,29 @@ async def test_send_slack_node_raises_after_retries_exhausted():
     assert error_call_kwargs["channel_id"] == "C123456"
 
     mock_client.post_message.assert_not_awaited()
+
+
+def test_format_citation_collapses_newlines_and_truncates_title():
+    """줄바꿈이 섞인 긴 제목도 한 줄 라벨로 접히고 20자에서 잘린다."""
+    line = _format_citation(
+        {
+            "index": 4,
+            "title": "[공유 | 배포 14주차 현황 공유] 안녕하세요 동민님!\n\n누적 질문: 1,122건",
+            "url": "https://slack.com/archives/C0AHX9SPSKS/p1784009288380589",
+        }
+    )
+
+    assert "\n" not in line
+    assert line == (
+        "- <https://slack.com/archives/C0AHX9SPSKS/p1784009288380589|"
+        "[4] [공유 &#124; 배포 14주차 현황 공유]...>"
+    )
+
+
+def test_format_citation_keeps_short_title_intact():
+    """20자 이하 제목은 말줄임 없이 그대로 유지한다."""
+    line = _format_citation(
+        {"index": 3, "title": "LLM Wiki 랜딩페이지", "url": "https://example.com/wiki"}
+    )
+
+    assert line == "- <https://example.com/wiki|[3] LLM Wiki 랜딩페이지>"
