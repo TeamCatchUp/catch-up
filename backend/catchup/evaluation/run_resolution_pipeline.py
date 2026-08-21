@@ -35,7 +35,13 @@ from catchup.knowledge_maintenance.adapters.llm.identity_judge import (
 from catchup.knowledge_maintenance.adapters.llm.name_embedder import (
     EmbeddingServiceNameEmbedder,
 )
+from catchup.knowledge_maintenance.adapters.llm.name_embedder import (
+    cached_name_embedder,
+)
 from catchup.knowledge_maintenance.adapters.llm.structured_extractor import CONTRACT_ID
+from catchup.knowledge_maintenance.adapters.postgres.name_embedding_cache import (
+    SqlAlchemyNameEmbeddingCache,
+)
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
@@ -157,8 +163,14 @@ def main() -> None:
         # 정확 일치로 좁아져 표기가 조금 다른 같은 대상이 다시 각자
         # 노드로 굳는데, 그렇게 굳은 노드는 이 단계가 다시 합쳐 주지
         # 않는다.
-        name_embedder = EmbeddingServiceNameEmbedder(
-            get_embedding_service(EmbeddingProvider.AWS_BEDROCK)
+        # 캐시를 둘러 이미 벡터로 바꿔 본 이름은 다시 임베딩하지 않는다.
+        # 라운드마다 살아 있는 노드 별칭을 전부 다시 부르던 몫이 줄어든다.
+        name_embedder = cached_name_embedder(
+            EmbeddingServiceNameEmbedder(
+                get_embedding_service(EmbeddingProvider.AWS_BEDROCK)
+            ),
+            SqlAlchemyNameEmbeddingCache(session_factory),
+            workspace_id=args.workspace_id,
         )
 
     result = resolve_entity_candidates(

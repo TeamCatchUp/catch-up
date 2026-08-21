@@ -37,6 +37,9 @@ from catchup.knowledge_maintenance.adapters.llm.identity_judge import (
 from catchup.knowledge_maintenance.adapters.llm.name_embedder import (
     EmbeddingServiceNameEmbedder,
 )
+from catchup.knowledge_maintenance.adapters.llm.name_embedder import (
+    cached_name_embedder,
+)
 from catchup.knowledge_maintenance.adapters.llm.structured_extractor import CONTRACT_ID
 from catchup.knowledge_maintenance.adapters.llm.structured_extractor import (
     PROMPT_VERSION,
@@ -44,11 +47,15 @@ from catchup.knowledge_maintenance.adapters.llm.structured_extractor import (
 from catchup.knowledge_maintenance.adapters.llm.structured_extractor import (
     StructuredKnowledgeExtractor,
 )
+from catchup.knowledge_maintenance.adapters.postgres.name_embedding_cache import (
+    SqlAlchemyNameEmbeddingCache,
+)
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunSpec
+from catchup.knowledge_maintenance.ports.name_embedder import NameEmbedder
 from catchup.knowledge_maintenance.services.converge_vocabulary import (
     resolve_latest_published_version,
 )
@@ -149,9 +156,7 @@ async def run_channel_talk_pre_review_job(
         # 임베더 없이 돌면 해소가 정확 일치 후보군으로 좁아져, 표기가 조금
         # 다른 같은 대상이 각자 노드로 굳는다. 한 번 굳으면 이 단계가 다시
         # 합쳐 주지 않으므로 만들지 못하면 그대로 실패시킨다.
-        name_embedder=EmbeddingServiceNameEmbedder(
-            get_embedding_service(EmbeddingProvider.AWS_BEDROCK)
-        ),
+        name_embedder=_name_embedder(workspace_id),
     )
     if result.status is PreReviewPipelineStatus.PARTIAL_FAILURE:
         logger.warning(
@@ -223,6 +228,21 @@ def _load_published_vocabulary(
             f"Published knowledge vocabulary not found for workspace {workspace_id}"
         )
     return vocabulary
+
+
+def _name_embedder(workspace_id: int) -> NameEmbedder:
+    """캐시를 두른 이름 임베더를 만든다.
+
+    캐시가 있으면 이미 벡터로 바꿔 본 이름은 다시 임베딩하지 않는다.
+    라운드마다 살아 있는 노드 별칭을 전부 다시 부르던 몫이 줄어든다.
+    """
+    return cached_name_embedder(
+        EmbeddingServiceNameEmbedder(
+            get_embedding_service(EmbeddingProvider.AWS_BEDROCK)
+        ),
+        SqlAlchemyNameEmbeddingCache(SessionLocal),
+        workspace_id=workspace_id,
+    )
 
 
 def _uow_factory(
