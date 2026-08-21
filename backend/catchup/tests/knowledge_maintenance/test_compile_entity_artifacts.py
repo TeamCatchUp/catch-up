@@ -391,12 +391,29 @@ class FakeArtifactRepository:
     ) -> uuid.UUID:
         validate_blocks(blocks)
         existing = self.by_key.get(idempotency_key)
+        if existing is not None and existing["status"] not in (
+            "pending",
+            "abandoned",
+        ):
+            raise ArtifactProposalConflict(
+                f"{existing['status']} 상태의 변경안이 같은 멱등 키를"
+                f" 쓰고 있다."
+            )
+        # 실 저장소가 문서 행을 잠그고 보는 검사를 그대로 옮긴다. 잠금은
+        # 흉내 낼 것이 없지만, 기준 판이 최신이 아니면 저장하지 않는다는
+        # 계약은 fake도 지켜야 이 규칙을 시험할 수 있다.
+        latest = self.find_latest_revision_id_and_number(
+            artifact_id=artifact_id
+        )
+        latest_revision_id = None if latest is None else latest[0]
+        if latest_revision_id != base_revision_id:
+            raise ArtifactProposalConflict(
+                f"문서 {artifact_id}의 최신 판이 {latest_revision_id}로"
+                f" 옮겨가 기준 판 {base_revision_id} 위의 변경안을 저장할"
+                f" 수 없다."
+            )
+
         if existing is not None:
-            if existing["status"] not in ("pending", "abandoned"):
-                raise ArtifactProposalConflict(
-                    f"{existing['status']} 상태의 변경안이 같은 멱등 키를"
-                    f" 쓰고 있다."
-                )
             existing.update(
                 artifact_id=artifact_id,
                 blocks=tuple(blocks),
@@ -1361,6 +1378,53 @@ def test_conflicting_node_is_isolated_from_the_rest() -> None:
     row = _only_pending(uow)
     artifact_id = uow.artifacts.definition_artifacts[(DEFINITION_ID, second)]
     assert row["artifact_id"] == artifact_id
+
+
+def test_publish_between_recheck_and_save_leaves_no_stale_pending() -> None:
+    """재확인을 지난 뒤 새 판이 나면 낡은 기준의 계류를 남기지 않는다.
+
+    저장 직전 재확인은 잠금 없는 읽기라, 그 뒤 저장까지 사이에 다른
+    검토가 계류를 승인해 새 판을 낼 수 있다. 그대로 저장하면 낡은 기준의
+    계류가 남고, 발행은 그 계류를 받지 않는데 다음 컴파일은 내용 지문이
+    같아 건너뛰므로 스스로 풀리지 않는다. 저장소가 기준 판이 최신인지
+    다시 보므로 그 틈이 여기서 잡힌다.
+    """
+    node_id = uuid.uuid4()
+    claim = _claim(node_id=node_id, value=60)
+    uow = FakeUnitOfWork(nodes=[_node(node_id)], claims=[claim])
+    _run(uow)
+    _publish(uow, revision_number=1)
+    uow.knowledge_candidates.claims = [replace(claim, value=120)]
+    _run(uow)
+
+    # 재확인과 저장 사이를 계류를 접는 자리로 잡는다. 컴파일이 그 자리에
+    # 이르렀을 때 다른 검토가 계류를 승인해 2판을 낸다.
+    uow.knowledge_candidates.claims = [replace(claim, value=180)]
+    original = uow.artifacts.abandon_pending_proposals
+
+    def _publish_then_abandon(**kwargs: object) -> int:
+        uow.artifacts.abandon_pending_proposals = original  # type: ignore[method-assign]
+        _publish(uow, revision_number=2)
+        return original(**kwargs)
+
+    uow.artifacts.abandon_pending_proposals = _publish_then_abandon  # type: ignore[method-assign]
+    result = _run(uow)
+
+    assert result.proposals_created == 0
+    assert result.proposals_conflicted == 1
+    # 접기는 0건이다. 그 계류는 방금 승인돼 이미 계류가 아니다.
+    assert result.proposals_abandoned == 0
+    assert uow.artifacts.pending_rows() == []
+    assert len(uow.artifacts.revisions) == 2
+
+    # 다음 컴파일이 새 기준 판 위에서 다시 세운다. 이 픽스처는 3회차
+    # 내용이 2판과 다르므로 건너뛰지 않고 새 계류를 만든다.
+    recovered = _run(uow)
+
+    assert recovered.proposals_created == 1
+    assert recovered.proposals_conflicted == 0
+    row = _only_pending(uow)
+    assert row["base_revision_id"] == uow.artifacts.revisions[-1]["id"]
 
 
 def test_skipped_node_abandons_stale_pending() -> None:

@@ -276,10 +276,16 @@ class ArtifactRepository(Protocol):
         되살리는 것은 pending과 abandoned뿐이다. 사람이 이미 승인하거나
         반려한 행을 되살리면 그 결정의 기록이 사라지므로 예외로 알린다.
 
+        저장 직전에 문서의 최신 판이 `base_revision_id`와 같은지 확인한다.
+        호출자가 기준 판을 읽은 뒤 여기 도착하기까지 사이에 다른 검토가
+        새 판을 냈으면 낡은 기준의 계류가 되므로, 저장하지 않고 예외로
+        알린다. 구현은 이 확인과 저장을 문서 행 잠금 아래에서 한 묶음으로
+        해야 한다.
+
         Raises:
             ArtifactBlockError: 블록이 근거 계약을 어겼을 때 던진다.
             ArtifactProposalConflict: 같은 키를 이미 결정된 변경안이 쓰고
-                있을 때 던진다.
+                있거나, 기준 판이 최신이 아닐 때 던진다.
         """
         ...
 
@@ -294,7 +300,9 @@ class ArtifactRepository(Protocol):
         for_update가 참이면 변경안 행을 transaction이 끝날 때까지 잠근다.
         같은 변경안을 건드리는 단건 판정과 일괄 발행이 이 행 하나를 두고
         줄을 서므로, 한쪽이 읽은 결정 목록이 다른 쪽 때문에 도중에 바뀌지
-        않는다.
+        않는다. 구현은 그 변경안이 달린 문서 행을 함께, 그리고 변경안
+        행보다 먼저 잠가야 한다. 판을 쌓는 자리와 변경안을 저장하는
+        자리가 문서 행 하나로 줄을 서기 때문이다.
         """
         ...
 
@@ -349,5 +357,10 @@ class ArtifactRepository(Protocol):
         blocks: Sequence[ArtifactBlock],
         source_proposal_id: uuid.UUID,
     ) -> uuid.UUID:
-        """승인으로 확정된 판을 새로 쌓는다."""
+        """승인으로 확정된 판을 새로 쌓는다.
+
+        구현은 변경안 저장과 같은 문서 행 잠금 아래에서 쌓아야 한다.
+        그래야 변경안을 저장하는 쪽이 기준 판을 확인하는 동안 새 판이
+        끼어들지 않는다.
+        """
         ...

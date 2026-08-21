@@ -1622,19 +1622,21 @@ def test_pg_reusable_narratives_come_from_revision_and_pending(
         uow.artifacts.mark_approved(
             proposal_id=proposal_id, reviewer="test"
         )
-        uow.artifacts.add_revision(
+        revision_id = uow.artifacts.add_revision(
             artifact_id=artifact_id,
             revision_number=1,
             blocks=[published],
             source_proposal_id=proposal_id,
         )
         pending = _narrated_block(node_id, "계류 산문이다.", "priority")
+        # 계류 변경안은 방금 낸 1판을 기준으로 삼는다. 저장소가 기준 판이
+        # 최신인지 보기 때문이다.
         uow.artifacts.add_or_revive_proposal(
             artifact_id=artifact_id,
             blocks=[pending],
             content_hash="hash-pending",
             idempotency_key=f"key-pending-{uuid.uuid4()}",
-            base_revision_id=None,
+            base_revision_id=revision_id,
         )
         uow.commit()
 
