@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unicodedata
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 
@@ -42,6 +43,93 @@ class IdentityVerdict:
             raise ValueError(
                 "same verdict must propose canonical type and name"
             )
+
+
+class PartitionContractError(ValueError):
+    """분할 판정이 계약을 어겼음을 알린다.
+
+    호출자는 이 예외를 그 블록 하나를 이번 라운드에서 접는 신호로 읽는다.
+    배정이 어긋난 분할을 그대로 쓰면 후보가 조용히 사라지거나 한 후보가 두
+    노드에 걸리므로, 블록만 격리하고 나머지 블록은 계속 간다.
+    """
+
+
+@dataclass(frozen=True, slots=True)
+class IdentityGroup:
+    """블록 안에서 같은 대상으로 묶인 멤버들을 표현한다.
+
+    Attributes:
+        canonical_name: 이 정체의 대표 표시 이름을 담는다.
+        canonical_type: 이 정체의 entity 종류를 담는다.
+        member_ids: 이 정체에 속한 멤버 식별자들을 담는다.
+        reason: 묶은 근거 한 문장을 담는다.
+    """
+
+    canonical_name: str
+    canonical_type: str
+    member_ids: tuple[str, ...]
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not self.canonical_name.strip():
+            raise ValueError("canonical_name must not be blank")
+        if not self.canonical_type.strip():
+            raise ValueError("canonical_type must not be blank")
+        if not self.reason.strip():
+            raise ValueError("reason must not be blank")
+        if not self.member_ids:
+            raise ValueError("identity group needs at least one member")
+
+
+@dataclass(frozen=True, slots=True)
+class IdentityPartition:
+    """블록 하나를 정체 여러 개로 가른 결과를 표현한다.
+
+    쌍 단위 판정과 달리 블록 전체를 한 번에 가른다. 쌍으로 물으면 호출
+    수가 짝의 수만큼 늘고, A와 B는 같고 B와 C도 같은데 A와 C는 다르다는
+    답이 와도 조정할 자리가 없기 때문이다.
+    """
+
+    groups: tuple[IdentityGroup, ...]
+
+    def __post_init__(self) -> None:
+        if not self.groups:
+            raise ValueError("partition needs at least one group")
+
+
+def validate_partition(
+    partition: IdentityPartition,
+    member_ids: Sequence[str],
+) -> None:
+    """분할이 블록 멤버를 정확히 한 번씩 덮는지 본다.
+
+    셋을 본다. 블록에 없던 멤버가 나왔는지, 두 그룹에 걸친 멤버가 있는지,
+    어느 그룹에도 못 들어간 멤버가 있는지다. 모델 출력은 이 셋을 모두
+    어길 수 있고, 어긴 채로 뒤 단계에 넘기면 후보가 사라지거나 한 후보가
+    두 노드에 붙는다.
+
+    Raises:
+        PartitionContractError: 셋 중 하나라도 어겼을 때 던진다.
+    """
+    expected = set(member_ids)
+    seen: set[str] = set()
+    for group in partition.groups:
+        for member_id in group.member_ids:
+            if member_id not in expected:
+                raise PartitionContractError(
+                    f"블록에 없는 멤버가 배정되었다: {member_id}"
+                )
+            if member_id in seen:
+                raise PartitionContractError(
+                    f"한 멤버가 두 그룹에 배정되었다: {member_id}"
+                )
+            seen.add(member_id)
+
+    missing = expected - seen
+    if missing:
+        raise PartitionContractError(
+            f"배정되지 않은 멤버가 있다: {sorted(missing)}"
+        )
 
 
 def normalize_name(name: str) -> str:
