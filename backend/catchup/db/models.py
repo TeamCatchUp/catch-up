@@ -5659,3 +5659,58 @@ class KnowledgeArtifactRevision(Base):
             name="fk_knowledge_artifact_revisions_source_proposal",
         ),
     )
+
+
+class KnowledgeNameEmbedding(Base):
+    """이름 하나를 벡터로 바꾼 결과를 정규화 이름 단위로 보관한다.
+
+    해소 단계는 라운드마다 이번 후보 이름과 살아 있는 노드 별칭 전부를
+    벡터로 바꾼다. 별칭이 쌓이면 이미 바꿔 본 이름을 매 라운드 다시
+    임베딩하게 되므로, 여기에 담아 두고 없는 이름만 임베딩한다.
+
+    이 표는 정본이 아니라 다시 만들 수 있는 사본이다. 통째로 지워도 다음
+    라운드가 임베딩을 다시 불러 같은 값을 채운다. 그래서 사람 결정이나
+    claim처럼 보존 규칙이 걸린 자료와 달리 마음대로 비워도 된다.
+
+    벡터는 pgvector 컬럼이 아니라 JSONB 실수 배열로 담고 HNSW 색인도 두지
+    않는다. 여기서 하는 일은 이름으로 정확히 찾아오는 조회지 가까운 벡터를
+    훑는 ANN 검색이 아니다. 조회 경로가 (workspace_id, model_id,
+    normalized_name) 하나뿐이라 UNIQUE 제약이 만드는 색인이면 충분하다.
+
+    model_id를 키에 넣는 이유는 모델이 다르면 벡터 공간이 달라 같은 이름의
+    옛 벡터를 새 모델 벡터와 나란히 견줄 수 없기 때문이다. 모델을 바꾸면
+    옛 행은 조회되지 않고 남아 있다가 지워질 뿐이다.
+    """
+
+    __tablename__ = "knowledge_name_embeddings"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    normalized_name: Mapped[str] = mapped_column(Text, nullable=False)
+    model_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    vector: Mapped[list[Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "model_id",
+            "normalized_name",
+            name="uq_knowledge_name_embeddings_name",
+        ),
+    )
