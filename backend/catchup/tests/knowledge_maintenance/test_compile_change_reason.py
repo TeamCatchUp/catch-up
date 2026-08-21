@@ -446,6 +446,14 @@ def test_publish_during_narration_drops_the_stale_proposal() -> None:
     assert result.proposals_created == 0
     assert result.proposals_conflicted == 1
     assert result.proposals_abandoned == 0
+    # 저장을 접어도 이미 쓴 서술 수는 그대로 센다. 감사 로그가 실제 호출
+    # 결과를 세야 하므로 물러나는 경로에서도 버리지 않는다. 요약 요청
+    # 한 번이 최상위 블록 3개를 채우므로 그만큼을 세어 맞춘다.
+    expected_narrated = sum(
+        3 if request.block_kind == BLOCK_KIND_SUMMARY else 1
+        for request in narrator.requests
+    )
+    assert result.blocks_narrated == expected_narrated
     # 낡은 기준을 적은 계류가 남지 않았다. 끼어든 승인으로 이전 계류는
     # approved가 됐으므로 계류는 하나도 없는 것이 맞다.
     assert uow.artifacts.pending_rows() == []

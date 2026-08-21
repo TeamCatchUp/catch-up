@@ -904,7 +904,14 @@ def _propose_node_blocks(
         )
         # 기존 계류도 접지 않는다. 저장할 것이 없는데 큐만 비우면 사람이
         # 보던 안건이 이유 없이 사라진다.
-        return _NodeOutcome(conflicted=1, suppressed=suppressed)
+        return _NodeOutcome(
+            conflicted=1,
+            suppressed=suppressed,
+            narrated=narrated,
+            reused=reused,
+            explained=explained,
+            explanations_reused=explanations_reused,
+        )
 
     replaced = uow.artifacts.abandon_pending_proposals(
         artifact_id=artifact_id,
