@@ -142,6 +142,7 @@ from catchup.knowledge_maintenance.ports.artifacts import ProposalAlreadyDecided
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
 from catchup.knowledge_maintenance.ports.block_verdicts import StoredBlockVerdict
 from catchup.knowledge_maintenance.ports.knowledge_candidates import AsOfClaim
+from catchup.knowledge_maintenance.ports.knowledge_nodes import ActiveEntityAlias
 from catchup.knowledge_maintenance.ports.mutation_proposals import (
     MergeProposalAlreadyDecided,
 )
@@ -531,6 +532,52 @@ class SqlAlchemyKnowledgeNodeRepository:
             statement.order_by(KnowledgeNodeRow.id).limit(1)
         )
         return knowledge_node_to_domain(row) if row is not None else None
+
+    def list_active_entity_aliases(
+        self,
+        *,
+        workspace_id: int,
+    ) -> list[ActiveEntityAlias]:
+        """살아 있는 entity 노드의 이름을 모두 모은다.
+
+        노드 하나에 이름이 여럿이면 그 수만큼 행이 나온다. 어느 표기가
+        후보와 닮았는지는 부르는 쪽이 견줘야 알 수 있어 저장소가 미리
+        하나로 줄이지 않는다. 정렬을 node id·정규화 이름으로 고정해 같은
+        질의가 같은 순서를 주게 한다.
+        """
+        rows = self._session.execute(
+            select(
+                KnowledgeNodeAliasRow.node_id,
+                KnowledgeNodeRow.entity_type,
+                KnowledgeNodeAliasRow.alias,
+                KnowledgeNodeAliasRow.normalized_alias,
+            )
+            .join(
+                KnowledgeNodeRow,
+                KnowledgeNodeRow.id == KnowledgeNodeAliasRow.node_id,
+            )
+            .where(
+                KnowledgeNodeAliasRow.workspace_id == workspace_id,
+                KnowledgeNodeRow.workspace_id == workspace_id,
+                KnowledgeNodeRow.node_kind == NodeKind.ENTITY.value,
+                KnowledgeNodeRow.lifecycle_state
+                == NodeLifecycleState.ACTIVE.value,
+                KnowledgeNodeRow.entity_type.is_not(None),
+            )
+            .order_by(
+                KnowledgeNodeAliasRow.node_id,
+                KnowledgeNodeAliasRow.normalized_alias,
+            )
+        ).all()
+        return [
+            ActiveEntityAlias(
+                node_id=row.node_id,
+                entity_type=row.entity_type,
+                alias=row.alias,
+                normalized_alias=row.normalized_alias,
+            )
+            for row in rows
+        ]
 
     def get_entity_by_id(
         self,
@@ -2320,8 +2367,12 @@ class SqlAlchemyMutationProposalRepository:
         merge_candidate_ids: tuple[uuid.UUID, ...],
         proposed_type: str,
         proposed_name: str,
+        merge_into_node_id: uuid.UUID | None = None,
     ) -> uuid.UUID:
         """같은 대상 후보들을 하나로 합치는 계획서를 쓴다.
+
+        `merge_into_node_id`를 주면 1번 명령이 노드를 새로 만들지 않고 그
+        노드로 붙는다는 표시를 명령 재료에 함께 적는다.
 
         같은 key의 행이 계류·접힘 상태면 그 행을 되살려 내용을
         갈아끼운다. `(workspace_id, idempotency_key)` UNIQUE가 상태를
@@ -2392,6 +2443,12 @@ class SqlAlchemyMutationProposalRepository:
             # 먼저 확정한다.
             self._session.flush()
 
+        operation_data: dict[str, JsonValue] = {
+            "proposed_type": proposed_type,
+            "proposed_name": proposed_name,
+        }
+        if merge_into_node_id is not None:
+            operation_data["merge_into_node_id"] = str(merge_into_node_id)
         self._session.add(
             KnowledgeMutationOperationRow(
                 id=uuid.uuid4(),
@@ -2400,10 +2457,7 @@ class SqlAlchemyMutationProposalRepository:
                 sequence=1,
                 operation_type="create_entity",
                 entity_candidate_id=representative_candidate_id,
-                operation_data={
-                    "proposed_type": proposed_type,
-                    "proposed_name": proposed_name,
-                },
+                operation_data=operation_data,
             )
         )
         for offset, candidate_id in enumerate(merge_candidate_ids, start=2):

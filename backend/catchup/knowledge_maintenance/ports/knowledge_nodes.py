@@ -2,11 +2,30 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Protocol
 
 from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
 from catchup.knowledge_maintenance.domain.source_version import JsonValue
+
+
+@dataclass(frozen=True, slots=True)
+class ActiveEntityAlias:
+    """살아 있는 entity 노드가 지금 들고 있는 이름 하나를 담는다.
+
+    Attributes:
+        node_id: 이 이름을 가진 노드를 가리킨다.
+        entity_type: 노드의 entity 종류를 나타낸다. 종류가 다르면 비교하지
+            않으므로 이름과 함께 와야 한다.
+        alias: 사람이 읽는 이름 그대로다.
+        normalized_alias: 비교에 쓰는 정규화 이름이다.
+    """
+
+    node_id: uuid.UUID
+    entity_type: str
+    alias: str
+    normalized_alias: str
 
 
 class KnowledgeNodeRepository(Protocol):
@@ -46,6 +65,24 @@ class KnowledgeNodeRepository(Protocol):
         호출자가 아니라 조회가 해야 하는 이유는, 1건만 돌려주는 조회에서
         type을 나중에 보면 다른 type 노드가 id 순으로 앞설 때 정작 맞는
         노드가 영영 보이지 않기 때문이다.
+        """
+        ...
+
+    def list_active_entity_aliases(
+        self,
+        *,
+        workspace_id: int,
+    ) -> list[ActiveEntityAlias]:
+        """살아 있는 entity 노드의 이름을 모두 모은다.
+
+        해소가 이름 유사도로 판정 블록을 만들 때 쓴다. 이번 라운드 후보만
+        서로 견주면 라운드를 넘어 갈라진 노드들과는 영영 만나지 못하므로,
+        이미 서 있는 노드의 이름도 같은 판정대에 올린다.
+
+        노드 하나가 여러 이름을 들고 있으면 그 수만큼 돌려준다. 어느
+        표기가 후보와 닮았는지는 부르는 쪽이 견줘 봐야 알 수 있기
+        때문이다. 흡수·퇴역한 노드는 빼고, node id·정규화 이름 순으로
+        정렬해 같은 질의가 같은 순서를 주게 한다.
         """
         ...
 

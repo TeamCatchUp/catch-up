@@ -26,6 +26,7 @@ from catchup.knowledge_maintenance.domain.knowledge_candidate import (
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
 )
+from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
 from catchup.knowledge_maintenance.ports.knowledge_candidates import (
     KnowledgeCandidateRepository,
 )
@@ -263,6 +264,13 @@ def _apply_create(
     실패로 남는데, 은퇴한 대표로 새 노드를 세우는 것보다 사람이 다시 보게
     두는 편이 안전하다.
 
+    명령 재료에 `merge_into_node_id`가 있으면 노드를 만들지 않고 그 노드로
+    대표를 붙인다. 이미 서 있는 노드와 같은 대상이라는 판정을 사람이
+    승인한 경우다. 여기서 노드를 또 만들면 합치자는 결정이 도리어 대상을
+    하나 더 세운다. 붙일 때 후보의 이름을 그 노드의 alias로 남긴다 —
+    노드가 이번에 확인된 표기로도 불릴 수 있어야 다음 후보가 같은 자리로
+    온다.
+
     새로 만든 노드에는 곧바로 이름 alias를 남긴다. 이 경로의 노드는
     외부 ID가 없어 canonical_key가 비므로, alias가 없으면 읽기 경로가
     (canonical_key -> normalized_alias 순으로 찾는다) 방금 만든 노드를
@@ -292,6 +300,17 @@ def _apply_create(
         return None
 
     proposed_name = str(operation.operation_data["proposed_name"])
+    target_raw = operation.operation_data.get("merge_into_node_id")
+    if target_raw is not None:
+        return _merge_into_existing_node(
+            uow,
+            workspace_id=workspace_id,
+            candidate_id=candidate_id,
+            node_id_raw=target_raw,
+            proposed_name=proposed_name,
+            tally=tally,
+        )
+
     node = uow.knowledge_nodes.create_entity_node(
         workspace_id=workspace_id,
         entity_type=str(operation.operation_data["proposed_type"]),
@@ -314,6 +333,59 @@ def _apply_create(
     )
     tally.resolved += 1
     return node.id
+
+
+def _merge_into_existing_node(
+    uow: ApplyUnitOfWork,
+    *,
+    workspace_id: int,
+    candidate_id: uuid.UUID,
+    node_id_raw: object,
+    proposed_name: str,
+    tally: _Tally,
+) -> uuid.UUID:
+    """대표 후보를 이미 서 있는 노드로 붙인다.
+
+    노드가 없거나 살아 있지 않으면 이 안건만 실패로 남긴다. 승인 이후
+    노드가 흡수·퇴역했다는 뜻이고, 그때 노드를 새로 만들면 사람이 승인한
+    "저 노드와 같다"는 결정과 다른 일을 하게 된다.
+
+    Raises:
+        ApplyOperationError: 노드 id를 읽을 수 없거나, 노드가 없거나,
+            살아 있지 않을 때 던진다.
+    """
+    try:
+        node_id = uuid.UUID(str(node_id_raw))
+    except ValueError as error:
+        raise ApplyOperationError(
+            f"병합 대상 노드 id를 읽을 수 없다: {node_id_raw}"
+        ) from error
+
+    node = uow.knowledge_nodes.get_entity_by_id(
+        workspace_id=workspace_id,
+        node_id=node_id,
+    )
+    if node is None:
+        raise ApplyOperationError(f"병합 대상 노드가 없다: {node_id}")
+    if node.lifecycle_state is not NodeLifecycleState.ACTIVE:
+        raise ApplyOperationError(
+            f"병합 대상 노드가 살아 있지 않다: {node_id}"
+        )
+
+    uow.knowledge_nodes.add_alias(
+        workspace_id=workspace_id,
+        node_id=node_id,
+        alias=proposed_name,
+        normalized_alias=normalize_name(proposed_name),
+        source="system",
+    )
+    uow.knowledge_candidates.mark_entity_resolved(
+        candidate_id=candidate_id,
+        status=EntityResolutionStatus.MERGED,
+        resolved_node_id=node_id,
+    )
+    tally.resolved += 1
+    return node_id
 
 
 def _apply_merge(

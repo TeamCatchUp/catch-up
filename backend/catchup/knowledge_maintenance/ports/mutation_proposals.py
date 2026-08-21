@@ -360,12 +360,17 @@ class MutationProposalRepository(Protocol):
         merge_candidate_ids: tuple[uuid.UUID, ...],
         proposed_type: str,
         proposed_name: str,
+        merge_into_node_id: uuid.UUID | None = None,
     ) -> uuid.UUID:
         """같은 대상 후보들을 하나로 합치는 계획서를 쓴다.
 
         operation은 두 종류다. 대표 후보의 create_entity가 1번이고,
         나머지 후보의 merge_entity가 그 뒤를 따르며 1번이 만들 노드를
         가리킨다.
+
+        `merge_into_node_id`를 주면 1번이 노드를 새로 만들지 않고 그 노드로
+        붙는다. 이미 서 있는 노드와 같은 대상이라는 판정이 나온 경우다.
+        노드를 또 만들면 합치자는 결정이 도리어 대상을 하나 더 세운다.
 
         같은 key의 행이 이미 결정돼 있으면(approved·applied·rejected)
         되살리지 않고 그 id를 그대로 돌려준다 — 사람은 같은 사실에

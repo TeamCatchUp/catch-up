@@ -380,6 +380,51 @@ def test_find_entity_by_normalized_alias_filters_entity_type(
         )
 
 
+def test_list_active_entity_aliases_skips_merged_nodes(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    session_factory: Callable[[], Session],
+    workspace_id: int,
+) -> None:
+    """살아 있는 entity 노드의 이름만 종류와 함께 모은다."""
+    with session_factory() as session:
+        target = _entity_node(session, workspace_id, "흡수처")
+        alive = _entity_node(
+            session, workspace_id, "살아 있는 노드", entity_type="feature"
+        )
+        gone = _entity_node(
+            session, workspace_id, "흡수된 노드", merged_into=target
+        )
+        session.commit()
+
+    with uow_factory() as uow:
+        # 실 DB에는 E2E가 남긴 alias가 이미 있으므로 이번에 심은 이름만
+        # 골라 본다.
+        mark = uuid.uuid4().hex
+        for node_id, name in ((alive, f"살아 있는 이름 {mark}"), (gone, f"흡수된 이름 {mark}")):
+            uow.knowledge_nodes.add_alias(
+                workspace_id=workspace_id,
+                node_id=node_id,
+                alias=name.upper(),
+                normalized_alias=name,
+                source="human",
+            )
+
+        listed = [
+            alias
+            for alias in uow.knowledge_nodes.list_active_entity_aliases(
+                workspace_id=workspace_id
+            )
+            if mark in alias.normalized_alias
+        ]
+
+    assert len(listed) == 1
+    only = listed[0]
+    assert only.node_id == alive
+    assert only.entity_type == "feature"
+    assert only.alias == f"살아 있는 이름 {mark}".upper()
+    assert only.normalized_alias == f"살아 있는 이름 {mark}"
+
+
 def test_find_entity_candidates_by_similarity(
     uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
     session_factory: Callable[[], Session],

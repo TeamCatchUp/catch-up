@@ -22,6 +22,7 @@ from catchup.knowledge_maintenance.domain.knowledge_candidate import (
 )
 from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
+from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredOperation
 from catchup.knowledge_maintenance.services.apply_mutation_proposals import (
     apply_mutation_proposals,
@@ -68,24 +69,51 @@ class FakeState:
         }
         return candidate_id
 
+    def add_node(
+        self,
+        *,
+        lifecycle_state: NodeLifecycleState = NodeLifecycleState.ACTIVE,
+    ) -> KnowledgeNode:
+        """이미 서 있는 entity 노드를 하나 심는다."""
+        node = KnowledgeNode(
+            id=uuid.uuid4(),
+            workspace_id=WORKSPACE_ID,
+            node_kind=NodeKind.ENTITY,
+            entity_type="feature",
+            canonical_key=None,
+            display_name="결제",
+            lifecycle_state=lifecycle_state,
+            merged_into_node_id=(
+                uuid.uuid4()
+                if lifecycle_state is NodeLifecycleState.MERGED
+                else None
+            ),
+        )
+        self.nodes.append(node)
+        return node
+
     def add_approved_merge(
         self,
         *,
         representative: uuid.UUID,
         members: tuple[uuid.UUID, ...],
         extra_operation: StoredOperation | None = None,
+        merge_into_node_id: uuid.UUID | None = None,
     ) -> uuid.UUID:
         proposal_id = uuid.uuid4()
+        operation_data: dict[str, Any] = {
+            "proposed_type": "feature",
+            "proposed_name": "결제 기능",
+        }
+        if merge_into_node_id is not None:
+            operation_data["merge_into_node_id"] = str(merge_into_node_id)
         operations = [
             StoredOperation(
                 sequence=1,
                 operation_type="create_entity",
                 entity_candidate_id=representative,
                 claim_candidate_id=None,
-                operation_data={
-                    "proposed_type": "feature",
-                    "proposed_name": "결제 기능",
-                },
+                operation_data=operation_data,
             )
         ]
         for offset, member in enumerate(members, start=2):
@@ -214,6 +242,17 @@ class FakeNodeRepo:
         )
         self.state.nodes.append(node)
         return node
+
+    def get_entity_by_id(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+    ) -> KnowledgeNode | None:
+        for node in self.state.nodes:
+            if node.workspace_id == workspace_id and node.id == node_id:
+                return node
+        return None
 
     def add_alias(
         self,
@@ -745,3 +784,57 @@ def test_supersede_without_claim_fails_that_proposal() -> None:
 
     assert result.proposals_failed == 1
     assert result.proposals_applied == 0
+
+
+def test_merge_into_existing_node_reuses_that_node() -> None:
+    """기존 노드로 붙이는 결정은 노드를 새로 만들지 않는다."""
+    state = FakeState()
+    existing = state.add_node()
+    representative = state.add_candidate()
+    member = state.add_candidate()
+    state.add_approved_merge(
+        representative=representative,
+        members=(member,),
+        merge_into_node_id=existing.id,
+    )
+
+    result, _ = _run(state)
+
+    assert result.proposals_applied == 1
+    assert result.candidates_resolved == 2
+    # 심어 둔 노드 하나 그대로다.
+    assert [node.id for node in state.nodes] == [existing.id]
+    assert state.candidates[representative] == {
+        "resolution_status": EntityResolutionStatus.MERGED,
+        "resolved_node_id": existing.id,
+    }
+    assert state.candidates[member]["resolved_node_id"] == existing.id
+    # 이번에 확인된 이름으로도 그 노드를 부를 수 있어야 한다.
+    assert state.aliases == [
+        {
+            "workspace_id": WORKSPACE_ID,
+            "node_id": existing.id,
+            "alias": "결제 기능",
+            "normalized_alias": normalize_name("결제 기능"),
+            "source": "system",
+        }
+    ]
+
+
+def test_merge_into_merged_node_fails_that_proposal() -> None:
+    """붙일 노드가 흡수됐으면 그 안건만 실패로 남는다."""
+    state = FakeState()
+    gone = state.add_node(lifecycle_state=NodeLifecycleState.MERGED)
+    representative = state.add_candidate()
+    proposal_id = state.add_approved_merge(
+        representative=representative,
+        members=(),
+        merge_into_node_id=gone.id,
+    )
+
+    result, _ = _run(state)
+
+    assert result.proposals_applied == 0
+    assert result.proposals_failed == 1
+    assert state.proposals[proposal_id]["status"] == "approved"
+    assert state.candidates[representative]["resolved_node_id"] is None
