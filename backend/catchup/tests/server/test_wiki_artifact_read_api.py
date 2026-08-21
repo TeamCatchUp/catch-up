@@ -40,6 +40,7 @@ from catchup.db.models import UserWorkspace
 from catchup.db.models import WikiArtifactFavorite
 from catchup.db.models import Workspace
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_SUMMARY
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.artifact import serialize_blocks
@@ -323,6 +324,66 @@ def test_returns_the_latest_published_revision(client, member, db, workspace_id)
     assert block["narrative"] == "이 요구는 검토 중이다."
     assert block["sources"][0]["statement"] == "상태는 검토 중이다"
     assert block["sources"][0]["citation_verified"] is True
+
+
+SUMMARY_NARRATIVE = (
+    "A사가 CSV 내보내기를 원한다."
+    "\n\n내려받은 파일을 바로 회계에 올릴 수 있게 된다."
+    "\n\n지금은 화면을 손으로 옮겨 적고 있다."
+)
+
+
+def test_summary_block_carries_the_form_sections(
+    client, member, db, workspace_id
+):
+    """머리말 블록만 양식의 세 칸을 함께 싣는다."""
+    artifact_id, _ = _publish(
+        db,
+        workspace_id=workspace_id,
+        narrative=None,
+        blocks=[
+            _block(
+                SUMMARY_NARRATIVE,
+                heading="요약",
+                block_kind=BLOCK_KIND_SUMMARY,
+            ),
+            _block("이 요구는 검토 중이다."),
+        ],
+    )
+
+    response = client.get(f"/api/v1/wiki/artifacts/{artifact_id}")
+
+    assert response.status_code == 200
+    blocks = response.json()["blocks"]
+    assert blocks[0]["summary_sections"] == {
+        "one_line_summary": "A사가 CSV 내보내기를 원한다.",
+        "desired_outcome": "내려받은 파일을 바로 회계에 올릴 수 있게 된다.",
+        "background": "지금은 화면을 손으로 옮겨 적고 있다.",
+    }
+    assert blocks[0]["narrative"] == SUMMARY_NARRATIVE
+    assert blocks[1]["summary_sections"] is None
+
+
+def test_summary_block_of_an_old_revision_has_no_sections(
+    client, member, db, workspace_id
+):
+    """세 칸으로 갈리기 전에 발행된 머리말은 없음으로 나간다."""
+    artifact_id, _ = _publish(
+        db,
+        workspace_id=workspace_id,
+        narrative=None,
+        blocks=[
+            _block(
+                "**헤드라인이다**\n\n한 줄 요약이다.",
+                heading="요약",
+                block_kind=BLOCK_KIND_SUMMARY,
+            )
+        ],
+    )
+
+    response = client.get(f"/api/v1/wiki/artifacts/{artifact_id}")
+
+    assert response.json()["blocks"][0]["summary_sections"] is None
 
 
 def test_second_revision_wins(client, member, db, workspace_id):

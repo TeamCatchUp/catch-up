@@ -120,6 +120,7 @@ from catchup.server.wiki.layout import layout_items
 from catchup.server.wiki.owners import owners_by_artifact
 from catchup.server.wiki.roles import can_decide_artifact
 from catchup.server.wiki.schemas import OwnerResponse
+from catchup.server.wiki.schemas import to_summary_sections
 
 router = APIRouter(
     prefix="/api/v1/knowledge-review",
@@ -892,6 +893,7 @@ def _to_block(
         verdict=None if verdict is None else _to_block_verdict(verdict),
         markdown=block_markdown(block),
         change_reason=reason,
+        summary_sections=to_summary_sections(block),
     )
 
 
@@ -912,6 +914,7 @@ def _to_base_block(
         claim_ids=[str(claim_id) for claim_id in block.claim_ids],
         relation_ids=[str(item) for item in block.relation_ids],
         sources=_to_sources(block.sources),
+        summary_sections=to_summary_sections(block),
     )
 
 

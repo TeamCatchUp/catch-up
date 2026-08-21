@@ -18,6 +18,7 @@ from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.domain.artifact import deserialize_blocks
 from catchup.knowledge_maintenance.domain.artifact import serialize_blocks
+from catchup.knowledge_maintenance.domain.artifact import summary_sections
 from catchup.knowledge_maintenance.domain.artifact import validate_blocks
 
 _CLAIM_ID = uuid.UUID("11111111-1111-1111-1111-111111111111")
@@ -284,3 +285,39 @@ def test_change_reason_roundtrips_and_stays_out_of_hash() -> None:
     assert serialized[0]["change_reason"] == explained.change_reason
     assert "change_reason" not in serialize_blocks([plain])[0]
     assert deserialize_blocks(serialized)[0].change_reason == explained.change_reason
+
+
+def test_summary_sections_splits_three_paragraphs() -> None:
+    """빈 줄로 갈린 세 문단이 그대로 세 칸이 된다."""
+    narrative = (
+        "A사가 CSV 내보내기를 원한다."
+        "\n\n내려받은 파일을 바로 회계에 올릴 수 있게 된다."
+        "\n\n지금은 화면을 손으로 옮겨 적고 있다."
+    )
+
+    assert summary_sections(narrative) == (
+        "A사가 CSV 내보내기를 원한다.",
+        "내려받은 파일을 바로 회계에 올릴 수 있게 된다.",
+        "지금은 화면을 손으로 옮겨 적고 있다.",
+    )
+
+
+def test_summary_sections_strips_bold_marks() -> None:
+    """문단 앞뒤의 굵게 기호는 벗겨 낸다."""
+    narrative = "**헤드라인이다**\n\n두 번째 문단이다.\n\n세 번째 문단이다."
+
+    sections = summary_sections(narrative)
+
+    assert sections is not None
+    assert sections[0] == "헤드라인이다"
+
+
+def test_summary_sections_of_two_paragraphs_is_none() -> None:
+    """문단이 셋이 아니면 칸을 짐작하지 않고 없음을 돌려준다."""
+    assert summary_sections("첫 문단이다.\n\n둘째 문단이다.") is None
+
+
+def test_summary_sections_of_empty_narrative_is_none() -> None:
+    """산문이 없거나 비면 없음을 돌려준다."""
+    assert summary_sections(None) is None
+    assert summary_sections("   ") is None

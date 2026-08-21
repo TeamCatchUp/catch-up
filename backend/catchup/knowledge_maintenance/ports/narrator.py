@@ -58,6 +58,28 @@ class NarrationRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class SummaryNarrative:
+    """문서 머리말을 이루는 세 칸을 담는다.
+
+    머리말은 한 덩어리 문장이 아니라 정해진 세 칸으로 읽힌다. 자유
+    문자열 하나로 돌려주면 어느 문장이 어느 칸인지 밖에서 알 수 없어,
+    받는 자리에서 칸을 갈라 둔다.
+
+    Attributes:
+        one_line_summary: 누가 무엇을 하고 싶어 하는지 한 문장으로 담는다.
+            이 문장만 읽어도 요구가 무엇인지 알 수 있어야 한다.
+        desired_outcome: 고객이 얻고자 하는 최종 결과를 담는다. 무엇을
+            어떻게 만들지가 아니라 결과만 적는다.
+        background: 요청이 나온 이유와 지금 어떻게 일하고 있는지를 담는다.
+            고객이 말한 사실만 적는다.
+    """
+
+    one_line_summary: str
+    desired_outcome: str
+    background: str
+
+
+@dataclass(frozen=True, slots=True)
 class ChangeExplanationRequest:
     """바뀐 블록 하나의 수정 이유를 묻는 데 필요한 재료를 담는다.
 
@@ -97,6 +119,24 @@ class BlockNarrator(Protocol):
 
         Raises:
             NarrationError: 산문을 받아 오지 못했을 때 던진다.
+        """
+        ...
+
+    def narrate_summary(self, request: NarrationRequest) -> SummaryNarrative:
+        """문서 머리말을 정해진 세 칸으로 받는다.
+
+        머리말은 본문 블록과 달리 칸이 정해져 있다. 한 줄 요약은 누가
+        무엇을 하고 싶어 하는지 한 문장으로 적고, 그 문장만 읽어도 요구를
+        알 수 있어야 한다. 원하는 결과는 구현 방식이 아니라 고객이 얻고자
+        하는 최종 결과를 적는다. 요청 배경은 요청이 나온 이유와 지금의
+        업무 방식을 고객이 말한 사실만으로 적는다.
+
+        세 칸 중 하나라도 비면 성공이 아니다. 칸이 빈 머리말은 화면에서
+        제목만 남은 빈 칸으로 그려지므로 문서 하나를 접는 편이 낫다.
+
+        Raises:
+            NarrationError: 머리말을 받아 오지 못했거나 어느 칸이든
+                비었을 때 던진다.
         """
         ...
 

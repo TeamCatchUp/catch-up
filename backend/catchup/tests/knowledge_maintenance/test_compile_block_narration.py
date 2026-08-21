@@ -27,6 +27,7 @@ from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPending
 from catchup.knowledge_maintenance.ports.narrator import ChangeExplanationRequest
 from catchup.knowledge_maintenance.ports.narrator import NarrationError
 from catchup.knowledge_maintenance.ports.narrator import NarrationRequest
+from catchup.knowledge_maintenance.ports.narrator import SummaryNarrative
 from catchup.knowledge_maintenance.ports.relations import StoredRelationEdge
 from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
     _actor_edge_line,
@@ -89,6 +90,16 @@ class _FakeNarrator:
         if self.error is not None:
             raise self.error
         return f"{request.heading} 절을 설명하는 문장이다."
+
+    def narrate_summary(self, request: NarrationRequest) -> SummaryNarrative:
+        self.requests.append(request)
+        if self.error is not None:
+            raise self.error
+        return SummaryNarrative(
+            one_line_summary="A사가\nCSV 내보내기를 원한다.",
+            desired_outcome="내려받은 파일을 바로 쓸 수 있게 된다.",
+            background="지금은\n\n손으로 옮겨 적고 있다.",
+        )
 
     def explain_change(self, request: ChangeExplanationRequest) -> str:
         self.explanations.append(request)
@@ -219,6 +230,33 @@ def test_case_b_first_compile_narrates_every_block() -> None:
     assert len(narrator.requests) == len(narratable)
     assert result.blocks_narrated == len(narratable)
     assert all(block.narrative for block in narratable)
+
+
+def test_summary_narrative_joins_the_three_fields_into_paragraphs() -> None:
+    """머리말은 칸 셋을 빈 줄로 이은 세 문단으로 저장된다.
+
+    읽는 쪽이 빈 줄을 경계로 칸을 되찾으므로 문단은 정확히 셋이어야 한다.
+    칸 안에 남은 개행과 빈 줄은 공백으로 접혀 그 경계를 흐리지 않는다.
+    """
+    node_id = uuid.uuid4()
+    uow = _uow(
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[_verified(_claim(node_id=node_id))],
+    )
+
+    _run(uow, _FakeNarrator())
+
+    summary = next(
+        block
+        for block in _blocks(uow)
+        if block.block_kind == BLOCK_KIND_SUMMARY
+    )
+    assert summary.narrative == (
+        "A사가 CSV 내보내기를 원한다."
+        "\n\n내려받은 파일을 바로 쓸 수 있게 된다."
+        "\n\n지금은 손으로 옮겨 적고 있다."
+    )
+    assert "**" not in summary.narrative
 
 
 def test_case_0_block_without_verified_statement_is_not_narrated() -> None:

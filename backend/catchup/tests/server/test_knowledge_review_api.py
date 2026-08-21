@@ -69,6 +69,7 @@ from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_RELATION_SECTION
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_SUMMARY
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.artifact import ContestedVariant
@@ -97,6 +98,7 @@ from catchup.knowledge_maintenance.services.review_artifact_proposal import (
     ProposalReviewError,
 )
 from catchup.knowledge_maintenance.services.review_artifact_proposal import ReviewResult
+from catchup.server.knowledge_review.api import _to_base_block
 from catchup.server.knowledge_review.api import _to_block
 from catchup.server.knowledge_review.api import router
 from catchup.server.knowledge_review.dependencies import ReviewerContext
@@ -3411,3 +3413,94 @@ def test_block_response_without_narrative_is_none() -> None:
         ).narrative
         is None
     )
+
+
+def _summary_narrative() -> str:
+    """세 칸을 빈 줄로 이은 머리말 산문을 만든다."""
+    return (
+        "A사가 CSV 내보내기를 원한다."
+        "\n\n내려받은 파일을 바로 회계에 올릴 수 있게 된다."
+        "\n\n지금은 화면을 손으로 옮겨 적고 있다."
+    )
+
+
+def _summary_block(narrative: str | None) -> ArtifactBlock:
+    """머리말 블록 하나를 만든다."""
+    claim_id = uuid.uuid4()
+    return ArtifactBlock(
+        block_kind=BLOCK_KIND_SUMMARY,
+        heading="요약",
+        body="요청 3건 (2026-08-15 관찰)",
+        claim_ids=(claim_id,),
+        proposal_ids=(),
+        ontology_version="v3",
+        narrative=narrative,
+    )
+
+
+def test_summary_block_response_carries_the_sections() -> None:
+    """검수 응답이 머리말을 양식의 세 칸으로 갈라 싣는다."""
+    response = _to_block(
+        _summary_block(_summary_narrative()),
+        block_index=0,
+        verdict=None,
+        reason=None,
+    )
+
+    assert response.summary_sections is not None
+    assert (
+        response.summary_sections.one_line_summary
+        == "A사가 CSV 내보내기를 원한다."
+    )
+    assert (
+        response.summary_sections.desired_outcome
+        == "내려받은 파일을 바로 회계에 올릴 수 있게 된다."
+    )
+    assert (
+        response.summary_sections.background
+        == "지금은 화면을 손으로 옮겨 적고 있다."
+    )
+    assert response.narrative == _summary_narrative()
+
+
+def test_base_summary_block_response_carries_the_sections() -> None:
+    """발행판 블록도 같은 세 칸을 싣는다."""
+    response = _to_base_block(
+        _summary_block(_summary_narrative()), block_index=0
+    )
+
+    assert response.summary_sections is not None
+    assert (
+        response.summary_sections.one_line_summary
+        == "A사가 CSV 내보내기를 원한다."
+    )
+
+
+def test_summary_sections_of_an_old_narrative_is_none() -> None:
+    """세 칸으로 갈리기 전의 머리말은 없음으로 나간다."""
+    response = _to_block(
+        _summary_block("**헤드라인이다**\n\n한 줄 요약이다."),
+        block_index=0,
+        verdict=None,
+        reason=None,
+    )
+
+    assert response.summary_sections is None
+
+
+def test_non_summary_block_has_no_summary_sections() -> None:
+    """머리말이 아닌 블록에는 세 칸이 붙지 않는다."""
+    claim_id = uuid.uuid4()
+    block = ArtifactBlock(
+        block_kind=BLOCK_KIND_CLAIM_SECTION,
+        heading="request_status",
+        body="검토 중 (2026-08-15 관찰)",
+        claim_ids=(claim_id,),
+        proposal_ids=(),
+        ontology_version="v3",
+        narrative=_summary_narrative(),
+    )
+
+    response = _to_block(block, block_index=0, verdict=None, reason=None)
+
+    assert response.summary_sections is None

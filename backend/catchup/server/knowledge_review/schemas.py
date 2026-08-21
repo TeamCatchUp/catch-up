@@ -19,6 +19,7 @@ from pydantic import BaseModel
 
 from catchup.server.wiki.schemas import LayoutItemResponse
 from catchup.server.wiki.schemas import OwnerResponse
+from catchup.server.wiki.schemas import SummarySectionsResponse
 
 
 class ArtifactRefResponse(BaseModel):
@@ -147,6 +148,9 @@ class BlockResponse(BaseModel):
     없을 수 있고(근거 인용이 없는 블록), 산문이 없던 옛 변경안도 그대로
     읽혀야 하므로 기본값을 없음으로 둔다. 검수자는 이 문장과 sources의
     인용 원문을 나란히 놓고 대조한다.
+
+    summary_sections는 머리말 블록에서만 값이 있다. 머리말이 아니거나 세
+    칸으로 갈라지기 전에 만들어진 옛 변경안이면 없음이다.
     """
 
     block_index: int
@@ -164,6 +168,7 @@ class BlockResponse(BaseModel):
     verdict: BlockVerdictResponse | None = None
     markdown: str
     change_reason: str | None = None
+    summary_sections: SummarySectionsResponse | None = None
 
 
 class BaseBlockResponse(BaseModel):
@@ -173,6 +178,9 @@ class BaseBlockResponse(BaseModel):
     발행판 블록에는 결정을 내릴 자리가 없으므로 block_content_hash와
     verdict를 싣지 않는다. 그 둘을 함께 실으면 소비자가 발행판 블록에도
     결정 요청을 보낼 수 있다고 읽는다.
+
+    summary_sections는 변경안 블록과 같은 뜻이다. 머리말 블록에서만 값이
+    있고, 세 칸으로 갈라지기 전에 발행된 옛 판이면 없음이다.
     """
 
     block_index: int
@@ -183,6 +191,7 @@ class BaseBlockResponse(BaseModel):
     claim_ids: list[str] = []
     relation_ids: list[str] = []
     sources: list[BlockSourceResponse] = []
+    summary_sections: SummarySectionsResponse | None = None
 
 
 class BlockChangeResponse(BaseModel):

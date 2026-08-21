@@ -375,11 +375,18 @@ def test_queue_item_carries_origin_title_and_summary() -> None:
     assert item.summary == "새 문서 초안입니다."
 
 
+SUMMARY_NARRATIVE = (
+    "결제 기능은 9월 출시를 목표로 한다."
+    "\n\n결제를 화면에서 바로 끝낼 수 있게 된다."
+    "\n\n지금은 외부 링크로 나가서 결제한다."
+)
+
+
 def test_summary_marks_proposal_without_base_revision_as_new_draft() -> None:
     """발행판이 없는 변경안은 새 문서 초안이라고 알린다."""
     state = FakeState()
     state.add_proposal(
-        blocks=(_summary_block(narrative="**결제 기능은 9월 출시를 목표로 한다**"),)
+        blocks=(_summary_block(narrative=SUMMARY_NARRATIVE),)
         + (_reason_block("근거가 한 건 늘었습니다."),),
     )
 
@@ -396,7 +403,7 @@ def test_summary_uses_first_change_reason_of_revision() -> None:
     state.add_proposal(
         base_revision_id=uuid.uuid4(),
         blocks=(
-            _summary_block(narrative="**결제 기능은 9월 출시를 목표로 한다**"),
+            _summary_block(narrative=SUMMARY_NARRATIVE),
             _reason_block("출시 월이 10월에서 9월로 바뀌었습니다."),
             _reason_block("근거가 한 건 늘었습니다."),
         ),

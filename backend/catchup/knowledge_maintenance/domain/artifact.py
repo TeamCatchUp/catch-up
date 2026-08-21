@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import uuid
 from collections.abc import Mapping
 from collections.abc import Sequence
@@ -410,6 +411,50 @@ def _parse_ids(values: Any, index: int, field: str) -> tuple[uuid.UUID, ...]:
         raise ArtifactBlockError(
             f"raw[{index}].{field}: UUID로 읽을 수 없다"
         ) from error
+
+
+def summary_sections(narrative: str | None) -> tuple[str, str, str] | None:
+    """머리말 산문을 한 줄 요약·원하는 결과·요청 배경 세 칸으로 되돌린다.
+
+    머리말은 세 칸을 빈 줄로 이어 한 문자열로 저장한다. 화면이 칸마다
+    제목을 붙여 그리려면 그 경계를 다시 찾아야 하는데, 빈 줄이 그 경계다.
+
+    문단이 정확히 셋일 때만 칸으로 읽는다. 셋이 아니면 세 칸으로 나뉘기
+    전에 발행된 옛 판이거나 모양이 깨진 문장이며, 그때는 없음을 돌려준다.
+    남은 문단을 어느 칸에 넣을지 짐작하지 않는다. 틀린 제목이 붙은 칸보다
+    제목 없는 문단이 낫기 때문이다.
+
+    문단 앞뒤의 `**`는 벗긴다. 굵게 그릴지는 화면이 정하는 일이고, 옛
+    판의 첫 문단에는 그 기호가 붙어 있다.
+
+    Args:
+        narrative: 머리말 블록에 저장된 산문을 받는다. 산문이 없는 블록도
+            있으므로 없음을 받을 수 있다.
+
+    Returns:
+        세 칸을 순서대로 담은 튜플을 돌려준다. 칸으로 읽을 수 없으면
+        없음을 돌려준다.
+    """
+    if not narrative:
+        return None
+    paragraphs = [
+        _strip_bold(part)
+        for part in re.split(r"\n[ \t]*\n", narrative.strip())
+        if part.strip()
+    ]
+    if len(paragraphs) != 3:
+        return None
+    return (paragraphs[0], paragraphs[1], paragraphs[2])
+
+
+def _strip_bold(paragraph: str) -> str:
+    """문단 앞뒤에 붙은 굵게 기호를 벗긴다."""
+    text = paragraph.strip()
+    if text.startswith("**"):
+        text = text[2:]
+    if text.endswith("**"):
+        text = text[:-2]
+    return text.strip()
 
 
 def _without_narrative(item: Mapping[str, Any]) -> dict[str, Any]:

@@ -23,6 +23,10 @@ from pydantic import ConfigDict
 from pydantic import Field
 from pydantic import field_validator
 
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_SUMMARY
+from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
+from catchup.knowledge_maintenance.domain.artifact import summary_sections
+
 
 class TestKnowledgeMaintenanceSettingRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -286,11 +290,57 @@ class ArtifactBlockSourceResponse(BaseModel):
     citation_verified: bool | None
 
 
+class SummarySectionsResponse(BaseModel):
+    """머리말 블록의 산문을 정해진 세 칸으로 갈라 담는다.
+
+    머리말은 한 줄 요약·원하는 결과·요청 배경 세 칸으로 읽는 양식이다.
+    산문 문자열만 내보내면 소비자가 칸 경계를 스스로 찾아야 하므로,
+    나눠 놓은 값을 함께 싣는다. 정본은 narrative이고 이 값은 그것을
+    갈라 놓은 파생값이다.
+    """
+
+    one_line_summary: str
+    desired_outcome: str
+    background: str
+
+
+def to_summary_sections(
+    block: ArtifactBlock,
+) -> SummarySectionsResponse | None:
+    """머리말 블록이면 산문을 세 칸으로 갈라 담는다.
+
+    문서 열람과 검토 상세가 같은 값을 내보내야 하므로 한자리에 둔다. 두
+    자리에 따로 적어 두면 한쪽만 고쳐져 같은 블록이 화면마다 다르게
+    그려질 수 있다.
+
+    Args:
+        block: 응답으로 옮기는 중인 블록을 받는다.
+
+    Returns:
+        머리말 블록이고 세 칸으로 갈라지면 그 값을 돌려준다. 머리말이
+        아니거나 갈라지지 않으면 없음을 돌려준다.
+    """
+    if block.block_kind != BLOCK_KIND_SUMMARY:
+        return None
+    sections = summary_sections(block.narrative)
+    if sections is None:
+        return None
+    one_line_summary, desired_outcome, background = sections
+    return SummarySectionsResponse(
+        one_line_summary=one_line_summary,
+        desired_outcome=desired_outcome,
+        background=background,
+    )
+
+
 class ArtifactDocumentBlockResponse(BaseModel):
     """발행된 문서의 블록 하나를 담는다.
 
     narrative는 표현이라 없을 수 있다. 산문이 없던 옛 판도 그대로 읽혀야
     하므로 없음을 허용한다.
+
+    summary_sections는 머리말 블록에서만 값이 있다. 머리말이 아니거나 세
+    칸으로 갈라지기 전에 발행된 옛 판이면 없음이다.
     """
 
     block_index: int
@@ -301,6 +351,7 @@ class ArtifactDocumentBlockResponse(BaseModel):
     claim_ids: list[str]
     relation_ids: list[str]
     sources: list[ArtifactBlockSourceResponse]
+    summary_sections: SummarySectionsResponse | None = None
 
 
 class LayoutTableRowResponse(BaseModel):

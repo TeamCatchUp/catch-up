@@ -98,6 +98,7 @@ from catchup.knowledge_maintenance.ports.narrator import BlockNarrator
 from catchup.knowledge_maintenance.ports.narrator import ChangeExplanationRequest
 from catchup.knowledge_maintenance.ports.narrator import NarrationError
 from catchup.knowledge_maintenance.ports.narrator import NarrationRequest
+from catchup.knowledge_maintenance.ports.narrator import SummaryNarrative
 from catchup.knowledge_maintenance.ports.relations import RelationRepository
 from catchup.knowledge_maintenance.ports.relations import StoredRelationEdge
 from catchup.knowledge_maintenance.services.traverse_relations import (
@@ -829,9 +830,11 @@ def _propose_node_blocks(
             if request is None:
                 narrated_blocks.append(block)
                 continue
-            narrated_blocks.append(
-                replace(block, narrative=narrator.narrate(request))
-            )
+            if block.block_kind == BLOCK_KIND_SUMMARY:
+                narrative = _joined_summary(narrator.narrate_summary(request))
+            else:
+                narrative = narrator.narrate(request)
+            narrated_blocks.append(replace(block, narrative=narrative))
             narrated += 1
         blocks = tuple(narrated_blocks)
 
@@ -1044,6 +1047,28 @@ def _verified_statements(block: ArtifactBlock) -> tuple[str, ...]:
         source.statement
         for source in block.sources
         if source.citation_verified
+    )
+
+
+def _joined_summary(narrative: SummaryNarrative) -> str:
+    """머리말 세 칸을 빈 줄로 이어 문자열 하나로 만든다.
+
+    저장하는 모양은 지금까지와 같은 문자열 하나다. 칸을 따로 저장하면
+    블록 지문과 산문 재사용 규칙이 함께 바뀌는데, 지금 바꾸려는 것은
+    화면이 칸 제목을 붙일 수 있게 하는 일뿐이다.
+
+    읽는 쪽은 빈 줄을 경계로 갈라 세 칸을 되찾는다. 칸 안에 개행이나 빈
+    줄이 남아 있으면 문단이 셋을 넘겨 그 복원이 깨지므로, 칸마다 연속된
+    공백과 개행을 공백 하나로 접은 뒤 잇는다. 이렇게 해야 문단 경계가
+    모델의 줄바꿈 습관과 무관하게 정해진다.
+    """
+    return "\n\n".join(
+        " ".join(value.split())
+        for value in (
+            narrative.one_line_summary,
+            narrative.desired_outcome,
+            narrative.background,
+        )
     )
 
 

@@ -1,0 +1,55 @@
+You write the opening of an internal wiki page. The opening always has the
+same three fields, and you fill each of them separately. The page is assembled
+by a deterministic compiler; the heading and the evidence are already fixed.
+Your only job is the prose that goes into the three fields.
+
+## What this page is for
+
+<< purpose_sentence >>
+
+## Style
+
+<< style_instruction >>
+
+## What this page is about (hints only, never evidence)
+
+- heading: << heading >>
+- compiled body: << topic_hint >>
+
+These are index labels written by another model. They tell you what the page
+is about. Never state them as facts and never quote them.
+
+## Evidence (the only facts you may state)
+
+{% if statements -%}
+{% for statement in statements -%}
+- << statement >>
+{% endfor -%}
+{% else -%}
+(no direct quotes for this page)
+{% endif %}
+## The three fields
+
+- `one_line_summary`: one sentence saying who wants to do what. A reader who
+  reads only this sentence must understand the request.
+- `desired_outcome`: the final result the customer wants to get. Write the
+  result, not how it would be built or which feature would deliver it.
+- `background`: why the request came up and how the customer works today.
+  State only facts the customer said.
+
+## Rules
+
+1. State only what the quotes above already say.
+2. Never invent or infer a person, a team, a date or a number. If the quotes
+   do not carry it, it does not exist.
+3. Fill all three fields. Never leave one empty and never move the content of
+   one field into another.
+4. Write plain sentences with no markdown at all: no `**`, no heading marks,
+   no bullet list, no numbering. How the fields are displayed is decided
+   elsewhere.
+5. Write in Korean.
+6. Follow the style instruction above.
+7. Add no conclusion, no recommendation and no judgement of your own.
+
+Return the three fields as `one_line_summary`, `desired_outcome` and
+`background`.
