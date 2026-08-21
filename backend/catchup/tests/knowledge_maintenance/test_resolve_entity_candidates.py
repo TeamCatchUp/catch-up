@@ -8,7 +8,12 @@ from datetime import timezone
 
 from structlog.testing import capture_logs
 
+from catchup.knowledge_maintenance.domain.entity_resolution import IdentityGroup
+from catchup.knowledge_maintenance.domain.entity_resolution import IdentityPartition
 from catchup.knowledge_maintenance.domain.entity_resolution import IdentityVerdict
+from catchup.knowledge_maintenance.domain.entity_resolution import (
+    PartitionContractError,
+)
 from catchup.knowledge_maintenance.domain.entity_resolution import normalize_name
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
@@ -23,6 +28,11 @@ from catchup.knowledge_maintenance.domain.knowledge_candidate import (
 from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
+from catchup.knowledge_maintenance.ports.knowledge_nodes import ActiveEntityAlias
+from catchup.knowledge_maintenance.ports.name_embedder import NameEmbeddingError
+from catchup.knowledge_maintenance.services.resolve_entity_candidates import (
+    block_idempotency_key,
+)
 from catchup.knowledge_maintenance.services.resolve_entity_candidates import (
     group_idempotency_key,
 )
@@ -87,6 +97,7 @@ class FakeNodeRepository:
         self.nodes: dict[uuid.UUID, KnowledgeNode] = {}
         self.aliases: list[tuple[uuid.UUID, str]] = []
         self.alias_sources: list[tuple[uuid.UUID, str, str]] = []
+        self.alias_rows: list[tuple[uuid.UUID, str, str]] = []
 
     def get_entity_by_canonical_key(self, *, workspace_id, canonical_key):
         del workspace_id
@@ -166,10 +177,28 @@ class FakeNodeRepository:
     def add_alias(
         self, *, workspace_id, node_id, alias, normalized_alias, source
     ):
-        del workspace_id, alias
+        del workspace_id
         if (node_id, normalized_alias) not in self.aliases:
             self.aliases.append((node_id, normalized_alias))
             self.alias_sources.append((node_id, normalized_alias, source))
+            self.alias_rows.append((node_id, alias, normalized_alias))
+
+    def list_active_entity_aliases(self, *, workspace_id):
+        del workspace_id
+        return [
+            ActiveEntityAlias(
+                node_id=node_id,
+                entity_type=self.nodes[node_id].entity_type,
+                alias=alias,
+                normalized_alias=normalized_alias,
+            )
+            for node_id, alias, normalized_alias in sorted(
+                self.alias_rows, key=lambda row: (row[0], row[2])
+            )
+            if self.nodes[node_id].node_kind is NodeKind.ENTITY
+            and self.nodes[node_id].lifecycle_state is NodeLifecycleState.ACTIVE
+            and self.nodes[node_id].entity_type is not None
+        ]
 
 
 class FakeProposalRepository:
@@ -1023,3 +1052,303 @@ def test_actor_resolution_never_calls_judge() -> None:
     resolve_entity_candidates(workspace_id=WORKSPACE, judge=judge, uow=uow)
 
     assert judge.calls == []
+
+
+_DIMENSION = 16
+# 같은 대상의 다른 표기끼리 주는 벡터다. 서로 완전히 같아 임계값을 넘고,
+# 아래 자리 벡터들과는 겹치는 축이 없어 0이 된다.
+_NEAR_VECTORS = {
+    "google workspace": (1.0, 1.0) + (0.0,) * (_DIMENSION - 2),
+    "결제": (0.0, 0.0, 1.0, 1.0) + (0.0,) * (_DIMENSION - 4),
+}
+
+
+class FakeNameEmbedder:
+    """이름마다 정해진 벡터를 돌려준다.
+
+    한 가족으로 지정한 이름들은 같은 벡터를 받아 한 블록으로 묶이고,
+    나머지는 자기 자리만 1인 벡터를 받아 어느 것과도 닮지 않는다.
+    """
+
+    def __init__(self, families: dict[str, tuple[str, ...]] | None = None) -> None:
+        self.family_by_name: dict[str, str] = {}
+        for family, names in (families or {}).items():
+            for name in names:
+                self.family_by_name[name] = family
+        self.calls: list[list[str]] = []
+        self._axes: dict[str, int] = {}
+
+    def embed(self, names):
+        self.calls.append(list(names))
+        return tuple(self._vector(name) for name in names)
+
+    def _vector(self, name: str) -> tuple[float, ...]:
+        family = self.family_by_name.get(name)
+        if family is not None:
+            return _NEAR_VECTORS[family]
+        axis = self._axes.setdefault(name, 4 + len(self._axes))
+        return tuple(
+            1.0 if index == axis else 0.0 for index in range(_DIMENSION)
+        )
+
+
+class FailingNameEmbedder:
+    def embed(self, names):
+        del names
+        raise NameEmbeddingError("임베딩 호출이 실패했다")
+
+
+class FakePartitionJudge:
+    """이름 앞 두 낱말이 같으면 한 정체라고 답한다."""
+
+    def __init__(self, *, failing_types: tuple[str, ...] = ()) -> None:
+        self.blocks: list = []
+        self._failing_types = failing_types
+
+    def judge(self, group):
+        raise AssertionError("분할 경로는 예·아니오 판정을 부르지 않는다")
+
+    def partition(self, block):
+        self.blocks.append(block)
+        if block.entity_type in self._failing_types:
+            raise PartitionContractError("배정되지 않은 멤버가 있다")
+        grouped: dict[str, list] = {}
+        for member in block.members:
+            grouped.setdefault(
+                " ".join(member.name.split()[:2]), []
+            ).append(member)
+        return IdentityPartition(
+            groups=tuple(
+                IdentityGroup(
+                    canonical_name="정규 이름 제안",
+                    canonical_type=block.entity_type,
+                    member_ids=tuple(
+                        member.member_id for member in members
+                    ),
+                    reason="표기만 다른 같은 대상이다",
+                )
+                for _, members in sorted(grouped.items())
+            )
+        )
+
+
+def _google_candidates() -> list[StoredEntityCandidate]:
+    return [
+        _candidate(
+            name="Google Workspace 연동",
+            entity_type="feature_request",
+            method=ExtractionMethod.LLM,
+        ),
+        _candidate(
+            name="Google Workspace 연동 지원",
+            entity_type="feature_request",
+            method=ExtractionMethod.LLM,
+            minutes=1,
+        ),
+    ]
+
+
+def _google_embedder() -> FakeNameEmbedder:
+    return FakeNameEmbedder(
+        families={
+            "google workspace": (
+                "Google Workspace 연동",
+                "Google Workspace 연동 지원",
+                "Google Workspace 커넥터",
+            )
+        }
+    )
+
+
+def test_similar_names_land_in_one_block_and_one_proposal() -> None:
+    """표기가 다른 같은 대상이 한 블록으로 묶여 병합 제안이 된다."""
+    judge = FakePartitionJudge()
+    members = _google_candidates()
+    uow = FakeUnitOfWork(members)
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE,
+        judge=judge,
+        uow=uow,
+        name_embedder=_google_embedder(),
+    )
+
+    assert result.blocks_formed == 1
+    assert result.blocks_judged == 1
+    assert result.blocks_failed == 0
+    assert result.proposals_created == 1
+    assert result.singletons_promoted == 0
+    # 후보는 pending 유지 — 확정은 승인 트랜잭션의 일이다.
+    assert uow.knowledge_candidates.resolved == {}
+
+    key = block_idempotency_key(
+        [f"candidate:{member.id}" for member in members]
+    )
+    kwargs = uow.mutation_proposals.proposals[key]["kwargs"]
+    assert kwargs["representative_candidate_id"] == members[0].id
+    assert kwargs["merge_candidate_ids"] == (members[1].id,)
+    assert kwargs["merge_into_node_id"] is None
+    assert kwargs["proposed_type"] == "feature_request"
+    # 모델이 지은 이름은 제안 값으로만 남고 검토 문장에는 안 실린다.
+    assert kwargs["proposed_name"] == "정규 이름 제안"
+    assert "정규 이름 제안" not in kwargs["summary"]
+
+
+def test_candidate_matching_existing_node_becomes_duplicate_proposal() -> None:
+    """기존 노드 별칭과 닮은 후보는 그 노드로 붙이는 제안이 된다."""
+    judge = FakePartitionJudge()
+    candidate = _candidate(
+        name="Google Workspace 연동 지원",
+        entity_type="feature_request",
+        method=ExtractionMethod.LLM,
+    )
+    uow = FakeUnitOfWork([candidate])
+    existing = _promoted_node(
+        uow, name="Google Workspace 연동", entity_type="feature_request"
+    )
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE,
+        judge=judge,
+        uow=uow,
+        name_embedder=_google_embedder(),
+    )
+
+    assert result.blocks_formed == 1
+    assert result.proposals_created == 1
+    assert result.singletons_promoted == 0
+    (stored,) = uow.mutation_proposals.proposals.values()
+    kwargs = stored["kwargs"]
+    assert kwargs["merge_into_node_id"] == existing.id
+    assert kwargs["representative_candidate_id"] == candidate.id
+    assert kwargs["merge_candidate_ids"] == ()
+    assert stored["resolver_metadata"]["merge_into_node_id"] == str(existing.id)
+
+
+def test_other_entity_type_is_not_blocked_together() -> None:
+    """종류가 다르면 이름이 닮아도 한 판정대에 오르지 않는다."""
+    judge = FakePartitionJudge()
+    uow = FakeUnitOfWork(
+        [
+            _candidate(
+                name="Google Workspace 연동",
+                entity_type="feature_request",
+                method=ExtractionMethod.LLM,
+            ),
+            _candidate(
+                name="Google Workspace 연동 지원",
+                entity_type="faq_question",
+                method=ExtractionMethod.LLM,
+                minutes=1,
+            ),
+        ]
+    )
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE,
+        judge=judge,
+        uow=uow,
+        name_embedder=_google_embedder(),
+    )
+
+    assert judge.blocks == []
+    assert result.blocks_formed == 0
+    assert result.proposals_created == 0
+    assert result.singletons_promoted == 2
+
+
+def test_partition_failure_isolates_only_that_block() -> None:
+    """분할 계약 위반은 그 블록만 접고 나머지는 계속 간다."""
+    judge = FakePartitionJudge(failing_types=("feature_request",))
+    failing = _google_candidates()
+    passing = [
+        _candidate(
+            name="결제 기능",
+            entity_type="feature",
+            method=ExtractionMethod.LLM,
+            minutes=2,
+        ),
+        _candidate(
+            name="결제 기능 개선",
+            entity_type="feature",
+            method=ExtractionMethod.LLM,
+            minutes=3,
+        ),
+    ]
+    uow = FakeUnitOfWork([*failing, *passing])
+    embedder = FakeNameEmbedder(
+        families={
+            "google workspace": (
+                "Google Workspace 연동",
+                "Google Workspace 연동 지원",
+            ),
+            "결제": ("결제 기능", "결제 기능 개선"),
+        }
+    )
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE,
+        judge=judge,
+        uow=uow,
+        name_embedder=embedder,
+    )
+
+    assert result.blocks_formed == 2
+    assert result.blocks_judged == 1
+    assert result.blocks_failed == 1
+    assert result.proposals_created == 1
+    # 판정을 못 받은 후보는 승격하지 않고 그대로 둔다.
+    assert result.singletons_promoted == 0
+    assert uow.knowledge_candidates.resolved == {}
+    assert uow.committed
+
+
+def test_rerun_of_same_block_opens_no_new_event() -> None:
+    """블록 구성이 그대로면 재실행이 안건을 새로 열지 않는다."""
+    judge = FakePartitionJudge()
+    members = _google_candidates()
+    first_uow = FakeUnitOfWork(members)
+    resolve_entity_candidates(
+        workspace_id=WORKSPACE,
+        judge=judge,
+        uow=first_uow,
+        name_embedder=_google_embedder(),
+    )
+
+    second_uow = FakeUnitOfWork(members)
+    second_uow.mutation_proposals = first_uow.mutation_proposals
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE,
+        judge=judge,
+        uow=second_uow,
+        name_embedder=_google_embedder(),
+    )
+
+    assert result.proposals_created == 0
+    assert result.proposals_abandoned == 0
+    assert second_uow.mutation_proposals.abandoned == []
+    assert len(second_uow.mutation_proposals.proposals) == 1
+
+
+def test_embedding_failure_falls_back_to_exact_name_groups() -> None:
+    """임베딩이 실패하면 정확 일치 경로로 물러난다."""
+    judge = FakeJudge(
+        IdentityVerdict(
+            same=True,
+            reason="같은 제품이다",
+            proposed_type="integration",
+            proposed_name="Slack",
+        )
+    )
+    uow = FakeUnitOfWork(_slack_group())
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE,
+        judge=judge,
+        uow=uow,
+        name_embedder=FailingNameEmbedder(),
+    )
+
+    assert result.blocks_formed == 0
+    assert result.groups_judged == 1
+    assert result.proposals_created == 1

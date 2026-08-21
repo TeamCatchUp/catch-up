@@ -37,6 +37,7 @@ from catchup.knowledge_maintenance.ports.extraction import ExtractionAPIError
 from catchup.knowledge_maintenance.ports.extraction import ExtractionContractError
 from catchup.knowledge_maintenance.ports.extraction import KnowledgeExtractionPort
 from catchup.knowledge_maintenance.ports.identity_judge import IdentityJudge
+from catchup.knowledge_maintenance.ports.name_embedder import NameEmbedder
 from catchup.knowledge_maintenance.ports.observation_normalizer import ObservationNormalizer
 from catchup.knowledge_maintenance.ports.source_poller import SkippedItem
 from catchup.knowledge_maintenance.ports.source_poller import SourcePollResult
@@ -125,6 +126,7 @@ async def run_pre_review_pipeline(
     extraction_contract_version: str,
     judge: IdentityJudge | None,
     uow_factory: UnitOfWorkFactory,
+    name_embedder: NameEmbedder | None = None,
     event_limit: int | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> PreReviewPipelineResult:
@@ -149,6 +151,7 @@ async def run_pre_review_pipeline(
             extraction_contract_version=extraction_contract_version,
             judge=judge,
             uow_factory=uow_factory,
+            name_embedder=name_embedder,
             event_limit=event_limit,
             clock=clock,
         )
@@ -189,6 +192,7 @@ async def _execute_pre_review_pipeline(
     extraction_contract_version: str,
     judge: IdentityJudge | None,
     uow_factory: UnitOfWorkFactory,
+    name_embedder: NameEmbedder | None = None,
     event_limit: int | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> PreReviewPipelineResult:
@@ -245,6 +249,7 @@ async def _execute_pre_review_pipeline(
         workspace_id=workspace_id,
         judge=judge,
         uow=uow_factory(),
+        name_embedder=name_embedder,
     )
 
     claim_conflicts = resolve_claim_conflicts(

@@ -23,12 +23,17 @@ import argparse
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from catchup.components.embedder.constants import EmbeddingProvider
+from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.llm.constants import LlmProvider
 from catchup.components.llm.constants import ModelCapacity
 from catchup.components.llm.factory import get_llm_service
 from catchup.configs.config import settings
 from catchup.knowledge_maintenance.adapters.llm.identity_judge import (
     BedrockIdentityJudge,
+)
+from catchup.knowledge_maintenance.adapters.llm.name_embedder import (
+    EmbeddingServiceNameEmbedder,
 )
 from catchup.knowledge_maintenance.adapters.llm.structured_extractor import CONTRACT_ID
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
@@ -113,6 +118,7 @@ def main() -> None:
     uow = KnowledgeMaintenanceUnitOfWork(session_factory)
 
     judge = None
+    name_embedder = None
     if not args.skip_judge:
         version = args.vocabulary_version
         if version is None:
@@ -147,11 +153,19 @@ def main() -> None:
             service.get_llm(),
             entity_types=entity_types,
         )
+        # 임베더를 못 만들면 여기서 멈춘다. 조용히 없이 돌면 후보군이
+        # 정확 일치로 좁아져 표기가 조금 다른 같은 대상이 다시 각자
+        # 노드로 굳는데, 그렇게 굳은 노드는 이 단계가 다시 합쳐 주지
+        # 않는다.
+        name_embedder = EmbeddingServiceNameEmbedder(
+            get_embedding_service(EmbeddingProvider.AWS_BEDROCK)
+        )
 
     result = resolve_entity_candidates(
         workspace_id=args.workspace_id,
         judge=judge,
         uow=uow,
+        name_embedder=name_embedder,
     )
 
     print("=== Resolution 결과 ===")
@@ -166,6 +180,11 @@ def main() -> None:
         f" (실패 {result.groups_failed})"
         f"  | proposal 생성 {result.proposals_created}"
         f" · 폐기 {result.proposals_abandoned}"
+    )
+    print(
+        f"  유사 이름 블록 {result.blocks_formed}"
+        f"  | 분할 판정 {result.blocks_judged}"
+        f" (실패 {result.blocks_failed})"
     )
 
     engine.dispose()

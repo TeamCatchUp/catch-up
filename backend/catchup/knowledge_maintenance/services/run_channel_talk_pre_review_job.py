@@ -10,6 +10,8 @@ from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from catchup.components.embedder.constants import EmbeddingProvider
+from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.llm.constants import LlmProvider
 from catchup.components.llm.constants import ModelCapacity
 from catchup.components.llm.factory import get_llm_service
@@ -31,6 +33,9 @@ from catchup.knowledge_maintenance.adapters.connectors.channel_talk.user_chat_po
 )
 from catchup.knowledge_maintenance.adapters.llm.identity_judge import (
     BedrockIdentityJudge,
+)
+from catchup.knowledge_maintenance.adapters.llm.name_embedder import (
+    EmbeddingServiceNameEmbedder,
 )
 from catchup.knowledge_maintenance.adapters.llm.structured_extractor import CONTRACT_ID
 from catchup.knowledge_maintenance.adapters.llm.structured_extractor import (
@@ -141,6 +146,12 @@ async def run_channel_talk_pre_review_job(
             entity_types=vocabulary.entity_type_entries,
         ),
         uow_factory=uow_factory,
+        # 임베더 없이 돌면 해소가 정확 일치 후보군으로 좁아져, 표기가 조금
+        # 다른 같은 대상이 각자 노드로 굳는다. 한 번 굳으면 이 단계가 다시
+        # 합쳐 주지 않으므로 만들지 못하면 그대로 실패시킨다.
+        name_embedder=EmbeddingServiceNameEmbedder(
+            get_embedding_service(EmbeddingProvider.AWS_BEDROCK)
+        ),
     )
     if result.status is PreReviewPipelineStatus.PARTIAL_FAILURE:
         logger.warning(
