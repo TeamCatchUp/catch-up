@@ -399,3 +399,86 @@ def test_modified_block_without_any_statement_is_not_explained() -> None:
     assert narrator.explanations == []
     assert result.blocks_explained == 0
     assert _reasons(uow)["status"] is None
+
+
+class _PublishingNarrator(_FakeNarrator):
+    """머리말을 서술하는 동안 새 판이 발행되는 상황을 흉내 낸다.
+
+    컴파일은 기준 판을 서술 앞에서 읽고 저장은 서술 뒤에 한다. 그 사이가
+    LLM 호출만큼 벌어져 있어, 다른 검토자가 계류 변경안을 승인하면 기준
+    판이 바뀐 채로 저장이 이어진다. 첫 서술 한 번에만 끼어들어 그 순간을
+    만든다.
+    """
+
+    def __init__(self, uow, revision_number: int) -> None:
+        super().__init__()
+        self._uow = uow
+        self._revision_number = revision_number
+        self.published = False
+
+    def narrate_summary(self, request):
+        if not self.published:
+            self.published = True
+            _publish_pending(self._uow, self._revision_number)
+        return super().narrate_summary(request)
+
+
+def test_publish_during_narration_drops_the_stale_proposal() -> None:
+    """서술 중 발행이 끼어들면 낡은 기준의 변경안을 저장하지 않는다.
+
+    낡은 기준을 적은 계류가 저장되면 발행이 거부하는데 다음 컴파일은 그
+    계류의 지문을 보고 무변경으로 건너뛰므로 갈아 주지도 않는다. 그래서
+    어긋남을 본 노드는 저장도 접기도 하지 않고 물러난다.
+    """
+    node_id = uuid.uuid4()
+    uow = _two_section_uow(node_id)
+    _run(uow, _FakeNarrator())
+    _publish_pending(uow, 1)
+    _add_priority_claim(uow, node_id)
+    _run(uow, _FakeNarrator())
+    _add_second_status_claim(uow, node_id)
+    first_revision = uow.artifacts.revisions[0]["id"]
+
+    narrator = _PublishingNarrator(uow, 2)
+    result = _run(uow, narrator)
+
+    assert narrator.published is True
+    assert result.proposals_created == 0
+    assert result.proposals_conflicted == 1
+    assert result.proposals_abandoned == 0
+    # 낡은 기준을 적은 계류가 남지 않았다. 끼어든 승인으로 이전 계류는
+    # approved가 됐으므로 계류는 하나도 없는 것이 맞다.
+    assert uow.artifacts.pending_rows() == []
+    assert all(
+        row["base_revision_id"] != first_revision
+        or row["status"] != "pending"
+        for row in uow.artifacts.by_key.values()
+    )
+    # 기존 계류를 접지 않았다. 접었다면 승인된 행이 abandoned로 덮였다.
+    assert all(
+        row["status"] != "abandoned" for row in uow.artifacts.by_key.values()
+    )
+
+
+def test_next_compile_recovers_on_the_new_base() -> None:
+    """물러난 다음 컴파일이 새 기준 판 위에 변경안을 다시 세운다.
+
+    이 픽스처에서는 새 판에 없는 status claim이 하나 더 붙어 있으므로
+    내용이 판과 달라 계류가 새로 생기는 쪽이다. 내용이 판과 같았다면
+    올릴 것이 없으니 건너뛰는 것이 맞다.
+    """
+    node_id = uuid.uuid4()
+    uow = _two_section_uow(node_id)
+    _run(uow, _FakeNarrator())
+    _publish_pending(uow, 1)
+    _add_priority_claim(uow, node_id)
+    _run(uow, _FakeNarrator())
+    _add_second_status_claim(uow, node_id)
+    _run(uow, _PublishingNarrator(uow, 2))
+    second_revision = uow.artifacts.revisions[1]["id"]
+
+    result = _run(uow, _FakeNarrator())
+
+    assert result.proposals_created == 1
+    assert result.proposals_conflicted == 0
+    assert _pending(uow)["base_revision_id"] == second_revision

@@ -882,6 +882,30 @@ def _propose_node_blocks(
             purpose_sentence=purpose_sentence,
         )
 
+    # 기준 판을 저장 직전에 한 번 더 읽어 그사이 발행이 있었는지 본다.
+    # 위에서 읽은 기준 판과 저장 사이에는 LLM 호출이 들어 있어 시간이
+    # 길게 벌어진다. 그동안 다른 검토자가 계류 변경안을 승인하면 새 판이
+    # 나고, 여기서 그대로 저장하면 낡은 기준을 적은 계류가 남는다. 그
+    # 계류는 발행이 STALE_BASE_REVISION으로 거부하는데, 다음 컴파일은 그
+    # 계류의 지문을 보고 무변경으로 건너뛰면서 그 행을 그대로 두므로
+    # 스스로 풀리지 않는다. 어긋남을 본 노드는 저장을 접는 것이 유일한
+    # 회복 경로다. 저장하지 않으면 다음 컴파일이 새 기준으로 다시 세운다.
+    moved = uow.artifacts.find_latest_revision_id_and_number(
+        artifact_id=artifact_id,
+    )
+    if moved != latest:
+        logger.warning(
+            "artifact_compile_node_base_moved",
+            workspace_id=workspace_id,
+            node_id=str(node_id),
+            artifact_id=str(artifact_id),
+            base_revision_id=None if latest is None else str(latest[0]),
+            latest_revision_id=None if moved is None else str(moved[0]),
+        )
+        # 기존 계류도 접지 않는다. 저장할 것이 없는데 큐만 비우면 사람이
+        # 보던 안건이 이유 없이 사라진다.
+        return _NodeOutcome(conflicted=1, suppressed=suppressed)
+
     replaced = uow.artifacts.abandon_pending_proposals(
         artifact_id=artifact_id,
     )
