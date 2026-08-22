@@ -248,14 +248,86 @@ def list_folders(db: Session, workspace_id: int) -> list[ChannelFolder]:
     )
 
 
+def last_activity_by_folder(
+    db: Session,
+    *,
+    workspace_id: int,
+    folder_ids: Sequence[uuid.UUID] | None = None,
+) -> dict[uuid.UUID, datetime]:
+    """폴더마다 그 안 문서가 마지막으로 움직인 시각을 읽는다.
+
+    폴더에는 활동 시각 컬럼이 없다. 폴더가 움직였다는 말은 그 안의 문서가
+    움직였다는 뜻이므로, 문서 쪽 사실에서 그때그때 계산한다.
+
+    문서 하나의 활동 시각은 문서 목록과 같은 규칙이다. 판 발행과 제안
+    도착 중 늦은 쪽이고, 둘 다 없으면 문서 생성 시각이다. 제안은 상태를
+    가리지 않고 센다. 폴더 값은 그 문서들의 값 중 가장 늦은 것이다.
+
+    문서가 하나도 없는 폴더는 결과에 키가 없다. 부르는 쪽은 그 폴더의
+    활동 시각을 비운다.
+
+    folder_ids가 None이면 workspace의 폴더 전부를 센다. 목록 한 쪽을
+    그리려면 폴더 수만큼 질의를 늘리지 않고 한 번에 읽어야 한다.
+    """
+    latest_revision_at = (
+        select(func.max(KnowledgeArtifactRevision.created_at))
+        .where(KnowledgeArtifactRevision.artifact_id == KnowledgeArtifact.id)
+        .correlate(KnowledgeArtifact)
+        .scalar_subquery()
+    )
+    latest_proposal_at = (
+        select(func.max(KnowledgeArtifactChangeProposal.created_at))
+        .where(
+            KnowledgeArtifactChangeProposal.artifact_id == KnowledgeArtifact.id
+        )
+        .correlate(KnowledgeArtifact)
+        .scalar_subquery()
+    )
+    activity = func.greatest(
+        func.coalesce(latest_revision_at, KnowledgeArtifact.created_at),
+        func.coalesce(latest_proposal_at, KnowledgeArtifact.created_at),
+    )
+    statement = (
+        select(KnowledgeArtifact.folder_id, func.max(activity))
+        .where(
+            KnowledgeArtifact.workspace_id == workspace_id,
+            KnowledgeArtifact.folder_id.is_not(None),
+        )
+        .group_by(KnowledgeArtifact.folder_id)
+    )
+    if folder_ids is not None:
+        if not folder_ids:
+            return {}
+        statement = statement.where(
+            KnowledgeArtifact.folder_id.in_(folder_ids)
+        )
+
+    return {
+        folder_id: activity_at
+        for folder_id, activity_at in db.execute(statement).all()
+    }
+
+
 def add_folder(
-    db: Session, *, workspace_id: int, channel_id: uuid.UUID, name: str
+    db: Session,
+    *,
+    workspace_id: int,
+    channel_id: uuid.UUID,
+    name: str,
+    created_by: int,
 ) -> ChannelFolder:
-    """폴더 한 개를 세션에 넣는다."""
+    """폴더 한 개를 세션에 넣는다.
+
+    created_by는 폴더를 만든 사용자 id다. 폴더를 만드는 일은 언제나 사람의
+    요청에서 시작하므로 이 값은 필수로 받는다. 컬럼이 nullable인 것은 이
+    컬럼이 생기기 전에 만들어진 폴더 때문이지, 새로 만드는 폴더에 만든
+    사람이 없어도 된다는 뜻이 아니다.
+    """
     folder = ChannelFolder(
         workspace_id=workspace_id,
         channel_id=channel_id,
         name=name,
+        created_by=created_by,
     )
     db.add(folder)
 

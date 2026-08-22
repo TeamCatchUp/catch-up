@@ -76,6 +76,7 @@ from catchup.server.wiki.dependencies import review_error
 from catchup.server.wiki.layout import layout_items
 from catchup.server.wiki.owners import editors_by_reviewer
 from catchup.server.wiki.owners import owners_by_artifact
+from catchup.server.wiki.owners import users_by_id
 from catchup.server.wiki.roles import can_manage_owners
 from catchup.server.wiki.roles import load_wiki_roles
 from catchup.server.wiki.schemas import ArtifactBlockSourceResponse
@@ -557,6 +558,7 @@ def onboard_channel(
                     workspace_id=context.workspace_id,
                     channel_id=channel.id,
                     name=preset_kind.label,
+                    created_by=context.user.id,
                 )
                 db.flush()
             kind_purposes = [
@@ -646,13 +648,26 @@ def list_channels(
         db, user_id=context.user.id, workspace_id=context.workspace_id
     )
 
+    folder_rows = wiki_queries.list_folders(db, context.workspace_id)
+    # 만든 사람과 활동 시각을 한 번씩만 읽는다. 폴더마다 읽으면 질의가
+    # 폴더 수만큼 늘어난다.
+    creators = users_by_id(db, [folder.created_by for folder in folder_rows])
+    activity = wiki_queries.last_activity_by_folder(
+        db, workspace_id=context.workspace_id
+    )
+
     folders: dict[uuid.UUID, list[FolderResponse]] = {}
-    for folder in wiki_queries.list_folders(db, context.workspace_id):
+    for folder in folder_rows:
         folders.setdefault(folder.channel_id, []).append(
             FolderResponse(
                 id=str(folder.id),
                 name=folder.name,
                 channel_id=str(folder.channel_id),
+                created_at=folder.created_at,
+                created_by=creators.get(folder.created_by)
+                if folder.created_by is not None
+                else None,
+                last_activity_at=activity.get(folder.id),
             )
         )
 
@@ -818,6 +833,7 @@ def create_folder(
         workspace_id=channel.workspace_id,
         channel_id=channel.id,
         name=request.name,
+        created_by=context.user.id,
     )
     try:
         db.commit()
@@ -831,10 +847,14 @@ def create_folder(
             ) from error
         raise
 
+    # 방금 만든 폴더에는 문서가 하나도 없으므로 활동 시각을 묻지 않는다.
     return FolderResponse(
         id=str(folder.id),
         name=folder.name,
         channel_id=str(folder.channel_id),
+        created_at=folder.created_at,
+        created_by=users_by_id(db, [context.user.id]).get(context.user.id),
+        last_activity_at=None,
     )
 
 
@@ -871,10 +891,18 @@ def rename_folder(
             ) from error
         raise
 
+    activity = wiki_queries.last_activity_by_folder(
+        db, workspace_id=folder.workspace_id, folder_ids=[folder.id]
+    )
     return FolderResponse(
         id=str(folder.id),
         name=folder.name,
         channel_id=str(folder.channel_id),
+        created_at=folder.created_at,
+        created_by=users_by_id(db, [folder.created_by]).get(folder.created_by)
+        if folder.created_by is not None
+        else None,
+        last_activity_at=activity.get(folder.id),
     )
 
 

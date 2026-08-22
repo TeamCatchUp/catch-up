@@ -39,6 +39,32 @@ def owners_by_artifact(
     }
 
 
+def users_by_id(
+    db: Session, user_ids: Sequence[int | None]
+) -> dict[int, OwnerResponse]:
+    """사용자 id마다 사람 응답을 만들어 묶는다.
+
+    사용자를 한 번에 읽고 나눈다. 행마다 따로 읽으면 목록 한 쪽에 질의가
+    줄 수만큼 늘어난다. None과 중복은 걸러서 넘긴다.
+
+    사용자 행이 사라진 id는 결과에 키가 없다. 부르는 쪽은 그 경우 사람을
+    비운다.
+    """
+    wanted = sorted({user_id for user_id in user_ids if user_id is not None})
+    if not wanted:
+        return {}
+
+    users = wiki_queries.list_users_for_display(db, user_ids=wanted)
+    return {
+        user_id: OwnerResponse(
+            user_id=row.user_id,
+            display_name=row.display_name,
+            profile_image_url=row.profile_image_url,
+        )
+        for user_id, row in users.items()
+    }
+
+
 # 승인 기록에 남는 승인자 문자열은 정상 승인 경로에서 "user:" 뒤에 사용자
 # id를 붙인 모양이다. 디버그 경로는 다른 모양으로 남기므로, 접두가 다르거나
 # 뒤가 정수가 아니면 사람으로 옮기지 않는다.

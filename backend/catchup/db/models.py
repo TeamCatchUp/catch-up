@@ -562,6 +562,12 @@ class ChannelFolder(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    # 이 컬럼이 생기기 전에 만들어진 폴더는 만든 사람을 되찾을 수 없어
+    # nullable이다. 새로 만드는 폴더는 언제나 요청한 사용자를 채운다.
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", name="fk_channel_folders_created_by"),
+        nullable=True,
+    )
 
 
 class ChannelPurpose(Base):

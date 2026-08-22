@@ -470,6 +470,125 @@ def test_channel_list_carries_folders_and_document_count(
     assert [folder["name"] for folder in mine[0]["folders"]] == ["요구사항"]
 
 
+def _find_channel(response_json: dict, channel_id: str) -> dict:
+    """채널 목록 응답에서 채널 한 줄을 찾는다."""
+    found = [
+        item for item in response_json["channels"] if item["id"] == channel_id
+    ]
+    assert len(found) == 1
+    return found[0]
+
+
+def test_channel_list_carries_folder_created_at_and_creator(
+    client: TestClient, member: User
+) -> None:
+    """목록의 폴더는 생성 시각과 만든 사람을 함께 싣는다."""
+    channel_id = client.post(
+        "/api/v1/wiki/channels", json={"name": f"작성자-{uuid.uuid4().hex[:8]}"}
+    ).json()["id"]
+    created = client.post(
+        f"/api/v1/wiki/channels/{channel_id}/folders", json={"name": "요구사항"}
+    )
+    assert created.status_code == 201
+    assert created.json()["created_at"] is not None
+    assert created.json()["created_by"]["user_id"] == member.id
+
+    listed = client.get("/api/v1/wiki/channels")
+
+    assert listed.status_code == 200
+    folder = _find_channel(listed.json(), channel_id)["folders"][0]
+    assert folder["created_at"] is not None
+    assert folder["created_by"] == {
+        "user_id": member.id,
+        "display_name": member.name,
+        "profile_image_url": member.picture,
+    }
+
+
+def test_folder_without_creator_reports_null_created_by(
+    client: TestClient, db: Session, member: User, workspace_ids: tuple[int, int]
+) -> None:
+    """created_by가 비어 있는 옛 폴더는 만든 사람이 null이다."""
+    workspace_id, _ = workspace_ids
+    channel_id = client.post(
+        "/api/v1/wiki/channels", json={"name": f"미상-{uuid.uuid4().hex[:8]}"}
+    ).json()["id"]
+    db.add(
+        ChannelFolder(
+            workspace_id=workspace_id,
+            channel_id=uuid.UUID(channel_id),
+            name="옛폴더",
+        )
+    )
+    db.commit()
+
+    listed = client.get("/api/v1/wiki/channels")
+
+    assert listed.status_code == 200
+    folder = _find_channel(listed.json(), channel_id)["folders"][0]
+    assert folder["name"] == "옛폴더"
+    assert folder["created_by"] is None
+    assert folder["created_at"] is not None
+
+
+def test_onboarding_folders_record_creator(
+    client: TestClient, member: User
+) -> None:
+    """온보딩이 만든 폴더도 만든 사람을 남긴다."""
+    created = client.post(
+        "/api/v1/wiki/channels/onboarding",
+        json={
+            "name": f"온보딩작성자-{uuid.uuid4().hex[:8]}",
+            "domain_preset": "voc",
+            "purpose_presets": ["voc.top_requests"],
+            "kinds": ["feature_request_status"],
+            "style_preset": "style.wiki_standard",
+        },
+    )
+    assert created.status_code == 201, created.json()
+    channel_id = created.json()["channel"]["id"]
+
+    listed = client.get("/api/v1/wiki/channels")
+
+    folders = _find_channel(listed.json(), channel_id)["folders"]
+    assert folders
+    assert all(
+        folder["created_by"]["user_id"] == member.id for folder in folders
+    )
+
+
+def test_folder_last_activity_comes_from_its_documents(
+    client: TestClient, db: Session, member: User, workspace_ids: tuple[int, int]
+) -> None:
+    """폴더의 마지막 활동 시각은 그 안의 문서에서 온다. 문서가 없으면 null이다."""
+    workspace_id, _ = workspace_ids
+    channel_id = client.post(
+        "/api/v1/wiki/channels", json={"name": f"활동-{uuid.uuid4().hex[:8]}"}
+    ).json()["id"]
+    filled = client.post(
+        f"/api/v1/wiki/channels/{channel_id}/folders", json={"name": "문서있음"}
+    ).json()["id"]
+    empty = client.post(
+        f"/api/v1/wiki/channels/{channel_id}/folders", json={"name": "문서없음"}
+    ).json()["id"]
+    _make_artifact(
+        db,
+        workspace_id=workspace_id,
+        channel_id=uuid.UUID(channel_id),
+        folder_id=uuid.UUID(filled),
+    )
+    db.commit()
+
+    listed = client.get("/api/v1/wiki/channels")
+
+    folders = {
+        folder["id"]: folder
+        for folder in _find_channel(listed.json(), channel_id)["folders"]
+    }
+    assert folders[filled]["last_activity_at"] is not None
+    assert folders[empty]["last_activity_at"] is None
+
+
 def test_channel_list_carries_purposes_and_definitions(
     client: TestClient, db: Session, member: User, workspace_ids: tuple[int, int]
 ) -> None:

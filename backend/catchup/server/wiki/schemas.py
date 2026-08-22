@@ -148,12 +148,36 @@ class ChannelOnboardingResponse(BaseModel):
     definitions: list[DefinitionSummaryResponse]
 
 
+class OwnerResponse(BaseModel):
+    """담당자 한 명을 화면에 그릴 만큼 담는다.
+
+    id만 내보내면 화면이 이름과 사진을 얻으려고 사용자 조회를 한 번 더
+    해야 한다. 담당자는 목록에서도 문서에서도 늘 사람 이름으로 보이므로
+    이름과 사진을 같이 싣는다. 사진은 없을 수 있어 None을 허용한다.
+    """
+
+    user_id: int
+    display_name: str
+    profile_image_url: str | None
+
+
 class FolderResponse(BaseModel):
-    """폴더 하나의 식별 정보를 담는다."""
+    """폴더 하나의 식별 정보와 만들어진 내력을 담는다.
+
+    created_by는 이 폴더를 만든 사람이다. 컬럼이 생기기 전에 만들어진
+    폴더와, 만든 사람의 사용자 행이 사라진 폴더는 None이다.
+
+    last_activity_at은 이 폴더 안 문서가 마지막으로 움직인 시각이다.
+    폴더에는 그런 컬럼이 없고 문서 쪽 사실에서 계산한다. 문서가 하나도
+    없는 폴더는 None이다.
+    """
 
     id: str
     name: str
     channel_id: str
+    created_at: datetime
+    created_by: OwnerResponse | None = None
+    last_activity_at: datetime | None = None
 
 
 class ChannelListItemResponse(BaseModel):
@@ -178,19 +202,6 @@ class ChannelListResponse(BaseModel):
     """채널 목록 전체를 담는다."""
 
     channels: list[ChannelListItemResponse]
-
-
-class OwnerResponse(BaseModel):
-    """담당자 한 명을 화면에 그릴 만큼 담는다.
-
-    id만 내보내면 화면이 이름과 사진을 얻으려고 사용자 조회를 한 번 더
-    해야 한다. 담당자는 목록에서도 문서에서도 늘 사람 이름으로 보이므로
-    이름과 사진을 같이 싣는다. 사진은 없을 수 있어 None을 허용한다.
-    """
-
-    user_id: int
-    display_name: str
-    profile_image_url: str | None
 
 
 class WorkspaceMemberListResponse(BaseModel):

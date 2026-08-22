@@ -142,6 +142,7 @@ def _folder(db: Session, channel: Channel, name: str) -> ChannelFolder:
         workspace_id=channel.workspace_id,
         channel_id=channel.id,
         name=name,
+        created_by=channel.created_by,
     )
     db.flush()
     return folder
