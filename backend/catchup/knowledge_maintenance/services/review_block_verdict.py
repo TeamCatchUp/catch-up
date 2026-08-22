@@ -14,6 +14,10 @@
 
 같은 블록을 다시 누르는 것은 오류가 아니라 마음을 바꾼 것이다. 블록당
 한 줄이라는 유일 제약 위에서 갱신으로 흡수하고, 마지막 결정만 남긴다.
+
+담당자 규칙도 이 transaction 안에서 본다. 판정은 발행이 읽어 확정하는
+재료이므로, 여기가 규칙 밖에 있으면 담당자가 지정된 뒤에도 남이 적어 둔
+판정이 담당자의 발행을 타고 문서에 실린다.
 """
 
 from __future__ import annotations
@@ -46,6 +50,9 @@ CODE_NOT_FOUND = "PROPOSAL_NOT_FOUND"
 CODE_ALREADY_DECIDED = "ALREADY_DECIDED"
 CODE_STALE_BLOCK = "STALE_BLOCK"
 CODE_INVALID = "INVALID"
+# 담당자가 정해진 문서에 담당자가 아닌 사람이 판정을 적으려 한 경우다.
+# 호출자는 이것만 권한 응답으로 옮기고 나머지는 상태 응답으로 옮긴다.
+CODE_NOT_DOCUMENT_OWNER = "NOT_DOCUMENT_OWNER"
 
 
 class BlockVerdictError(Exception):
@@ -97,16 +104,26 @@ def upsert_block_verdict(
     chosen_winner_claim_id: uuid.UUID | None,
     reviewer: str,
     now: datetime | None = None,
+    decider_user_id: int | None = None,
 ) -> StoredBlockVerdict:
     """블록 하나의 결정을 확정해 저널에 남기고 그 결정을 돌려준다.
 
     같은 블록에 이미 결정이 있으면 갱신으로 흡수한다. 마음을 바꾸는 것은
     검토의 일부이므로 오류가 아니다.
 
+    `decider_user_id`를 주면 담당자 규칙을 이 transaction 안에서 강제한다.
+    문서에 담당자가 있고 결정자가 그중에 없으면 거절한다. 판정은 발행이
+    읽어 확정하는 재료이므로, 여기에 규칙이 없으면 담당자가 지정된 뒤에도
+    남이 적어 둔 판정이 담당자의 발행을 타고 문서에 실린다. 담당자를
+    세우는 일은 여기서 하지 않는다 — 블록 판정은 문서의 내용을 확정한
+    것이 아니라 확정을 위한 재료다.
+
+    주지 않으면 강제하지 않는다. CLI 러너와 debug 표면이 이 경로다.
+
     Raises:
         BlockVerdictError: 결정을 받아들일 수 없을 때 던진다. code는
-            PROPOSAL_NOT_FOUND·ALREADY_DECIDED·STALE_BLOCK·INVALID 중
-            하나다.
+            PROPOSAL_NOT_FOUND·ALREADY_DECIDED·STALE_BLOCK·INVALID·
+            NOT_DOCUMENT_OWNER 중 하나다.
     """
     if not reviewer.strip():
         # 누가 결정했는지 없는 판정은 감사 기록이 되지 못한다.
@@ -130,6 +147,18 @@ def upsert_block_verdict(
                 CODE_ALREADY_DECIDED,
                 f"변경안 {proposal_id}는 이미 {proposal.status} 상태다",
             )
+        if decider_user_id is not None:
+            # 변경안 행을 잠근 뒤에 본다. 문서 행은 그 잠금이 이미 잡았고,
+            # 담당자 명단을 바꾸는 경로도 같은 문서 행을 잡으므로 판정과
+            # 지정이 그 행 하나를 두고 줄을 선다.
+            owner_user_ids = uow.artifacts.lock_owner_user_ids(
+                artifact_id=proposal.artifact_id
+            )
+            if owner_user_ids and decider_user_id not in owner_user_ids:
+                raise BlockVerdictError(
+                    CODE_NOT_DOCUMENT_OWNER,
+                    f"변경안 {proposal_id}의 문서는 담당자만 판정할 수 있다",
+                )
         if not 0 <= block_index < len(proposal.blocks):
             raise BlockVerdictError(
                 CODE_INVALID,

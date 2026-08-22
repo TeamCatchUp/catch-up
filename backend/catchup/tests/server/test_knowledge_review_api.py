@@ -103,6 +103,12 @@ from catchup.knowledge_maintenance.services.review_artifact_proposal import (
     ProposalReviewError,
 )
 from catchup.knowledge_maintenance.services.review_artifact_proposal import ReviewResult
+from catchup.knowledge_maintenance.services.review_block_verdict import (
+    CODE_NOT_DOCUMENT_OWNER as BLOCK_CODE_NOT_DOCUMENT_OWNER,
+)
+from catchup.knowledge_maintenance.services.review_block_verdict import (
+    BlockVerdictError,
+)
 from catchup.server.knowledge_review.api import _to_base_block
 from catchup.server.knowledge_review.api import _to_block
 from catchup.server.knowledge_review.api import router
@@ -3785,6 +3791,99 @@ def test_publish_requires_document_permission(
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "NOT_DOCUMENT_REVIEWER"
     service.assert_not_called()
+
+
+def test_block_verdict_passes_decider_to_service(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """블록 결정도 결정자를 실어 보낸다.
+
+    담당자 규칙을 다시 보는 일은 서비스가 자기 transaction 안에서 한다.
+    결정자를 빼면 판정 저널만 규칙 밖에 남아, 남이 적어 둔 판정을 담당자의
+    발행이 그대로 읽어 확정하게 된다.
+    """
+    workspace_id, _ = workspace_ids
+    member = _make_user(db, email="bv-decider@example.com")
+    _join(db, user=member, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    as_user(member)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+    stored = StoredBlockVerdict(
+        proposal_id=proposal_id,
+        block_index=0,
+        block_content_hash="a" * 64,
+        verdict="approved",
+        rejection_reason=None,
+        chosen_winner_claim_id=None,
+        reviewer=f"user:{member.id}",
+        reviewed_at=AT,
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.upsert_block_verdict",
+        return_value=stored,
+    ) as service:
+        response = client.put(
+            _verdict_path(proposal_id, 0),
+            json={"verdict": "approved", "block_content_hash": "a" * 64},
+        )
+
+    assert response.status_code == 200
+    assert service.call_args.kwargs["decider_user_id"] == member.id
+
+
+def test_block_verdict_owner_refusal_becomes_document_reviewer_403(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """서비스가 담당자 규칙으로 막은 블록 결정도 403으로 나간다.
+
+    409로 나가면 소비자는 권한 문제를 변경안 상태 문제로 읽고, 다시 읽어
+    보면 계류 그대로라 무엇을 고쳐야 하는지 알 수 없다.
+    """
+    workspace_id, _ = workspace_ids
+    member = _make_user(db, email="bv-race@example.com")
+    _join(db, user=member, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    as_user(member)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.upsert_block_verdict",
+        side_effect=BlockVerdictError(
+            BLOCK_CODE_NOT_DOCUMENT_OWNER, "담당자가 아니다"
+        ),
+    ):
+        response = client.put(
+            _verdict_path(proposal_id, 0),
+            json={"verdict": "approved", "block_content_hash": "a" * 64},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "NOT_DOCUMENT_REVIEWER"
 
 
 def test_block_verdict_hides_other_workspace_proposal(

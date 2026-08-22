@@ -95,6 +95,9 @@ from catchup.knowledge_maintenance.services.review_artifact_proposal import (
     review_artifact_proposal,
 )
 from catchup.knowledge_maintenance.services.review_block_verdict import (
+    CODE_NOT_DOCUMENT_OWNER as BLOCK_CODE_NOT_DOCUMENT_OWNER,
+)
+from catchup.knowledge_maintenance.services.review_block_verdict import (
     BlockVerdictError,
 )
 from catchup.knowledge_maintenance.services.review_block_verdict import (
@@ -638,6 +641,10 @@ def put_block_verdict(
     PUT인 이유가 그것이다. 블록당 결정은 하나뿐이라 같은 요청을 몇 번
     보내도 결과가 같다.
 
+    담당자 규칙은 서비스가 자기 transaction 안에서 다시 본다. 판정은
+    발행이 읽어 확정하는 재료라, 여기만 사전 검사에 맡기면 담당자가
+    지정된 뒤에도 남이 적어 둔 판정이 발행을 타고 문서에 실린다.
+
     Raises:
         HTTPException: 변경안이 없으면 404, 이 문서의 검수 권한이 없으면
             403, 이미 결정됐거나 본문이 바뀌었으면 409, 보낸 값 자체가
@@ -654,8 +661,13 @@ def put_block_verdict(
             rejection_reason=payload.rejection_reason,
             chosen_winner_claim_id=payload.chosen_winner_claim_id,
             reviewer=context.reviewer,
+            decider_user_id=context.user.id,
         )
     except BlockVerdictError as error:
+        if error.code == BLOCK_CODE_NOT_DOCUMENT_OWNER:
+            # 사전 검사를 지난 뒤 담당자가 지정된 경우다. 상태가 아니라
+            # 권한 문제이므로 409 묶음에 섞지 않는다.
+            raise _document_permission_error() from error
         status_code, message = _BLOCK_VERDICT_ERRORS.get(
             error.code, _UNMAPPED_ERROR
         )
