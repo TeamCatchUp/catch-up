@@ -137,6 +137,74 @@ describe('buildBlockDiff', () => {
     expect(entry.after![1].segments.every((s) => !s.emphasized)).toBe(true);
   });
 
+  it('레이아웃이 있으면 카드 순서가 그 양식을 따른다', () => {
+    const entries = buildBlockDiff(
+      [block({}), block({ blockIndex: 1, heading: '두 번째', body: 'b' })],
+      [block({ body: 'a2' }), block({ blockIndex: 1, heading: '두 번째', body: 'b2' })],
+      [change({ blockIndex: 0, baseBlockIndex: 0 }), change({ blockIndex: 1, baseBlockIndex: 1 })],
+      [
+        { kind: 'block', heading: '두 번째', blockIndex: 1 },
+        { kind: 'block', heading: '재시도 정책', blockIndex: 0 },
+      ],
+    );
+
+    expect(entries.map((entry) => entry.blockIndex)).toEqual([1, 0]);
+  });
+
+  it('표로 묶인 블록들은 그 표 자리에 함께 선다', () => {
+    const entries = buildBlockDiff(
+      [block({}), block({ blockIndex: 1, body: 'b' }), block({ blockIndex: 2, body: 'c' })],
+      [block({ body: 'a2' }), block({ blockIndex: 1, body: 'b2' }), block({ blockIndex: 2, body: 'c2' })],
+      [
+        change({ blockIndex: 0 }),
+        change({ blockIndex: 1, baseBlockIndex: 1 }),
+        change({ blockIndex: 2, baseBlockIndex: 2 }),
+      ],
+      [
+        { kind: 'table', heading: '사용 상황', blockIndexes: [1, 2], rows: [] },
+        { kind: 'block', heading: '요청 상태', blockIndex: 0 },
+      ],
+    );
+
+    expect(entries.map((entry) => entry.blockIndex)).toEqual([1, 2, 0]);
+  });
+
+  it('양식이 이름을 대지 않은 카드는 원래 순서대로 뒤에 남는다 — 빠진 블록이 그렇다', () => {
+    const entries = buildBlockDiff(
+      [block({ heading: '사라진 블록', body: 'gone' }), block({ blockIndex: 1, body: 'b' })],
+      [block({ body: 'a2' })],
+      [change({ kind: 'removed', blockIndex: null, baseBlockIndex: 0 }), change({ blockIndex: 0, baseBlockIndex: 1 })],
+      [{ kind: 'block', heading: '재시도 정책', blockIndex: 0 }],
+    );
+
+    expect(entries.map((entry) => entry.kind)).toEqual(['modified', 'removed']);
+  });
+
+  it('레이아웃이 순서만 바꾼다 — 판정 키는 카드마다 그대로다', () => {
+    const entries = buildBlockDiff(
+      [block({}), block({ blockIndex: 1, body: 'b' })],
+      [block({ body: 'a2' }), block({ blockIndex: 1, body: 'b2', blockContentHash: 'sha256:second' })],
+      [change({ blockIndex: 0 }), change({ blockIndex: 1, baseBlockIndex: 1 })],
+      [
+        { kind: 'block', heading: '두 번째', blockIndex: 1 },
+        { kind: 'block', heading: '재시도 정책', blockIndex: 0 },
+      ],
+    );
+
+    expect(entries[0]).toMatchObject({ blockIndex: 1, blockContentHash: 'sha256:second', id: 'modified-1' });
+    expect(entries[1]).toMatchObject({ blockIndex: 0, blockContentHash: 'sha256:test', id: 'modified-0' });
+  });
+
+  it('레이아웃이 비면 서버 변경 목록 순서 그대로다 — 구서버 응답 경로다', () => {
+    const entries = buildBlockDiff(
+      [block({}), block({ blockIndex: 1, body: 'b' })],
+      [block({ body: 'a2' }), block({ blockIndex: 1, body: 'b2' })],
+      [change({ blockIndex: 1, baseBlockIndex: 1 }), change({ blockIndex: 0, baseBlockIndex: 0 })],
+    );
+
+    expect(entries.map((entry) => entry.blockIndex)).toEqual([1, 0]);
+  });
+
   it('added·removed 카드에는 단어 강조가 없다 (패널 색이 전부)', () => {
     const entries = buildBlockDiff(
       [block({ body: '지워질 내용' })],

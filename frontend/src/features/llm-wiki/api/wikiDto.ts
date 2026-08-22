@@ -97,6 +97,27 @@ export interface WikiDocumentBlockDto {
   sources: WikiBlockSourceDto[];
 }
 
+/** 읽기 레이아웃 표의 한 행. label이 양식이 정한 칸 이름이고 value가 그 칸 값이다 */
+export interface WikiLayoutTableRowDto {
+  label: string;
+  value: string;
+}
+
+/**
+ * 읽기 레이아웃 항목. item_kind는 block·table·placeholder지만 늘 수 있어 닫지 않는다.
+ * block_index는 blocks[] 자리 그대로이고 표시 순서에 맞춰 재번호하지 않는다.
+ */
+export interface WikiLayoutItemDto {
+  item_kind: string;
+  heading: string;
+  block_index?: number | null;
+  /** table 항목이 합친 블록 자리들. rows[i]가 block_indexes[i]에서 나온다 */
+  block_indexes?: number[];
+  rows?: WikiLayoutTableRowDto[];
+  /** placeholder 항목의 문구. 가리킬 블록이 없다 */
+  text?: string | null;
+}
+
 /** 지금 발행된 판 하나. 발행판이 없는 문서는 이 경로가 404다 */
 export interface WikiArtifactDocumentDto {
   artifact_id: string;
@@ -110,6 +131,8 @@ export interface WikiArtifactDocumentDto {
   revision_id: string;
   published_at: string;
   blocks: WikiDocumentBlockDto[];
+  /** 표시 순서·이름만 정한다. 내용과 근거의 원천은 blocks다 — 구서버 응답에는 없다 */
+  layout?: WikiLayoutItemDto[];
 }
 
 export interface WikiFavoriteItemDto {

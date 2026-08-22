@@ -3,7 +3,7 @@
  * 원천은 backend/catchup/server/knowledge_review/{api,schemas}.py다.
  */
 
-import type { WikiOwnerDto } from './wikiDto';
+import type { WikiLayoutItemDto, WikiOwnerDto } from './wikiDto';
 
 /** 큐 한 줄이 가리키는 문서. 미분류 문서는 channel_id·folder_id가 둘 다 null이다 */
 export interface ReviewArtifactRefDto {
@@ -127,7 +127,11 @@ export interface ReviewProposalDetailDto {
   owners: WikiOwnerDto[];
   can_review: boolean;
   blocks: ReviewBlockDto[];
+  /** blocks의 표시 순서·이름. 블록 배열은 재배치되지 않는다 — 구서버 응답에는 없다 */
+  layout?: WikiLayoutItemDto[];
   base_blocks: ReviewBaseBlockDto[];
+  /** base_blocks의 같은 양식. 발행판이 없으면 빈 목록이다 */
+  base_layout?: WikiLayoutItemDto[];
   block_changes: ReviewBlockChangeDto[];
   read_set: ReviewReadSetDto;
   conflicts: ReviewConflictDto[];

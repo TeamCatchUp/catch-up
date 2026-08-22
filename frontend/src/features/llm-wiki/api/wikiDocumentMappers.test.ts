@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   mapWikiArtifactDocument,
   mapWikiDocumentBlock,
+  mapWikiLayout,
   resolveDocumentBlockText,
 } from './wikiDocumentMappers';
 import type { WikiArtifactDocumentDto, WikiDocumentBlockDto } from './wikiDto';
@@ -95,6 +96,62 @@ describe('resolveDocumentBlockText', () => {
   });
 });
 
+describe('mapWikiLayout', () => {
+  it('block 항목은 blocks[] 자리를 그대로 들고 온다 — 재번호가 없다', () => {
+    expect(mapWikiLayout([{ item_kind: 'block', heading: '한 줄 요약', block_index: 3 }])).toEqual([
+      { kind: 'block', heading: '한 줄 요약', blockIndex: 3 },
+    ]);
+  });
+
+  it('block_index 0도 자리다 — 없음과 섞이면 첫 블록이 사라진다', () => {
+    expect(mapWikiLayout([{ item_kind: 'block', heading: '요청 상태', block_index: 0 }])).toHaveLength(1);
+  });
+
+  it('table 항목은 자리 목록과 행을 같은 순서로 옮긴다', () => {
+    expect(
+      mapWikiLayout([
+        {
+          item_kind: 'table',
+          heading: '사용 상황',
+          block_indexes: [5, 6],
+          rows: [
+            { label: '사용 상황', value: '월말 정산 때 쓴다.' },
+            { label: '요청자 역할', value: '재무 담당자가 요청했다.' },
+          ],
+        },
+      ]),
+    ).toEqual([
+      {
+        kind: 'table',
+        heading: '사용 상황',
+        blockIndexes: [5, 6],
+        rows: [
+          { label: '사용 상황', value: '월말 정산 때 쓴다.' },
+          { label: '요청자 역할', value: '재무 담당자가 요청했다.' },
+        ],
+      },
+    ]);
+  });
+
+  it('placeholder 항목은 가리킬 블록 없이 문구만 갖는다', () => {
+    expect(mapWikiLayout([{ item_kind: 'placeholder', heading: '우회 방법', text: '없음' }])).toEqual([
+      { kind: 'placeholder', heading: '우회 방법', text: '없음' },
+    ]);
+  });
+
+  it('모르는 item_kind는 그릴 방법이 없어 떨군다 — 종류가 늘어도 화면이 깨지지 않는다', () => {
+    expect(mapWikiLayout([{ item_kind: 'timeline', heading: '연표' }])).toEqual([]);
+  });
+
+  it('가리킬 자리가 없는 block 항목도 떨군다', () => {
+    expect(mapWikiLayout([{ item_kind: 'block', heading: '요청 상태', block_index: null }])).toEqual([]);
+  });
+
+  it('키가 없으면 빈 목록이다 — layout을 싣지 않는 구서버 응답이 그렇다', () => {
+    expect(mapWikiLayout(undefined)).toEqual([]);
+  });
+});
+
 describe('mapWikiArtifactDocument', () => {
   it('문서 상세를 도메인 계약으로 옮긴다', () => {
     const mapped = mapWikiArtifactDocument(document());
@@ -120,5 +177,27 @@ describe('mapWikiArtifactDocument', () => {
 
     expect(mapped.channelId).toBeNull();
     expect(mapped.folderId).toBeNull();
+  });
+
+  it('layout이 없는 응답은 빈 목록으로 온다 — 구서버에서도 blocks 순서로 읽힌다', () => {
+    expect(mapWikiArtifactDocument(document()).layout).toEqual([]);
+  });
+
+  it('layout이 오면 그대로 싣고 blocks는 건드리지 않는다', () => {
+    const mapped = mapWikiArtifactDocument(
+      document({
+        blocks: [block(), block({ block_index: 1, heading: '요청 상태' })],
+        layout: [
+          { item_kind: 'block', heading: '요청 상태', block_index: 1 },
+          { item_kind: 'block', heading: '한 줄 요약', block_index: 0 },
+        ],
+      }),
+    );
+
+    expect(mapped.layout).toEqual([
+      { kind: 'block', heading: '요청 상태', blockIndex: 1 },
+      { kind: 'block', heading: '한 줄 요약', blockIndex: 0 },
+    ]);
+    expect(mapped.blocks.map((item) => item.blockIndex)).toEqual([0, 1]);
   });
 });

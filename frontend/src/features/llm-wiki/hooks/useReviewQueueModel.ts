@@ -96,7 +96,7 @@ export function useReviewQueueModel(): ReviewQueuePageProps {
   const rejectAllMutation = useRejectReviewProposalMutation(selectedRowId ?? '');
 
   const entries = useMemo(
-    () => (detail ? buildBlockDiff(detail.baseBlocks, detail.blocks, detail.changes) : []),
+    () => (detail ? buildBlockDiff(detail.baseBlocks, detail.blocks, detail.changes, detail.layout) : []),
     [detail],
   );
 

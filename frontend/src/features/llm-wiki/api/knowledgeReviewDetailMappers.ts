@@ -4,6 +4,7 @@ import type { BlockChange, WikiBlock } from '../types/llmWikiDiff';
 import type { ChangeProposalStatus, DocumentOwner } from '../types/llmWikiModel';
 import type { ReviewBlockChangeDto, ReviewProposalDetailDto } from './knowledgeReviewDto';
 import { mapChangeProposalStatus, mapReviewBaseBlock, mapReviewBlock } from './knowledgeReviewMappers';
+import { mapWikiLayout, type WikiLayoutItem } from './wikiDocumentMappers';
 import { mapWikiOwners } from './wikiMappers';
 
 /**
@@ -24,7 +25,11 @@ export interface ReviewProposalDetailData {
   baseRevisionId: string | null;
   owners: DocumentOwner[];
   blocks: WikiBlock[];
+  /** blocks의 표시 순서·이름. 비면 blocks 순서가 곧 카드 순서다 */
+  layout: WikiLayoutItem[];
   baseBlocks: WikiBlock[];
+  /** baseBlocks의 같은 양식. 지금은 소비처가 없고 계약만 보존한다 */
+  baseLayout: WikiLayoutItem[];
   changes: BlockChange[];
 }
 
@@ -44,7 +49,9 @@ export function mapReviewProposalDetail(dto: ReviewProposalDetailDto): ReviewPro
     baseRevisionId: dto.base_revision_id,
     owners: mapWikiOwners(dto.owners),
     blocks: dto.blocks.map(mapReviewBlock),
+    layout: mapWikiLayout(dto.layout),
     baseBlocks: dto.base_blocks.map(mapReviewBaseBlock),
+    baseLayout: mapWikiLayout(dto.base_layout),
     changes: dto.block_changes.map(mapReviewBlockChange),
   };
 }

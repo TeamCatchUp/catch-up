@@ -1,5 +1,6 @@
 import { Diff } from 'diff';
 
+import type { WikiLayoutItem } from '../../api/wikiDocumentMappers';
 import type { BlockChange, BlockDiffEntry, DiffLine, DiffSegment, WikiBlock } from '../../types/llmWikiDiff';
 
 interface ChangePart {
@@ -55,6 +56,23 @@ function verdictFields(proposed: WikiBlock) {
 }
 
 /**
+ * 카드 순서만 양식 순서로 바꾼다. 자리에 이름이 없는 카드(빠진 블록)는 원래 순서대로 뒤에 남는다.
+ * 판정에 쓰는 blockIndex·blockContentHash는 카드가 그대로 들고 있어 재배치와 무관하다.
+ */
+function sortByLayout(entries: readonly BlockDiffEntry[], layout: readonly WikiLayoutItem[]): BlockDiffEntry[] {
+  const position = new Map<number, number>();
+  layout.forEach((item, index) => {
+    if (item.kind === 'block') position.set(item.blockIndex, index);
+    if (item.kind === 'table') item.blockIndexes.forEach((blockIndex) => position.set(blockIndex, index));
+  });
+
+  const rank = (entry: BlockDiffEntry) =>
+    (entry.blockIndex === null ? undefined : position.get(entry.blockIndex)) ?? Number.MAX_SAFE_INTEGER;
+
+  return [...entries].sort((left, right) => rank(left) - rank(right));
+}
+
+/**
  * 서버가 계산한 변경 목록을 diff 카드로 옮긴다. 짝짓기는 하지 않고 자리만 따라간다 —
  * 같은 안건이 소비자마다 다르게 보이지 않으려면 짝짓기 규칙이 한 곳에만 있어야 한다.
  * 자리가 blocks 범위를 벗어난 변경은 카드를 만들지 않는다.
@@ -63,6 +81,8 @@ export function buildBlockDiff(
   baseBlocks: readonly WikiBlock[],
   proposedBlocks: readonly WikiBlock[],
   changes: readonly BlockChange[],
+  /** 있으면 카드 순서가 이 양식을 따른다. 비면 서버 변경 목록 순서 그대로다 */
+  layout: readonly WikiLayoutItem[] = [],
 ): BlockDiffEntry[] {
   const entries: BlockDiffEntry[] = [];
 
@@ -115,5 +135,5 @@ export function buildBlockDiff(
     });
   }
 
-  return entries;
+  return layout.length > 0 ? sortByLayout(entries, layout) : entries;
 }

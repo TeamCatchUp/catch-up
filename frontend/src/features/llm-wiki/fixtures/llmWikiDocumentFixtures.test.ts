@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { resolveDocumentBlockText } from '../api/wikiDocumentMappers';
-import { WIKI_DOCUMENT_BREADCRUMBS, WIKI_DOCUMENT_FIXTURE } from './llmWikiDocumentFixtures';
+import {
+  WIKI_DOCUMENT_BREADCRUMBS,
+  WIKI_DOCUMENT_FIXTURE,
+  WIKI_DOCUMENT_LAYOUT_FIXTURE,
+} from './llmWikiDocumentFixtures';
 
 describe('llmWikiDocumentFixtures', () => {
   it('블록이 하나 이상 있다 — 없으면 아래 검사가 공허하게 통과한다', () => {
@@ -34,5 +38,39 @@ describe('llmWikiDocumentFixtures', () => {
   it('발행 시각은 ISO와 표시 문자열을 함께 갖는다 — 표시 문자열은 정렬에 쓸 수 없다', () => {
     expect(Number.isNaN(Date.parse(WIKI_DOCUMENT_FIXTURE.publishedAt))).toBe(false);
     expect(WIKI_DOCUMENT_FIXTURE.publishedLabel.length).toBeGreaterThan(0);
+  });
+
+  it('기본 표본은 layout이 비어 있다 — 양식 없는 종류와 구서버 응답의 자리다', () => {
+    expect(WIKI_DOCUMENT_FIXTURE.layout).toEqual([]);
+  });
+});
+
+describe('WIKI_DOCUMENT_LAYOUT_FIXTURE', () => {
+  it('세 가지 항목이 모두 있다 — 하나라도 빠지면 스토리가 그 경로를 덮지 못한다', () => {
+    const kinds = new Set(WIKI_DOCUMENT_LAYOUT_FIXTURE.layout.map((item) => item.kind));
+    expect(kinds).toEqual(new Set(['block', 'table', 'placeholder']));
+  });
+
+  it('block·table 항목이 가리키는 자리가 blocks에 실재한다', () => {
+    for (const item of WIKI_DOCUMENT_LAYOUT_FIXTURE.layout) {
+      if (item.kind === 'block') expect(WIKI_DOCUMENT_LAYOUT_FIXTURE.blocks[item.blockIndex]).toBeDefined();
+      if (item.kind === 'table') {
+        for (const blockIndex of item.blockIndexes) {
+          expect(WIKI_DOCUMENT_LAYOUT_FIXTURE.blocks[blockIndex]).toBeDefined();
+        }
+      }
+    }
+  });
+
+  it('표의 행 수와 묶인 블록 수가 같다 — 같은 순서의 짝이라는 계약이다', () => {
+    const table = WIKI_DOCUMENT_LAYOUT_FIXTURE.layout.find((item) => item.kind === 'table')!;
+    expect(table.rows).toHaveLength(table.blockIndexes.length);
+  });
+
+  it('표시 순서가 저장 순서와 다르다 — 같으면 layout을 따르는지 드러나지 않는다', () => {
+    const shown = WIKI_DOCUMENT_LAYOUT_FIXTURE.layout
+      .filter((item) => item.kind === 'block')
+      .map((item) => item.blockIndex);
+    expect(shown).not.toEqual([...shown].sort((left, right) => left - right));
   });
 });

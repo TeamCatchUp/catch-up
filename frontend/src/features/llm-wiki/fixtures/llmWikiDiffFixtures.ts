@@ -1,3 +1,4 @@
+import type { WikiLayoutItem } from '../api/wikiDocumentMappers';
 import type { BlockChange, WikiBlock } from '../types/llmWikiDiff';
 
 /**
@@ -61,7 +62,8 @@ export const PROPOSED_WIKI_BLOCKS: readonly WikiBlock[] = [
         citationVerified: true,
       },
     ],
-    reason: '근거 1건 추가·0건 폐기',
+    // 컴파일이 받아 둔 수정 이유 표본 — 개수 세기가 아니라 사람이 읽을 한 문장이다
+    reason: '재시도 상한이 3회로 올랐다는 근거가 새로 들어왔습니다.',
   }),
   block({
     blockIndex: 1,
@@ -76,7 +78,7 @@ export const PROPOSED_WIKI_BLOCKS: readonly WikiBlock[] = [
         citationVerified: null,
       },
     ],
-    reason: '새 섹션',
+    reason: '새로 추가된 섹션입니다.',
   }),
 ];
 
@@ -88,6 +90,15 @@ export const PROPOSED_BLOCK_CHANGES: readonly BlockChange[] = [
   { kind: 'modified', blockIndex: 0, baseBlockIndex: 0 },
   { kind: 'added', blockIndex: 1, baseBlockIndex: null },
   { kind: 'removed', blockIndex: null, baseBlockIndex: 1 },
+];
+
+/**
+ * 변경안 blocks의 읽기 양식. 저장 순서(0 → 1)와 어긋나게 둬 카드가 양식을 따르는지 드러낸다.
+ * 빠진 블록은 변경안에 자리가 없어 이 목록에 이름이 없다.
+ */
+export const PROPOSED_WIKI_LAYOUT: readonly WikiLayoutItem[] = [
+  { kind: 'block', heading: 'PG 점검 시간 예외', blockIndex: 1 },
+  { kind: 'block', heading: '재시도 정책', blockIndex: 0 },
 ];
 
 /** 다툼 블록 — sources를 비우고 variants에만 근거를 싣는 계약을 표본으로 남긴다 */
@@ -123,7 +134,7 @@ export const CONTESTED_PROPOSED_BLOCKS: readonly WikiBlock[] = [
         ],
       },
     ],
-    reason: '근거 1건 추가·0건 폐기',
+    reason: '근거 1건이 추가되었습니다.',
   }),
 ];
 
@@ -134,7 +145,7 @@ export const JUDGED_PROPOSED_BLOCKS: readonly WikiBlock[] = [
     heading: '재시도 정책',
     body: '결제 승인 실패 시 3회까지 재시도한다.\n재시도 간격은 30초다.',
     claimIds: ['c-retry-1'],
-    reason: '산문 갱신',
+    reason: '산문 표현만 다듬었습니다.',
     verdict: {
       proposalId: 'prop-payment-retry',
       blockIndex: 0,
@@ -184,7 +195,7 @@ export const LONG_PROPOSED_WIKI_BLOCKS: readonly WikiBlock[] = [
     heading: '고객 안내 문구 표준',
     body: '결제 승인이 실패한 경우 고객에게는 결제 수단과 한도를 확인해 달라는 안내 문구를 노출하고, 동일 카드로 두 번 이상 실패가 발생하면 상담 채널로 연결되는 배너를 함께 보여 준다. 이 문구는 PG사별로 다르게 표기하지 않는다.',
     claimIds: ['c-copy-1'],
-    reason: '근거 2건 추가·1건 폐기',
+    reason: '근거 2건이 추가되고 1건이 빠졌습니다.',
   }),
 ];
 
