@@ -248,14 +248,86 @@ def list_folders(db: Session, workspace_id: int) -> list[ChannelFolder]:
     )
 
 
+def last_activity_by_folder(
+    db: Session,
+    *,
+    workspace_id: int,
+    folder_ids: Sequence[uuid.UUID] | None = None,
+) -> dict[uuid.UUID, datetime]:
+    """폴더마다 그 안 문서가 마지막으로 움직인 시각을 읽는다.
+
+    폴더에는 활동 시각 컬럼이 없다. 폴더가 움직였다는 말은 그 안의 문서가
+    움직였다는 뜻이므로, 문서 쪽 사실에서 그때그때 계산한다.
+
+    문서 하나의 활동 시각은 문서 목록과 같은 규칙이다. 판 발행과 제안
+    도착 중 늦은 쪽이고, 둘 다 없으면 문서 생성 시각이다. 제안은 상태를
+    가리지 않고 센다. 폴더 값은 그 문서들의 값 중 가장 늦은 것이다.
+
+    문서가 하나도 없는 폴더는 결과에 키가 없다. 부르는 쪽은 그 폴더의
+    활동 시각을 비운다.
+
+    folder_ids가 None이면 workspace의 폴더 전부를 센다. 목록 한 쪽을
+    그리려면 폴더 수만큼 질의를 늘리지 않고 한 번에 읽어야 한다.
+    """
+    latest_revision_at = (
+        select(func.max(KnowledgeArtifactRevision.created_at))
+        .where(KnowledgeArtifactRevision.artifact_id == KnowledgeArtifact.id)
+        .correlate(KnowledgeArtifact)
+        .scalar_subquery()
+    )
+    latest_proposal_at = (
+        select(func.max(KnowledgeArtifactChangeProposal.created_at))
+        .where(
+            KnowledgeArtifactChangeProposal.artifact_id == KnowledgeArtifact.id
+        )
+        .correlate(KnowledgeArtifact)
+        .scalar_subquery()
+    )
+    activity = func.greatest(
+        func.coalesce(latest_revision_at, KnowledgeArtifact.created_at),
+        func.coalesce(latest_proposal_at, KnowledgeArtifact.created_at),
+    )
+    statement = (
+        select(KnowledgeArtifact.folder_id, func.max(activity))
+        .where(
+            KnowledgeArtifact.workspace_id == workspace_id,
+            KnowledgeArtifact.folder_id.is_not(None),
+        )
+        .group_by(KnowledgeArtifact.folder_id)
+    )
+    if folder_ids is not None:
+        if not folder_ids:
+            return {}
+        statement = statement.where(
+            KnowledgeArtifact.folder_id.in_(folder_ids)
+        )
+
+    return {
+        folder_id: activity_at
+        for folder_id, activity_at in db.execute(statement).all()
+    }
+
+
 def add_folder(
-    db: Session, *, workspace_id: int, channel_id: uuid.UUID, name: str
+    db: Session,
+    *,
+    workspace_id: int,
+    channel_id: uuid.UUID,
+    name: str,
+    created_by: int,
 ) -> ChannelFolder:
-    """폴더 한 개를 세션에 넣는다."""
+    """폴더 한 개를 세션에 넣는다.
+
+    created_by는 폴더를 만든 사용자 id다. 폴더를 만드는 일은 언제나 사람의
+    요청에서 시작하므로 이 값은 필수로 받는다. 컬럼이 nullable인 것은 이
+    컬럼이 생기기 전에 만들어진 폴더 때문이지, 새로 만드는 폴더에 만든
+    사람이 없어도 된다는 뜻이 아니다.
+    """
     folder = ChannelFolder(
         workspace_id=workspace_id,
         channel_id=channel_id,
         name=name,
+        created_by=created_by,
     )
     db.add(folder)
 
@@ -297,6 +369,47 @@ def get_latest_revision(
         .order_by(KnowledgeArtifactRevision.revision_number.desc())
         .limit(1)
     )
+
+
+@dataclass(frozen=True, slots=True)
+class RevisionApproval:
+    """판 하나를 사람이 승인한 기록이다.
+
+    발행판은 승인된 변경안에서만 나오므로, 그 변경안에 남은 승인자와 승인
+    시각이 곧 그 판을 마지막으로 손댄 사람과 시각이다.
+
+    reviewer는 사람을 가리키는 문자열이고 형식은 승인 경로마다 다르다.
+    사용자 id로 옮기는 일은 표시를 맡은 server 계층에서 한다.
+    """
+
+    reviewer: str | None
+    reviewed_at: datetime | None
+
+
+def get_revision_approval(
+    db: Session, *, revision_id: uuid.UUID
+) -> RevisionApproval | None:
+    """그 판을 만든 변경안의 승인자와 승인 시각을 읽는다.
+
+    판이 없거나 출처 변경안이 사라졌으면 None이다.
+    """
+    row = db.execute(
+        select(
+            KnowledgeArtifactChangeProposal.reviewer,
+            KnowledgeArtifactChangeProposal.reviewed_at,
+        )
+        .join(
+            KnowledgeArtifactRevision,
+            KnowledgeArtifactRevision.source_proposal_id
+            == KnowledgeArtifactChangeProposal.id,
+        )
+        .where(KnowledgeArtifactRevision.id == revision_id)
+    ).first()
+
+    if row is None:
+        return None
+
+    return RevisionApproval(row[0], row[1])
 
 
 def count_artifacts_by_channel(
@@ -487,6 +600,29 @@ def list_workspace_members(
         WorkspaceMemberRow(user_id, name, picture)
         for user_id, name, picture in rows
     ]
+
+
+def list_users_for_display(
+    db: Session, *, user_ids: Sequence[int]
+) -> dict[int, WorkspaceMemberRow]:
+    """사용자 id로 이름·사진을 한 번에 읽어 id별로 묶는다.
+
+    id 하나씩 조회하면 목록 한 쪽에 질의가 줄 수만큼 늘어난다. 없는 id는
+    결과에 키가 없다. 소속이나 활성 여부로 거르지 않는다. 지난 승인 기록에
+    남은 사람은 이미 워크스페이스를 떠났을 수 있는데, 그렇다고 그 판을 누가
+    승인했는지가 사라지는 것은 아니기 때문이다.
+    """
+    if not user_ids:
+        return {}
+
+    rows = db.execute(
+        select(User.id, User.name, User.picture).where(User.id.in_(user_ids))
+    ).all()
+
+    return {
+        user_id: WorkspaceMemberRow(user_id, name, picture)
+        for user_id, name, picture in rows
+    }
 
 
 def get_artifact_locations(
@@ -680,6 +816,9 @@ class ArtifactListRow:
     # 마지막 활동 시각이다. 발행과 제안 도착 중 늦은 쪽이고, 둘 다 없으면
     # 문서 생성 시각이다. 항상 값이 있다.
     last_activity_at: datetime
+    # 최신 발행판을 승인한 사람과 그 시각이다. 발행판이 없으면 둘 다 None이다.
+    last_edit_reviewer: str | None
+    last_edit_reviewed_at: datetime | None
 
 
 def artifact_status(row: ArtifactListRow) -> str:
@@ -699,7 +838,7 @@ def list_artifacts(
     folder_id: uuid.UUID | None = None,
     kind: str | None = None,
     status: str | None = None,
-    owner_user_id: int | None = None,
+    owner_user_ids: Sequence[int] | None = None,
     unassigned: bool = False,
     q: str | None = None,
     created_after: datetime | None = None,
@@ -719,8 +858,14 @@ def list_artifacts(
     동률 순서를 고정하지 않으면 같은 조건으로 다음 쪽을 요청했을 때 앞
     쪽에서 이미 본 문서가 다시 나오거나 아예 빠질 수 있다.
 
-    owner_user_id와 unassigned를 함께 받으면 결과가 반드시 비지만, 여기서는
+    owner_user_ids는 여러 명을 받고 그중 한 명이라도 담당자인 문서를 남긴다.
+    비어 있거나 None이면 담당자 조건을 걸지 않는다.
+
+    owner_user_ids와 unassigned를 함께 받으면 결과가 반드시 비지만, 여기서는
     막지 않고 받은 대로 건다. 잘못된 조합을 거르는 일은 서버 계층의 몫이다.
+
+    최신 판을 만든 변경안까지 함께 붙여 승인자와 승인 시각을 싣는다. 문서를
+    마지막으로 손댄 사람은 별도 컬럼이 아니라 그 승인 기록에서만 나온다.
     """
     pending_count = (
         select(func.count(KnowledgeArtifactChangeProposal.id))
@@ -743,6 +888,10 @@ def list_artifacts(
         .subquery()
     )
     latest_row = aliased(KnowledgeArtifactRevision)
+    # 최신 판을 만든 변경안이다. 계류 제안 수를 세는 쪽과 같은 표를 보지만
+    # 조건이 달라 별칭을 따로 둔다. 같은 별칭을 쓰면 두 조건이 한 join에
+    # 겹쳐 계류 수가 최신 판 쪽 조건에 끌려간다.
+    latest_source = aliased(KnowledgeArtifactChangeProposal)
     latest_proposal_at = (
         select(func.max(KnowledgeArtifactChangeProposal.created_at))
         .where(
@@ -775,12 +924,17 @@ def list_artifacts(
             latest_row.revision_number.label("latest_revision_number"),
             latest_row.created_at.label("latest_published_at"),
             last_activity_expr.label("last_activity_at"),
+            latest_source.reviewer.label("last_edit_reviewer"),
+            latest_source.reviewed_at.label("last_edit_reviewed_at"),
         )
         .outerjoin(latest, latest.c.artifact_id == KnowledgeArtifact.id)
         .outerjoin(
             latest_row,
             (latest_row.artifact_id == KnowledgeArtifact.id)
             & (latest_row.revision_number == latest.c.revision_number),
+        )
+        .outerjoin(
+            latest_source, latest_source.id == latest_row.source_proposal_id
         )
         .where(KnowledgeArtifact.workspace_id == workspace_id)
     )
@@ -792,11 +946,13 @@ def list_artifacts(
         statement = statement.where(KnowledgeArtifact.kind == kind)
     if status is not None:
         statement = statement.where(status_expr == status)
-    if owner_user_id is not None:
+    if owner_user_ids:
+        # 담당자 표를 join하지 않고 서브쿼리로 거른다. join하면 담당자가
+        # 여럿인 문서가 담당자 수만큼 여러 줄로 나온다.
         statement = statement.where(
             KnowledgeArtifact.id.in_(
                 select(ArtifactOwner.artifact_id).where(
-                    ArtifactOwner.user_id == owner_user_id
+                    ArtifactOwner.user_id.in_(owner_user_ids)
                 )
             )
         )

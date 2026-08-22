@@ -1514,6 +1514,61 @@ def test_detail_embeds_base_blocks_and_block_changes(
     assert data["blocks"][0]["markdown"].startswith("## 속도 제한")
 
 
+def test_detail_marks_evidence_swap_as_modified(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    reviewer: User,
+    workspace_ids: tuple[int, int],
+) -> None:
+    """본문이 같고 근거만 갈린 블록도 검토 상세에 변경으로 나타난다.
+
+    발행은 변경 목록에 없는 블록의 결정 요구를 면제하므로, 근거 교체가
+    화면에 뜨지 않으면 사람이 결정할 자리 자체가 사라진다.
+    """
+    workspace_id, _ = workspace_ids
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    claim_id = uuid.uuid4()
+    _seed_revision(
+        db,
+        workspace_id=workspace_id,
+        artifact_id=artifact_id,
+        blocks=_revision_blocks(claim_id=claim_id, body="rate_limit은 60이다"),
+    )
+    proposal_id = uuid.uuid4()
+    # 같은 claim을 가리키면서 인용만 새로 붙었다. claim 개수가 그대로라
+    # 개수를 세는 문구로는 무엇이 달라졌는지 말할 수 없다.
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id,
+                artifact_id=artifact_id,
+                claim_id=claim_id,
+                sources=(
+                    BlockSource(
+                        claim_id=claim_id,
+                        statement="rate_limit은 60이다",
+                        observed_at=AT,
+                        citation_verified=True,
+                    ),
+                ),
+            )
+        )
+    )
+
+    response = client.get(f"/api/v1/knowledge-review/queue/{proposal_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["block_changes"] == [
+        {"change": "modified", "block_index": 0, "base_block_index": 0},
+    ]
+    assert (
+        data["blocks"][0]["change_reason"]
+        == "본문은 그대로이고 근거가 갈렸습니다."
+    )
+
+
 def test_detail_without_revision_has_empty_base_blocks(
     app: FastAPI,
     client: TestClient,
@@ -2872,6 +2927,93 @@ def test_publish_undecided_blocks_returns_409_with_indexes(
     detail = response.json()["detail"]
     assert detail["code"] == "UNDECIDED_BLOCKS"
     assert detail["undecided_block_indexes"] == [1]
+
+
+def test_publish_needs_no_verdict_for_unchanged_blocks(
+    app: FastAPI,
+    client: TestClient,
+    reviewer: User,
+    session_factory: Callable[[], Session],
+    workspace_ids: tuple[int, int],
+) -> None:
+    """수정 문서는 바뀐 블록만 결정해도 발행이 200으로 통과한다.
+
+    검토 상세는 발행판과 다른 블록만 내려 준다. 화면에 뜨지 않은 블록에
+    결정을 요구하면 검토자가 발행할 길이 없으므로, 발행은 그 블록의 결정
+    요구를 면제한다.
+    """
+    workspace_id, _ = workspace_ids
+    first_id, blocks = _seed_two_block_proposal(
+        session_factory,
+        workspace_id=workspace_id,
+        admin_user_id=reviewer.id,
+    )
+
+    with _real_session_local(session_factory):
+        for index, block in enumerate(blocks):
+            client.put(
+                _verdict_path(first_id, index),
+                json={
+                    "verdict": "approved",
+                    "block_content_hash": block_content_hash(block),
+                },
+            )
+        first = client.post(
+            f"/api/v1/knowledge-review/queue/{first_id}/publish",
+            json={"base_revision_id": None},
+        )
+
+    assert first.status_code == 200
+    base_revision_id = first.json()["revision_id"]
+
+    changed = ArtifactBlock(
+        block_kind=BLOCK_KIND_CLAIM_SECTION,
+        heading=blocks[1].heading,
+        body="담당은 정산 팀이다",
+        claim_ids=blocks[1].claim_ids,
+        proposal_ids=(),
+        ontology_version="1",
+    )
+    next_blocks = (blocks[0], changed)
+    content_hash = blocks_content_hash(next_blocks)
+    with KnowledgeMaintenanceUnitOfWork(
+        session_factory, workspace_id=workspace_id
+    ) as uow:
+        artifact_id = uow.artifacts.get_proposal(
+            proposal_id=first_id
+        ).artifact_id
+        second_id = uow.artifacts.add_or_revive_proposal(
+            artifact_id=artifact_id,
+            blocks=next_blocks,
+            content_hash=content_hash,
+            idempotency_key=artifact_idempotency_key(
+                artifact_id,
+                content_hash,
+                base_revision_id=uuid.UUID(base_revision_id),
+            ),
+            base_revision_id=uuid.UUID(base_revision_id),
+        )
+        uow.commit()
+
+    with _real_session_local(session_factory):
+        client.put(
+            _verdict_path(second_id, 1),
+            json={
+                "verdict": "approved",
+                "block_content_hash": block_content_hash(changed),
+            },
+        )
+        response = client.post(
+            f"/api/v1/knowledge-review/queue/{second_id}/publish",
+            json={"base_revision_id": base_revision_id},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["verdict"] == "approved"
+    assert body["blocks_published"] == 2
+    assert body["blocks_rejected"] == 0
+    assert body["revision_number"] == 2
 
 
 def test_publish_stale_base_returns_409(

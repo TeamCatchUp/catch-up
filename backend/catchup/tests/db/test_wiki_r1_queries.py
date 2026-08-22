@@ -142,6 +142,7 @@ def _folder(db: Session, channel: Channel, name: str) -> ChannelFolder:
         workspace_id=channel.workspace_id,
         channel_id=channel.id,
         name=name,
+        created_by=channel.created_by,
     )
     db.flush()
     return folder
@@ -186,7 +187,10 @@ def _artifact(
 
 
 def _proposal(
-    db: Session, artifact: KnowledgeArtifact, status: str
+    db: Session,
+    artifact: KnowledgeArtifact,
+    status: str,
+    reviewer: str = "test:reviewer",
 ) -> KnowledgeArtifactChangeProposal:
     """문서 변경안 한 건을 만든다."""
     decided = status in ("approved", "rejected")
@@ -199,7 +203,7 @@ def _proposal(
         content_hash=uuid.uuid4().hex,
         idempotency_key=uuid.uuid4().hex,
         # 승인·반려에는 결정자와 시각이 반드시 남아야 한다는 DB 제약이 있다.
-        reviewer="test:reviewer" if decided else None,
+        reviewer=reviewer if decided else None,
         reviewed_at=datetime.now(UTC) if decided else None,
         rejection_reason="사유" if status == "rejected" else None,
     )
@@ -209,10 +213,13 @@ def _proposal(
 
 
 def _revision(
-    db: Session, artifact: KnowledgeArtifact, number: int
+    db: Session,
+    artifact: KnowledgeArtifact,
+    number: int,
+    reviewer: str = "test:reviewer",
 ) -> KnowledgeArtifactRevision:
     """문서 한 판을 만든다. 판은 승인된 제안에서 나오므로 제안을 먼저 만든다."""
-    proposal = _proposal(db, artifact, "approved")
+    proposal = _proposal(db, artifact, "approved", reviewer=reviewer)
     revision = KnowledgeArtifactRevision(
         id=uuid.uuid4(),
         workspace_id=artifact.workspace_id,
@@ -328,7 +335,7 @@ def test_list_artifacts_filters(db, workspace_id) -> None:
     assert rows[0].artifact_id == elsewhere.id
 
     rows, total = wiki_queries.list_artifacts(
-        db, workspace_id=workspace_id, owner_user_id=user.id
+        db, workspace_id=workspace_id, owner_user_ids=[user.id]
     )
     assert total == 1
     assert rows[0].artifact_id == elsewhere.id
@@ -632,6 +639,69 @@ def test_list_artifacts_unassigned_filter(db, workspace_id) -> None:
     assert rows[0].artifact_id == orphan.id
 
 
+def test_list_artifacts_owner_filter_is_or_over_users(db, workspace_id) -> None:
+    """owner_user_ids는 그중 한 명이라도 담당자인 문서를 모두 남긴다."""
+    first = _user(db, "owner-or-1@x.com")
+    second = _user(db, "owner-or-2@x.com")
+    channel = _channel(db, workspace_id, created_by=first.id)
+    mine = _artifact(db, workspace_id, channel, "faq_answer", "내 담당")
+    yours = _artifact(db, workspace_id, channel, "faq_answer", "네 담당")
+    _artifact(db, workspace_id, channel, "faq_answer", "담당 없음")
+    wiki_queries.add_artifact_owner(
+        db, artifact_id=mine.id, user_id=first.id, granted_by=first.id
+    )
+    wiki_queries.add_artifact_owner(
+        db, artifact_id=yours.id, user_id=second.id, granted_by=first.id
+    )
+    db.flush()
+
+    rows, total = wiki_queries.list_artifacts(
+        db, workspace_id=workspace_id, owner_user_ids=[first.id, second.id]
+    )
+
+    assert total == 2
+    assert {row.artifact_id for row in rows} == {mine.id, yours.id}
+
+
+def test_list_artifacts_owner_filter_does_not_duplicate_rows(
+    db, workspace_id
+) -> None:
+    """담당자가 여럿인 문서도 한 줄로만 실리고 total과 줄 수가 어긋나지 않는다."""
+    first = _user(db, "owner-dup-1@x.com")
+    second = _user(db, "owner-dup-2@x.com")
+    channel = _channel(db, workspace_id, created_by=first.id)
+    shared = _artifact(db, workspace_id, channel, "faq_answer", "공동 담당")
+    wiki_queries.add_artifact_owner(
+        db, artifact_id=shared.id, user_id=first.id, granted_by=first.id
+    )
+    wiki_queries.add_artifact_owner(
+        db, artifact_id=shared.id, user_id=second.id, granted_by=first.id
+    )
+    db.flush()
+
+    rows, total = wiki_queries.list_artifacts(
+        db, workspace_id=workspace_id, owner_user_ids=[first.id, second.id]
+    )
+
+    assert total == 1
+    assert len(rows) == 1
+    assert rows[0].artifact_id == shared.id
+
+
+def test_list_artifacts_empty_owner_filter_keeps_all(db, workspace_id) -> None:
+    """owner_user_ids가 비어 있으면 담당자 조건을 걸지 않은 것과 같다."""
+    user = _user(db, "owner-empty@x.com")
+    channel = _channel(db, workspace_id, created_by=user.id)
+    _artifact(db, workspace_id, channel, "faq_answer", "아무거나")
+    db.flush()
+
+    _, total = wiki_queries.list_artifacts(
+        db, workspace_id=workspace_id, owner_user_ids=[]
+    )
+
+    assert total == 1
+
+
 def test_list_artifacts_searches_title(db, workspace_id) -> None:
     """q는 제목 부분일치로 거르고, 와일드카드 문자는 글자 그대로 본다."""
     user = _user(db, "search@x.com")
@@ -703,6 +773,59 @@ def test_list_artifacts_last_activity_at(db, workspace_id) -> None:
     assert activity["조용함"] == base
     assert activity["발행됨"] == base + timedelta(days=5)
     assert activity["제안됨"] == base + timedelta(days=9)
+
+
+def test_list_artifacts_carries_latest_revision_approval(db, workspace_id) -> None:
+    """목록 줄에 최신 발행판을 승인한 사람과 승인 시각이 실린다.
+
+    판을 여러 번 발행한 문서는 번호가 가장 큰 판의 승인 기록만 실어야 한다.
+    발행판이 없는 문서는 승인 기록도 없으므로 둘 다 None이다.
+    """
+    user = _user(db, "approval@x.com")
+    channel = _channel(db, workspace_id, created_by=user.id)
+    published = _artifact(db, workspace_id, channel, "faq_answer", "발행됨")
+    _revision(db, published, 1, reviewer="user:11")
+    latest = _revision(db, published, 2, reviewer="user:22")
+    bare = _artifact(db, workspace_id, channel, "faq_answer", "판없음")
+    db.flush()
+
+    rows, _ = wiki_queries.list_artifacts(db, workspace_id=workspace_id)
+    by_title = {row.title: row for row in rows}
+
+    assert by_title["발행됨"].last_edit_reviewer == "user:22"
+    assert by_title["발행됨"].last_edit_reviewed_at is not None
+    assert by_title["판없음"].last_edit_reviewer is None
+    assert by_title["판없음"].last_edit_reviewed_at is None
+    assert bare.id in {row.artifact_id for row in rows}
+    assert latest.revision_number == 2
+
+
+def test_get_revision_approval_reads_source_proposal(db, workspace_id) -> None:
+    """판 하나의 승인자와 승인 시각을 그 판을 만든 변경안에서 읽는다."""
+    user = _user(db, "revapproval@x.com")
+    channel = _channel(db, workspace_id, created_by=user.id)
+    artifact = _artifact(db, workspace_id, channel, "faq_answer", "발행됨")
+    revision = _revision(db, artifact, 1, reviewer="user:33")
+    db.flush()
+
+    approval = wiki_queries.get_revision_approval(db, revision_id=revision.id)
+
+    assert approval is not None
+    assert approval.reviewer == "user:33"
+    assert approval.reviewed_at is not None
+
+
+def test_list_users_for_display_skips_unknown_ids(db, workspace_id) -> None:
+    """사용자 id로 이름·사진을 한 번에 읽고, 없는 id는 결과에서 빠진다."""
+    user = _user(db, "display@x.com")
+    user.picture = "https://img/display.png"
+    db.flush()
+
+    found = wiki_queries.list_users_for_display(db, user_ids=[user.id, -1])
+
+    assert set(found) == {user.id}
+    assert found[user.id].display_name == user.name
+    assert found[user.id].profile_image_url == "https://img/display.png"
 
 
 def _member(

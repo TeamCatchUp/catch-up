@@ -283,9 +283,15 @@ def _add_pending_proposal(
 
 
 def _publish(
-    db: Session, *, workspace_id: int, artifact_id: uuid.UUID
+    db: Session,
+    *,
+    workspace_id: int,
+    artifact_id: uuid.UUID,
+    reviewer: str = "test",
+    reviewed_at: datetime = datetime(2026, 8, 15, tzinfo=timezone.utc),
+    revision_number: int = 1,
 ) -> uuid.UUID:
-    """그 문서를 1판까지 발행해 판 id를 돌려준다."""
+    """그 문서를 한 판 발행해 판 id를 돌려준다."""
     proposal_id = uuid.uuid4()
     db.add(
         KnowledgeArtifactChangeProposal(
@@ -296,8 +302,8 @@ def _publish(
             status="approved",
             content_hash=uuid.uuid4().hex,
             idempotency_key=uuid.uuid4().hex,
-            reviewer="test",
-            reviewed_at=datetime(2026, 8, 15, tzinfo=timezone.utc),
+            reviewer=reviewer,
+            reviewed_at=reviewed_at,
         )
     )
     db.flush()
@@ -307,7 +313,7 @@ def _publish(
             id=revision_id,
             workspace_id=workspace_id,
             artifact_id=artifact_id,
-            revision_number=1,
+            revision_number=revision_number,
             blocks=[],
             source_proposal_id=proposal_id,
         )
@@ -359,6 +365,90 @@ def test_list_artifacts_returns_status_owners_favorite(
     assert items["B"]["owners"] == []
     assert items["B"]["is_favorite"] is True
     assert items["A"]["is_favorite"] is False
+
+
+def test_list_artifacts_shows_last_editor(client, member, db, workspace_id):
+    """최신 발행판을 승인한 사람과 그 시각이 목록 줄에 실린다.
+
+    승인자는 사람이 읽을 이름과 사진까지 함께 실어야 한다. 화면이 id만
+    받으면 줄마다 사용자 조회를 한 번씩 더 해야 한다.
+    """
+    artifact_id = _make_artifact(db, workspace_id=workspace_id, title="편집됨")
+    _publish(
+        db,
+        workspace_id=workspace_id,
+        artifact_id=artifact_id,
+        reviewer=f"user:{member.id}",
+        reviewed_at=datetime(2026, 8, 20, tzinfo=timezone.utc),
+    )
+
+    body = client.get("/api/v1/wiki/artifacts").json()
+    item = {row["title"]: row for row in body["items"]}["편집됨"]
+
+    assert item["last_edited_by"]["user_id"] == member.id
+    assert item["last_edited_by"]["display_name"] == member.name
+    assert item["last_edited_at"].startswith("2026-08-20")
+
+
+def test_list_artifacts_without_revision_has_no_last_editor(
+    client, member, db, workspace_id
+):
+    """발행판이 없는 문서는 최종 편집자도 시각도 없다."""
+    _make_artifact(db, workspace_id=workspace_id, title="판없음")
+
+    body = client.get("/api/v1/wiki/artifacts").json()
+    item = {row["title"]: row for row in body["items"]}["판없음"]
+
+    assert item["last_edited_by"] is None
+    assert item["last_edited_at"] is None
+
+
+def test_list_artifacts_debug_reviewer_has_no_last_editor(
+    client, member, db, workspace_id
+):
+    """승인자가 사용자로 이어지지 않으면 사람은 비우고 시각만 싣는다."""
+    artifact_id = _make_artifact(db, workspace_id=workspace_id, title="디버그")
+    _publish(
+        db,
+        workspace_id=workspace_id,
+        artifact_id=artifact_id,
+        reviewer="debug:test-user",
+    )
+
+    body = client.get("/api/v1/wiki/artifacts").json()
+    item = {row["title"]: row for row in body["items"]}["디버그"]
+
+    assert item["last_edited_by"] is None
+    assert item["last_edited_at"].startswith("2026-08-15")
+
+
+def test_list_artifacts_last_editor_follows_newest_revision(
+    client, member, db, workspace_id
+):
+    """다시 발행하면 최종 편집자가 새 판의 승인자로 바뀐다."""
+    other = _make_user(db, prefix="editor")
+    _join(db, user=other, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id, title="재발행")
+    _publish(
+        db,
+        workspace_id=workspace_id,
+        artifact_id=artifact_id,
+        reviewer=f"user:{member.id}",
+    )
+    _publish(
+        db,
+        workspace_id=workspace_id,
+        artifact_id=artifact_id,
+        reviewer=f"user:{other.id}",
+        reviewed_at=datetime(2026, 8, 21, tzinfo=timezone.utc),
+        revision_number=2,
+    )
+
+    body = client.get("/api/v1/wiki/artifacts").json()
+    item = {row["title"]: row for row in body["items"]}["재발행"]
+
+    assert item["last_edited_by"]["user_id"] == other.id
+    assert item["last_edited_at"].startswith("2026-08-21")
 
 
 def test_list_artifacts_status_filter_and_pagination(
@@ -625,6 +715,77 @@ def test_list_artifacts_rejects_unassigned_with_owner(
     """
     response = client.get(
         f"/api/v1/wiki/artifacts?unassigned=true&owner_user_id={member.id}"
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "CONFLICTING_OWNER_FILTERS"
+
+
+def test_list_artifacts_owner_filter_accepts_single_value(
+    client, member, db, workspace_id, two_artifacts
+):
+    """owner_user_id를 하나만 주면 그 사람이 담당자인 문서만 남는다."""
+    response = client.get(
+        f"/api/v1/wiki/artifacts?owner_user_id={member.id}"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+    assert _titles(response) == ["A"]
+
+
+def test_list_artifacts_owner_filter_accepts_multiple_values(
+    client, member, db, workspace_id, two_artifacts
+):
+    """owner_user_id를 여러 번 주면 그중 한 명이라도 담당자인 문서를 모두 남긴다."""
+    other = _make_user(db, prefix="other")
+    _join(db, user=other, workspace_id=workspace_id)
+    c_id = _make_artifact(db, workspace_id=workspace_id, title="C")
+    db.add(ArtifactOwner(artifact_id=c_id, user_id=other.id))
+    db.flush()
+
+    response = client.get(
+        "/api/v1/wiki/artifacts"
+        f"?owner_user_id={member.id}&owner_user_id={other.id}"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 2
+    assert sorted(_titles(response)) == ["A", "C"]
+
+
+def test_list_artifacts_owner_filter_counts_shared_artifact_once(
+    client, member, db, workspace_id, two_artifacts
+):
+    """담당자가 둘인 문서도 한 줄로만 실리고 total도 그 수와 맞는다."""
+    other = _make_user(db, prefix="second-owner")
+    _join(db, user=other, workspace_id=workspace_id)
+    a_id, _ = two_artifacts
+    db.add(ArtifactOwner(artifact_id=a_id, user_id=other.id))
+    db.flush()
+
+    response = client.get(
+        "/api/v1/wiki/artifacts"
+        f"?owner_user_id={member.id}&owner_user_id={other.id}"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert _titles(response) == ["A"]
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+
+
+def test_list_artifacts_rejects_unassigned_with_multiple_owners(
+    client, member, db, workspace_id, two_artifacts
+):
+    """담당자를 여러 명 주면서 미지정 필터까지 켜도 422다."""
+    other = _make_user(db, prefix="conflict-owner")
+    _join(db, user=other, workspace_id=workspace_id)
+
+    response = client.get(
+        "/api/v1/wiki/artifacts?unassigned=true"
+        f"&owner_user_id={member.id}&owner_user_id={other.id}"
     )
 
     assert response.status_code == 422

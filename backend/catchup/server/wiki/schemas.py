@@ -148,12 +148,36 @@ class ChannelOnboardingResponse(BaseModel):
     definitions: list[DefinitionSummaryResponse]
 
 
+class OwnerResponse(BaseModel):
+    """담당자 한 명을 화면에 그릴 만큼 담는다.
+
+    id만 내보내면 화면이 이름과 사진을 얻으려고 사용자 조회를 한 번 더
+    해야 한다. 담당자는 목록에서도 문서에서도 늘 사람 이름으로 보이므로
+    이름과 사진을 같이 싣는다. 사진은 없을 수 있어 None을 허용한다.
+    """
+
+    user_id: int
+    display_name: str
+    profile_image_url: str | None
+
+
 class FolderResponse(BaseModel):
-    """폴더 하나의 식별 정보를 담는다."""
+    """폴더 하나의 식별 정보와 만들어진 내력을 담는다.
+
+    created_by는 이 폴더를 만든 사람이다. 컬럼이 생기기 전에 만들어진
+    폴더와, 만든 사람의 사용자 행이 사라진 폴더는 None이다.
+
+    last_activity_at은 이 폴더 안 문서가 마지막으로 움직인 시각이다.
+    폴더에는 그런 컬럼이 없고 문서 쪽 사실에서 계산한다. 문서가 하나도
+    없는 폴더는 None이다.
+    """
 
     id: str
     name: str
     channel_id: str
+    created_at: datetime
+    created_by: OwnerResponse | None = None
+    last_activity_at: datetime | None = None
 
 
 class ChannelListItemResponse(BaseModel):
@@ -178,19 +202,6 @@ class ChannelListResponse(BaseModel):
     """채널 목록 전체를 담는다."""
 
     channels: list[ChannelListItemResponse]
-
-
-class OwnerResponse(BaseModel):
-    """담당자 한 명을 화면에 그릴 만큼 담는다.
-
-    id만 내보내면 화면이 이름과 사진을 얻으려고 사용자 조회를 한 번 더
-    해야 한다. 담당자는 목록에서도 문서에서도 늘 사람 이름으로 보이므로
-    이름과 사진을 같이 싣는다. 사진은 없을 수 있어 None을 허용한다.
-    """
-
-    user_id: int
-    display_name: str
-    profile_image_url: str | None
 
 
 class WorkspaceMemberListResponse(BaseModel):
@@ -343,6 +354,11 @@ class ArtifactDocumentResponse(BaseModel):
 
     담당자와 즐겨찾기를 함께 싣는다. 문서 화면이 늘 같이 그리는 값이라,
     따로 물어보게 하면 한 화면에 왕복이 세 번 생기고 그 사이에 값이 갈린다.
+
+    last_edited_by는 지금 발행된 판을 승인한 사람이다. 문서는 승인을 거쳐야
+    판이 되므로 그 승인자가 곧 이 문장을 마지막으로 손댄 사람이다. 승인자가
+    사용자로 이어지지 않으면 None이고, 그때도 last_edited_at은 승인 시각으로
+    채운다. 누가 손댔는지 모르는 것과 언제 손댔는지 모르는 것은 다르다.
     """
 
     artifact_id: str
@@ -355,6 +371,8 @@ class ArtifactDocumentResponse(BaseModel):
     is_favorite: bool
     revision_id: str
     published_at: datetime
+    last_edited_by: OwnerResponse | None = None
+    last_edited_at: datetime | None = None
     blocks: list[ArtifactDocumentBlockResponse]
     layout: list[LayoutItemResponse] = []
 
@@ -382,6 +400,11 @@ class ArtifactListItemResponse(BaseModel):
     시각과 가장 최근 변경안 도착 시각 중 늦은 쪽이고, 둘 다 없으면 문서
     생성 시각이다. 변경안은 계류·승인·반려를 가리지 않는다. 도착 자체가
     문서가 움직인 사실이기 때문이다. 값은 항상 있다.
+
+    last_edited_by는 가장 최근 발행판을 승인한 사람이다. 문서는 승인을 거쳐야
+    판이 되므로 그 승인자가 곧 마지막으로 손댄 사람이다. 발행판이 없으면
+    둘 다 None이고, 승인자가 사용자로 이어지지 않으면 사람만 None이 되고
+    last_edited_at은 승인 시각으로 채운다.
     """
 
     artifact_id: str
@@ -396,6 +419,8 @@ class ArtifactListItemResponse(BaseModel):
     latest_revision: LatestRevisionResponse | None
     owners: list[OwnerResponse]
     is_favorite: bool
+    last_edited_by: OwnerResponse | None = None
+    last_edited_at: datetime | None = None
 
 
 class ArtifactListResponse(BaseModel):

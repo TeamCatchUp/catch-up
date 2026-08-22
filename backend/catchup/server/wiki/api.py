@@ -74,7 +74,9 @@ from catchup.server.wiki.dependencies import deny_reviewer
 from catchup.server.wiki.dependencies import resolve_member_workspace
 from catchup.server.wiki.dependencies import review_error
 from catchup.server.wiki.layout import layout_items
+from catchup.server.wiki.owners import editors_by_reviewer
 from catchup.server.wiki.owners import owners_by_artifact
+from catchup.server.wiki.owners import users_by_id
 from catchup.server.wiki.roles import can_manage_owners
 from catchup.server.wiki.roles import load_wiki_roles
 from catchup.server.wiki.schemas import ArtifactBlockSourceResponse
@@ -556,6 +558,7 @@ def onboard_channel(
                     workspace_id=context.workspace_id,
                     channel_id=channel.id,
                     name=preset_kind.label,
+                    created_by=context.user.id,
                 )
                 db.flush()
             kind_purposes = [
@@ -645,13 +648,26 @@ def list_channels(
         db, user_id=context.user.id, workspace_id=context.workspace_id
     )
 
+    folder_rows = wiki_queries.list_folders(db, context.workspace_id)
+    # 만든 사람과 활동 시각을 한 번씩만 읽는다. 폴더마다 읽으면 질의가
+    # 폴더 수만큼 늘어난다.
+    creators = users_by_id(db, [folder.created_by for folder in folder_rows])
+    activity = wiki_queries.last_activity_by_folder(
+        db, workspace_id=context.workspace_id
+    )
+
     folders: dict[uuid.UUID, list[FolderResponse]] = {}
-    for folder in wiki_queries.list_folders(db, context.workspace_id):
+    for folder in folder_rows:
         folders.setdefault(folder.channel_id, []).append(
             FolderResponse(
                 id=str(folder.id),
                 name=folder.name,
                 channel_id=str(folder.channel_id),
+                created_at=folder.created_at,
+                created_by=creators.get(folder.created_by)
+                if folder.created_by is not None
+                else None,
+                last_activity_at=activity.get(folder.id),
             )
         )
 
@@ -817,6 +833,7 @@ def create_folder(
         workspace_id=channel.workspace_id,
         channel_id=channel.id,
         name=request.name,
+        created_by=context.user.id,
     )
     try:
         db.commit()
@@ -830,10 +847,14 @@ def create_folder(
             ) from error
         raise
 
+    # 방금 만든 폴더에는 문서가 하나도 없으므로 활동 시각을 묻지 않는다.
     return FolderResponse(
         id=str(folder.id),
         name=folder.name,
         channel_id=str(folder.channel_id),
+        created_at=folder.created_at,
+        created_by=users_by_id(db, [context.user.id]).get(context.user.id),
+        last_activity_at=None,
     )
 
 
@@ -870,10 +891,18 @@ def rename_folder(
             ) from error
         raise
 
+    activity = wiki_queries.last_activity_by_folder(
+        db, workspace_id=folder.workspace_id, folder_ids=[folder.id]
+    )
     return FolderResponse(
         id=str(folder.id),
         name=folder.name,
         channel_id=str(folder.channel_id),
+        created_at=folder.created_at,
+        created_by=users_by_id(db, [folder.created_by]).get(folder.created_by)
+        if folder.created_by is not None
+        else None,
+        last_activity_at=activity.get(folder.id),
     )
 
 
@@ -914,6 +943,7 @@ def _to_list_item(
     *,
     owners: list[OwnerResponse],
     is_favorite: bool,
+    last_edited_by: OwnerResponse | None,
 ) -> ArtifactListItemResponse:
     """문서 목록 한 줄을 응답 모양으로 옮겨 담는다."""
     latest = None
@@ -936,6 +966,8 @@ def _to_list_item(
         latest_revision=latest,
         owners=owners,
         is_favorite=is_favorite,
+        last_edited_by=last_edited_by,
+        last_edited_at=row.last_edit_reviewed_at,
     )
 
 
@@ -964,8 +996,12 @@ def list_artifacts(
             "파생 상태로 거른다(pending_review·published·no_revision)."
         ),
     ),
-    owner_user_id: int | None = Query(
-        None, description="해당 사용자가 담당자인 문서만 조회한다."
+    owner_user_id: list[int] | None = Query(
+        None,
+        description=(
+            "담당자로 거른다. 여러 번 주면 그중 한 명이라도 담당자인 문서를 "
+            "모두 조회한다."
+        ),
     ),
     unassigned: bool = Query(
         False,
@@ -1012,9 +1048,10 @@ def list_artifacts(
     먼저 찾는 것이 최근에 움직인 문서이기 때문이다.
 
     Raises:
-        HTTPException: owner_user_id와 unassigned를 함께 주면 422를 던진다.
+        HTTPException: owner_user_id를 한 명 이상 주면서 unassigned까지 켜면
+            422를 던진다.
     """
-    if unassigned and owner_user_id is not None:
+    if unassigned and owner_user_id:
         # 두 조건은 서로 반대라 겹치는 문서가 없다. 빈 목록을 돌려주면
         # 소비자가 요청이 잘못된 것인지 정말 문서가 없는 것인지 가릴 수
         # 없다.
@@ -1031,7 +1068,7 @@ def list_artifacts(
         folder_id=folder_id,
         kind=kind,
         status=status_filter,
-        owner_user_id=owner_user_id,
+        owner_user_ids=owner_user_id,
         unassigned=unassigned,
         q=q,
         created_after=created_after,
@@ -1043,6 +1080,9 @@ def list_artifacts(
     )
     artifact_ids = [row.artifact_id for row in rows]
     owners = owners_by_artifact(db, artifact_ids)
+    editors = editors_by_reviewer(
+        db, [row.last_edit_reviewer for row in rows]
+    )
     favorites = wiki_queries.list_favorite_artifact_ids(
         db, user_id=context.user.id, workspace_id=context.workspace_id
     )
@@ -1052,6 +1092,11 @@ def list_artifacts(
                 row,
                 owners=owners[row.artifact_id],
                 is_favorite=row.artifact_id in favorites,
+                last_edited_by=(
+                    None
+                    if row.last_edit_reviewer is None
+                    else editors.get(row.last_edit_reviewer)
+                ),
             )
             for row in rows
         ],
@@ -1241,6 +1286,9 @@ def get_artifact_document(
             message="아직 발행된 판이 없습니다.",
         )
     blocks = deserialize_blocks(revision.blocks)
+    approval = wiki_queries.get_revision_approval(db, revision_id=revision.id)
+    reviewer = None if approval is None else approval.reviewer
+    editors = editors_by_reviewer(db, [reviewer])
     return ArtifactDocumentResponse(
         artifact_id=str(artifact.id),
         channel_id=(
@@ -1262,6 +1310,10 @@ def get_artifact_document(
         ),
         revision_id=str(revision.id),
         published_at=revision.created_at,
+        last_edited_by=(
+            None if reviewer is None else editors.get(reviewer)
+        ),
+        last_edited_at=None if approval is None else approval.reviewed_at,
         blocks=[
             ArtifactDocumentBlockResponse(
                 block_index=index,

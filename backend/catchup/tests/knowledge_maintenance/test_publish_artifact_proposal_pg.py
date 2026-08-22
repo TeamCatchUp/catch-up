@@ -60,6 +60,9 @@ from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
     CODE_STALE_BLOCK,
 )
 from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
+    CODE_UNDECIDED_BLOCKS,
+)
+from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
     PublishError,
 )
 from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
@@ -529,6 +532,151 @@ def test_insert_verdict_if_absent_never_touches_an_existing_verdict(
     assert stored.block_content_hash == block_content_hash(block)
 
 
+def test_unchanged_block_publishes_without_a_verdict_row(
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    workspace_id: int,
+) -> None:
+    """미변경 블록은 결정 행 없이 새 판에 실린다.
+
+    fake는 저장소를 dict로 들고 있어 결정 행이 실제로 안 생겼는지까지는
+    보여 주지 못한다. 면제가 자동 승인으로 새지 않았는지, 즉 사람이
+    결정하지 않은 블록에 결정 저널이 비어 있는지를 실 DB로 본다.
+    """
+    with session_factory() as session:
+        run_id = _extraction_run(session, workspace_id)
+        node_id = _entity_node(session, workspace_id)
+        kept_claim = _claim(
+            session, workspace_id, run_id, node_id, "status", "운영 중"
+        )
+        changed_claim = _claim(
+            session, workspace_id, run_id, node_id, "owner", "결제팀"
+        )
+        session.commit()
+
+    definition = _definition_with_channel(session_factory, workspace_id)
+    kept = _section(kept_claim, "status", "운영 중입니다.")
+    old = _section(changed_claim, "owner", "담당은 결제팀입니다.")
+    with uow_factory() as uow:
+        artifact_id = uow.artifacts.get_or_create_definition_artifact(
+            definition_id=definition.id,
+            channel_id=definition.channel_id,
+            kind=definition.kind,
+            subject_node_id=node_id,
+            title="결제 기능",
+        )
+        first_id = _add_proposal(uow, artifact_id, (kept, old), None)
+        uow.commit()
+
+    _approve_blocks(uow_factory, first_id, (kept, old))
+    first = publish_artifact_proposal(
+        uow_factory(),
+        workspace_id=workspace_id,
+        proposal_id=first_id,
+        base_revision_id=None,
+        reviewer=REVIEWER,
+    )
+
+    changed = _section(changed_claim, "owner", "담당은 정산팀입니다.")
+    with uow_factory() as uow:
+        second_id = _add_proposal(
+            uow, artifact_id, (kept, changed), first.revision_id
+        )
+        uow.commit()
+
+    # 검토자는 화면에 변경으로 보인 둘째 블록만 결정한다.
+    upsert_block_verdict(
+        uow_factory(),
+        proposal_id=second_id,
+        block_index=1,
+        block_content_hash_seen=block_content_hash(changed),
+        verdict="approved",
+        rejection_reason=None,
+        chosen_winner_claim_id=None,
+        reviewer=REVIEWER,
+    )
+
+    second = publish_artifact_proposal(
+        uow_factory(),
+        workspace_id=workspace_id,
+        proposal_id=second_id,
+        base_revision_id=first.revision_id,
+        reviewer=REVIEWER,
+    )
+
+    assert second.verdict == "approved"
+    assert second.blocks_published == 2
+    assert second.blocks_rejected == 0
+    assert second.revision_number == 2
+
+    with session_factory() as session:
+        revision = session.get(RevisionRow, second.revision_id)
+        rows = list(
+            session.scalars(
+                select(VerdictRow).where(VerdictRow.proposal_id == second_id)
+            )
+        )
+
+    assert revision is not None
+    published = deserialize_blocks(revision.blocks)
+    assert [block.heading for block in published] == ["status", "owner"]
+    assert published[0].body == "운영 중입니다."
+    assert published[1].body == "담당은 정산팀입니다."
+    # 면제는 자동 승인이 아니다. 사람이 결정한 블록에만 저널이 남는다.
+    assert [row.block_index for row in rows] == [1]
+
+
+def _add_proposal(
+    uow: KnowledgeMaintenanceUnitOfWork,
+    artifact_id: uuid.UUID,
+    blocks: tuple[ArtifactBlock, ...],
+    base_revision_id: uuid.UUID | None,
+) -> uuid.UUID:
+    """블록 한 벌을 계류 변경안으로 심는다."""
+    content_hash = blocks_content_hash(blocks)
+    return uow.artifacts.add_or_revive_proposal(
+        artifact_id=artifact_id,
+        blocks=blocks,
+        content_hash=content_hash,
+        idempotency_key=artifact_idempotency_key(
+            artifact_id, content_hash, base_revision_id=base_revision_id
+        ),
+        base_revision_id=base_revision_id,
+    )
+
+
+def _approve_blocks(
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    proposal_id: uuid.UUID,
+    blocks: tuple[ArtifactBlock, ...],
+) -> None:
+    """다툼이 없는 블록 한 벌을 모두 승인으로 적는다."""
+    for index, block in enumerate(blocks):
+        upsert_block_verdict(
+            uow_factory(),
+            proposal_id=proposal_id,
+            block_index=index,
+            block_content_hash_seen=block_content_hash(block),
+            verdict="approved",
+            rejection_reason=None,
+            chosen_winner_claim_id=None,
+            reviewer=REVIEWER,
+        )
+
+
+def _section(claim_id: uuid.UUID, heading: str, body: str) -> ArtifactBlock:
+    """제목과 본문을 지정한 평범한 절을 하나 만든다."""
+    return ArtifactBlock(
+        block_kind=BLOCK_KIND_CLAIM_SECTION,
+        heading=heading,
+        body=body,
+        claim_ids=(claim_id,),
+        proposal_ids=(),
+        ontology_version="1",
+        sources=(_source(claim_id, body),),
+    )
+
+
 def _approve_all(
     uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
     seed: _Seed,
@@ -720,3 +868,102 @@ def _source(claim_id: uuid.UUID, statement: str) -> BlockSource:
         observed_at=datetime(2026, 7, 1, tzinfo=timezone.utc),
         citation_verified=True,
     )
+
+
+def test_evidence_swap_refuses_publish_without_a_verdict(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """본문이 같고 근거만 갈린 블록은 결정 저널이 비면 실리지 않는다.
+
+    발행은 발행판과 달라지지 않은 블록의 결정 요구를 면제한다. 근거 교체가
+    미변경으로 새면 사람이 보지 않은 근거가 판에 오르고 그 claim이 실 DB에서
+    accepted까지 간다. 실 DB에서 claim 상태가 그대로인지까지 본다.
+    """
+    with session_factory() as session:
+        run_id = _extraction_run(session, workspace_id)
+        node_id = _entity_node(session, workspace_id)
+        old_claim = _claim(
+            session, workspace_id, run_id, node_id, "status", "운영 중"
+        )
+        fresh_claim = _claim(
+            session, workspace_id, run_id, node_id, "status", "운영 중"
+        )
+        session.commit()
+
+    definition = _definition_with_channel(session_factory, workspace_id)
+    published = _claim_section(old_claim)
+    swapped = _claim_section(fresh_claim)
+    assert published.body == swapped.body
+    assert block_content_hash(published) != block_content_hash(swapped)
+
+    with uow_factory() as uow:
+        artifact_id = uow.artifacts.get_or_create_definition_artifact(
+            definition_id=definition.id,
+            channel_id=definition.channel_id,
+            kind=definition.kind,
+            subject_node_id=node_id,
+            title="결제 기능",
+        )
+        seed_hash = blocks_content_hash((published,))
+        seed_proposal = uow.artifacts.add_or_revive_proposal(
+            artifact_id=artifact_id,
+            blocks=(published,),
+            content_hash=seed_hash,
+            idempotency_key=artifact_idempotency_key(
+                artifact_id, seed_hash, base_revision_id=None
+            ),
+            base_revision_id=None,
+        )
+        base_revision_id = uow.artifacts.add_revision(
+            artifact_id=artifact_id,
+            revision_number=1,
+            blocks=(published,),
+            source_proposal_id=seed_proposal,
+        )
+        swapped_hash = blocks_content_hash((swapped,))
+        proposal_id = uow.artifacts.add_or_revive_proposal(
+            artifact_id=artifact_id,
+            blocks=(swapped,),
+            content_hash=swapped_hash,
+            idempotency_key=artifact_idempotency_key(
+                artifact_id, swapped_hash, base_revision_id=base_revision_id
+            ),
+            base_revision_id=base_revision_id,
+        )
+        uow.commit()
+
+    with pytest.raises(PublishError) as error:
+        publish_artifact_proposal(
+            uow_factory(),
+            workspace_id=workspace_id,
+            proposal_id=proposal_id,
+            base_revision_id=base_revision_id,
+            reviewer=REVIEWER,
+        )
+
+    assert error.value.code == CODE_UNDECIDED_BLOCKS
+    assert error.value.undecided == (0,)
+
+    with session_factory() as session:
+        proposal = session.get(ProposalRow, proposal_id)
+        assert proposal is not None
+        assert proposal.status == "pending"
+        assert (
+            session.scalars(
+                select(RevisionRow.id).where(
+                    RevisionRow.artifact_id == artifact_id
+                )
+            ).all()
+            == [base_revision_id]
+        )
+        statuses = dict(
+            session.execute(
+                select(ClaimRow.id, ClaimRow.resolution_status).where(
+                    ClaimRow.id.in_([old_claim, fresh_claim])
+                )
+            ).all()
+        )
+        assert statuses[fresh_claim] != "accepted"
+        assert statuses[old_claim] != "accepted"
