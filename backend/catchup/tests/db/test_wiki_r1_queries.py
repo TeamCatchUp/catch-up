@@ -328,7 +328,7 @@ def test_list_artifacts_filters(db, workspace_id) -> None:
     assert rows[0].artifact_id == elsewhere.id
 
     rows, total = wiki_queries.list_artifacts(
-        db, workspace_id=workspace_id, owner_user_id=user.id
+        db, workspace_id=workspace_id, owner_user_ids=[user.id]
     )
     assert total == 1
     assert rows[0].artifact_id == elsewhere.id
@@ -630,6 +630,69 @@ def test_list_artifacts_unassigned_filter(db, workspace_id) -> None:
 
     assert total == 1
     assert rows[0].artifact_id == orphan.id
+
+
+def test_list_artifacts_owner_filter_is_or_over_users(db, workspace_id) -> None:
+    """owner_user_ids는 그중 한 명이라도 담당자인 문서를 모두 남긴다."""
+    first = _user(db, "owner-or-1@x.com")
+    second = _user(db, "owner-or-2@x.com")
+    channel = _channel(db, workspace_id, created_by=first.id)
+    mine = _artifact(db, workspace_id, channel, "faq_answer", "내 담당")
+    yours = _artifact(db, workspace_id, channel, "faq_answer", "네 담당")
+    _artifact(db, workspace_id, channel, "faq_answer", "담당 없음")
+    wiki_queries.add_artifact_owner(
+        db, artifact_id=mine.id, user_id=first.id, granted_by=first.id
+    )
+    wiki_queries.add_artifact_owner(
+        db, artifact_id=yours.id, user_id=second.id, granted_by=first.id
+    )
+    db.flush()
+
+    rows, total = wiki_queries.list_artifacts(
+        db, workspace_id=workspace_id, owner_user_ids=[first.id, second.id]
+    )
+
+    assert total == 2
+    assert {row.artifact_id for row in rows} == {mine.id, yours.id}
+
+
+def test_list_artifacts_owner_filter_does_not_duplicate_rows(
+    db, workspace_id
+) -> None:
+    """담당자가 여럿인 문서도 한 줄로만 실리고 total과 줄 수가 어긋나지 않는다."""
+    first = _user(db, "owner-dup-1@x.com")
+    second = _user(db, "owner-dup-2@x.com")
+    channel = _channel(db, workspace_id, created_by=first.id)
+    shared = _artifact(db, workspace_id, channel, "faq_answer", "공동 담당")
+    wiki_queries.add_artifact_owner(
+        db, artifact_id=shared.id, user_id=first.id, granted_by=first.id
+    )
+    wiki_queries.add_artifact_owner(
+        db, artifact_id=shared.id, user_id=second.id, granted_by=first.id
+    )
+    db.flush()
+
+    rows, total = wiki_queries.list_artifacts(
+        db, workspace_id=workspace_id, owner_user_ids=[first.id, second.id]
+    )
+
+    assert total == 1
+    assert len(rows) == 1
+    assert rows[0].artifact_id == shared.id
+
+
+def test_list_artifacts_empty_owner_filter_keeps_all(db, workspace_id) -> None:
+    """owner_user_ids가 비어 있으면 담당자 조건을 걸지 않은 것과 같다."""
+    user = _user(db, "owner-empty@x.com")
+    channel = _channel(db, workspace_id, created_by=user.id)
+    _artifact(db, workspace_id, channel, "faq_answer", "아무거나")
+    db.flush()
+
+    _, total = wiki_queries.list_artifacts(
+        db, workspace_id=workspace_id, owner_user_ids=[]
+    )
+
+    assert total == 1
 
 
 def test_list_artifacts_searches_title(db, workspace_id) -> None:

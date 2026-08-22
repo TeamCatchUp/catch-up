@@ -699,7 +699,7 @@ def list_artifacts(
     folder_id: uuid.UUID | None = None,
     kind: str | None = None,
     status: str | None = None,
-    owner_user_id: int | None = None,
+    owner_user_ids: Sequence[int] | None = None,
     unassigned: bool = False,
     q: str | None = None,
     created_after: datetime | None = None,
@@ -719,7 +719,10 @@ def list_artifacts(
     동률 순서를 고정하지 않으면 같은 조건으로 다음 쪽을 요청했을 때 앞
     쪽에서 이미 본 문서가 다시 나오거나 아예 빠질 수 있다.
 
-    owner_user_id와 unassigned를 함께 받으면 결과가 반드시 비지만, 여기서는
+    owner_user_ids는 여러 명을 받고 그중 한 명이라도 담당자인 문서를 남긴다.
+    비어 있거나 None이면 담당자 조건을 걸지 않는다.
+
+    owner_user_ids와 unassigned를 함께 받으면 결과가 반드시 비지만, 여기서는
     막지 않고 받은 대로 건다. 잘못된 조합을 거르는 일은 서버 계층의 몫이다.
     """
     pending_count = (
@@ -792,11 +795,13 @@ def list_artifacts(
         statement = statement.where(KnowledgeArtifact.kind == kind)
     if status is not None:
         statement = statement.where(status_expr == status)
-    if owner_user_id is not None:
+    if owner_user_ids:
+        # 담당자 표를 join하지 않고 서브쿼리로 거른다. join하면 담당자가
+        # 여럿인 문서가 담당자 수만큼 여러 줄로 나온다.
         statement = statement.where(
             KnowledgeArtifact.id.in_(
                 select(ArtifactOwner.artifact_id).where(
-                    ArtifactOwner.user_id == owner_user_id
+                    ArtifactOwner.user_id.in_(owner_user_ids)
                 )
             )
         )

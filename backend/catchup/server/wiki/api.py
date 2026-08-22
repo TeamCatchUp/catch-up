@@ -964,8 +964,12 @@ def list_artifacts(
             "파생 상태로 거른다(pending_review·published·no_revision)."
         ),
     ),
-    owner_user_id: int | None = Query(
-        None, description="해당 사용자가 담당자인 문서만 조회한다."
+    owner_user_id: list[int] | None = Query(
+        None,
+        description=(
+            "담당자로 거른다. 여러 번 주면 그중 한 명이라도 담당자인 문서를 "
+            "모두 조회한다."
+        ),
     ),
     unassigned: bool = Query(
         False,
@@ -1012,9 +1016,10 @@ def list_artifacts(
     먼저 찾는 것이 최근에 움직인 문서이기 때문이다.
 
     Raises:
-        HTTPException: owner_user_id와 unassigned를 함께 주면 422를 던진다.
+        HTTPException: owner_user_id를 한 명 이상 주면서 unassigned까지 켜면
+            422를 던진다.
     """
-    if unassigned and owner_user_id is not None:
+    if unassigned and owner_user_id:
         # 두 조건은 서로 반대라 겹치는 문서가 없다. 빈 목록을 돌려주면
         # 소비자가 요청이 잘못된 것인지 정말 문서가 없는 것인지 가릴 수
         # 없다.
@@ -1031,7 +1036,7 @@ def list_artifacts(
         folder_id=folder_id,
         kind=kind,
         status=status_filter,
-        owner_user_id=owner_user_id,
+        owner_user_ids=owner_user_id,
         unassigned=unassigned,
         q=q,
         created_after=created_after,

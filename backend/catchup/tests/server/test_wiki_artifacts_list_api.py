@@ -631,6 +631,77 @@ def test_list_artifacts_rejects_unassigned_with_owner(
     assert response.json()["detail"]["code"] == "CONFLICTING_OWNER_FILTERS"
 
 
+def test_list_artifacts_owner_filter_accepts_single_value(
+    client, member, db, workspace_id, two_artifacts
+):
+    """owner_user_id를 하나만 주면 그 사람이 담당자인 문서만 남는다."""
+    response = client.get(
+        f"/api/v1/wiki/artifacts?owner_user_id={member.id}"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+    assert _titles(response) == ["A"]
+
+
+def test_list_artifacts_owner_filter_accepts_multiple_values(
+    client, member, db, workspace_id, two_artifacts
+):
+    """owner_user_id를 여러 번 주면 그중 한 명이라도 담당자인 문서를 모두 남긴다."""
+    other = _make_user(db, prefix="other")
+    _join(db, user=other, workspace_id=workspace_id)
+    c_id = _make_artifact(db, workspace_id=workspace_id, title="C")
+    db.add(ArtifactOwner(artifact_id=c_id, user_id=other.id))
+    db.flush()
+
+    response = client.get(
+        "/api/v1/wiki/artifacts"
+        f"?owner_user_id={member.id}&owner_user_id={other.id}"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 2
+    assert sorted(_titles(response)) == ["A", "C"]
+
+
+def test_list_artifacts_owner_filter_counts_shared_artifact_once(
+    client, member, db, workspace_id, two_artifacts
+):
+    """담당자가 둘인 문서도 한 줄로만 실리고 total도 그 수와 맞는다."""
+    other = _make_user(db, prefix="second-owner")
+    _join(db, user=other, workspace_id=workspace_id)
+    a_id, _ = two_artifacts
+    db.add(ArtifactOwner(artifact_id=a_id, user_id=other.id))
+    db.flush()
+
+    response = client.get(
+        "/api/v1/wiki/artifacts"
+        f"?owner_user_id={member.id}&owner_user_id={other.id}"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert _titles(response) == ["A"]
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+
+
+def test_list_artifacts_rejects_unassigned_with_multiple_owners(
+    client, member, db, workspace_id, two_artifacts
+):
+    """담당자를 여러 명 주면서 미지정 필터까지 켜도 422다."""
+    other = _make_user(db, prefix="conflict-owner")
+    _join(db, user=other, workspace_id=workspace_id)
+
+    response = client.get(
+        "/api/v1/wiki/artifacts?unassigned=true"
+        f"&owner_user_id={member.id}&owner_user_id={other.id}"
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "CONFLICTING_OWNER_FILTERS"
+
+
 def test_list_artifacts_searches_title(
     client, member, db, workspace_id, two_artifacts
 ):
