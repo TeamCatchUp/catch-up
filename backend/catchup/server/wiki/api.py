@@ -1458,6 +1458,13 @@ def assign_artifact_owner(
     roles = load_wiki_roles(
         db, user_id=context.user.id, workspace_id=context.workspace_id
     )
+    # 명단을 읽기 전에 문서 행을 잠근다. 검토 확정도 자기 transaction에서
+    # 같은 행을 잡고 명단을 다시 보므로, 지정과 확정이 이 행 하나를 두고
+    # 줄을 선다. 잠그지 않으면 확정이 담당자 없음으로 읽은 직후에 지정이
+    # 커밋돼, 담당자가 생긴 문서에 남의 결정이 실린다.
+    wiki_queries.lock_artifact_row(
+        db, artifact_id=artifact.id, workspace_id=context.workspace_id
+    )
     owner_user_ids = frozenset(
         wiki_queries.list_artifact_owner_ids(db, artifact.id)
     )
@@ -1533,6 +1540,11 @@ def remove_artifact_owner(
     """
     artifact = _load_artifact(
         db, artifact_id=artifact_id, workspace_id=context.workspace_id
+    )
+    # 해제도 지정과 같은 자리에서 문서 행을 잠근다. 명단이 줄어드는
+    # 방향도 확정이 읽는 사실을 바꾸므로 같은 줄에 세운다.
+    wiki_queries.lock_artifact_row(
+        db, artifact_id=artifact.id, workspace_id=context.workspace_id
     )
     roles = load_wiki_roles(
         db, user_id=context.user.id, workspace_id=context.workspace_id

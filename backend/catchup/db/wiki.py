@@ -468,6 +468,33 @@ def add_channel_admin(
     return admin
 
 
+def lock_artifact_row(
+    db: Session, *, artifact_id: uuid.UUID, workspace_id: int
+) -> None:
+    """문서 행을 transaction이 끝날 때까지 잠근다.
+
+    담당자 명단을 바꾸기 전에 잡는다. 검토 확정도 자기 transaction에서 같은
+    행을 잡고 담당자 명단을 다시 읽으므로, 명단이 바뀌는 일과 결정이
+    확정되는 일이 이 행 하나를 두고 줄을 선다. 잡지 않으면 확정이 명단을
+    읽은 뒤 커밋하기까지 사이에 새 담당자가 끼어들어, 담당자가 생긴 문서에
+    남의 결정이 실린다.
+
+    담당자 행에만 잠금을 걸어서는 안 된다. 아직 없는 행은 잠글 수 없어
+    새로 지정되는 담당자를 막지 못한다.
+
+    문서 행이 없으면 아무것도 잠그지 않는다. 호출자가 문서를 먼저 읽어
+    404로 가르므로 여기서 없음을 다시 알릴 자리가 아니다.
+    """
+    db.execute(
+        select(KnowledgeArtifact.id)
+        .where(
+            KnowledgeArtifact.id == artifact_id,
+            KnowledgeArtifact.workspace_id == workspace_id,
+        )
+        .with_for_update()
+    )
+
+
 def get_artifact_owner(
     db: Session, *, artifact_id: uuid.UUID, user_id: int
 ) -> ArtifactOwner | None:
