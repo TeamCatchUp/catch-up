@@ -27,6 +27,7 @@ from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_OPEN_QUESTION
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_SUMMARY
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
@@ -296,6 +297,41 @@ class FakeArtifactRepository:
         )
         return hashes
 
+    def find_latest_revision_blocks(
+        self, *, artifact_id: uuid.UUID
+    ) -> tuple[ArtifactBlock, ...] | None:
+        """최신 판의 블록을 돌려준다. 판이 없으면 None이다."""
+        rows = [
+            row
+            for row in self.revisions
+            if row["artifact_id"] == artifact_id
+        ]
+        if not rows:
+            return None
+        latest = max(rows, key=lambda row: row["revision_number"])
+        return deserialize_blocks(latest["blocks"])
+
+    def list_reusable_change_reasons(
+        self, *, artifact_id: uuid.UUID, base_revision_id: uuid.UUID
+    ) -> dict[str, str]:
+        """같은 기준 판 위에 선 계류 변경안의 수정 이유를 모은다.
+
+        실 저장소와 같이 계류 변경안만 본다. 반려·접힌 행은 빼야 사람이
+        물린 문장이 되살아나지 않는다.
+        """
+        found: dict[str, str] = {}
+        for row in self.by_key.values():
+            if row["artifact_id"] != artifact_id:
+                continue
+            if row["status"] != "pending":
+                continue
+            if row["base_revision_id"] != base_revision_id:
+                continue
+            for block in row["blocks"]:
+                if block.change_reason is not None:
+                    found[block_content_hash(block)] = block.change_reason
+        return found
+
     def list_reusable_narratives(
         self, *, artifact_id: uuid.UUID
     ) -> dict[str, str]:
@@ -355,12 +391,29 @@ class FakeArtifactRepository:
     ) -> uuid.UUID:
         validate_blocks(blocks)
         existing = self.by_key.get(idempotency_key)
+        if existing is not None and existing["status"] not in (
+            "pending",
+            "abandoned",
+        ):
+            raise ArtifactProposalConflict(
+                f"{existing['status']} 상태의 변경안이 같은 멱등 키를"
+                f" 쓰고 있다."
+            )
+        # 실 저장소가 문서 행을 잠그고 보는 검사를 그대로 옮긴다. 잠금은
+        # 흉내 낼 것이 없지만, 기준 판이 최신이 아니면 저장하지 않는다는
+        # 계약은 fake도 지켜야 이 규칙을 시험할 수 있다.
+        latest = self.find_latest_revision_id_and_number(
+            artifact_id=artifact_id
+        )
+        latest_revision_id = None if latest is None else latest[0]
+        if latest_revision_id != base_revision_id:
+            raise ArtifactProposalConflict(
+                f"문서 {artifact_id}의 최신 판이 {latest_revision_id}로"
+                f" 옮겨가 기준 판 {base_revision_id} 위의 변경안을 저장할"
+                f" 수 없다."
+            )
+
         if existing is not None:
-            if existing["status"] not in ("pending", "abandoned"):
-                raise ArtifactProposalConflict(
-                    f"{existing['status']} 상태의 변경안이 같은 멱등 키를"
-                    f" 쓰고 있다."
-                )
             existing.update(
                 artifact_id=artifact_id,
                 blocks=tuple(blocks),
@@ -618,8 +671,12 @@ def _node(node_id: uuid.UUID, name: str = "결제 기능") -> _NodeRow:
 
 
 def _title(name: str = "결제 기능") -> str:
-    """정의가 그 이름의 노드에 지을 문서 제목을 만든다."""
-    return f"{DEFINITION_KIND}: {name}"
+    """정의가 그 이름의 노드에 지을 문서 제목을 만든다.
+
+    제목은 엔티티 이름을 그대로 쓴다. 문서 종류는 kind 칸이 들고 있어
+    제목에 종류 문자열을 덧붙이지 않는다.
+    """
+    return name
 
 
 def _run(uow: FakeUnitOfWork):
@@ -648,6 +705,23 @@ def _publish(uow: FakeUnitOfWork, *, revision_number: int) -> uuid.UUID:
         source_proposal_id=proposal_id,
     )
     return proposal_id
+
+
+# 머리말 블록 셋이 맨 앞에 서므로 본문 첫 블록은 index 3이다.
+FIRST_CONTENT_INDEX = 3
+
+
+def _content_blocks(blocks) -> list:
+    """맨 앞의 머리말 블록 셋을 빼고 본문 블록만 남긴다.
+
+    머리말은 아래 블록을 센 집계라 절의 차례·본문·근거를 보는 시험의
+    대상이 아니다. 머리말 자체는 test_compile_summary_block.py가 본다.
+    """
+    return [
+        block
+        for block in blocks
+        if block.block_kind != BLOCK_KIND_SUMMARY
+    ]
 
 
 def _reject_block(
@@ -732,7 +806,7 @@ def test_entity_without_pending_proposal_gets_claim_sections_only() -> None:
     assert uow.committed == 1
 
     row = _only_pending(uow)
-    blocks = row["blocks"]
+    blocks = _content_blocks(row["blocks"])
     assert [block.block_kind for block in blocks] == [
         BLOCK_KIND_CLAIM_SECTION,
         BLOCK_KIND_CLAIM_SECTION,
@@ -743,6 +817,33 @@ def test_entity_without_pending_proposal_gets_claim_sections_only() -> None:
     artifact_id = uow.artifacts.definition_artifacts[(DEFINITION_ID, node_id)]
     assert row["artifact_id"] == artifact_id
     assert uow.artifacts.titles[artifact_id] == _title()
+
+
+def test_title_is_entity_name_without_kind_prefix() -> None:
+    """문서 제목이 엔티티 이름과 같고 종류를 섞지 않는다."""
+    node_id = uuid.uuid4()
+    uow = FakeUnitOfWork(
+        nodes=[_node(node_id, name="Google Workspace 연동 지원")],
+        claims=[_claim(node_id=node_id, value=60)],
+    )
+
+    _run(uow)
+
+    row = _only_pending(uow)
+    artifact_id = uow.artifacts.definition_artifacts[(DEFINITION_ID, node_id)]
+    title = uow.artifacts.titles[artifact_id]
+    assert title == "Google Workspace 연동 지원"
+    assert DEFINITION_KIND not in title
+    # 머리말 블록의 heading은 문서 제목이 아니라 섹션 기계 키다.
+    assert [block.heading for block in row["blocks"][:FIRST_CONTENT_INDEX]] == [
+        "one_line_summary",
+        "desired_outcome",
+        "background",
+    ]
+    assert all(
+        block.block_kind == BLOCK_KIND_SUMMARY
+        for block in row["blocks"][:FIRST_CONTENT_INDEX]
+    )
 
 
 def test_predicate_order_follows_dictionary_then_name() -> None:
@@ -765,7 +866,10 @@ def test_predicate_order_follows_dictionary_then_name() -> None:
 
     _run(uow)
 
-    headings = [block.heading for block in _only_pending(uow)["blocks"]]
+    headings = [
+        block.heading
+        for block in _content_blocks(_only_pending(uow)["blocks"])
+    ]
     assert headings == [
         "release_month",
         "rate_limit",
@@ -786,7 +890,7 @@ def test_multiple_values_are_all_listed_without_judgement() -> None:
 
     _run(uow)
 
-    block = _only_pending(uow)["blocks"][0]
+    block = _content_blocks(_only_pending(uow)["blocks"])[0]
     assert block.body == (
         "60 (2026-07-30 관찰)\n120 (2026-07-30 관찰)"
     )
@@ -807,7 +911,7 @@ def test_contradiction_predicate_renders_contested_block() -> None:
 
     _run(uow)
 
-    blocks = _only_pending(uow)["blocks"]
+    blocks = _content_blocks(_only_pending(uow)["blocks"])
     assert [block.block_kind for block in blocks] == [BLOCK_KIND_CONTESTED]
     block = blocks[0]
     assert block.heading == "rate_limit"
@@ -853,7 +957,7 @@ def test_contested_block_replaces_its_open_question() -> None:
 
     _run(uow)
 
-    blocks = _only_pending(uow)["blocks"]
+    blocks = _content_blocks(_only_pending(uow)["blocks"])
     assert [block.block_kind for block in blocks] == [
         BLOCK_KIND_CONTESTED,
         BLOCK_KIND_OPEN_QUESTION,
@@ -888,7 +992,7 @@ def test_contested_variants_stay_inside_the_proposal() -> None:
 
     _run(uow)
 
-    blocks = _only_pending(uow)["blocks"]
+    blocks = _content_blocks(_only_pending(uow)["blocks"])
     assert [block.block_kind for block in blocks] == [
         BLOCK_KIND_CONTESTED,
         BLOCK_KIND_CLAIM_SECTION,
@@ -957,7 +1061,7 @@ def test_single_live_claim_keeps_open_question() -> None:
 
     _run(uow)
 
-    blocks = _only_pending(uow)["blocks"]
+    blocks = _content_blocks(_only_pending(uow)["blocks"])
     assert [block.block_kind for block in blocks] == [
         BLOCK_KIND_CLAIM_SECTION,
         BLOCK_KIND_OPEN_QUESTION,
@@ -1034,7 +1138,7 @@ def test_changed_claim_abandons_pending_and_writes_new() -> None:
     fresh = _only_pending(uow)
     assert fresh["id"] != stale_id
     assert uow.artifacts.by_id[stale_id]["status"] == "abandoned"
-    assert fresh["blocks"][0].body == "120 (2026-07-30 관찰)"
+    assert _content_blocks(fresh["blocks"])[0].body == "120 (2026-07-30 관찰)"
 
 
 def test_returning_to_abandoned_content_revives_that_row() -> None:
@@ -1276,6 +1380,53 @@ def test_conflicting_node_is_isolated_from_the_rest() -> None:
     assert row["artifact_id"] == artifact_id
 
 
+def test_publish_between_recheck_and_save_leaves_no_stale_pending() -> None:
+    """재확인을 지난 뒤 새 판이 나면 낡은 기준의 계류를 남기지 않는다.
+
+    저장 직전 재확인은 잠금 없는 읽기라, 그 뒤 저장까지 사이에 다른
+    검토가 계류를 승인해 새 판을 낼 수 있다. 그대로 저장하면 낡은 기준의
+    계류가 남고, 발행은 그 계류를 받지 않는데 다음 컴파일은 내용 지문이
+    같아 건너뛰므로 스스로 풀리지 않는다. 저장소가 기준 판이 최신인지
+    다시 보므로 그 틈이 여기서 잡힌다.
+    """
+    node_id = uuid.uuid4()
+    claim = _claim(node_id=node_id, value=60)
+    uow = FakeUnitOfWork(nodes=[_node(node_id)], claims=[claim])
+    _run(uow)
+    _publish(uow, revision_number=1)
+    uow.knowledge_candidates.claims = [replace(claim, value=120)]
+    _run(uow)
+
+    # 재확인과 저장 사이를 계류를 접는 자리로 잡는다. 컴파일이 그 자리에
+    # 이르렀을 때 다른 검토가 계류를 승인해 2판을 낸다.
+    uow.knowledge_candidates.claims = [replace(claim, value=180)]
+    original = uow.artifacts.abandon_pending_proposals
+
+    def _publish_then_abandon(**kwargs: object) -> int:
+        uow.artifacts.abandon_pending_proposals = original  # type: ignore[method-assign]
+        _publish(uow, revision_number=2)
+        return original(**kwargs)
+
+    uow.artifacts.abandon_pending_proposals = _publish_then_abandon  # type: ignore[method-assign]
+    result = _run(uow)
+
+    assert result.proposals_created == 0
+    assert result.proposals_conflicted == 1
+    # 접기는 0건이다. 그 계류는 방금 승인돼 이미 계류가 아니다.
+    assert result.proposals_abandoned == 0
+    assert uow.artifacts.pending_rows() == []
+    assert len(uow.artifacts.revisions) == 2
+
+    # 다음 컴파일이 새 기준 판 위에서 다시 세운다. 이 픽스처는 3회차
+    # 내용이 2판과 다르므로 건너뛰지 않고 새 계류를 만든다.
+    recovered = _run(uow)
+
+    assert recovered.proposals_created == 1
+    assert recovered.proposals_conflicted == 0
+    row = _only_pending(uow)
+    assert row["base_revision_id"] == uow.artifacts.revisions[-1]["id"]
+
+
 def test_skipped_node_abandons_stale_pending() -> None:
     """지문이 그대로라 넘기는 노드도 내용이 다른 낡은 계류는 접는다."""
     node_id = uuid.uuid4()
@@ -1470,7 +1621,7 @@ def test_claim_section_sources_follow_member_order() -> None:
 
     _run(uow)
 
-    block = _only_pending(uow)["blocks"][0]
+    block = _content_blocks(_only_pending(uow)["blocks"])[0]
     assert block.claim_ids == (older.id, newer.id)
     assert [source.claim_id for source in block.sources] == [
         older.id,
@@ -1555,17 +1706,23 @@ def test_rejected_block_is_dropped_from_the_next_compile() -> None:
     )
     _run(uow)
     first = _only_pending(uow)
-    assert [block.heading for block in first["blocks"]] == [
+    assert [
+        block.heading for block in _content_blocks(first["blocks"])
+    ] == [
         "release_month",
         "rate_limit",
     ]
-    _reject_block(uow, proposal_id=first["id"], block_index=0)
+    _reject_block(
+        uow, proposal_id=first["id"], block_index=FIRST_CONTENT_INDEX
+    )
 
     result = _run(uow)
 
     assert result.blocks_suppressed == 1
     fresh = _only_pending(uow)
-    assert [block.heading for block in fresh["blocks"]] == ["rate_limit"]
+    assert [block.heading for block in _content_blocks(fresh["blocks"])] == [
+        "rate_limit"
+    ]
     assert fresh["content_hash"] == blocks_content_hash(fresh["blocks"])
 
 
@@ -1589,19 +1746,23 @@ def test_rejected_contested_block_reopens_its_question() -> None:
     )
     _run(uow)
     first = _only_pending(uow)
-    assert [block.block_kind for block in first["blocks"]] == [
-        BLOCK_KIND_CONTESTED
-    ]
-    _reject_block(uow, proposal_id=first["id"], block_index=0)
+    assert [
+        block.block_kind for block in _content_blocks(first["blocks"])
+    ] == [BLOCK_KIND_CONTESTED]
+    _reject_block(
+        uow, proposal_id=first["id"], block_index=FIRST_CONTENT_INDEX
+    )
 
     result = _run(uow)
 
     assert result.blocks_suppressed == 1
     fresh = _only_pending(uow)
-    kinds = [block.block_kind for block in fresh["blocks"]]
+    kinds = [block.block_kind for block in _content_blocks(fresh["blocks"])]
     assert BLOCK_KIND_CONTESTED not in kinds
     assert kinds == [BLOCK_KIND_OPEN_QUESTION]
-    assert fresh["blocks"][0].proposal_ids == (contradiction.id,)
+    assert _content_blocks(fresh["blocks"])[0].proposal_ids == (
+        contradiction.id,
+    )
     assert fresh["content_hash"] == blocks_content_hash(fresh["blocks"])
     validate_blocks(fresh["blocks"])
     # 되살린 카드도 같은 입력이면 같은 본문이라 다시 쌓이지 않는다.
@@ -1626,9 +1787,17 @@ def test_reopened_question_can_be_rejected_too() -> None:
         pending={node_id: [contradiction]},
     )
     _run(uow)
-    _reject_block(uow, proposal_id=_only_pending(uow)["id"], block_index=0)
+    _reject_block(
+        uow,
+        proposal_id=_only_pending(uow)["id"],
+        block_index=FIRST_CONTENT_INDEX,
+    )
     _run(uow)
-    _reject_block(uow, proposal_id=_only_pending(uow)["id"], block_index=0)
+    _reject_block(
+        uow,
+        proposal_id=_only_pending(uow)["id"],
+        block_index=FIRST_CONTENT_INDEX,
+    )
 
     result = _run(uow)
 
@@ -1650,7 +1819,11 @@ def test_changed_block_reappears_after_rejection() -> None:
         claims=[_claim(node_id=node_id, value=60), month],
     )
     _run(uow)
-    _reject_block(uow, proposal_id=_only_pending(uow)["id"], block_index=0)
+    _reject_block(
+        uow,
+        proposal_id=_only_pending(uow)["id"],
+        block_index=FIRST_CONTENT_INDEX,
+    )
     _run(uow)
 
     uow.knowledge_candidates.claims = [
@@ -1661,11 +1834,12 @@ def test_changed_block_reappears_after_rejection() -> None:
 
     assert result.blocks_suppressed == 0
     fresh = _only_pending(uow)
-    assert [block.heading for block in fresh["blocks"]] == [
+    content = _content_blocks(fresh["blocks"])
+    assert [block.heading for block in content] == [
         "release_month",
         "rate_limit",
     ]
-    assert fresh["blocks"][0].body == "2026-10 (2026-07-30 관찰)"
+    assert content[0].body == "2026-10 (2026-07-30 관찰)"
 
 
 def test_node_with_every_block_rejected_is_skipped() -> None:
@@ -1681,7 +1855,11 @@ def test_node_with_every_block_rejected_is_skipped() -> None:
     )
     _run(uow)
     stale_id = _only_pending(uow)["id"]
-    _reject_block(uow, proposal_id=stale_id, block_index=0)
+    # 머리말을 뺀 본문 블록을 물린다. 머리말은 남은 본문을 다시 세어
+    # 서므로 본문이 통째로 빠지면 머리말도 함께 사라진다.
+    _reject_block(
+        uow, proposal_id=stale_id, block_index=FIRST_CONTENT_INDEX
+    )
 
     result = _run(uow)
 
@@ -1710,7 +1888,7 @@ def test_compiled_blocks_pass_validation_with_sources() -> None:
     blocks = _only_pending(uow)["blocks"]
     validate_blocks(blocks)
     # 모순 안건은 대조 블록 하나로 접히므로 절과 질문이 따로 서지 않는다.
-    assert len(blocks) == 1
+    assert len(_content_blocks(blocks)) == 1
     for block in blocks:
         assert block.sources
         assert {source.claim_id for source in block.sources} <= set(

@@ -57,6 +57,7 @@ from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
 from catchup.knowledge_maintenance.contracts.extraction import RelationTypeEntry
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_RELATION_SECTION
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_SUMMARY
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.artifact import block_content_hash
@@ -276,6 +277,19 @@ def _pending_by_title(uow: FakeDefinitionUnitOfWork) -> dict[str, dict]:
     }
 
 
+def _content_blocks(blocks) -> list:
+    """맨 앞의 요약 블록을 빼고 본문 블록만 남긴다.
+
+    요약은 아래 블록을 센 집계라 절의 차례나 종류를 보는 시험의 대상이
+    아니다. 요약 자체는 test_compile_summary_block.py가 본다.
+    """
+    return [
+        block
+        for block in blocks
+        if block.block_kind != BLOCK_KIND_SUMMARY
+    ]
+
+
 def test_definition_loop_creates_proposal_per_matching_entity() -> None:
     """정의가 고른 종류의 노드마다 문서 변경안이 하나씩 선다."""
     first = uuid.uuid4()
@@ -312,8 +326,8 @@ def test_definition_loop_creates_proposal_per_matching_entity() -> None:
     assert uow.committed == 1
     titles = set(_pending_by_title(uow))
     assert titles == {
-        f"{DEFINITION_KIND}: 요청 A",
-        f"{DEFINITION_KIND}: 요청 B",
+        "요청 A",
+        "요청 B",
     }
     # 정의가 고르지 않은 종류의 노드는 문서를 얻지 못한다.
     assert all("결제팀" not in title for title in titles)
@@ -384,8 +398,8 @@ def test_predicate_sections_orders_and_filters() -> None:
 
     _run(uow)
 
-    row = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]
-    headings = [block.heading for block in row["blocks"]]
+    row = _pending_by_title(uow)["요청 A"]
+    headings = [block.heading for block in _content_blocks(row["blocks"])]
     # 어휘 차례는 status·summary·priority지만 정의의 차례가 이긴다.
     assert headings == ["summary", "status"]
 
@@ -404,8 +418,10 @@ def test_no_predicate_sections_keeps_dictionary_order() -> None:
 
     _run(uow)
 
-    row = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]
-    assert [block.heading for block in row["blocks"]] == [
+    row = _pending_by_title(uow)["요청 A"]
+    assert [
+        block.heading for block in _content_blocks(row["blocks"])
+    ] == [
         "status",
         "priority",
     ]
@@ -453,7 +469,7 @@ def test_empty_predicate_sections_drops_claim_sections() -> None:
 
     _run(uow)
 
-    row = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]
+    row = _pending_by_title(uow)["요청 A"]
     assert [block.block_kind for block in row["blocks"]] == [
         BLOCK_KIND_RELATION_SECTION
     ]
@@ -500,7 +516,7 @@ def test_preset_feature_request_kind_compiles_request_count_section() -> None:
         uow, workspace_id=WORKSPACE, vocabulary=vocabulary
     )
 
-    row = _pending_by_title(uow)[f"{preset_kind.kind}: 요청 A"]
+    row = _pending_by_title(uow)["요청 A"]
     counts = [
         block
         for block in row["blocks"]
@@ -647,8 +663,8 @@ def test_truncated_path_failure_does_not_stop_other_nodes() -> None:
     result = _run(uow)
 
     titles = _pending_by_title(uow)
-    assert f"{DEFINITION_KIND}: 요청 A" not in titles
-    assert f"{DEFINITION_KIND}: 요청 B" in titles
+    assert "요청 A" not in titles
+    assert "요청 B" in titles
     assert result.nodes_considered == 2
     assert result.nodes_failed == 1
     assert result.proposals_created == 1
@@ -727,8 +743,10 @@ def test_dead_path_without_truncation_stays_silent() -> None:
 
     result = _run(uow)
 
-    blocks = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]["blocks"]
-    assert [block.block_kind for block in blocks] == [BLOCK_KIND_CLAIM_SECTION]
+    blocks = _pending_by_title(uow)["요청 A"]["blocks"]
+    assert [
+        block.block_kind for block in _content_blocks(blocks)
+    ] == [BLOCK_KIND_CLAIM_SECTION]
     assert result.nodes_failed == 0
 
 
@@ -769,12 +787,12 @@ def test_relation_blocks_included_with_ledger() -> None:
 
     _run(uow)
 
-    blocks = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]["blocks"]
-    assert [block.block_kind for block in blocks] == [
+    blocks = _pending_by_title(uow)["요청 A"]["blocks"]
+    assert [block.block_kind for block in _content_blocks(blocks)] == [
         BLOCK_KIND_CLAIM_SECTION,
         BLOCK_KIND_RELATION_SECTION,
     ]
-    relation_block = blocks[1]
+    relation_block = _content_blocks(blocks)[1]
     assert relation_block.heading == "owned_by(out)"
     assert relation_block.body == (
         "요청 A → owned_by → 결제팀\n  ↳ 요청 A는 결제팀이 맡는다"
@@ -805,8 +823,10 @@ def test_relation_path_without_edges_leaves_no_block() -> None:
 
     _run(uow)
 
-    blocks = _pending_by_title(uow)[f"{DEFINITION_KIND}: 요청 A"]["blocks"]
-    assert [block.block_kind for block in blocks] == [BLOCK_KIND_CLAIM_SECTION]
+    blocks = _pending_by_title(uow)["요청 A"]["blocks"]
+    assert [
+        block.block_kind for block in _content_blocks(blocks)
+    ] == [BLOCK_KIND_CLAIM_SECTION]
 
 
 def test_invalid_definition_skipped_not_fatal() -> None:
@@ -1220,8 +1240,8 @@ def test_same_input_twice_all_skipped(
             {"workspace": workspace_id},
         ).all()
     assert [row.title for row in stored] == [
-        f"{DEFINITION_KIND}: 요청 A",
-        f"{DEFINITION_KIND}: 요청 B",
+        "요청 A",
+        "요청 B",
     ]
     for row in stored:
         assert row.definition_id == FIRST_DEFINITION_ID
@@ -1235,7 +1255,7 @@ def test_same_input_twice_all_skipped(
                 " JOIN knowledge_artifacts a ON a.id = p.artifact_id"
                 " WHERE p.workspace_id = :workspace AND a.title = :title"
             ),
-            {"workspace": workspace_id, "title": f"{DEFINITION_KIND}: 요청 A"},
+            {"workspace": workspace_id, "title": "요청 A"},
         ).scalar_one()
     relation_blocks = [
         block
@@ -1602,19 +1622,21 @@ def test_pg_reusable_narratives_come_from_revision_and_pending(
         uow.artifacts.mark_approved(
             proposal_id=proposal_id, reviewer="test"
         )
-        uow.artifacts.add_revision(
+        revision_id = uow.artifacts.add_revision(
             artifact_id=artifact_id,
             revision_number=1,
             blocks=[published],
             source_proposal_id=proposal_id,
         )
         pending = _narrated_block(node_id, "계류 산문이다.", "priority")
+        # 계류 변경안은 방금 낸 1판을 기준으로 삼는다. 저장소가 기준 판이
+        # 최신인지 보기 때문이다.
         uow.artifacts.add_or_revive_proposal(
             artifact_id=artifact_id,
             blocks=[pending],
             content_hash="hash-pending",
             idempotency_key=f"key-pending-{uuid.uuid4()}",
-            base_revision_id=None,
+            base_revision_id=revision_id,
         )
         uow.commit()
 

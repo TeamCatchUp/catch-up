@@ -464,8 +464,25 @@ def test_approve_commits_revision_and_status_together(
         assert deserialize_blocks(revision.blocks) == blocks
 
     # 딛고 선 판이 낡은 변경안은 거절되고 어떤 쓰기도 남기지 않는다.
+    # 1판 위에 올린 변경안이 검토를 기다리는 사이에 다른 승인이 2판을
+    # 내면 그 변경안의 기준이 낡는다.
     with uow_factory() as uow:
-        stale_id = _add(uow, artifact_id, _blocks("낡은 근거"), None)
+        stale_id = _add(
+            uow, artifact_id, _blocks("낡은 근거"), result.revision_id
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        rival_id = _add(
+            uow, artifact_id, _blocks("먼저 실린 근거"), result.revision_id
+        )
+        uow.artifacts.mark_approved(proposal_id=rival_id, reviewer=REVIEWER)
+        uow.artifacts.add_revision(
+            artifact_id=artifact_id,
+            revision_number=2,
+            blocks=_blocks("먼저 실린 근거"),
+            source_proposal_id=rival_id,
+        )
         uow.commit()
 
     with pytest.raises(ProposalReviewError):
@@ -486,7 +503,7 @@ def test_approve_commits_revision_and_status_together(
                 RevisionRow.artifact_id == artifact_id
             )
         ).all()
-        assert list(numbers) == [1]
+        assert sorted(numbers) == [1, 2]
 
 
 def test_approve_rolls_back_revision_when_marking_fails(
@@ -551,7 +568,7 @@ def test_approve_turns_number_collision_into_review_error(
     with uow_factory() as uow:
         seed_id = _add(uow, artifact_id, _blocks("먼저 승인된 판"))
         uow.artifacts.mark_approved(proposal_id=seed_id, reviewer=REVIEWER)
-        uow.artifacts.add_revision(
+        seed_revision_id = uow.artifacts.add_revision(
             artifact_id=artifact_id,
             revision_number=1,
             blocks=_blocks("먼저 승인된 판"),
@@ -560,7 +577,9 @@ def test_approve_turns_number_collision_into_review_error(
         uow.commit()
 
     with uow_factory() as uow:
-        proposal_id = _add(uow, artifact_id, _blocks("동시에 올라온 판"))
+        proposal_id = _add(
+            uow, artifact_id, _blocks("동시에 올라온 판"), seed_revision_id
+        )
         uow.commit()
 
     def _stale(self, *, artifact_id: uuid.UUID) -> None:

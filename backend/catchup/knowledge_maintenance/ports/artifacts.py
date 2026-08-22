@@ -204,6 +204,37 @@ class ArtifactRepository(Protocol):
         """
         ...
 
+    def find_latest_revision_blocks(
+        self,
+        *,
+        artifact_id: uuid.UUID,
+    ) -> tuple[ArtifactBlock, ...] | None:
+        """최신 발행 판의 블록을 돌려준다. 발행 판이 없으면 None이다.
+
+        무엇이 바뀌었는지 말하려면 비교할 이전 내용이 있어야 한다. 판이
+        없다는 것은 아직 사람 앞에 놓인 내용이 없다는 뜻이므로, 빈 튜플이
+        아니라 None으로 알린다. 빈 튜플이면 "블록이 하나도 없는 판"과
+        구분되지 않는다.
+        """
+        ...
+
+    def list_reusable_change_reasons(
+        self,
+        *,
+        artifact_id: uuid.UUID,
+        base_revision_id: uuid.UUID,
+    ) -> dict[str, str]:
+        """같은 기준 판 위에 선 계류 변경안에서 수정 이유를 모아 온다.
+
+        키는 블록 내용 지문이고 값은 그 블록에 붙어 있던 수정 이유다.
+        기준 판이 같으면 짝지을 이전 블록도 같으므로, 이전 블록과 새 블록
+        두 지문을 짝으로 들고 다니지 않고 새 블록 지문 하나만 키로 쓴다.
+
+        반려된 변경안의 이유는 넣지 않는다. 사람이 그 변경안을 물렸으므로
+        거기 붙은 문장도 다시 쓸 것이 아니다.
+        """
+        ...
+
     def find_latest_content_hashes(
         self,
         *,
@@ -245,10 +276,16 @@ class ArtifactRepository(Protocol):
         되살리는 것은 pending과 abandoned뿐이다. 사람이 이미 승인하거나
         반려한 행을 되살리면 그 결정의 기록이 사라지므로 예외로 알린다.
 
+        저장 직전에 문서의 최신 판이 `base_revision_id`와 같은지 확인한다.
+        호출자가 기준 판을 읽은 뒤 여기 도착하기까지 사이에 다른 검토가
+        새 판을 냈으면 낡은 기준의 계류가 되므로, 저장하지 않고 예외로
+        알린다. 구현은 이 확인과 저장을 문서 행 잠금 아래에서 한 묶음으로
+        해야 한다.
+
         Raises:
             ArtifactBlockError: 블록이 근거 계약을 어겼을 때 던진다.
             ArtifactProposalConflict: 같은 키를 이미 결정된 변경안이 쓰고
-                있을 때 던진다.
+                있거나, 기준 판이 최신이 아닐 때 던진다.
         """
         ...
 
@@ -263,7 +300,9 @@ class ArtifactRepository(Protocol):
         for_update가 참이면 변경안 행을 transaction이 끝날 때까지 잠근다.
         같은 변경안을 건드리는 단건 판정과 일괄 발행이 이 행 하나를 두고
         줄을 서므로, 한쪽이 읽은 결정 목록이 다른 쪽 때문에 도중에 바뀌지
-        않는다.
+        않는다. 구현은 그 변경안이 달린 문서 행을 함께, 그리고 변경안
+        행보다 먼저 잠가야 한다. 판을 쌓는 자리와 변경안을 저장하는
+        자리가 문서 행 하나로 줄을 서기 때문이다.
         """
         ...
 
@@ -318,5 +357,10 @@ class ArtifactRepository(Protocol):
         blocks: Sequence[ArtifactBlock],
         source_proposal_id: uuid.UUID,
     ) -> uuid.UUID:
-        """승인으로 확정된 판을 새로 쌓는다."""
+        """승인으로 확정된 판을 새로 쌓는다.
+
+        구현은 변경안 저장과 같은 문서 행 잠금 아래에서 쌓아야 한다.
+        그래야 변경안을 저장하는 쪽이 기준 판을 확인하는 동안 새 판이
+        끼어들지 않는다.
+        """
         ...

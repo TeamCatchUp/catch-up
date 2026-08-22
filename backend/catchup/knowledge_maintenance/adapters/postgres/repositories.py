@@ -2657,6 +2657,60 @@ class SqlAlchemyArtifactRepository:
             ) in self._session.execute(statement).all()
         )
 
+    def find_latest_revision_blocks(
+        self,
+        *,
+        artifact_id: uuid.UUID,
+    ) -> tuple[ArtifactBlock, ...] | None:
+        """최신 발행 판의 블록을 돌려준다. 발행 판이 없으면 None이다.
+
+        최신 판을 고르는 기준은 `find_latest_revision_id_and_number`와 같은
+        판 번호 최대값이다. 기준이 갈리면 같은 문서를 두 코드가 다르게
+        가리킨다.
+        """
+        raw = self._session.scalar(
+            select(KnowledgeArtifactRevisionRow.blocks)
+            .where(
+                KnowledgeArtifactRevisionRow.workspace_id
+                == self._workspace_id,
+                KnowledgeArtifactRevisionRow.artifact_id == artifact_id,
+            )
+            .order_by(KnowledgeArtifactRevisionRow.revision_number.desc())
+            .limit(1)
+        )
+        if raw is None:
+            return None
+        return deserialize_blocks(raw)
+
+    def list_reusable_change_reasons(
+        self,
+        *,
+        artifact_id: uuid.UUID,
+        base_revision_id: uuid.UUID,
+    ) -> dict[str, str]:
+        """같은 기준 판 위에 선 계류 변경안에서 수정 이유를 모아 온다.
+
+        재료는 계류 변경안뿐이다. 발행 판의 블록에 붙은 이유는 그 판을
+        만들 때 비교한 더 앞의 판을 두고 쓴 문장이라, 지금 기준 판과
+        짝짓는 이유로 다시 쓸 수 없다.
+        """
+        found: dict[str, str] = {}
+        for raw in self._session.scalars(
+            select(KnowledgeArtifactChangeProposalRow.blocks).where(
+                KnowledgeArtifactChangeProposalRow.workspace_id
+                == self._workspace_id,
+                KnowledgeArtifactChangeProposalRow.artifact_id
+                == artifact_id,
+                KnowledgeArtifactChangeProposalRow.status == "pending",
+                KnowledgeArtifactChangeProposalRow.base_revision_id
+                == base_revision_id,
+            )
+        ):
+            for block in deserialize_blocks(raw):
+                if block.change_reason is not None:
+                    found[block_content_hash(block)] = block.change_reason
+        return found
+
     def find_latest_content_hashes(
         self,
         *,
@@ -2756,13 +2810,52 @@ class SqlAlchemyArtifactRepository:
             if block.narrative is not None:
                 found[block_content_hash(block)] = block.narrative
 
+    def _lock_artifact(self, artifact_id: uuid.UUID) -> None:
+        """문서 행을 transaction이 끝날 때까지 잠근다.
+
+        컴파일이 변경안을 저장하는 자리와 검토가 새 판을 쌓는 자리가 이
+        행 하나를 두고 줄을 선다. 그래야 기준 판을 읽은 뒤 쓰기까지의
+        사이에 다른 쪽이 새 판을 커밋하지 못한다. 잠그지 않으면 컴파일이
+        낡은 기준 판을 적은 계류를 남기고, 그 계류는 발행이 받아 주지
+        않는데 다음 컴파일은 내용 지문이 같아 건너뛰므로 스스로 풀리지
+        않는다.
+
+        문서 행은 이 저장소에서 가장 바깥 잠금이다. 문서 행과 변경안 행을
+        함께 잡는 경로는 모두 문서 행을 먼저 잡는다. 컴파일은 계류를 접기
+        전에, 발행과 단건 판정은 변경안 행을 FOR UPDATE로 읽기 전에 이
+        잠금을 잡는다. 잡는 차례가 한 방향뿐이라 서로 기다리는 짝이
+        생기지 않는다. 변경안 행만 잡고 문서 행은 잡지 않는 경로가 있어도
+        그 경로는 문서 행을 기다리지 않으므로 짝이 되지 못한다.
+
+        같은 transaction에서 두 번 잡아도 된다. 이미 쥔 행을 다시 잡는
+        것은 아무 일도 하지 않으므로, 잠금이 필요한 함수마다 스스로
+        잡아도 서로 방해하지 않는다.
+
+        문서 행이 없으면 아무것도 잠그지 않고 지나간다. 없는 문서에 다는
+        변경안은 어차피 FK가 막는다.
+        """
+        self._session.execute(
+            select(KnowledgeArtifactRow.id)
+            .where(
+                KnowledgeArtifactRow.workspace_id == self._workspace_id,
+                KnowledgeArtifactRow.id == artifact_id,
+            )
+            .with_for_update()
+        )
+
     def abandon_pending_proposals(
         self,
         *,
         artifact_id: uuid.UUID,
         except_content_hash: str | None = None,
     ) -> int:
-        """문서의 계류안을 접되 지정한 현재 내용은 남긴다."""
+        """문서의 계류안을 접되 지정한 현재 내용은 남긴다.
+
+        접기 전에 문서 행을 잠근다. 이 함수를 부르는 컴파일은 이어서
+        변경안을 저장하며 문서 행을 잡으므로, 여기서 미리 잡아 두어야
+        문서 행을 먼저 잡는 차례가 지켜진다.
+        """
+        self._lock_artifact(artifact_id)
         statement = update(KnowledgeArtifactChangeProposalRow).where(
                 KnowledgeArtifactChangeProposalRow.workspace_id
                 == self._workspace_id,
@@ -2803,14 +2896,27 @@ class SqlAlchemyArtifactRepository:
         되살릴 때 검토 흔적을 지운다. 반려 사유와 검토자가 남아 있으면
         새 변경안이 이미 반려된 것처럼 보이기 때문이다.
 
+        문서 행을 잠근 뒤 최신 판을 읽어 `base_revision_id`와 같은지 본다.
+        호출자가 기준 판을 읽은 시점과 여기 도착한 시점 사이에 다른
+        검토가 새 판을 냈으면 낡은 기준의 계류가 되기 때문이다. 다르면
+        `ArtifactProposalConflict`를 던진다. 새 예외를 두지 않는 것은
+        호출자가 이미 이 예외를 그 문서 하나만 접고 나머지는 그대로 두는
+        신호로 다루고 있어서다.
+
         Raises:
             ArtifactBlockError: 블록이 근거 계약을 어겼을 때 던진다.
             ArtifactProposalConflict: 같은 키를 이미 결정된 변경안이 쓰고
-                있을 때 던진다.
+                있거나, 기준 판이 최신이 아닐 때 던진다.
         """
         # 근거 없는 문장을 막는 마지막 자리다. 저장 전에 본다.
         validate_blocks(blocks)
         payload = serialize_blocks(blocks)
+
+        self._lock_artifact(artifact_id)
+        latest = self.find_latest_revision_id_and_number(
+            artifact_id=artifact_id,
+        )
+        latest_revision_id = None if latest is None else latest[0]
 
         existing = self._session.scalar(
             select(KnowledgeArtifactChangeProposalRow).where(
@@ -2820,12 +2926,22 @@ class SqlAlchemyArtifactRepository:
                 == idempotency_key,
             )
         )
+        if existing is not None and existing.status not in (
+            "pending",
+            "abandoned",
+        ):
+            raise ArtifactProposalConflict(
+                f"{existing.status} 상태의 변경안 {existing.id}가 같은"
+                f" 멱등 키를 쓰고 있어 되살릴 수 없다."
+            )
+        if latest_revision_id != base_revision_id:
+            raise ArtifactProposalConflict(
+                f"문서 {artifact_id}의 최신 판이 {latest_revision_id}로"
+                f" 옮겨가 기준 판 {base_revision_id} 위의 변경안을 저장할"
+                f" 수 없다."
+            )
+
         if existing is not None:
-            if existing.status not in ("pending", "abandoned"):
-                raise ArtifactProposalConflict(
-                    f"{existing.status} 상태의 변경안 {existing.id}가 같은"
-                    f" 멱등 키를 쓰고 있어 되살릴 수 없다."
-                )
             existing.artifact_id = artifact_id
             existing.blocks = payload
             existing.status = "pending"
@@ -2861,15 +2977,26 @@ class SqlAlchemyArtifactRepository:
     ) -> StoredArtifactProposal | None:
         """변경안 하나를 문서 제목·대상과 함께 읽는다.
 
-        for_update가 참이면 변경안 행에만 FOR UPDATE를 건다. 함께 읽는
-        문서 행까지 잠그면 그 문서를 건드리는 다른 일까지 줄을 서므로,
-        잠금 대상을 변경안 행으로 좁힌다. 잠금은 transaction이 끝날 때
-        풀린다.
+        for_update가 참이면 그 변경안이 달린 문서 행을 먼저 잠그고, 이어
+        변경안 행에 FOR UPDATE를 건다. 문서 행까지 잠그면 그 문서를
+        건드리는 다른 일도 줄을 서지만, 판을 쌓는 쪽과 변경안을 저장하는
+        쪽이 같은 문서를 두고 순서 없이 겹치면 낡은 기준 판의 계류가
+        남는다. 문서 행을 먼저 잡는 차례는 `_lock_artifact`가 설명한다.
+        잠금은 transaction이 끝날 때 풀린다.
         """
         statement = self._proposal_statement().where(
             KnowledgeArtifactChangeProposalRow.id == proposal_id
         )
         if for_update:
+            artifact_id = self._session.scalar(
+                select(KnowledgeArtifactChangeProposalRow.artifact_id).where(
+                    KnowledgeArtifactChangeProposalRow.workspace_id
+                    == self._workspace_id,
+                    KnowledgeArtifactChangeProposalRow.id == proposal_id,
+                )
+            )
+            if artifact_id is not None:
+                self._lock_artifact(artifact_id)
             statement = statement.with_for_update(
                 of=KnowledgeArtifactChangeProposalRow
             )
@@ -3018,7 +3145,12 @@ class SqlAlchemyArtifactRepository:
 
         판 번호가 겹치면 UNIQUE가 막는다. 동시에 두 승인이 같은 번호를
         쓰는 것을 DB가 거절하는 자리이므로 여기서 미리 검사하지 않는다.
+
+        쌓기 전에 문서 행을 잠근다. 변경안을 저장하는 쪽도 같은 행을
+        잠그므로, 그쪽이 기준 판을 확인하고 쓰는 동안 이쪽이 새 판을
+        커밋하지 못한다.
         """
+        self._lock_artifact(artifact_id)
         revision_id = uuid.uuid4()
         self._session.add(
             KnowledgeArtifactRevisionRow(

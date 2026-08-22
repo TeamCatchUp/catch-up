@@ -31,6 +31,8 @@ from catchup.knowledge_maintenance.domain.artifact_definition import DIRECTION_O
 from catchup.knowledge_maintenance.domain.artifact_definition import RelationPath
 from catchup.knowledge_maintenance.domain.artifact_definition import RelationStep
 from catchup.knowledge_maintenance.domain.artifact_definition import SelectionSpec
+from catchup.knowledge_maintenance.domain.layout import Layout
+from catchup.knowledge_maintenance.domain.layout import TableGroup
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +45,9 @@ class PresetKind:
         description: 이 종류가 어떤 문서인지 한 줄로 설명한다.
         example_text: 어떤 문서가 나오는지 보여줄 예시를 담는다.
         spec_template: 인자 없이 선택 규칙을 만들어 주는 함수다.
+        layout: 이 종류의 문서를 읽을 때 쓸 순서와 이름을 담는다. 저장된
+            블록과 그 순서는 그대로 두고 읽기 화면만 바꾸므로, 레이아웃이
+            없으면 블록을 컴파일 순서대로 읽는다.
     """
 
     kind: str
@@ -50,6 +55,7 @@ class PresetKind:
     description: str
     example_text: str
     spec_template: Callable[[], SelectionSpec]
+    layout: Layout | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -501,6 +507,88 @@ def _customer_history_spec() -> SelectionSpec:
     )
 
 
+# 아래 레이아웃은 기획 양식이 정한 읽기 순서다. section_key는 컴파일이
+# 붙이는 블록 heading과 글자 그대로 같아야 한다. 절 블록은 predicate
+# 이름이 그대로 heading이고, 관계 블록은 경로의 걸음을
+# "relation_type(direction)"으로 이어 붙인 문자열이 heading이다.
+_FEATURE_REQUEST_STATUS_LAYOUT = Layout(
+    sections=(
+        ("request_status", "요청 상태"),
+        ("request_priority", "우선순위"),
+        ("request_count", "요청 횟수"),
+        ("first_reported_at", "최초 보고"),
+        ("last_reported_at", "최근 보고"),
+        ("usage_context", "사용 상황"),
+        ("requester_role", "요청자 역할"),
+        ("frequency", "빈도"),
+        ("support_status", "지원 상태"),
+        ("workaround", "우회 방법"),
+        ("requested_by(out)", "요청 고객사"),
+        ("belongs_to_area(out)", "기능 영역"),
+    ),
+    table_groups=(
+        TableGroup(
+            key="usage_table",
+            title="사용 상황",
+            section_keys=("usage_context", "requester_role", "frequency"),
+        ),
+    ),
+    always_show=("request_status", "support_status", "workaround"),
+)
+
+
+_COMPLAINT_TOPIC_BRIEF_LAYOUT = Layout(
+    sections=(
+        ("complaint_status", "처리 상태"),
+        ("first_reported_at", "최초 보고"),
+        ("pain_description", "불편 내용"),
+        ("expected_behavior", "기대 동작"),
+        ("reproduction_steps", "재현 절차"),
+        ("impact", "영향"),
+        ("guidance", "안내"),
+        ("complains_about(in)", "신고 고객사"),
+    ),
+    always_show=("complaint_status", "guidance"),
+)
+
+
+_FAQ_ANSWER_LAYOUT = Layout(
+    sections=(
+        ("faq_status", "상태"),
+        ("faq_category", "분류"),
+        ("current_answer", "현재 답변"),
+        ("workaround", "우회 방법"),
+        ("internal_notes", "내부 메모"),
+        ("last_confirmed_at", "최근 확인"),
+        ("related_question(out)", "관련 질문"),
+    ),
+    always_show=("current_answer", "workaround"),
+)
+
+
+_CUSTOMER_VOICE_PROFILE_LAYOUT = Layout(
+    sections=(
+        ("account_request_status", "요청 상태"),
+        ("support_status", "지원 상태"),
+        ("requested_by(in)", "요청한 기능"),
+        ("complains_about(out)", "불편 사항"),
+    ),
+    always_show=("account_request_status",),
+)
+
+
+_CUSTOMER_HISTORY_LAYOUT = Layout(
+    sections=(
+        ("industry", "산업"),
+        ("company_size", "규모"),
+        ("adopted_at", "도입 시기"),
+        ("usage_pattern", "사용 패턴"),
+        ("requested_by(in)", "요청한 기능"),
+        ("complains_about(out)", "불편 사항"),
+    ),
+)
+
+
 _VOC_KINDS = (
     PresetKind(
         kind="feature_request_status",
@@ -514,6 +602,7 @@ _VOC_KINDS = (
             " 최초 접수 2026-06-02."
         ),
         spec_template=_feature_request_status_spec,
+        layout=_FEATURE_REQUEST_STATUS_LAYOUT,
     ),
     PresetKind(
         kind="complaint_topic_brief",
@@ -527,6 +616,7 @@ _VOC_KINDS = (
             " 최초 보고 2026-05-20."
         ),
         spec_template=_complaint_topic_brief_spec,
+        layout=_COMPLAINT_TOPIC_BRIEF_LAYOUT,
     ),
     PresetKind(
         kind="faq_answer",
@@ -540,6 +630,7 @@ _VOC_KINDS = (
             " 카테고리 데이터."
         ),
         spec_template=_faq_answer_spec,
+        layout=_FAQ_ANSWER_LAYOUT,
     ),
     PresetKind(
         kind="customer_voice_profile",
@@ -553,6 +644,7 @@ _VOC_KINDS = (
             " 상태 검토중."
         ),
         spec_template=_customer_voice_profile_spec,
+        layout=_CUSTOMER_VOICE_PROFILE_LAYOUT,
     ),
     PresetKind(
         kind="customer_history",
@@ -565,6 +657,7 @@ _VOC_KINDS = (
             "A사 — 업종 SaaS, 도입 2026-03, 요청 4건·불편 2건."
         ),
         spec_template=_customer_history_spec,
+        layout=_CUSTOMER_HISTORY_LAYOUT,
     ),
 )
 
@@ -745,6 +838,18 @@ def find_kind_by_name(kind: str) -> PresetKind | None:
             if preset_kind.kind == kind:
                 return preset_kind
     return None
+
+
+def layout_for_kind(kind: str) -> Layout | None:
+    """문서 종류의 읽기 레이아웃을 찾는다.
+
+    카탈로그 밖 kind이거나 레이아웃을 두지 않은 종류면 None이다. 읽는
+    쪽은 None을 받으면 블록을 컴파일 순서대로 보여 준다.
+    """
+    preset_kind = find_kind_by_name(kind)
+    if preset_kind is None:
+        return None
+    return preset_kind.layout
 
 
 def find_style(style_id: str) -> PresetStyle | None:

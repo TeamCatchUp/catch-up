@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.block_diff import BlockChange
@@ -92,10 +93,13 @@ def test_change_reason_counts_claim_diff():
     base = [_block(claim_ids=[c1, c2])]
     prop = [_block(body="n", claim_ids=[c2, c3])]
     change = diff_blocks(base, prop)[0]
-    assert change_reason(change, base=base, proposed=prop) == "근거 1건 추가·1건 폐기"
+    assert (
+        change_reason(change, base=base, proposed=prop)
+        == "근거 1건이 추가되고 1건이 빠졌습니다."
+    )
     assert (
         change_reason(BlockChange("added", 0, None), base=[], proposed=prop)
-        == "새 섹션"
+        == "새로 추가된 섹션입니다."
     )
     assert (
         change_reason(BlockChange("removed", None, 0), base=base, proposed=[]) is None
@@ -103,7 +107,18 @@ def test_change_reason_counts_claim_diff():
     same = [_block(body="n", claim_ids=[c1, c2])]
     assert (
         change_reason(diff_blocks(base, same)[0], base=base, proposed=same)
-        == "산문 갱신"
+        == "산문 표현만 다듬었습니다."
+    )
+
+
+def test_change_reason_counts_only_dropped_claims():
+    """근거가 빠지기만 했으면 빠진 건수만 말한다."""
+    c1, c2 = uuid.uuid4(), uuid.uuid4()
+    base = [_block(claim_ids=[c1, c2])]
+    prop = [_block(body="n", claim_ids=[c1])]
+    change = diff_blocks(base, prop)[0]
+    assert (
+        change_reason(change, base=base, proposed=prop) == "근거 1건이 빠졌습니다."
     )
 
 
@@ -113,3 +128,32 @@ def test_block_markdown_prefers_narrative():
         == "## 상태\n\n산문"
     )
     assert block_markdown(_block(heading="상태", body="b")) == "## 상태\n\nb"
+
+
+def test_change_reason_prefers_stored_value():
+    """블록에 저장된 수정 이유가 있으면 그 문장을 먼저 돌려준다."""
+    c1, c2 = uuid.uuid4(), uuid.uuid4()
+    base = [_block(body="x", claim_ids=(c1,))]
+    prop = [
+        replace(
+            _block(body="y", claim_ids=(c1, c2)),
+            change_reason="새 회의록이 붙어 값이 갱신됐다.",
+        )
+    ]
+    change = diff_blocks(base, prop)[0]
+    assert (
+        change_reason(change, base=base, proposed=prop)
+        == "새 회의록이 붙어 값이 갱신됐다."
+    )
+
+
+def test_change_reason_falls_back_when_stored_missing():
+    """저장된 수정 이유가 없으면 기존 결정론 문구로 돌아간다."""
+    c1, c2 = uuid.uuid4(), uuid.uuid4()
+    base = [_block(body="x", claim_ids=(c1,))]
+    prop = [_block(body="y", claim_ids=(c1, c2))]
+    change = diff_blocks(base, prop)[0]
+    assert (
+        change_reason(change, base=base, proposed=prop)
+        == "근거 1건이 추가되었습니다."
+    )

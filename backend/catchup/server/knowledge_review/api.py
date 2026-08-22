@@ -116,6 +116,7 @@ from catchup.server.knowledge_review.schemas import ReadSetResponse
 from catchup.server.knowledge_review.schemas import RejectRequest
 from catchup.server.knowledge_review.schemas import VariantResponse
 from catchup.server.wiki.dependencies import review_error
+from catchup.server.wiki.layout import layout_items
 from catchup.server.wiki.owners import owners_by_artifact
 from catchup.server.wiki.roles import can_decide_artifact
 from catchup.server.wiki.schemas import OwnerResponse
@@ -402,6 +403,10 @@ def get_queue_item(
     발행판은 문서마다 한 번만 읽는다. base_blocks와 block_changes가 같은
     한 벌에서 나와야 소비자가 두 값을 짝지어 볼 수 있다.
 
+    문서 행은 읽기 레이아웃을 고르려고 읽는다. 어떤 양식으로 읽힐지는 문서
+    종류가 정하는데, 변경안은 그 값을 들고 있지 않기 때문이다. 저장소에 없는
+    문서면 종류를 모르는 것으로 두고 블록을 저장된 순서 그대로 낸다.
+
     Raises:
         HTTPException: 이 workspace에 그 변경안이 없으면 404를 던진다.
     """
@@ -418,6 +423,9 @@ def get_queue_item(
         artifact_id=proposal.artifact_id,
         owner_user_ids=frozenset(owner.user_id for owner in owners),
         user_id=context.user.id,
+    )
+    artifact = wiki_queries.get_artifact(
+        db, artifact_id=proposal.artifact_id, workspace_id=context.workspace_id
     )
     revision = wiki_queries.get_latest_revision(
         db, artifact_id=proposal.artifact_id, workspace_id=context.workspace_id
@@ -454,6 +462,7 @@ def get_queue_item(
         can_review=can_review,
         base_blocks=base_blocks,
         changes=changes,
+        kind=None if artifact is None else artifact.kind,
     )
 
 
@@ -917,21 +926,33 @@ def _to_detail(
     can_review: bool,
     base_blocks: Sequence[ArtifactBlock],
     changes: tuple[BlockChange, ...],
+    kind: str | None,
 ) -> ProposalDetailResponse:
     """변경안 하나를 상세 응답으로 옮긴다.
 
     변경 사유는 블록 자리로 짚어 붙인다. changes에는 바뀐 블록만 들어
-    있으므로, 목록에 없는 자리의 블록은 사유가 없음이 된다.
+    있으므로, 목록에 없는 자리의 블록은 사유가 없음이 된다. 발행판이 없는
+    신규 문서는 사유를 아예 붙이지 않는다.
+
+    읽기 레이아웃은 변경안 블록과 발행판 블록에 각각 따로 만든다. 둘은 블록
+    구성이 다르므로 한쪽의 자리 번호를 다른 쪽에 쓸 수 없다. kind를 모르면
+    레이아웃이 없어 블록을 저장된 순서 그대로 낸다.
     """
     contains_conflict = _has_contested(proposal)
     by_index = {verdict.block_index: verdict for verdict in verdicts}
-    reasons = {
-        change.block_index: change_reason(
-            change, base=base_blocks, proposed=proposal.blocks
-        )
-        for change in changes
-        if change.block_index is not None
-    }
+    # 발행판이 없으면 문서 전체가 새것이라 블록마다 사유를 붙여도
+    # 같은 말이 되풀이될 뿐이라 붙이지 않는다.
+    reasons = (
+        {
+            change.block_index: change_reason(
+                change, base=base_blocks, proposed=proposal.blocks
+            )
+            for change in changes
+            if change.block_index is not None
+        }
+        if base_blocks
+        else {}
+    )
     claim_ids: dict[str, None] = {}
     proposal_ids: dict[str, None] = {}
     relation_ids: dict[str, None] = {}
@@ -971,10 +992,16 @@ def _to_detail(
         owners=owners,
         can_review=can_review,
         blocks=blocks,
+        layout=layout_items(proposal.blocks, kind=kind),
         base_blocks=[
             _to_base_block(block, block_index=index)
             for index, block in enumerate(base_blocks)
         ],
+        # 발행판이 없으면 자리표시조차 내지 않는다. 빈 칸 목록은 "값이
+        # 아직 없는 발행판"으로 읽히는데, 실제로는 발행된 판 자체가 없다.
+        base_layout=(
+            layout_items(base_blocks, kind=kind) if base_blocks else []
+        ),
         block_changes=[
             BlockChangeResponse(
                 change=change.change,

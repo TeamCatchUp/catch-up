@@ -25,11 +25,13 @@ import pytest
 
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_SUMMARY
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import ContestedVariant
 from catchup.knowledge_maintenance.domain.artifact import deserialize_blocks
 from catchup.knowledge_maintenance.domain.artifact import serialize_blocks
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
+from catchup.knowledge_maintenance.services.list_review_queue import SUMMARY_MAX_LENGTH
 from catchup.knowledge_maintenance.services.list_review_queue import list_review_queue
 
 WORKSPACE_ID = 1
@@ -70,6 +72,37 @@ def _contested_blocks(heading: str, body: str) -> tuple[ArtifactBlock, ...]:
     )
 
 
+def _summary_block(
+    *,
+    narrative: str | None,
+    heading: str = "결제 기능",
+    body: str = "claim 3건 · 관계 1건 · 최초 보고 2026-06-03T07:59:38.407000+00:00",
+) -> ArtifactBlock:
+    """문서 맨 앞에 오는 summary 블록 하나를 만든다."""
+    return ArtifactBlock(
+        block_kind=BLOCK_KIND_SUMMARY,
+        heading=heading,
+        body=body,
+        claim_ids=(uuid.uuid4(),),
+        proposal_ids=(),
+        ontology_version="1",
+        narrative=narrative,
+    )
+
+
+def _reason_block(reason: str | None) -> ArtifactBlock:
+    """수정 이유를 달아 둔 본문 블록 하나를 만든다."""
+    return ArtifactBlock(
+        block_kind=BLOCK_KIND_CLAIM_SECTION,
+        heading="release_month",
+        body="9월 출시 예정입니다.",
+        claim_ids=(uuid.uuid4(),),
+        proposal_ids=(),
+        ontology_version="1",
+        change_reason=reason,
+    )
+
+
 @dataclass
 class FakeState:
     """변경안들을 담아 두는 공유 상태다."""
@@ -87,14 +120,20 @@ class FakeState:
         body: str = "9월 출시 예정입니다.",
         title: str = "결제 기능",
         artifact_id: uuid.UUID | None = None,
+        blocks: tuple[ArtifactBlock, ...] | None = None,
+        base_revision_id: uuid.UUID | None = None,
     ) -> uuid.UUID:
-        """검토를 기다리는 문서 변경안 한 건을 넣는다."""
+        """검토를 기다리는 문서 변경안 한 건을 넣는다.
+
+        blocks를 주면 heading·body·contested 대신 그 블록들을 그대로 담는다.
+        """
         proposal_id = uuid.uuid4()
-        blocks = (
-            _contested_blocks(heading, body)
-            if contested
-            else _blocks(heading, body)
-        )
+        if blocks is None:
+            blocks = (
+                _contested_blocks(heading, body)
+                if contested
+                else _blocks(heading, body)
+            )
         self.proposals.append(
             {
                 "id": proposal_id,
@@ -105,7 +144,7 @@ class FakeState:
                 # 실 DB처럼 직렬화한 형태로 담는다.
                 "blocks": serialize_blocks(blocks),
                 "content_hash": "0" * 64,
-                "base_revision_id": None,
+                "base_revision_id": base_revision_id,
                 "rejection_reason": None,
                 "origin": origin,
                 "created_at": created_at,
@@ -333,8 +372,83 @@ def test_queue_item_carries_origin_title_and_summary() -> None:
     assert item.title == "결제 기능"
     assert item.status == "pending"
     assert item.created_at == BASE_TIME
-    assert item.summary == "release_month: 9월 출시 예정입니다."
+    assert item.summary == "새 문서 초안입니다."
 
+
+SUMMARY_NARRATIVE = (
+    "결제 기능은 9월 출시를 목표로 한다."
+    "\n\n결제를 화면에서 바로 끝낼 수 있게 된다."
+    "\n\n지금은 외부 링크로 나가서 결제한다."
+)
+
+
+def test_summary_marks_proposal_without_base_revision_as_new_draft() -> None:
+    """발행판이 없는 변경안은 새 문서 초안이라고 알린다."""
+    state = FakeState()
+    state.add_proposal(
+        blocks=(_summary_block(narrative=SUMMARY_NARRATIVE),)
+        + (_reason_block("근거가 한 건 늘었습니다."),),
+    )
+
+    page = list_review_queue(
+        FakeUnitOfWork(state), workspace_id=WORKSPACE_ID
+    )
+
+    assert page.items[0].summary == "새 문서 초안입니다."
+
+
+def test_summary_uses_first_change_reason_of_revision() -> None:
+    """발행판이 있으면 블록에 적힌 첫 수정 이유를 그대로 쓴다."""
+    state = FakeState()
+    state.add_proposal(
+        base_revision_id=uuid.uuid4(),
+        blocks=(
+            _summary_block(narrative=SUMMARY_NARRATIVE),
+            _reason_block("출시 월이 10월에서 9월로 바뀌었습니다."),
+            _reason_block("근거가 한 건 늘었습니다."),
+        ),
+    )
+
+    page = list_review_queue(
+        FakeUnitOfWork(state), workspace_id=WORKSPACE_ID
+    )
+
+    assert page.items[0].summary == "출시 월이 10월에서 9월로 바뀌었습니다."
+
+
+def test_summary_clamps_long_change_reason() -> None:
+    """수정 이유가 길면 길이 상한에서 자른다."""
+    state = FakeState()
+    state.add_proposal(
+        base_revision_id=uuid.uuid4(),
+        blocks=(_reason_block("가" * 300),),
+    )
+
+    page = list_review_queue(
+        FakeUnitOfWork(state), workspace_id=WORKSPACE_ID
+    )
+
+    summary = page.items[0].summary
+    assert len(summary) == SUMMARY_MAX_LENGTH
+    assert summary.endswith("…")
+
+
+def test_summary_falls_back_when_no_change_reason() -> None:
+    """수정 이유가 하나도 없으면 바뀌었다는 사실만 알린다."""
+    state = FakeState()
+    state.add_proposal(
+        base_revision_id=uuid.uuid4(),
+        blocks=(
+            _summary_block(narrative=None),
+            _reason_block(None),
+        ),
+    )
+
+    page = list_review_queue(
+        FakeUnitOfWork(state), workspace_id=WORKSPACE_ID
+    )
+
+    assert page.items[0].summary == "문서 내용이 바뀌었습니다."
 
 def test_negative_paging_is_refused() -> None:
     """음수 페이지 인자는 조용히 넘기지 않는다."""

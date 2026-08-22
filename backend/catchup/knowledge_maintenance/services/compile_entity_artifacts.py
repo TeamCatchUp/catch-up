@@ -53,6 +53,8 @@ from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTI
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_OPEN_QUESTION
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_RELATION_SECTION
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_SUMMARY
+from catchup.knowledge_maintenance.domain.artifact import SUMMARY_SECTION_KEYS
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.artifact import ContestedVariant
@@ -64,6 +66,8 @@ from catchup.knowledge_maintenance.domain.artifact_definition import SelectionSp
 from catchup.knowledge_maintenance.domain.artifact_definition import (
     validate_selection_spec,
 )
+from catchup.knowledge_maintenance.domain.block_diff import CHANGE_MODIFIED
+from catchup.knowledge_maintenance.domain.block_diff import diff_blocks
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.domain.preset_catalog import DEFAULT_PURPOSE_SENTENCE
 from catchup.knowledge_maintenance.domain.preset_catalog import (
@@ -92,8 +96,10 @@ from catchup.knowledge_maintenance.ports.mutation_proposals import (
 )
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPendingProposal
 from catchup.knowledge_maintenance.ports.narrator import BlockNarrator
+from catchup.knowledge_maintenance.ports.narrator import ChangeExplanationRequest
 from catchup.knowledge_maintenance.ports.narrator import NarrationError
 from catchup.knowledge_maintenance.ports.narrator import NarrationRequest
+from catchup.knowledge_maintenance.ports.narrator import SummaryNarrative
 from catchup.knowledge_maintenance.ports.relations import RelationRepository
 from catchup.knowledge_maintenance.ports.relations import StoredRelationEdge
 from catchup.knowledge_maintenance.services.traverse_relations import (
@@ -195,6 +201,10 @@ class ArtifactCompileResult:
             중간 집계는 버리므로 실제 LLM 호출 수보다 작을 수 있다.
         blocks_narrative_reused: 지난 산문을 그대로 다시 쓴 블록 수를
             나타낸다. 이 수가 클수록 검수자가 볼 산문 diff가 작다.
+        blocks_explained: 이번 실행이 새로 수정 이유를 받은 블록 수를
+            나타낸다. 발행 판과 짝이 맞으면서 내용이 달라진 블록만 센다.
+        blocks_explanation_reused: 지난 수정 이유를 그대로 다시 쓴 블록
+            수를 나타낸다.
     """
 
     definitions_considered: int = 0
@@ -208,6 +218,8 @@ class ArtifactCompileResult:
     nodes_failed: int = 0
     blocks_narrated: int = 0
     blocks_narrative_reused: int = 0
+    blocks_explained: int = 0
+    blocks_explanation_reused: int = 0
 
 
 def compile_definition_artifacts(
@@ -250,6 +262,8 @@ def compile_definition_artifacts(
     nodes_failed = 0
     narrated = 0
     reused = 0
+    explained = 0
+    explanations_reused = 0
     now = (clock or _utcnow)()
     with uow:
         definitions = uow.artifact_definitions.list_definitions()
@@ -328,6 +342,7 @@ def compile_definition_artifacts(
                     nodes_failed += 1
                     continue
 
+                title = _definition_title(definition, source)
                 blocks = _build_blocks(
                     claims=by_node.get(source.node_id, ()),
                     pending=pending,
@@ -358,7 +373,7 @@ def compile_definition_artifacts(
                         channel_id=definition.channel_id,
                         kind=definition.kind,
                         subject_node_id=source.node_id,
-                        title=_definition_title(definition, source),
+                        title=title,
                         folder_id=definition.folder_id,
                     )
                 )
@@ -404,6 +419,8 @@ def compile_definition_artifacts(
                 suppressed += outcome.suppressed
                 narrated += outcome.narrated
                 reused += outcome.reused
+                explained += outcome.explained
+                explanations_reused += outcome.explanations_reused
 
         uow.commit()
 
@@ -419,6 +436,8 @@ def compile_definition_artifacts(
         nodes_failed=nodes_failed,
         blocks_narrated=narrated,
         blocks_narrative_reused=reused,
+        blocks_explained=explained,
+        blocks_explanation_reused=explanations_reused,
     )
     logger.info(
         "artifact_compile_completed",
@@ -434,6 +453,8 @@ def compile_definition_artifacts(
         nodes_failed=result.nodes_failed,
         blocks_narrated=result.blocks_narrated,
         blocks_narrative_reused=result.blocks_narrative_reused,
+        blocks_explained=result.blocks_explained,
+        blocks_explanation_reused=result.blocks_explanation_reused,
     )
     return result
 
@@ -444,11 +465,14 @@ def _definition_title(
 ) -> str:
     """정의가 만드는 문서의 제목을 짓는다.
 
-    정의가 정한 앞자리에 대상 이름을 잇는다. 같은 대상에 여러 정의가
-    문서를 만들 수 있어, 이름만으로는 검토자가 어느 정의의 문서인지
-    가릴 수 없기 때문이다.
+    제목은 대상 엔티티의 이름을 그대로 쓴다. 제목은 명사구이고, 문서
+    종류를 가리는 일은 응답의 kind 필드가 맡는다. 종류 문자열을 제목
+    앞에 덧붙이면 사람이 읽는 이름 자리에 기계용 값이 섞인다.
+
+    LLM이 쓰는 문장형 헤드라인은 summary 블록의 narrative에만 두고
+    제목으로는 쓰지 않는다.
     """
-    return f"{definition.title_prefix}: {source.display_name}"
+    return source.display_name
 
 
 def _style_instruction(
@@ -641,6 +665,9 @@ class _NodeOutcome:
         suppressed: 반려 장부에 걸려 카드에서 뺀 블록 수를 나타낸다.
         narrated: 새로 산문을 받은 블록 수를 나타낸다.
         reused: 지난 산문을 그대로 다시 쓴 블록 수를 나타낸다.
+        explained: 새로 수정 이유를 받은 블록 수를 나타낸다.
+        explanations_reused: 지난 수정 이유를 그대로 다시 쓴 블록 수를
+            나타낸다.
     """
 
     created: int = 0
@@ -651,6 +678,8 @@ class _NodeOutcome:
     suppressed: int = 0
     narrated: int = 0
     reused: int = 0
+    explained: int = 0
+    explanations_reused: int = 0
 
 
 def _propose_node_blocks(
@@ -672,12 +701,31 @@ def _propose_node_blocks(
     여기가 정한다. 두 입구가 이 자리를 나눠 쓰므로 반려 억제와 지문
     비교와 멱등 키 규칙이 입구마다 갈리지 않는다.
 
+    머리말 블록은 여기서 다시 센다. 머리말은 아래 블록을 집계한 줄이라,
+    반려로 빠진 블록이 있는데 옛 집계를 그대로 두면 문서가 싣지 않은
+    근거를 가리키게 된다. 다시 센 줄도 반려 장부를 거치므로 사람이
+    머리말 자체를 물린 판단은 그대로 살아 있다.
+
     Raises:
-        NarrationError: 블록 산문을 받아 오지 못했을 때 그대로 올라간다.
-            부르는 쪽이 이 문서 하나만 접는다.
+        NarrationError: 블록 산문이나 수정 이유를 받아 오지 못했을 때
+            그대로 올라간다. 부르는 쪽이 이 문서 하나만 접는다.
     """
     rejected = uow.block_verdicts.find_rejected_hashes(
         artifact_id=artifact_id,
+    )
+    summary_ontology_version = next(
+        (
+            block.ontology_version
+            for block in blocks
+            if block.block_kind == BLOCK_KIND_SUMMARY
+        ),
+        None,
+    )
+    had_summary = any(
+        block.block_kind == BLOCK_KIND_SUMMARY for block in blocks
+    )
+    blocks = tuple(
+        block for block in blocks if block.block_kind != BLOCK_KIND_SUMMARY
     )
     blocks, dropped, suppressed_ids = _drop_rejected_blocks(
         blocks,
@@ -703,6 +751,23 @@ def _propose_node_blocks(
     if reopened:
         validate_blocks(reopened)
         blocks = (*blocks, *reopened)
+    if blocks and had_summary:
+        rebuilt = _summary_blocks(
+            blocks,
+            ontology_version=summary_ontology_version,
+        )
+        if rebuilt:
+            kept, dropped_summary, _ = _drop_rejected_blocks(
+                rebuilt,
+                rejected,
+                workspace_id=workspace_id,
+                artifact_id=artifact_id,
+            )
+            suppressed += dropped_summary
+            blocks = (*kept, *blocks)
+            # 다시 센 머리말도 근거 계약을 거친다. 되살린 열린 질문과 같은
+            # 자리다. 여기서 만든 블록은 입구의 검사를 거치지 않았다.
+            validate_blocks(blocks)
     if not blocks:
         # 남은 문장이 없으면 빈 카드 규칙과 같이 건너뛴다. 다만 큐에
         # 남은 계류는 접는다. 그 계류가 담은 본문이 바로 방금 반려된
@@ -734,6 +799,14 @@ def _propose_node_blocks(
             suppressed=suppressed,
         )
 
+    # 기준 판은 두 자리에서 쓴다. 수정 이유를 다시 쓸 수 있는지 고를 때와
+    # 변경안에 기준 판을 적을 때다. 두 자리가 같은 판을 봐야 재사용 규칙과
+    # 멱등 키 규칙이 어긋나지 않으므로 한 번만 읽어 나눠 쓴다.
+    latest = uow.artifacts.find_latest_revision_id_and_number(
+        artifact_id=artifact_id,
+    )
+    base_revision_id = None if latest is None else latest[0]
+
     # 지문 비교를 지나 "이번에 새로 올린다"가 정해진 뒤에만 서술한다.
     # 앞에 두면 무변경 재컴파일에서도 LLM이 돈다. 산문이 붙어도 위에서
     # 구한 content_hash는 그대로다 — 지문 계산이 산문을 빼고 세므로 다시
@@ -744,12 +817,44 @@ def _propose_node_blocks(
         reusable = uow.artifacts.list_reusable_narratives(
             artifact_id=artifact_id,
         )
+        # 머리말 세 블록은 한 번의 서술로 함께 채운다. 세 섹션은 같은
+        # 집계 한 줄을 딛고 선 한 벌이라, 블록마다 따로 물으면 같은 질문을
+        # 세 번 하는 셈이고 세 섹션이 서로 어긋난 문장을 받을 수도 있다.
+        # 요청은 언제나 첫 머리말 블록으로 만들어, 어느 블록에서 재사용이
+        # 걸리든 같은 재료를 묻게 한다.
+        summary_request = _summary_narration_request(
+            blocks,
+            style_instruction=style_instruction,
+            purpose_sentence=purpose_sentence,
+        )
+        summary_narrative: SummaryNarrative | None = None
         narrated_blocks: list[ArtifactBlock] = []
         for block in blocks:
             found = reusable.get(block_content_hash(block))
             if found is not None:
                 narrated_blocks.append(replace(block, narrative=found))
                 reused += 1
+                continue
+            if block.block_kind == BLOCK_KIND_SUMMARY:
+                if (
+                    summary_request is None
+                    or block.heading not in SUMMARY_SECTION_KEYS
+                ):
+                    narrated_blocks.append(block)
+                    continue
+                if summary_narrative is None:
+                    summary_narrative = narrator.narrate_summary(
+                        summary_request
+                    )
+                # heading이 SummaryNarrative의 필드 이름과 같은 기계 키라
+                # 그대로 골라 담는다.
+                narrated_blocks.append(
+                    replace(
+                        block,
+                        narrative=getattr(summary_narrative, block.heading),
+                    )
+                )
+                narrated += 1
                 continue
             request = _narration_request(
                 block,
@@ -765,13 +870,52 @@ def _propose_node_blocks(
             narrated += 1
         blocks = tuple(narrated_blocks)
 
+    explained = 0
+    explanations_reused = 0
+    if narrator is not None and base_revision_id is not None:
+        blocks, explained, explanations_reused = _explain_changed_blocks(
+            uow,
+            artifact_id=artifact_id,
+            blocks=blocks,
+            base_revision_id=base_revision_id,
+            narrator=narrator,
+            purpose_sentence=purpose_sentence,
+        )
+
+    # 기준 판을 저장 직전에 한 번 더 읽어 그사이 발행이 있었는지 본다.
+    # 위에서 읽은 기준 판과 저장 사이에는 LLM 호출이 들어 있어 시간이
+    # 길게 벌어진다. 그동안 다른 검토자가 계류 변경안을 승인하면 새 판이
+    # 나고, 여기서 그대로 저장하면 낡은 기준을 적은 계류가 남는다. 그
+    # 계류는 발행이 STALE_BASE_REVISION으로 거부하는데, 다음 컴파일은 그
+    # 계류의 지문을 보고 무변경으로 건너뛰면서 그 행을 그대로 두므로
+    # 스스로 풀리지 않는다. 어긋남을 본 노드는 저장을 접는 것이 유일한
+    # 회복 경로다. 저장하지 않으면 다음 컴파일이 새 기준으로 다시 세운다.
+    moved = uow.artifacts.find_latest_revision_id_and_number(
+        artifact_id=artifact_id,
+    )
+    if moved != latest:
+        logger.warning(
+            "artifact_compile_node_base_moved",
+            workspace_id=workspace_id,
+            node_id=str(node_id),
+            artifact_id=str(artifact_id),
+            base_revision_id=None if latest is None else str(latest[0]),
+            latest_revision_id=None if moved is None else str(moved[0]),
+        )
+        # 기존 계류도 접지 않는다. 저장할 것이 없는데 큐만 비우면 사람이
+        # 보던 안건이 이유 없이 사라진다.
+        return _NodeOutcome(
+            conflicted=1,
+            suppressed=suppressed,
+            narrated=narrated,
+            reused=reused,
+            explained=explained,
+            explanations_reused=explanations_reused,
+        )
+
     replaced = uow.artifacts.abandon_pending_proposals(
         artifact_id=artifact_id,
     )
-    latest = uow.artifacts.find_latest_revision_id_and_number(
-        artifact_id=artifact_id,
-    )
-    base_revision_id = None if latest is None else latest[0]
     try:
         proposal_id = uow.artifacts.add_or_revive_proposal(
             artifact_id=artifact_id,
@@ -785,10 +929,18 @@ def _propose_node_blocks(
             base_revision_id=base_revision_id,
         )
     except ArtifactProposalConflict:
-        # 키에 기준 판이 들어가므로 정상 흐름에서는 결정된 행과 부딪히지
-        # 않는다. 그래도 부딪히면 데이터 이상 신호이므로 이 노드만
-        # 건너뛰고 나머지 노드의 작업은 그대로 커밋한다. 바로 위에서
-        # 접은 계류는 되돌리지 않는다.
+        # 두 가지가 여기로 온다. 하나는 결정된 행과 멱등 키가 부딪히는
+        # 경우다. 키에 기준 판이 들어가므로 정상 흐름에서는 나지 않고,
+        # 나면 데이터 이상 신호다. 다른 하나는 위의 재확인을 지난 뒤
+        # 저장 사이에 다른 검토가 새 판을 낸 경우다. 저장소가 문서 행을
+        # 잠그고 기준 판이 최신인지 다시 보므로 그 틈이 여기서 잡힌다.
+        # 어느 쪽이든 저장하지 않고 이 노드만 건너뛰며, 나머지 노드의
+        # 작업은 그대로 커밋한다. 다음 컴파일이 새 기준 판 위에서 다시
+        # 세운다.
+        #
+        # 바로 위에서 접은 계류는 되돌리지 않는다. 새 판이 끼어든
+        # 경우에는 그 계류가 이미 승인으로 끝나 접기가 0건이라 되돌릴
+        # 것도 없다.
         logger.warning(
             "artifact_compile_proposal_conflict",
             workspace_id=workspace_id,
@@ -802,6 +954,8 @@ def _propose_node_blocks(
             suppressed=suppressed,
             narrated=narrated,
             reused=reused,
+            explained=explained,
+            explanations_reused=explanations_reused,
         )
 
     logger.info(
@@ -820,6 +974,183 @@ def _propose_node_blocks(
         suppressed=suppressed,
         narrated=narrated,
         reused=reused,
+        explained=explained,
+        explanations_reused=explanations_reused,
+    )
+
+
+def _explain_changed_blocks(
+    uow: ArtifactCompileUnitOfWork,
+    *,
+    artifact_id: uuid.UUID,
+    blocks: tuple[ArtifactBlock, ...],
+    base_revision_id: uuid.UUID,
+    narrator: BlockNarrator,
+    purpose_sentence: str,
+) -> tuple[tuple[ArtifactBlock, ...], int, int]:
+    """발행 판과 짝이 맞으면서 내용이 달라진 블록에 수정 이유를 붙인다.
+
+    짝이 있는 블록만 대상이다. 새로 생긴 절은 비교할 이전 내용이 없고 빠진
+    절은 변경안에 자리가 없으므로, 둘 다 물어볼 것이 없다. 화면에 붙는
+    문구는 읽는 쪽이 결정론으로 만들어 채운다.
+
+    기준 판이 같은 계류 변경안에 같은 지문의 블록이 있으면 거기 적힌
+    문장을 그대로 다시 쓴다. 기준 판이 같으면 짝지을 이전 블록도 같으므로
+    다시 물어도 같은 것을 묻는 셈이다.
+
+    Args:
+        uow: 문서 저장소를 담은 작업 단위다.
+        artifact_id: 이유를 붙일 문서다.
+        blocks: 이번에 올릴 블록들이다.
+        base_revision_id: 이 변경안이 딛고 선 발행 판이다.
+        narrator: 수정 이유를 받아 올 서술기다.
+        purpose_sentence: 이 문서가 무엇에 쓰이는지 알리는 한 줄이다.
+
+    Returns:
+        이유를 붙인 블록들과, 새로 받은 수, 다시 쓴 수다.
+
+    Raises:
+        NarrationError: 수정 이유를 받아 오지 못했을 때 그대로 올라간다.
+    """
+    base = uow.artifacts.find_latest_revision_blocks(artifact_id=artifact_id)
+    if base is None:
+        return blocks, 0, 0
+    reusable = uow.artifacts.list_reusable_change_reasons(
+        artifact_id=artifact_id,
+        base_revision_id=base_revision_id,
+    )
+    explained = 0
+    reused = 0
+    updated = list(blocks)
+    for change in diff_blocks(base, blocks):
+        if change.change != CHANGE_MODIFIED:
+            continue
+        block = updated[change.block_index]
+        if block.block_kind == BLOCK_KIND_SUMMARY:
+            # 머리말 본문은 아래 블록을 센 값이라 문서 어디가 바뀌어도
+            # 함께 바뀐다. 무엇이 달라졌는지는 같은 실행이 새로 쓰는 머리말
+            # 산문이 이미 말하므로, 여기서는 수정 이유를 붙이지 않는다.
+            # 판정 기준이 block_kind라 머리말 세 블록이 모두 빠진다.
+            continue
+        found = reusable.get(block_content_hash(block))
+        if found is not None:
+            updated[change.block_index] = replace(block, change_reason=found)
+            reused += 1
+            continue
+        request = _change_explanation_request(
+            block,
+            base[change.base_block_index],
+            purpose_sentence=purpose_sentence,
+        )
+        if not request.before_statements and not request.after_statements:
+            # 앞뒤 사실 입력이 모두 비면 무엇이 달라졌는지 말할 재료가
+            # 없다. 그대로 물으면 프롬프트가 빈 앞면을 "이 블록은 전에
+            # 없었다"로 읽어 거짓 전제를 만든다. 이유를 비워 두면 읽는
+            # 쪽이 결정론 문구로 채운다.
+            continue
+        updated[change.block_index] = replace(
+            block, change_reason=narrator.explain_change(request)
+        )
+        explained += 1
+    return tuple(updated), explained, reused
+
+
+def _change_explanation_request(
+    block: ArtifactBlock,
+    paired: ArtifactBlock,
+    *,
+    purpose_sentence: str,
+) -> ChangeExplanationRequest:
+    """짝지어진 두 블록을 수정 이유 요청으로 옮긴다.
+
+    관계 절은 사실 입력이 다르다. 그 블록은 인용을 갖지 않고 본문의 간선
+    줄이 곧 사실이므로, 앞뒤를 간선 줄로 만든다. 인용만 읽으면 관계 절의
+    앞뒤가 언제나 비어 프롬프트가 빈 앞면을 "이 블록은 전에 없었다"로
+    읽는다. 들여쓴 힌트 줄은 관계에 붙은 원문 문장이라 그 말을 한 사람이
+    관계의 상대 노드로 읽힐 자리가 있으므로 서술 때와 같이 뺀다.
+
+    나머지 블록의 앞뒤 사실 입력은 검증된 인용뿐이다. 블록 본문과 제목은 색인용 라벨에서
+    온 문장이라 근거가 아니고, 검증되지 않은 인용은 아직 근거가 아니다.
+    새로 붙은 인용은 뒤에만 있는 문장으로 계산한다. 그것이 이번 변경을
+    불러온 것을 말할 수 있는 유일한 재료다.
+
+    Args:
+        block: 이번에 올릴 블록이다.
+        paired: 발행 판에서 짝지어진 블록이다.
+        purpose_sentence: 이 문서가 무엇에 쓰이는지 알리는 한 줄이다.
+
+    Returns:
+        수정 이유를 묻는 요청이다.
+    """
+    if block.block_kind == BLOCK_KIND_RELATION_SECTION:
+        before = _relation_edge_lines(paired)
+        after = _relation_edge_lines(block)
+    else:
+        before = _verified_statements(paired)
+        after = _verified_statements(block)
+    seen = set(before)
+    return ChangeExplanationRequest(
+        heading=block.heading,
+        before_statements=before,
+        after_statements=after,
+        new_sources=tuple(
+            statement for statement in after if statement not in seen
+        ),
+        purpose_sentence=purpose_sentence,
+    )
+
+
+def _relation_edge_lines(block: ArtifactBlock) -> tuple[str, ...]:
+    """관계 절 본문에서 간선 줄만 차례대로 모은다.
+
+    본문은 간선 줄과 들여쓴 힌트 줄이 섞여 있다. 힌트 줄은 관계에 붙은
+    원문 문장이라 사실 입력이 아니므로 접두로 갈라 뺀다.
+    """
+    return tuple(
+        line
+        for line in block.body.split("\n")
+        if line.strip() and not line.startswith(RELATION_HINT_PREFIX)
+    )
+
+
+def _verified_statements(block: ArtifactBlock) -> tuple[str, ...]:
+    """블록이 담은 인용 중 대조를 통과한 원문만 차례대로 모은다."""
+    return tuple(
+        source.statement
+        for source in block.sources
+        if source.citation_verified
+    )
+
+
+def _summary_narration_request(
+    blocks: Sequence[ArtifactBlock],
+    *,
+    style_instruction: str,
+    purpose_sentence: str,
+) -> NarrationRequest | None:
+    """머리말 세 블록을 대표하는 서술 요청 하나를 만든다.
+
+    첫 머리말 블록으로 만든다. 세 블록은 heading만 다르고 본문과 근거가
+    같아 어느 블록으로 만들어도 사실 입력은 같지만, 만드는 자리를 첫
+    블록으로 못박아야 지난 산문 재사용이 어느 블록에서 걸리든 같은 요청이
+    나간다.
+
+    머리말 블록이 없거나 검증된 인용이 하나도 없으면 None이다.
+    """
+    summary = next(
+        (
+            block
+            for block in blocks
+            if block.block_kind == BLOCK_KIND_SUMMARY
+        ),
+        None,
+    )
+    if summary is None:
+        return None
+    return _narration_request(
+        summary,
+        style_instruction=style_instruction,
+        purpose_sentence=purpose_sentence,
     )
 
 
@@ -840,9 +1171,10 @@ def _narration_request(
     있다. 그래서 접두로 갈라 간선 줄만 사실로 넘기고 원문 문장은 표현
     힌트로 넘긴다. 잘린 걸음을 알리는 줄은 사실이므로 간선 쪽에 남는다.
 
-    claim 절·열린 질문·대조 블록의 사실 입력은 검증된 인용뿐이다. 블록
-    본문과 제목은 색인용 라벨에서 온 문장이라 근거가 아니라 주제 힌트로만
-    넘긴다.
+    claim 절·열린 질문·대조·머리말 블록의 사실 입력은 검증된 인용뿐이다.
+    블록 본문과 제목은 색인용 라벨에서 온 문장이라 근거가 아니라 주제
+    힌트로만 넘긴다. 머리말 블록은 본문이 결정론 집계 한 줄이므로 그 줄이
+    그대로 주제 힌트가 되고, 사실 입력은 문서 전체의 검증된 인용이다.
 
     대조 블록은 자기 sources를 비우고 근거를 후보마다 나눠 갖는다. 후보를
     합치면 어느 인용이 어느 값의 근거인지 사라지므로 갈라서 넘긴다. 검증된
@@ -854,21 +1186,14 @@ def _narration_request(
     않는 것이지 오류가 아니므로 예외가 아니라 None으로 알린다.
     """
     if block.block_kind == BLOCK_KIND_RELATION_SECTION:
-        lines = tuple(
-            line for line in block.body.split("\n") if line.strip()
-        )
-        if not lines:
-            return None
-        edges = tuple(
-            line
-            for line in lines
-            if not line.startswith(RELATION_HINT_PREFIX)
-        )
+        edges = _relation_edge_lines(block)
         hints = tuple(
             line[len(RELATION_HINT_PREFIX) :]
-            for line in lines
+            for line in block.body.split("\n")
             if line.startswith(RELATION_HINT_PREFIX)
         )
+        if not edges and not hints:
+            return None
         return NarrationRequest(
             block_kind=block.block_kind,
             heading=block.heading,
@@ -880,11 +1205,7 @@ def _narration_request(
             purpose_sentence=purpose_sentence,
             hints=hints,
         )
-    statements = tuple(
-        source.statement
-        for source in block.sources
-        if source.citation_verified
-    )
+    statements = _verified_statements(block)
     variants = tuple(
         (body, verified)
         for body, verified in (
@@ -1047,6 +1368,9 @@ def _build_blocks(
     관계 절은 claim 절과 열린 질문 사이에 놓는다. 앞쪽은 이 대상이
     무엇인지를, 뒤쪽은 사람에게 묻는 것을 말하므로, 대상과 이웃의
     관계는 그 사이에 온다.
+
+    실을 내용이 있으면 머리말 블록 셋을 맨 앞에 세운다. 문서를 열자마자
+    읽는 자리라 아래 블록들을 집계한 한 줄이 먼저 와야 한다.
     """
     ontology_version = vocabulary.snapshot_id or None
     sections = _claim_sections(
@@ -1067,7 +1391,109 @@ def _build_blocks(
         [item for item in pending if item.id not in contested_ids],
         ontology_version,
     )
-    return tuple([*sections, *relation_blocks, *questions])
+    body = tuple([*sections, *relation_blocks, *questions])
+    return (
+        *_summary_blocks(body, ontology_version=ontology_version),
+        *body,
+    )
+
+
+# 머리말 블록이 나르는 근거 인용의 상한이다. 근거 수를 제한하는 것은 산문
+# 입력 길이를 묶기 위해서다. 넘치면 최근 것부터 남긴다.
+_SUMMARY_SOURCE_LIMIT = 40
+
+
+def _summary_blocks(
+    blocks: Sequence[ArtifactBlock],
+    *,
+    ontology_version: str | None,
+) -> tuple[ArtifactBlock, ...]:
+    """문서 맨 앞에 세울 머리말 블록 셋을 만든다. 근거가 없으면 빈 튜플이다.
+
+    머리말은 한 줄 요약·원하는 결과·요청 배경 세 섹션이다. 세 섹션은
+    본문의 다른 섹션과 같은 급의 최상위 섹션이므로 각각 블록 하나로
+    선다. 블록이 곧 검수 단위라, 셋을 한 블록에 묶으면 검토자가 세 섹션을
+    한 번에만 승인하거나 반려할 수 있다.
+
+    세 블록의 heading은 SUMMARY_SECTION_KEYS의 기계 키를 그대로 쓰고,
+    화면에 보여 줄 한글 제목은 읽기 레이아웃이 붙인다.
+
+    본문은 아래 블록들을 센 집계 한 줄이고, 세 블록에 같은 줄을 싣는다.
+    이 집계가 세 섹션이 함께 딛고 선 결정론 내용이고, 내용 지문이 같은
+    기준으로 움직여야 문서가 바뀔 때 세 섹션이 함께 다시 서술되기
+    때문이다. heading이 서로 달라 세 블록의 지문은 각각 다르다.
+
+    LLM을 부르지 않고 세기만 하므로 같은 입력이면 같은 줄이 나온다. 집계
+    항목의 순서와 표기를 바꾸면 내용 지문이 달라져 사람이 이미 본 카드가
+    검토 큐에 다시 쌓이므로, 형식은 시험으로 고정한다.
+
+    claim 장부와 근거는 모든 블록의 합집합이다. 머리말이 문서 전체를
+    가리키는 블록이기 때문이다. 합칠 때는 정렬해 순서를 고정한다. 블록이
+    들어온 차례나 저장소가 돌려준 차례에 기대면 같은 입력이 다른 지문을
+    낳는다.
+
+    claim 근거가 하나도 없으면 만들지 않는다. 관계만 있는 문서가 그런
+    경우인데, 머리말은 claim 장부를 요구하는 블록이라 빈 장부로 세우면
+    근거 계약에 걸린다.
+
+    근거가 상한을 넘으면 최근 것부터 남긴다. 머리말 산문은 이 문서가 지금
+    어떤 상태인지를 말해야 하는데, 오래된 쪽을 남기면 본문이 적은 최근
+    보고 시각과 산문이 읽은 근거가 어긋난다. 본문의 최초·최근 보고
+    시각은 자르기 전 근거 전체에서 센다.
+    """
+    if not blocks:
+        return ()
+    claim_ids = sorted(
+        {claim_id for block in blocks for claim_id in block.claim_ids},
+        key=str,
+    )
+    if not claim_ids:
+        return ()
+    relation_count = len(
+        {
+            relation_id
+            for block in blocks
+            for relation_id in block.relation_ids
+        }
+    )
+    question_count = sum(
+        1
+        for block in blocks
+        if block.block_kind == BLOCK_KIND_OPEN_QUESTION
+    )
+    sources = sorted(
+        {source for block in blocks for source in block.sources},
+        key=lambda source: (
+            source.observed_at,
+            str(source.claim_id),
+            source.statement,
+        ),
+    )
+    if sources:
+        first = sources[0].observed_at.isoformat()
+        last = sources[-1].observed_at.isoformat()
+    else:
+        first = "없음"
+        last = "없음"
+    body = (
+        f"claim {len(claim_ids)}건"
+        f" · 관계 {relation_count}건"
+        f" · 열린 질문 {question_count}건"
+        f" · 최초 보고 {first}"
+        f" · 최근 보고 {last}"
+    )
+    return tuple(
+        ArtifactBlock(
+            block_kind=BLOCK_KIND_SUMMARY,
+            heading=section_key,
+            body=body,
+            claim_ids=tuple(claim_ids),
+            proposal_ids=(),
+            ontology_version=ontology_version,
+            sources=tuple(sources[-_SUMMARY_SOURCE_LIMIT:]),
+        )
+        for section_key in SUMMARY_SECTION_KEYS
+    )
 
 
 @dataclass(frozen=True, slots=True)

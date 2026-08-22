@@ -16,6 +16,7 @@ from structlog.testing import capture_logs
 from catchup.knowledge_maintenance.contracts.extraction import RelationTypeEntry
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_RELATION_SECTION
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_SUMMARY
 from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.domain.preset_catalog import DEFAULT_PURPOSE_SENTENCE
@@ -23,8 +24,10 @@ from catchup.knowledge_maintenance.domain.preset_catalog import (
     DEFAULT_STYLE_INSTRUCTION,
 )
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPendingProposal
+from catchup.knowledge_maintenance.ports.narrator import ChangeExplanationRequest
 from catchup.knowledge_maintenance.ports.narrator import NarrationError
 from catchup.knowledge_maintenance.ports.narrator import NarrationRequest
+from catchup.knowledge_maintenance.ports.narrator import SummaryNarrative
 from catchup.knowledge_maintenance.ports.relations import StoredRelationEdge
 from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
     _actor_edge_line,
@@ -51,18 +54,58 @@ from catchup.tests.knowledge_maintenance.test_compile_definition_artifacts impor
 from catchup.tests.knowledge_maintenance.test_compile_definition_artifacts import _spec
 
 
-class _FakeNarrator:
-    """호출을 기록하고 고정 문장을 돌려주는 서술기다."""
+def _content_headings(narrator) -> list[str]:
+    """머리말을 뺀, 본문 블록 서술 요청의 제목만 모은다.
 
-    def __init__(self, error: Exception | None = None) -> None:
+    머리말은 아래 블록을 센 줄이라 절 하나만 바뀌어도 함께 바뀐다. 어느
+    절이 다시 서술됐는지 보는 시험에서는 그 한 줄을 빼고 센다.
+    """
+    return [
+        request.heading
+        for request in narrator.requests
+        if request.block_kind != BLOCK_KIND_SUMMARY
+    ]
+
+
+class _FakeNarrator:
+    """호출을 기록하고 고정 문장을 돌려주는 서술기다.
+
+    산문 요청과 수정 이유 요청을 따로 담는다. 두 요청은 부르는 조건이
+    다르므로 한 목록에 섞으면 어느 규칙이 깨졌는지 가릴 수 없다.
+    """
+
+    def __init__(
+        self,
+        error: Exception | None = None,
+        *,
+        explain_error: Exception | None = None,
+    ) -> None:
         self.requests: list[NarrationRequest] = []
+        self.explanations: list[ChangeExplanationRequest] = []
         self.error = error
+        self.explain_error = explain_error
 
     def narrate(self, request: NarrationRequest) -> str:
         self.requests.append(request)
         if self.error is not None:
             raise self.error
         return f"{request.heading} 절을 설명하는 문장이다."
+
+    def narrate_summary(self, request: NarrationRequest) -> SummaryNarrative:
+        self.requests.append(request)
+        if self.error is not None:
+            raise self.error
+        return SummaryNarrative(
+            one_line_summary="A사가 CSV 내보내기를 원한다.",
+            desired_outcome="내려받은 파일을 바로 쓸 수 있게 된다.",
+            background="지금은 손으로 옮겨 적고 있다.",
+        )
+
+    def explain_change(self, request: ChangeExplanationRequest) -> str:
+        self.explanations.append(request)
+        if self.explain_error is not None:
+            raise self.explain_error
+        return f"{request.heading} 블록이 바뀐 이유다."
 
 
 def _verified(claim: StoredClaimCandidate) -> StoredClaimCandidate:
@@ -172,7 +215,11 @@ def test_case_a_no_narrator_keeps_the_old_result() -> None:
 
 
 def test_case_b_first_compile_narrates_every_block() -> None:
-    """첫 컴파일은 서술 가능한 블록 수만큼 부른다."""
+    """첫 컴파일은 서술 가능한 블록을 모두 채운다.
+
+    호출 수는 블록 수보다 둘 적다. 머리말 세 블록은 한 번의 서술로 함께
+    채우기 때문이다.
+    """
     node_id = uuid.uuid4()
     uow = _uow(
         nodes=[(node_id, "요청 A", "feature_request", "active")],
@@ -184,9 +231,115 @@ def test_case_b_first_compile_narrates_every_block() -> None:
 
     blocks = _blocks(uow)
     narratable = [block for block in blocks if block.sources]
-    assert len(narrator.requests) == len(narratable)
+    assert len(narrator.requests) == len(narratable) - 2
     assert result.blocks_narrated == len(narratable)
     assert all(block.narrative for block in narratable)
+
+
+def test_summary_sections_are_three_blocks_narrated_by_one_call() -> None:
+    """머리말 세 블록이 맨 앞에 서고 한 번의 서술로 함께 채워진다.
+
+    세 섹션은 본문의 다른 섹션과 같은 급이라 각각 블록 하나로 선다.
+    heading은 기계 키이고, 서술은 narrate_summary 한 번이면 된다.
+    """
+    node_id = uuid.uuid4()
+    uow = _uow(
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[_verified(_claim(node_id=node_id))],
+    )
+    narrator = _FakeNarrator()
+
+    _run(uow, narrator)
+
+    blocks = _blocks(uow)
+    summaries = blocks[:3]
+    assert [block.block_kind for block in summaries] == [
+        BLOCK_KIND_SUMMARY
+    ] * 3
+    assert [block.heading for block in summaries] == [
+        "one_line_summary",
+        "desired_outcome",
+        "background",
+    ]
+    assert [block.narrative for block in summaries] == [
+        "A사가 CSV 내보내기를 원한다.",
+        "내려받은 파일을 바로 쓸 수 있게 된다.",
+        "지금은 손으로 옮겨 적고 있다.",
+    ]
+    summary_requests = [
+        request
+        for request in narrator.requests
+        if request.block_kind == BLOCK_KIND_SUMMARY
+    ]
+    assert len(summary_requests) == 1
+    assert summary_requests[0].heading == "one_line_summary"
+    # 본문은 세 블록 모두 같은 집계 한 줄이고, heading이 달라 지문은
+    # 서로 다르다.
+    assert len({block.body for block in summaries}) == 1
+    assert len({block_content_hash(block) for block in summaries}) == 3
+
+
+def test_summary_blocks_are_not_narrated_without_a_narrator() -> None:
+    """서술기를 주지 않으면 머리말 세 블록 모두 산문이 없다."""
+    node_id = uuid.uuid4()
+    uow = _uow(
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[_verified(_claim(node_id=node_id))],
+    )
+
+    _run(uow)
+
+    assert all(block.narrative is None for block in _blocks(uow)[:3])
+
+
+def test_partly_reused_summary_calls_narrate_summary_once() -> None:
+    """세 칸 중 하나만 캐시에 걸려도 서술은 한 번만 부르고 나머지를 채운다.
+
+    지난 판에 남은 문장은 그대로 살아 있어야 하고, 빠진 칸만 새로 받는다.
+    머리말 세 블록은 본문이 같아도 heading이 달라 지문이 각각이므로,
+    재사용이 한 칸에만 걸리는 일이 실제로 일어난다.
+    """
+    node_id = uuid.uuid4()
+    claim = _verified(_claim(node_id=node_id))
+    uow = _uow(
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[claim],
+    )
+    narrator = _FakeNarrator()
+    _run(uow, narrator)
+    first = _pending(uow)
+    uow.artifacts.mark_approved(proposal_id=first["id"], reviewer="사람")
+    # 발행판에는 첫 머리말 블록의 문장만 남긴다. 나머지 두 칸은 산문이
+    # 없어 재사용 사전에 들어가지 않는다.
+    uow.artifacts.add_revision(
+        artifact_id=first["artifact_id"],
+        revision_number=1,
+        blocks=[
+            replace(block, narrative="지난 판의 한 줄 요약이다.")
+            if index == 0
+            else replace(block, narrative=None)
+            for index, block in enumerate(first["blocks"])
+        ],
+        source_proposal_id=first["id"],
+    )
+    # claim 절의 값만 바꾼다. 인용 원문과 관찰 시각은 그대로라 머리말
+    # 세 블록의 지문은 움직이지 않고, 본문 절만 새 내용이 된다.
+    uow.knowledge_candidates.claims = [replace(claim, value="진행 중")]
+    narrator.requests.clear()
+
+    result = _run(uow, narrator)
+
+    summaries = _blocks(uow)[:3]
+    assert summaries[0].narrative == "지난 판의 한 줄 요약이다."
+    assert summaries[1].narrative == "내려받은 파일을 바로 쓸 수 있게 된다."
+    assert summaries[2].narrative == "지금은 손으로 옮겨 적고 있다."
+    summary_requests = [
+        request
+        for request in narrator.requests
+        if request.block_kind == BLOCK_KIND_SUMMARY
+    ]
+    assert len(summary_requests) == 1
+    assert result.blocks_narrative_reused == 1
 
 
 def test_case_0_block_without_verified_statement_is_not_narrated() -> None:
@@ -250,8 +403,10 @@ def test_case_d_changed_block_reuses_the_rest() -> None:
 
     result = _run(uow, narrator)
 
-    assert [item.heading for item in narrator.requests] == ["priority"]
-    assert result.blocks_narrated == 1
+    # 머리말은 집계가 달라졌으므로 세 블록 모두 다시 서술된다.
+    assert _content_headings(narrator) == ["priority"]
+    assert narrator.requests[0].block_kind == BLOCK_KIND_SUMMARY
+    assert result.blocks_narrated == 4
     assert result.blocks_narrative_reused == 1
 
 
@@ -361,11 +516,12 @@ def test_case_e_rejected_block_narrative_is_not_reused() -> None:
 
     result = _run(uow, narrator)
 
-    assert sorted(item.heading for item in narrator.requests) == [
+    assert sorted(_content_headings(narrator)) == [
         "priority",
         "status",
     ]
-    assert result.blocks_narrated == 2
+    # 머리말 세 블록까지 다섯 블록이 다시 서술된다.
+    assert result.blocks_narrated == 5
     assert result.blocks_narrative_reused == 0
 
 
@@ -452,7 +608,8 @@ def test_case_g_relation_section_is_narrated_from_body_lines() -> None:
     assert relation_request.statements == ()
     assert relation_request.edges == ("요청 A → owned_by → 결제팀",)
     assert relation_request.hints == ("요청 A는 결제팀이 맡는다",)
-    assert result.blocks_narrated == 2
+    # claim 절·관계 절과 머리말 세 블록이 서술된다.
+    assert result.blocks_narrated == 5
     relation_block = next(
         block
         for block in _blocks(uow)
@@ -712,8 +869,12 @@ def test_contested_block_without_any_verified_quote_is_not_narrated() -> None:
     result = _run(uow, narrator)
 
     assert [block.block_kind for block in _blocks(uow)] == [
-        BLOCK_KIND_CONTESTED
+        BLOCK_KIND_SUMMARY,
+        BLOCK_KIND_SUMMARY,
+        BLOCK_KIND_SUMMARY,
+        BLOCK_KIND_CONTESTED,
     ]
+    # 머리말의 근거도 같은 인용이라 검증된 문장이 없어 서술되지 않는다.
     assert narrator.requests == []
     assert result.nodes_failed == 0
     assert result.blocks_narrated == 0

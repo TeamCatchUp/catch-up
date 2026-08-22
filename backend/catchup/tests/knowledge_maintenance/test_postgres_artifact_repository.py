@@ -9,6 +9,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from collections.abc import Iterator
+from dataclasses import replace
 from datetime import datetime
 from datetime import timezone
 
@@ -42,6 +43,7 @@ from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlockError
 from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.artifact import artifact_idempotency_key
+from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactProposalConflict
 from catchup.tests.knowledge_maintenance.test_artifact_definition_schema import (
@@ -429,7 +431,7 @@ def test_add_or_revive_proposal_never_reopens_decided_rows(
     with uow_factory() as uow:
         approved_id, _ = _add(uow, artifact_id, blocks)
         uow.artifacts.mark_approved(proposal_id=approved_id, reviewer="tester")
-        uow.artifacts.add_revision(
+        revision_id = uow.artifacts.add_revision(
             artifact_id=artifact_id,
             revision_number=1,
             blocks=blocks,
@@ -437,6 +439,8 @@ def test_add_or_revive_proposal_never_reopens_decided_rows(
         )
         uow.commit()
 
+    # 기준 판은 지금의 최신 판으로 준다. 기준이 낡았다는 이유로 먼저
+    # 막히면 결정된 행을 지키는 규칙 자체를 보지 못한다.
     with uow_factory() as uow:
         with pytest.raises(ArtifactProposalConflict):
             uow.artifacts.add_or_revive_proposal(
@@ -444,7 +448,7 @@ def test_add_or_revive_proposal_never_reopens_decided_rows(
                 blocks=blocks,
                 content_hash=content_hash,
                 idempotency_key=key,
-                base_revision_id=None,
+                base_revision_id=revision_id,
             )
 
     with session_factory() as session:
@@ -458,7 +462,9 @@ def test_add_or_revive_proposal_never_reopens_decided_rows(
     rejected_blocks = _blocks("반려된 판")
     rejected_hash = blocks_content_hash(rejected_blocks)
     with uow_factory() as uow:
-        rejected_id, _ = _add(uow, artifact_id, rejected_blocks)
+        rejected_id, _ = _add(
+            uow, artifact_id, rejected_blocks, base_revision_id=revision_id
+        )
         uow.artifacts.mark_rejected(
             proposal_id=rejected_id,
             reviewer="tester",
@@ -473,9 +479,9 @@ def test_add_or_revive_proposal_never_reopens_decided_rows(
                 blocks=rejected_blocks,
                 content_hash=rejected_hash,
                 idempotency_key=artifact_idempotency_key(
-                    artifact_id, rejected_hash, base_revision_id=None
+                    artifact_id, rejected_hash, base_revision_id=revision_id
                 ),
-                base_revision_id=None,
+                base_revision_id=revision_id,
             )
 
     with session_factory() as session:
@@ -483,6 +489,81 @@ def test_add_or_revive_proposal_never_reopens_decided_rows(
         assert row is not None
         assert row.status == "rejected"
         assert row.rejection_reason == "근거가 부족하다"
+
+
+def test_add_or_revive_proposal_refuses_stale_base_revision(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """기준 판이 최신이 아니면 변경안을 저장하지 않는다.
+
+    컴파일이 기준 판을 읽은 뒤 저장하기까지 사이에 다른 검토가 새 판을
+    내면 이 조건에 걸린다. 그대로 저장하면 발행이 받지 않는 계류가
+    남는데 다음 컴파일은 내용 지문이 같아 건너뛰므로 스스로 풀리지 않는다.
+
+    두 세션을 붙여 잠금 경합을 재지는 않는다. 여기서 볼 것은 조건 검사가
+    저장을 막는지이고, 그 검사가 다른 transaction과 겹치지 않게 지켜지는
+    것은 `_lock_artifact`의 `with_for_update`가 맡는다.
+    """
+    artifact_id = _artifact_id(uow_factory, session_factory, workspace_id)
+
+    with uow_factory() as uow:
+        _publish_revision(uow, artifact_id, 1, "1판")
+        uow.commit()
+
+    blocks = _blocks("낡은 기준 위의 변경안")
+    content_hash = blocks_content_hash(blocks)
+    with uow_factory() as uow:
+        with pytest.raises(ArtifactProposalConflict):
+            uow.artifacts.add_or_revive_proposal(
+                artifact_id=artifact_id,
+                blocks=blocks,
+                content_hash=content_hash,
+                idempotency_key=artifact_idempotency_key(
+                    artifact_id, content_hash, base_revision_id=None
+                ),
+                base_revision_id=None,
+            )
+
+    with session_factory() as session:
+        assert (
+            session.scalars(
+                select(ProposalRow).where(
+                    ProposalRow.artifact_id == artifact_id,
+                    ProposalRow.content_hash == content_hash,
+                )
+            ).all()
+            == []
+        )
+
+
+def test_add_or_revive_proposal_accepts_current_base_revision(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """기준 판이 최신이면 그대로 저장된다."""
+    artifact_id = _artifact_id(uow_factory, session_factory, workspace_id)
+
+    with uow_factory() as uow:
+        revision_id = _publish_revision(uow, artifact_id, 1, "1판")
+        uow.commit()
+
+    blocks = _blocks("최신 기준 위의 변경안")
+    with uow_factory() as uow:
+        proposal_id, _ = _add(
+            uow, artifact_id, blocks, base_revision_id=revision_id
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        stored = uow.artifacts.get_proposal(proposal_id=proposal_id)
+
+    assert stored is not None
+    assert stored.status == "pending"
+    assert stored.base_revision_id == revision_id
+    assert stored.blocks == blocks
 
 
 def test_add_or_revive_proposal_refuses_unsupported_blocks(
@@ -596,7 +677,7 @@ def test_find_latest_content_hashes_covers_revision_and_open_reviews(
     with uow_factory() as uow:
         old_id, old_hash = _add(uow, artifact_id, _blocks("옛 판"))
         uow.artifacts.mark_approved(proposal_id=old_id, reviewer="tester")
-        uow.artifacts.add_revision(
+        old_revision_id = uow.artifacts.add_revision(
             artifact_id=artifact_id,
             revision_number=1,
             blocks=_blocks("옛 판"),
@@ -605,7 +686,9 @@ def test_find_latest_content_hashes_covers_revision_and_open_reviews(
         uow.commit()
 
     with uow_factory() as uow:
-        latest_id, latest_hash = _add(uow, artifact_id, _blocks("새 판"))
+        latest_id, latest_hash = _add(
+            uow, artifact_id, _blocks("새 판"), base_revision_id=old_revision_id
+        )
         uow.artifacts.mark_approved(proposal_id=latest_id, reviewer="tester")
         revision_id = uow.artifacts.add_revision(
             artifact_id=artifact_id,
@@ -621,14 +704,20 @@ def test_find_latest_content_hashes_covers_revision_and_open_reviews(
         ) == (revision_id, 2)
 
     with uow_factory() as uow:
-        _, pending_hash = _add(uow, artifact_id, _blocks("계류 중"))
-        rejected_id, rejected_hash = _add(uow, artifact_id, _blocks("반려된"))
+        _, pending_hash = _add(
+            uow, artifact_id, _blocks("계류 중"), base_revision_id=revision_id
+        )
+        rejected_id, rejected_hash = _add(
+            uow, artifact_id, _blocks("반려된"), base_revision_id=revision_id
+        )
         uow.artifacts.mark_rejected(
             proposal_id=rejected_id,
             reviewer="tester",
             reason="근거가 부족하다",
         )
-        abandoned_id, abandoned_hash = _add(uow, artifact_id, _blocks("접힌"))
+        abandoned_id, abandoned_hash = _add(
+            uow, artifact_id, _blocks("접힌"), base_revision_id=revision_id
+        )
         uow.commit()
 
     with session_factory() as session:
@@ -879,9 +968,21 @@ def _publish_revision(
     revision_number: int,
     body: str,
 ) -> uuid.UUID:
-    """변경안을 올려 승인하고 그 내용으로 판을 하나 발행한다."""
+    """변경안을 올려 승인하고 그 내용으로 판을 하나 발행한다.
+
+    변경안의 기준 판은 지금의 최신 판이다. 저장소가 기준 판이 최신인지
+    보므로, 판을 이어 쌓을 때마다 직전 판을 기준으로 올려야 한다.
+    """
     blocks = _blocks(body)
-    proposal_id, _ = _add(uow, artifact_id, blocks)
+    latest = uow.artifacts.find_latest_revision_id_and_number(
+        artifact_id=artifact_id
+    )
+    proposal_id, _ = _add(
+        uow,
+        artifact_id,
+        blocks,
+        base_revision_id=None if latest is None else latest[0],
+    )
     uow.artifacts.mark_approved(proposal_id=proposal_id, reviewer="tester")
     return uow.artifacts.add_revision(
         artifact_id=artifact_id,
@@ -1100,3 +1201,80 @@ def test_legacy_blocks_without_sources_still_load(
     assert stored is not None
     assert stored.blocks[0].sources == ()
     assert stored.blocks[0].body == "2026-09"
+
+
+def test_find_latest_revision_blocks_returns_none_then_blocks(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """판이 없으면 None이고, 판을 내면 그 판의 블록이 돌아온다."""
+    artifact_id = _artifact_id(uow_factory, session_factory, workspace_id)
+
+    with uow_factory() as uow:
+        assert (
+            uow.artifacts.find_latest_revision_blocks(artifact_id=artifact_id)
+            is None
+        )
+
+    with uow_factory() as uow:
+        _publish_revision(uow, artifact_id, 1, "옛 판")
+        _publish_revision(uow, artifact_id, 2, "새 판")
+        uow.commit()
+
+    with uow_factory() as uow:
+        blocks = uow.artifacts.find_latest_revision_blocks(
+            artifact_id=artifact_id
+        )
+
+    assert blocks is not None
+    assert len(blocks) == 1
+    assert blocks[0].body == "새 판"
+    assert blocks[0].block_kind == BLOCK_KIND_CLAIM_SECTION
+    assert isinstance(blocks[0].claim_ids[0], uuid.UUID)
+
+
+def test_list_reusable_change_reasons_keyed_by_block_hash_same_base(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """같은 기준 판의 계류안 수정 이유만 블록 지문에 걸려 돌아온다."""
+    artifact_id = _artifact_id(uow_factory, session_factory, workspace_id)
+
+    kept = tuple(
+        replace(block, change_reason="근거가 하나 늘었다")
+        for block in _blocks("계류")
+    )
+    refused = tuple(
+        replace(block, change_reason="사람이 물린 이유")
+        for block in _blocks("반려")
+    )
+
+    with uow_factory() as uow:
+        base_id = _publish_revision(uow, artifact_id, 1, "1판")
+        _add(uow, artifact_id, kept, base_revision_id=base_id)
+        refused_id, _ = _add(
+            uow, artifact_id, refused, base_revision_id=base_id
+        )
+        uow.artifacts.mark_rejected(
+            proposal_id=refused_id,
+            reviewer="tester",
+            reason="근거가 부족하다",
+        )
+        other_id = _publish_revision(uow, artifact_id, 2, "2판")
+        uow.commit()
+
+    with uow_factory() as uow:
+        found = uow.artifacts.list_reusable_change_reasons(
+            artifact_id=artifact_id,
+            base_revision_id=base_id,
+        )
+        elsewhere = uow.artifacts.list_reusable_change_reasons(
+            artifact_id=artifact_id,
+            base_revision_id=other_id,
+        )
+
+    assert found == {block_content_hash(kept[0]): "근거가 하나 늘었다"}
+    assert block_content_hash(refused[0]) not in found
+    assert elsewhere == {}

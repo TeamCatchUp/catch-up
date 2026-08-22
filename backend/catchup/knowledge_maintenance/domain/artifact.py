@@ -14,13 +14,36 @@ BLOCK_KIND_CLAIM_SECTION = "claim_section"
 BLOCK_KIND_OPEN_QUESTION = "open_question"
 BLOCK_KIND_CONTESTED = "contested"
 BLOCK_KIND_RELATION_SECTION = "relation_section"
+BLOCK_KIND_SUMMARY = "summary"
 
 _BLOCK_KINDS = (
     BLOCK_KIND_CLAIM_SECTION,
     BLOCK_KIND_OPEN_QUESTION,
     BLOCK_KIND_CONTESTED,
     BLOCK_KIND_RELATION_SECTION,
+    BLOCK_KIND_SUMMARY,
 )
+
+# 문서 머리말을 이루는 최상위 섹션의 heading 키다. 세 섹션은 각각 summary
+# 블록 하나로 서고, 블록의 heading에 이 기계 키를 그대로 적는다. 화면에
+# 보여 줄 한글 제목은 읽기 레이아웃이 붙인다. 저장된 heading을 한글로
+# 두면 제목 문구를 고칠 때마다 블록 내용 지문이 달라져, 사람이 이미 본
+# 문서가 검토 큐에 다시 쌓인다.
+SUMMARY_SECTION_ONE_LINE_SUMMARY = "one_line_summary"
+SUMMARY_SECTION_DESIRED_OUTCOME = "desired_outcome"
+SUMMARY_SECTION_BACKGROUND = "background"
+
+# 머리말 섹션을 문서에 싣는 순서다. SummaryNarrative의 필드 이름과 글자
+# 그대로 같아, 서술 결과를 heading으로 골라 담을 수 있다.
+SUMMARY_SECTION_KEYS = (
+    SUMMARY_SECTION_ONE_LINE_SUMMARY,
+    SUMMARY_SECTION_DESIRED_OUTCOME,
+    SUMMARY_SECTION_BACKGROUND,
+)
+
+
+# 블록의 표현일 뿐 내용이 아니어서 지문 계산에서 빼는 저장 키들이다.
+_NON_CONTENT_KEYS = frozenset({"narrative", "change_reason"})
 
 
 class ArtifactBlockError(ValueError):
@@ -89,6 +112,9 @@ class ArtifactBlock:
             아니라 표현이므로 내용 지문 계산에서 빠진다. 도메인은 이 값을
             나르기만 하고, 어떤 블록이 산문을 받을지는 컴파일 서비스가
             정한다. 산문이 없는 블록은 없음이다.
+        change_reason: 재컴파일로 바뀐 블록에 붙는 수정 이유 한 문장이다.
+            표현이지 근거가 아니며 내용 지문에 들어가지 않는다. 이전
+            발행판이 없거나 바뀌지 않은 블록은 None이다.
     """
 
     block_kind: str
@@ -101,6 +127,7 @@ class ArtifactBlock:
     variants: tuple[ContestedVariant, ...] = ()
     relation_ids: tuple[uuid.UUID, ...] = ()
     narrative: str | None = None
+    change_reason: str | None = None
 
 
 def validate_blocks(blocks: Sequence[ArtifactBlock]) -> None:
@@ -143,10 +170,13 @@ def validate_blocks(blocks: Sequence[ArtifactBlock]) -> None:
             )
         if block.block_kind == BLOCK_KIND_RELATION_SECTION:
             _validate_relation_section(block, index)
-        elif block.block_kind == BLOCK_KIND_CLAIM_SECTION:
+        elif block.block_kind in (
+            BLOCK_KIND_CLAIM_SECTION,
+            BLOCK_KIND_SUMMARY,
+        ):
             if not block.claim_ids:
                 raise ArtifactBlockError(
-                    f"blocks[{index}]: claim_section에 claim_ids가 없다"
+                    f"blocks[{index}]: {block.block_kind}에 claim_ids가 없다"
                 )
         elif block.block_kind == BLOCK_KIND_CONTESTED:
             _validate_contested(block, index, allowed)
@@ -214,9 +244,9 @@ def serialize_blocks(
     없는 기존 블록의 저장 형태를 그대로 두어야 내용 지문이 흔들리지 않기
     때문이다.
 
-    narrative도 값이 있을 때만 키로 적는다. 산문이 없는 블록의 저장 형태를
-    지금과 바이트 그대로 두어야 이미 저장된 판과 변경안을 다시 읽어도 모양이
-    흔들리지 않기 때문이다.
+    narrative와 change_reason도 값이 있을 때만 키로 적는다. 산문이나 수정
+    이유가 없는 블록의 저장 형태를 지금과 바이트 그대로 두어야 이미 저장된
+    판과 변경안을 다시 읽어도 모양이 흔들리지 않기 때문이다.
     """
     items: list[dict[str, Any]] = []
     for block in blocks:
@@ -246,6 +276,8 @@ def serialize_blocks(
             ]
         if block.narrative is not None:
             item["narrative"] = block.narrative
+        if block.change_reason is not None:
+            item["change_reason"] = block.change_reason
         items.append(item)
     return items
 
@@ -310,6 +342,11 @@ def deserialize_blocks(
                     None
                     if item.get("narrative") is None
                     else str(item["narrative"])
+                ),
+                change_reason=(
+                    None
+                    if item.get("change_reason") is None
+                    else str(item["change_reason"])
                 ),
             )
         )
@@ -393,14 +430,19 @@ def _parse_ids(values: Any, index: int, field: str) -> tuple[uuid.UUID, ...]:
 
 
 def _without_narrative(item: Mapping[str, Any]) -> dict[str, Any]:
-    """지문 계산용으로 산문 칸을 뺀 사전을 만든다.
+    """지문 계산용으로 산문 칸과 수정 이유 칸을 뺀 사전을 만든다.
 
     산문은 블록의 표현이지 내용이 아니다. 지문에 넣으면 문장만 다듬어도
     문서 전체가 새 검토 사건이 되고, 그러면 검수자가 진짜 변화를 찾지
-    못한다. 저장 직렬화를 그대로 쓰고 여기서 한 칸만 걷어내, 저장 형태와
-    지문 형태가 갈라지지 않게 한다.
+    못한다. 수정 이유도 같다. 바뀐 내용을 설명하는 표현이지 근거가 아니므로
+    지문에서 뺀다. 저장 직렬화를 그대로 쓰고 여기서 두 칸만 걷어내, 저장
+    형태와 지문 형태가 갈라지지 않게 한다.
     """
-    return {key: value for key, value in item.items() if key != "narrative"}
+    return {
+        key: value
+        for key, value in item.items()
+        if key not in _NON_CONTENT_KEYS
+    }
 
 
 def blocks_content_hash(blocks: Sequence[ArtifactBlock]) -> str:
@@ -410,8 +452,8 @@ def blocks_content_hash(blocks: Sequence[ArtifactBlock]) -> str:
     순서는 의미가 없으므로 정렬해, 직렬화 구현이 바뀌어도 같은 내용이면
     같은 지문이 나오게 한다.
 
-    산문(narrative)은 빼고 센다 — 표현이 바뀌었다고 내용이 바뀐 것은
-    아니다.
+    산문(narrative)과 수정 이유(change_reason)는 빼고 센다. 표현이 바뀌었다고
+    내용이 바뀐 것은 아니다.
     """
     payload = json.dumps(
         [_without_narrative(item) for item in serialize_blocks(blocks)],
@@ -429,8 +471,8 @@ def block_content_hash(block: ArtifactBlock) -> str:
     없음)을 쓴다. 블록 단위 판정이 어떤 내용에 대한 판정이었는지 못박아,
     본문이 바뀐 뒤에도 옛 판정이 되살아나는 것을 막는 열쇠다.
 
-    산문(narrative)은 빼고 센다 — 표현이 바뀌었다고 내용이 바뀐 것은
-    아니다.
+    산문(narrative)과 수정 이유(change_reason)는 빼고 센다. 표현이 바뀌었다고
+    내용이 바뀐 것은 아니다.
     """
     payload = json.dumps(
         _without_narrative(serialize_blocks([block])[0]),

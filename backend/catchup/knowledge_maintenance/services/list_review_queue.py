@@ -32,7 +32,6 @@ from typing import Protocol
 from typing import Self
 
 from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
-from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactRepository
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
 from catchup.observability.logging import get_logger
@@ -169,7 +168,7 @@ def _to_item(proposal: StoredArtifactProposal) -> ReviewQueueItem:
         artifact_id=proposal.artifact_id,
         title=proposal.title,
         status=proposal.status,
-        summary=_summary(proposal.blocks),
+        summary=_summary(proposal),
         origin=proposal.origin,
         contains_conflict=any(
             block.block_kind == BLOCK_KIND_CONTESTED
@@ -179,19 +178,30 @@ def _to_item(proposal: StoredArtifactProposal) -> ReviewQueueItem:
     )
 
 
-def _summary(blocks: tuple[ArtifactBlock, ...]) -> str:
-    """첫 블록의 제목과 본문 첫 줄로 한 줄 요약을 조립한다.
+def _summary(proposal: StoredArtifactProposal) -> str:
+    """큐 한 줄에 실을 요약을 만든다.
 
-    제목만으로는 같은 속성을 다루는 안건들이 구별되지 않고, 본문 전체는
-    목록에 실을 수 없다. 첫 줄까지가 "무엇이 달라졌나"를 가리는 최소
-    단위다. 블록이 없으면 빈 문자열이다.
+    이 자리는 검토자에게 "무엇을 봐 달라"고 말을 거는 자리다. 그래서
+    문서 본문 문체(~한다)가 아니라 존댓말 문장을 쓴다. 문서를 한 문장으로
+    말하는 헤드라인은 상세 화면의 summary 블록 머리말이 이미 보여 주므로,
+    목록에서 그것을 되풀이할 이유가 없다.
+
+    규칙은 셋이다. base_revision_id가 없으면 발행판이 없는 신규 문서라
+    새 초안이라고 알린다. 발행판이 있으면 블록에 적힌 첫 수정 이유를
+    그대로 쓴다. 컴파일이 앞뒤 내용을 보고 받아 둔 존댓말 문장이고,
+    검토자가 가장 먼저 알아야 할 것이 거기 적혀 있다. 수정 이유가
+    한 건도 없는 자동 경로는 바뀌었다는 사실만 알린다.
     """
-    if not blocks:
-        return ""
-    block = blocks[0]
-    lines = [line.strip() for line in block.body.splitlines() if line.strip()]
-    parts = [part for part in (block.heading.strip(), *lines[:1]) if part]
-    summary = ": ".join(parts)
+    if proposal.base_revision_id is None:
+        return "새 문서 초안입니다."
+    for block in proposal.blocks:
+        if block.change_reason:
+            return _clamp(block.change_reason)
+    return "문서 내용이 바뀌었습니다."
+
+
+def _clamp(summary: str) -> str:
+    """요약이 길이 상한을 넘으면 잘라 내고 말줄임표를 붙인다."""
     if len(summary) > SUMMARY_MAX_LENGTH:
         return summary[: SUMMARY_MAX_LENGTH - 1] + "…"
     return summary
