@@ -299,6 +299,47 @@ def get_latest_revision(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class RevisionApproval:
+    """판 하나를 사람이 승인한 기록이다.
+
+    발행판은 승인된 변경안에서만 나오므로, 그 변경안에 남은 승인자와 승인
+    시각이 곧 그 판을 마지막으로 손댄 사람과 시각이다.
+
+    reviewer는 사람을 가리키는 문자열이고 형식은 승인 경로마다 다르다.
+    사용자 id로 옮기는 일은 표시를 맡은 server 계층에서 한다.
+    """
+
+    reviewer: str | None
+    reviewed_at: datetime | None
+
+
+def get_revision_approval(
+    db: Session, *, revision_id: uuid.UUID
+) -> RevisionApproval | None:
+    """그 판을 만든 변경안의 승인자와 승인 시각을 읽는다.
+
+    판이 없거나 출처 변경안이 사라졌으면 None이다.
+    """
+    row = db.execute(
+        select(
+            KnowledgeArtifactChangeProposal.reviewer,
+            KnowledgeArtifactChangeProposal.reviewed_at,
+        )
+        .join(
+            KnowledgeArtifactRevision,
+            KnowledgeArtifactRevision.source_proposal_id
+            == KnowledgeArtifactChangeProposal.id,
+        )
+        .where(KnowledgeArtifactRevision.id == revision_id)
+    ).first()
+
+    if row is None:
+        return None
+
+    return RevisionApproval(row[0], row[1])
+
+
 def count_artifacts_by_channel(
     db: Session, workspace_id: int
 ) -> dict[uuid.UUID, int]:
@@ -487,6 +528,29 @@ def list_workspace_members(
         WorkspaceMemberRow(user_id, name, picture)
         for user_id, name, picture in rows
     ]
+
+
+def list_users_for_display(
+    db: Session, *, user_ids: Sequence[int]
+) -> dict[int, WorkspaceMemberRow]:
+    """사용자 id로 이름·사진을 한 번에 읽어 id별로 묶는다.
+
+    id 하나씩 조회하면 목록 한 쪽에 질의가 줄 수만큼 늘어난다. 없는 id는
+    결과에 키가 없다. 소속이나 활성 여부로 거르지 않는다. 지난 승인 기록에
+    남은 사람은 이미 워크스페이스를 떠났을 수 있는데, 그렇다고 그 판을 누가
+    승인했는지가 사라지는 것은 아니기 때문이다.
+    """
+    if not user_ids:
+        return {}
+
+    rows = db.execute(
+        select(User.id, User.name, User.picture).where(User.id.in_(user_ids))
+    ).all()
+
+    return {
+        user_id: WorkspaceMemberRow(user_id, name, picture)
+        for user_id, name, picture in rows
+    }
 
 
 def get_artifact_locations(
@@ -680,6 +744,9 @@ class ArtifactListRow:
     # 마지막 활동 시각이다. 발행과 제안 도착 중 늦은 쪽이고, 둘 다 없으면
     # 문서 생성 시각이다. 항상 값이 있다.
     last_activity_at: datetime
+    # 최신 발행판을 승인한 사람과 그 시각이다. 발행판이 없으면 둘 다 None이다.
+    last_edit_reviewer: str | None
+    last_edit_reviewed_at: datetime | None
 
 
 def artifact_status(row: ArtifactListRow) -> str:
@@ -724,6 +791,9 @@ def list_artifacts(
 
     owner_user_ids와 unassigned를 함께 받으면 결과가 반드시 비지만, 여기서는
     막지 않고 받은 대로 건다. 잘못된 조합을 거르는 일은 서버 계층의 몫이다.
+
+    최신 판을 만든 변경안까지 함께 붙여 승인자와 승인 시각을 싣는다. 문서를
+    마지막으로 손댄 사람은 별도 컬럼이 아니라 그 승인 기록에서만 나온다.
     """
     pending_count = (
         select(func.count(KnowledgeArtifactChangeProposal.id))
@@ -746,6 +816,10 @@ def list_artifacts(
         .subquery()
     )
     latest_row = aliased(KnowledgeArtifactRevision)
+    # 최신 판을 만든 변경안이다. 계류 제안 수를 세는 쪽과 같은 표를 보지만
+    # 조건이 달라 별칭을 따로 둔다. 같은 별칭을 쓰면 두 조건이 한 join에
+    # 겹쳐 계류 수가 최신 판 쪽 조건에 끌려간다.
+    latest_source = aliased(KnowledgeArtifactChangeProposal)
     latest_proposal_at = (
         select(func.max(KnowledgeArtifactChangeProposal.created_at))
         .where(
@@ -778,12 +852,17 @@ def list_artifacts(
             latest_row.revision_number.label("latest_revision_number"),
             latest_row.created_at.label("latest_published_at"),
             last_activity_expr.label("last_activity_at"),
+            latest_source.reviewer.label("last_edit_reviewer"),
+            latest_source.reviewed_at.label("last_edit_reviewed_at"),
         )
         .outerjoin(latest, latest.c.artifact_id == KnowledgeArtifact.id)
         .outerjoin(
             latest_row,
             (latest_row.artifact_id == KnowledgeArtifact.id)
             & (latest_row.revision_number == latest.c.revision_number),
+        )
+        .outerjoin(
+            latest_source, latest_source.id == latest_row.source_proposal_id
         )
         .where(KnowledgeArtifact.workspace_id == workspace_id)
     )

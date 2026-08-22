@@ -74,6 +74,7 @@ from catchup.server.wiki.dependencies import deny_reviewer
 from catchup.server.wiki.dependencies import resolve_member_workspace
 from catchup.server.wiki.dependencies import review_error
 from catchup.server.wiki.layout import layout_items
+from catchup.server.wiki.owners import editors_by_reviewer
 from catchup.server.wiki.owners import owners_by_artifact
 from catchup.server.wiki.roles import can_manage_owners
 from catchup.server.wiki.roles import load_wiki_roles
@@ -914,6 +915,7 @@ def _to_list_item(
     *,
     owners: list[OwnerResponse],
     is_favorite: bool,
+    last_edited_by: OwnerResponse | None,
 ) -> ArtifactListItemResponse:
     """문서 목록 한 줄을 응답 모양으로 옮겨 담는다."""
     latest = None
@@ -936,6 +938,8 @@ def _to_list_item(
         latest_revision=latest,
         owners=owners,
         is_favorite=is_favorite,
+        last_edited_by=last_edited_by,
+        last_edited_at=row.last_edit_reviewed_at,
     )
 
 
@@ -1048,6 +1052,9 @@ def list_artifacts(
     )
     artifact_ids = [row.artifact_id for row in rows]
     owners = owners_by_artifact(db, artifact_ids)
+    editors = editors_by_reviewer(
+        db, [row.last_edit_reviewer for row in rows]
+    )
     favorites = wiki_queries.list_favorite_artifact_ids(
         db, user_id=context.user.id, workspace_id=context.workspace_id
     )
@@ -1057,6 +1064,11 @@ def list_artifacts(
                 row,
                 owners=owners[row.artifact_id],
                 is_favorite=row.artifact_id in favorites,
+                last_edited_by=(
+                    None
+                    if row.last_edit_reviewer is None
+                    else editors.get(row.last_edit_reviewer)
+                ),
             )
             for row in rows
         ],
@@ -1246,6 +1258,9 @@ def get_artifact_document(
             message="아직 발행된 판이 없습니다.",
         )
     blocks = deserialize_blocks(revision.blocks)
+    approval = wiki_queries.get_revision_approval(db, revision_id=revision.id)
+    reviewer = None if approval is None else approval.reviewer
+    editors = editors_by_reviewer(db, [reviewer])
     return ArtifactDocumentResponse(
         artifact_id=str(artifact.id),
         channel_id=(
@@ -1267,6 +1282,10 @@ def get_artifact_document(
         ),
         revision_id=str(revision.id),
         published_at=revision.created_at,
+        last_edited_by=(
+            None if reviewer is None else editors.get(reviewer)
+        ),
+        last_edited_at=None if approval is None else approval.reviewed_at,
         blocks=[
             ArtifactDocumentBlockResponse(
                 block_index=index,

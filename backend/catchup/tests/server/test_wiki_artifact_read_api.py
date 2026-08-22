@@ -261,6 +261,8 @@ def _publish(
     revision_number: int = 1,
     blocks: list[ArtifactBlock] | None = None,
     kind: str = "feature_request_status",
+    reviewer: str = "test",
+    reviewed_at: datetime = datetime(2026, 8, 15, tzinfo=timezone.utc),
 ) -> tuple[uuid.UUID, uuid.UUID]:
     """문서 하나를 발행 상태까지 만들어 (문서 id, 판 id)를 돌려준다.
 
@@ -285,8 +287,8 @@ def _publish(
             content_hash=uuid.uuid4().hex,
             idempotency_key=uuid.uuid4().hex,
             base_revision_id=None,
-            reviewer="test",
-            reviewed_at=datetime(2026, 8, 15, tzinfo=timezone.utc),
+            reviewer=reviewer,
+            reviewed_at=reviewed_at,
         )
     )
     db.flush()
@@ -458,6 +460,68 @@ def test_document_without_owner_or_favorite(client, member, db, workspace_id):
 
     assert body["owners"] == []
     assert body["is_favorite"] is False
+
+
+def test_document_carries_last_editor(client, member, db, workspace_id):
+    """문서 응답에 최신 발행판을 승인한 사람과 그 시각이 함께 실린다."""
+    artifact_id, _ = _publish(
+        db,
+        workspace_id=workspace_id,
+        narrative="문장이다.",
+        reviewer=f"user:{member.id}",
+        reviewed_at=datetime(2026, 8, 20, tzinfo=timezone.utc),
+    )
+
+    body = client.get(f"/api/v1/wiki/artifacts/{artifact_id}").json()
+
+    assert body["last_edited_by"]["user_id"] == member.id
+    assert body["last_edited_by"]["display_name"] == member.name
+    assert body["last_edited_at"].startswith("2026-08-20")
+
+
+def test_document_debug_reviewer_has_no_last_editor(
+    client, member, db, workspace_id
+):
+    """승인자가 사용자로 이어지지 않으면 사람은 비우고 시각만 싣는다."""
+    artifact_id, _ = _publish(
+        db,
+        workspace_id=workspace_id,
+        narrative="문장이다.",
+        reviewer="debug:test-user",
+    )
+
+    body = client.get(f"/api/v1/wiki/artifacts/{artifact_id}").json()
+
+    assert body["last_edited_by"] is None
+    assert body["last_edited_at"].startswith("2026-08-15")
+
+
+def test_document_last_editor_follows_newest_revision(
+    client, member, db, workspace_id
+):
+    """다시 발행하면 최종 편집자가 새 판의 승인자로 바뀐다."""
+    other = _make_user(db, email=f"editor-{uuid.uuid4().hex[:8]}@example.com")
+    _join(db, user=other, workspace_id=workspace_id)
+    artifact_id, _ = _publish(
+        db,
+        workspace_id=workspace_id,
+        narrative="첫 판이다.",
+        reviewer=f"user:{member.id}",
+    )
+    _publish(
+        db,
+        workspace_id=workspace_id,
+        narrative="두 번째 판이다.",
+        artifact_id=artifact_id,
+        revision_number=2,
+        reviewer=f"user:{other.id}",
+        reviewed_at=datetime(2026, 8, 21, tzinfo=timezone.utc),
+    )
+
+    body = client.get(f"/api/v1/wiki/artifacts/{artifact_id}").json()
+
+    assert body["last_edited_by"]["user_id"] == other.id
+    assert body["last_edited_at"].startswith("2026-08-21")
 
 
 # ======================= 읽기 레이아웃 =======================
