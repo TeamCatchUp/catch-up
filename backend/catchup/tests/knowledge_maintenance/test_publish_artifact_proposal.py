@@ -217,6 +217,16 @@ class FakeArtifactRepository:
         )
         return revision_id
 
+    def find_latest_revision_blocks(
+        self, *, artifact_id: uuid.UUID
+    ) -> tuple[ArtifactBlock, ...] | None:
+        latest = self.find_latest_revision_id_and_number(
+            artifact_id=artifact_id
+        )
+        if latest is None:
+            return None
+        return self.revision_blocks(latest[0])
+
     def revision_blocks(
         self, revision_id: uuid.UUID
     ) -> tuple[ArtifactBlock, ...]:
@@ -1368,3 +1378,141 @@ def test_bulk_undecided_never_overwrites_a_concurrent_human_verdict() -> None:
     assert result.verdict == "approved"
     assert result.blocks_published == 2
     assert result.blocks_rejected == 1
+
+
+def _seed_modified_document(
+    uow: FakeUnitOfWork,
+) -> tuple[uuid.UUID, uuid.UUID, tuple[ArtifactBlock, ...]]:
+    """발행판 하나를 세우고 그 위에 블록 하나만 고친 변경안을 올린다.
+
+    발행판과 변경안은 첫 블록을 바이트 그대로 공유하고 둘째 블록만 본문이
+    다르다. 검토 화면이라면 둘째 블록만 변경으로 보인다.
+    """
+    claims = uow.knowledge_candidates
+    artifact_id = uuid.uuid4()
+    kept = _claim_block(claims.add_claim(), "predicate_0")
+    old = _claim_block(claims.add_claim(), "predicate_1")
+    seed_id = uow.artifacts.add_proposal(
+        artifact_id=artifact_id,
+        blocks=(kept, old),
+        base_revision_id=None,
+        status="approved",
+    )
+    base = uow.artifacts.add_revision(
+        artifact_id=artifact_id,
+        revision_number=1,
+        blocks=(kept, old),
+        source_proposal_id=seed_id,
+    )
+    changed = ArtifactBlock(
+        block_kind=BLOCK_KIND_CLAIM_SECTION,
+        heading="predicate_1",
+        body="predicate_1 본문을 고쳤다",
+        claim_ids=old.claim_ids,
+        proposal_ids=(),
+        ontology_version="1",
+        sources=old.sources,
+    )
+    blocks = (kept, changed)
+    proposal_id = uow.artifacts.add_proposal(
+        artifact_id=artifact_id,
+        blocks=blocks,
+        base_revision_id=base,
+    )
+    return base, proposal_id, blocks
+
+
+def test_unchanged_block_needs_no_verdict_to_publish() -> None:
+    """바뀌지 않은 블록은 결정이 없어도 발행을 막지 않는다.
+
+    검토 화면은 발행판과 다른 블록만 보여 준다. 화면에 뜨지 않은 블록에
+    결정을 요구하면 검토자가 발행할 길이 없다. 면제는 완전성 검사에서만
+    하고, 결정 저널에는 아무것도 적지 않는다.
+    """
+    uow = FakeUnitOfWork()
+    base, proposal_id, blocks = _seed_modified_document(uow)
+    _record_verdict(uow, proposal_id, 1)
+
+    result = _publish(uow, proposal_id, base_revision_id=base)
+
+    assert result.verdict == "approved"
+    assert result.blocks_published == 2
+    assert result.blocks_rejected == 0
+    assert result.revision_number == 2
+    assert result.revision_id is not None
+    stored = uow.artifacts.revision_blocks(result.revision_id)
+    assert [block.heading for block in stored] == [
+        "predicate_0",
+        "predicate_1",
+    ]
+    assert stored[0].body == blocks[0].body
+    assert stored[1].body == "predicate_1 본문을 고쳤다"
+    # 면제는 자동 승인이 아니다. 사람이 결정하지 않은 블록에는 결정 행이
+    # 생기지 않는다.
+    assert (proposal_id, 0) not in uow.block_verdicts.verdicts
+
+
+def test_human_rejection_on_an_unchanged_block_still_drops_it() -> None:
+    """사람이 미변경 블록을 반려했으면 그 블록은 새 판에서 빠진다."""
+    uow = FakeUnitOfWork()
+    base, proposal_id, _ = _seed_modified_document(uow)
+    _record_verdict(
+        uow,
+        proposal_id,
+        0,
+        verdict="rejected",
+        rejection_reason="이 절은 더 이상 맞지 않는다",
+    )
+    _record_verdict(uow, proposal_id, 1)
+
+    result = _publish(uow, proposal_id, base_revision_id=base)
+
+    assert result.blocks_published == 1
+    assert result.blocks_rejected == 1
+    assert result.revision_id is not None
+    stored = uow.artifacts.revision_blocks(result.revision_id)
+    assert [block.heading for block in stored] == ["predicate_1"]
+
+
+def test_bulk_undecided_skips_unchanged_blocks() -> None:
+    """일괄 처리는 화면에 변경으로 보인 블록에만 결정을 만든다.
+
+    일괄 반려가 미변경 블록까지 훑으면 검토자가 보지도 않은 내용이 문서
+    에서 떨어진다.
+    """
+    uow = FakeUnitOfWork()
+    base, proposal_id, _ = _seed_modified_document(uow)
+
+    result = _publish(
+        uow,
+        proposal_id,
+        base_revision_id=base,
+        undecided="reject",
+        rejection_reason="이번 판에는 싣지 않는다",
+    )
+
+    assert (proposal_id, 0) not in uow.block_verdicts.verdicts
+    rejected = uow.block_verdicts.verdicts[(proposal_id, 1)]
+    assert rejected["verdict"] == "rejected"
+    # 미변경 블록은 결정 없이 그대로 실리고, 바뀐 블록만 반려로 빠진다.
+    assert result.verdict == "approved"
+    assert result.blocks_published == 1
+    assert result.blocks_rejected == 1
+    assert result.revision_id is not None
+    stored = uow.artifacts.revision_blocks(result.revision_id)
+    assert [block.heading for block in stored] == ["predicate_0"]
+
+
+def test_stale_verdict_on_an_unchanged_block_refuses_publish() -> None:
+    """미변경 블록에 남은 결정의 지문이 어긋나면 그대로 STALE_BLOCK이다."""
+    uow = FakeUnitOfWork()
+    base, proposal_id, _ = _seed_modified_document(uow)
+    _record_verdict(uow, proposal_id, 0, block_hash="f" * 64)
+    _record_verdict(uow, proposal_id, 1)
+
+    with pytest.raises(PublishError) as error:
+        _publish(uow, proposal_id, base_revision_id=base)
+
+    assert error.value.code == "STALE_BLOCK"
+    assert len(uow.artifacts.revisions) == 1
+    assert uow.committed == 0

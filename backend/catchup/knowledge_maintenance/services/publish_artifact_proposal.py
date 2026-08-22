@@ -35,6 +35,7 @@ from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CONTESTED
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 from catchup.knowledge_maintenance.domain.artifact import validate_blocks
+from catchup.knowledge_maintenance.domain.block_diff import diff_blocks
 from catchup.knowledge_maintenance.ports.artifacts import ArtifactRepository
 from catchup.knowledge_maintenance.ports.artifacts import ProposalAlreadyDecided
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
@@ -218,6 +219,11 @@ def publish_artifact_proposal(
     승인으로 끝맺는다. 전 블록이 반려됐으면 판을 만들지 않고 블록 사유를
     합성해 반려로 끝맺는다.
 
+    최신 발행판과 견주어 달라지지 않은 블록은 결정 요구를 면제한다.
+    검토 화면이 변경으로 보여 주지 않은 블록이라 검토자가 결정할 기회가
+    없었기 때문이다. 면제받은 블록은 발행판에 실려 있던 그대로 새 판에
+    오르고, 결정 저널에는 아무 행도 생기지 않는다.
+
     `undecided`를 주면 아직 결정이 없는 블록에 그 결정을 먼저 적고 발행을
     이어 간다. approve면 일괄 승인, reject면 일괄 반려이고 반려는
     `rejection_reason`이 있어야 한다. 이미 결정이 있는 블록은 건드리지
@@ -314,6 +320,8 @@ def _publish_in_transaction(
                 f"변경안 {proposal_id}의 기준 판이 요청과 다르다",
             )
 
+        unchanged = _unchanged_indexes(uow, proposal)
+
         if undecided is not None:
             _record_undecided(
                 uow,
@@ -322,9 +330,10 @@ def _publish_in_transaction(
                 rejection_reason=rejection_reason,
                 reviewer=reviewer,
                 now=decided_at,
+                unchanged=unchanged,
             )
 
-        verdicts = _verdicts_by_index(uow, proposal)
+        verdicts = _verdicts_by_index(uow, proposal, unchanged=unchanged)
         contested, assembled, reasons = _assemble(proposal, verdicts)
 
         latest = uow.artifacts.find_latest_revision_id_and_number(
@@ -446,6 +455,42 @@ def _publish_in_transaction(
     )
 
 
+def _unchanged_indexes(
+    uow: ArtifactPublishUnitOfWork,
+    proposal: StoredArtifactProposal,
+) -> frozenset[int]:
+    """최신 발행판과 견주어 달라지지 않은 블록 번호를 모은다.
+
+    검토 화면은 발행판과 다른 블록만 보여 준다. 화면에 뜨지 않은 블록에
+    결정을 요구하면 검토자가 발행할 길이 없으므로, 발행은 그 블록의 결정
+    요구를 면제한다. 면제일 뿐 승인이 아니다. 결정 저널에는 아무것도
+    적지 않는다.
+
+    비교 기준은 `find_latest_revision_blocks`가 주는 최신 발행판이다.
+    발행은 최신 판이 변경안의 base_revision_id와 다르면 STALE_BASE로
+    거절하므로, 여기서 읽는 판은 검토 화면이 diff의 기준으로 쓴 판과
+    항상 같다. 기준이 어긋나면 화면에 변경으로 보인 블록과 여기서 세는
+    블록이 갈려, 사람이 보지 않은 내용이 결정 없이 실릴 수 있다.
+
+    Returns:
+        변경안 blocks 안에서 발행판과 같은 블록의 번호들이다. 발행판이
+        없으면 빈 집합이라, 새 문서는 여전히 전 블록 결정을 요구한다.
+    """
+    base = uow.artifacts.find_latest_revision_blocks(
+        artifact_id=proposal.artifact_id,
+    )
+    if base is None:
+        return frozenset()
+    changed = {
+        change.block_index
+        for change in diff_blocks(base, proposal.blocks)
+        if change.block_index is not None
+    }
+    return frozenset(
+        index for index in range(len(proposal.blocks)) if index not in changed
+    )
+
+
 def _record_undecided(
     uow: ArtifactPublishUnitOfWork,
     proposal: StoredArtifactProposal,
@@ -454,11 +499,16 @@ def _record_undecided(
     rejection_reason: str | None,
     reviewer: str,
     now: datetime,
+    unchanged: frozenset[int],
 ) -> None:
     """아직 결정이 없는 블록에 일괄 결정을 기록한다.
 
     이미 결정된 블록은 건드리지 않는다. 사람의 결정은 불변이다. 다툼
     (contested) 블록은 승자를 골라야 하므로 approve로 일괄 승인할 수 없다.
+
+    `unchanged` 블록도 건드리지 않는다. 일괄 처리는 검토자가 화면에서 본
+    블록에만 결정을 만든다. 그러지 않으면 일괄 반려가 검토자가 보지도
+    않은 블록까지 반려해 멀쩡한 내용을 문서에서 떨어뜨린다.
 
     쓰기는 `insert_verdict_if_absent`로 한다. 미결정 목록을 읽은 뒤
     쓰기까지 사이에 사람이 같은 블록에 단건 결정을 저장할 수 있는데, 그
@@ -486,7 +536,7 @@ def _record_undecided(
     missing = [
         index
         for index in range(len(proposal.blocks))
-        if index not in decided
+        if index not in decided and index not in unchanged
     ]
     if undecided == UNDECIDED_APPROVE:
         contested = tuple(
@@ -522,8 +572,15 @@ def _record_undecided(
 def _verdicts_by_index(
     uow: ArtifactPublishUnitOfWork,
     proposal: StoredArtifactProposal,
+    *,
+    unchanged: frozenset[int],
 ) -> dict[int, StoredBlockVerdict]:
     """블록 번호마다 결정을 모으고 빠짐·낡음을 검사한다.
+
+    `unchanged` 블록은 빠짐 검사에서 면제한다. 검토 화면이 변경으로 보여
+    주지 않은 블록이라 검토자가 결정할 기회가 없었기 때문이다. 반대로
+    사람이 그 블록에 이미 결정을 남겼다면 그 결정은 그대로 살아 있고
+    낡음 검사도 그대로 받는다.
 
     Raises:
         PublishError: 결정이 빠졌거나(UNDECIDED_BLOCKS) 결정 당시 본
@@ -534,7 +591,7 @@ def _verdicts_by_index(
     undecided = tuple(
         index
         for index in range(len(proposal.blocks))
-        if index not in by_index
+        if index not in by_index and index not in unchanged
     )
     if undecided:
         raise PublishError(
@@ -542,8 +599,9 @@ def _verdicts_by_index(
             f"변경안 {proposal.id}에 결정이 없는 블록이 있다",
             undecided=undecided,
         )
-    for index, block in enumerate(proposal.blocks):
-        if by_index[index].block_content_hash != block_content_hash(block):
+    for index, verdict in by_index.items():
+        block = proposal.blocks[index]
+        if verdict.block_content_hash != block_content_hash(block):
             # 결정을 적은 뒤 본문이 바뀌었다. 그대로 실으면 사람이 읽지
             # 않은 문장에 사람의 이름이 붙는다.
             raise PublishError(
@@ -566,6 +624,13 @@ def _assemble(
     쓰기보다 먼저 전부 계산한다. 다툼 블록의 승자가 후보 밖이면 여기서
     거절되므로, 파생 결정이 하나라도 나가기 전에 멈춘다.
 
+    결정이 없는 블록은 결정 요구를 면제받은 미변경 블록이다. 발행판에
+    이미 실려 있던 내용이므로 승인과 같이 판에 그대로 싣고, 사유에도
+    승인 목록에도 넣지 않는다. 미변경 블록은 다툼(contested)일 수 없다.
+    판에는 승자를 고른 claim_section만 실리고 짝짓기는 block_kind가 같은
+    블록끼리만 이루어지므로, 다툼 블록은 짝을 찾지 못해 언제나 변경으로
+    잡힌다.
+
     Raises:
         PublishError: 다툼 블록의 승인이 승자를 가리키지 못할 때
             INVALID로 던진다. 조립본이 근거 계약을 어겨도 같다.
@@ -574,7 +639,10 @@ def _assemble(
     blocks: list[ArtifactBlock] = []
     reasons: list[str] = []
     for index, block in enumerate(proposal.blocks):
-        verdict = verdicts[index]
+        verdict = verdicts.get(index)
+        if verdict is None:
+            blocks.append(block)
+            continue
         if verdict.verdict != BLOCK_VERDICT_APPROVED:
             # 반려 블록의 chosen_winner_claim_id는 여기서 읽지 않는다.
             # 저널은 무검증으로 그 값을 담을 수 있지만, 반려는 "이 대조를

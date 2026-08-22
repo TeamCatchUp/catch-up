@@ -8,8 +8,13 @@
 3. 짝이 없으면 제안 쪽은 added, 발행판 쪽은 removed다.
 
 짝이 맞은 블록은 body와 narrative가 모두 같을 때만 미변경이고, 미변경은
-결과에 넣지 않는다. 이 규칙은 표시용 파생이며 stale 판정에는 쓰지 않는다.
-stale 판정은 block_content_hash와 base_revision_id가 맡는다.
+결과에 넣지 않는다. 이 규칙은 검토 화면이 무엇을 보여 줄지 정하고, 발행이
+어느 블록에 사람의 결정을 요구할지도 정한다. 화면에 변경으로 뜨지 않은
+블록에 결정을 요구하면 검토자가 발행할 길이 없으므로, 두 자리가 같은
+규칙을 써야 한다.
+
+stale 판정에는 쓰지 않는다. stale 판정은 block_content_hash와
+base_revision_id가 맡는다.
 """
 
 from __future__ import annotations
