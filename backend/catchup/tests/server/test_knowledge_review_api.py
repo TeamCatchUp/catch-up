@@ -1514,6 +1514,61 @@ def test_detail_embeds_base_blocks_and_block_changes(
     assert data["blocks"][0]["markdown"].startswith("## 속도 제한")
 
 
+def test_detail_marks_evidence_swap_as_modified(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    reviewer: User,
+    workspace_ids: tuple[int, int],
+) -> None:
+    """본문이 같고 근거만 갈린 블록도 검토 상세에 변경으로 나타난다.
+
+    발행은 변경 목록에 없는 블록의 결정 요구를 면제하므로, 근거 교체가
+    화면에 뜨지 않으면 사람이 결정할 자리 자체가 사라진다.
+    """
+    workspace_id, _ = workspace_ids
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    claim_id = uuid.uuid4()
+    _seed_revision(
+        db,
+        workspace_id=workspace_id,
+        artifact_id=artifact_id,
+        blocks=_revision_blocks(claim_id=claim_id, body="rate_limit은 60이다"),
+    )
+    proposal_id = uuid.uuid4()
+    # 같은 claim을 가리키면서 인용만 새로 붙었다. claim 개수가 그대로라
+    # 개수를 세는 문구로는 무엇이 달라졌는지 말할 수 없다.
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id,
+                artifact_id=artifact_id,
+                claim_id=claim_id,
+                sources=(
+                    BlockSource(
+                        claim_id=claim_id,
+                        statement="rate_limit은 60이다",
+                        observed_at=AT,
+                        citation_verified=True,
+                    ),
+                ),
+            )
+        )
+    )
+
+    response = client.get(f"/api/v1/knowledge-review/queue/{proposal_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["block_changes"] == [
+        {"change": "modified", "block_index": 0, "base_block_index": 0},
+    ]
+    assert (
+        data["blocks"][0]["change_reason"]
+        == "본문은 그대로이고 근거가 갈렸습니다."
+    )
+
+
 def test_detail_without_revision_has_empty_base_blocks(
     app: FastAPI,
     client: TestClient,

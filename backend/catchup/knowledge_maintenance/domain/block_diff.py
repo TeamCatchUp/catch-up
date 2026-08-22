@@ -7,14 +7,21 @@
 2. 1의 후보가 여럿이면 claim_ids 교집합이 있는 것을 고른다.
 3. 짝이 없으면 제안 쪽은 added, 발행판 쪽은 removed다.
 
-짝이 맞은 블록은 body와 narrative가 모두 같을 때만 미변경이고, 미변경은
-결과에 넣지 않는다. 이 규칙은 검토 화면이 무엇을 보여 줄지 정하고, 발행이
-어느 블록에 사람의 결정을 요구할지도 정한다. 화면에 변경으로 뜨지 않은
-블록에 결정을 요구하면 검토자가 발행할 길이 없으므로, 두 자리가 같은
-규칙을 써야 한다.
+짝이 맞은 블록은 body·narrative·내용 지문(block_content_hash)이 모두 같을
+때만 미변경이고, 미변경은 결과에 넣지 않는다. 셋 가운데 하나라도 다르면
+modified다. body와 narrative를 따로 보는 이유는 내용 지문이 표현(narrative,
+change_reason)을 빼고 세기 때문이다. 지문만 보면 산문만 다듬은 블록이
+미변경으로 새고, body·narrative만 보면 문장은 그대로인 채 근거(claim_ids·
+sources·proposal_ids·ontology_version)만 갈린 블록이 미변경으로 샌다.
 
-stale 판정에는 쓰지 않는다. stale 판정은 block_content_hash와
-base_revision_id가 맡는다.
+이 규칙은 검토 화면이 무엇을 보여 줄지 정하고, 발행이 어느 블록에 사람의
+결정을 요구할지도 정한다. 발행은 이 목록에 없는 블록의 결정 요구를
+면제하므로, 화면에 뜨지 않은 블록에는 검토자가 결정할 자리 자체가 없다.
+두 자리가 같은 규칙을 써야 사람이 보지 않은 내용이 결정 없이 판에 실리는
+일이 없다.
+
+stale 판정에는 쓰지 않는다. stale 판정은 결정 시점에 적어 둔
+block_content_hash와 base_revision_id가 맡는다.
 """
 
 from __future__ import annotations
@@ -23,6 +30,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
+from catchup.knowledge_maintenance.domain.artifact import block_content_hash
 
 # 블록 하나에 붙는 변경 종류다.
 CHANGE_ADDED = "added"
@@ -80,7 +88,11 @@ def diff_blocks(
         base_index = candidates[0]
         remaining.remove(base_index)
         paired = base[base_index]
-        if paired.body != block.body or paired.narrative != block.narrative:
+        if (
+            paired.body != block.body
+            or paired.narrative != block.narrative
+            or block_content_hash(paired) != block_content_hash(block)
+        ):
             changes.append(BlockChange(CHANGE_MODIFIED, index, base_index))
     for base_index in remaining:
         changes.append(BlockChange(CHANGE_REMOVED, None, base_index))
@@ -107,6 +119,11 @@ def change_reason(
     "근거 1건이 추가되었습니다."이고, 늘고 줄었으면
     "근거 1건이 추가되고 1건이 빠졌습니다."다.
 
+    claim 개수가 그대로인 변경도 있다. 문장만 손본 블록과, 문장은 그대로인
+    채 근거만 갈린 블록이다. 뒤쪽은 claim 목록이 같아도 sources·
+    proposal_ids·ontology_version이 달라 내용 지문이 갈린 경우이므로,
+    본문과 산문이 그대로인지 보고 둘을 갈라 말한다.
+
     Args:
         change: 사유를 붙일 변경이다.
         base: 발행판 블록들이다.
@@ -122,10 +139,17 @@ def change_reason(
     stored = proposed[change.block_index].change_reason
     if stored is not None:
         return stored
-    before = set(base[change.base_block_index].claim_ids)
-    after = set(proposed[change.block_index].claim_ids)
+    paired = base[change.base_block_index]
+    block = proposed[change.block_index]
+    before = set(paired.claim_ids)
+    after = set(block.claim_ids)
     added, dropped = len(after - before), len(before - after)
     if added == 0 and dropped == 0:
+        if paired.body == block.body and paired.narrative == block.narrative:
+            # 읽는 문장은 한 글자도 달라지지 않았고 그 문장을 받치는 근거만
+            # 갈렸다. claim 개수가 같아 셀 것이 없으므로 무엇이 갈렸는지를
+            # 개수 대신 말로 알린다.
+            return "본문은 그대로이고 근거가 갈렸습니다."
         return "산문 표현만 다듬었습니다."
     if dropped == 0:
         return f"근거 {added}건이 추가되었습니다."

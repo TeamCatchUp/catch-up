@@ -466,6 +466,13 @@ def _unchanged_indexes(
     요구를 면제한다. 면제일 뿐 승인이 아니다. 결정 저널에는 아무것도
     적지 않는다.
 
+    무엇이 "달라지지 않았"는지는 `diff_blocks`가 정한다. 화면도 같은 함수를
+    쓰므로 두 자리의 기준이 갈리지 않는다. 그 함수는 짝지어진 블록의
+    body·narrative뿐 아니라 내용 지문까지 견주므로, 읽는 문장은 같아도
+    근거(claim_ids·sources·proposal_ids·ontology_version)가 갈린 블록은
+    여기서 미변경으로 세지 않는다. 그런 블록까지 면제하면 사람이 보지 않은
+    근거가 판에 실리고 그 claim이 확정까지 간다.
+
     비교 기준은 `find_latest_revision_blocks`가 주는 최신 발행판이다.
     발행은 최신 판이 변경안의 base_revision_id와 다르면 STALE_BASE로
     거절하므로, 여기서 읽는 판은 검토 화면이 diff의 기준으로 쓴 판과

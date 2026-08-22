@@ -9,8 +9,11 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import replace
+from datetime import datetime
+from datetime import timezone
 
 from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
+from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.block_diff import BlockChange
 from catchup.knowledge_maintenance.domain.block_diff import block_markdown
 from catchup.knowledge_maintenance.domain.block_diff import change_reason
@@ -35,6 +38,15 @@ def _block(
     )
 
 
+def _source(claim_id, statement):
+    return BlockSource(
+        claim_id=claim_id,
+        statement=statement,
+        observed_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+        citation_verified=True,
+    )
+
+
 def test_same_kind_and_heading_pairs_and_unchanged_is_omitted():
     a = _block(body="x")
     assert diff_blocks([a], [a]) == ()
@@ -46,6 +58,59 @@ def test_modified_when_body_or_narrative_differs():
     assert diff_blocks(base, prop) == (BlockChange("modified", 0, 0),)
     prop2 = [_block(body="x", narrative="새 산문")]
     assert diff_blocks(base, prop2) == (BlockChange("modified", 0, 0),)
+
+
+def test_modified_when_only_claim_ids_differ():
+    """본문과 산문이 같아도 근거가 갈리면 변경으로 잡는다.
+
+    발행은 변경으로 잡히지 않은 블록의 사람 결정을 면제한다. 근거 교체가
+    미변경으로 새면 사람이 보지 않은 근거가 판에 실리고 그 claim이 확정까지
+    간다.
+    """
+    c1, c2 = uuid.uuid4(), uuid.uuid4()
+    base = [_block(body="x", claim_ids=[c1])]
+    prop = [_block(body="x", claim_ids=[c2])]
+    assert diff_blocks(base, prop) == (BlockChange("modified", 0, 0),)
+
+
+def test_modified_when_only_sources_differ():
+    """claim 목록이 같아도 인용 근거가 갈리면 변경으로 잡는다."""
+    claim_id = uuid.uuid4()
+    base = [
+        replace(
+            _block(body="x", claim_ids=[claim_id]),
+            sources=(_source(claim_id, "옛 인용"),),
+        )
+    ]
+    prop = [
+        replace(
+            _block(body="x", claim_ids=[claim_id]),
+            sources=(_source(claim_id, "새 인용"),),
+        )
+    ]
+    assert diff_blocks(base, prop) == (BlockChange("modified", 0, 0),)
+
+
+def test_change_reason_tells_evidence_swap_when_text_is_intact():
+    """본문·산문이 그대로면서 근거만 갈린 블록은 근거 교체를 말한다."""
+    claim_id = uuid.uuid4()
+    base = [
+        replace(
+            _block(body="x", claim_ids=[claim_id]),
+            sources=(_source(claim_id, "옛 인용"),),
+        )
+    ]
+    prop = [
+        replace(
+            _block(body="x", claim_ids=[claim_id]),
+            sources=(_source(claim_id, "새 인용"),),
+        )
+    ]
+    change = diff_blocks(base, prop)[0]
+    assert (
+        change_reason(change, base=base, proposed=prop)
+        == "본문은 그대로이고 근거가 갈렸습니다."
+    )
 
 
 def test_added_and_removed():

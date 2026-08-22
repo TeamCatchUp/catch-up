@@ -1516,3 +1516,71 @@ def test_stale_verdict_on_an_unchanged_block_refuses_publish() -> None:
     assert error.value.code == "STALE_BLOCK"
     assert len(uow.artifacts.revisions) == 1
     assert uow.committed == 0
+
+
+def _seed_evidence_swapped_document(
+    uow: FakeUnitOfWork,
+) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
+    """발행판 하나를 세우고 근거만 갈아 끼운 변경안을 올린다.
+
+    변경안의 둘째 블록은 발행판 블록과 종류·제목·본문·산문이 모두 같고
+    가리키는 claim만 새 claim으로 바뀐다. 사람이 보지 않은 근거가 판에
+    실릴 수 있는 자리라 발행이 결정을 요구해야 한다.
+    """
+    claims = uow.knowledge_candidates
+    artifact_id = uuid.uuid4()
+    kept = _claim_block(claims.add_claim(), "predicate_0")
+    old = _claim_block(claims.add_claim(), "predicate_1")
+    seed_id = uow.artifacts.add_proposal(
+        artifact_id=artifact_id,
+        blocks=(kept, old),
+        base_revision_id=None,
+        status="approved",
+    )
+    base = uow.artifacts.add_revision(
+        artifact_id=artifact_id,
+        revision_number=1,
+        blocks=(kept, old),
+        source_proposal_id=seed_id,
+    )
+    fresh_claim = claims.add_claim()
+    swapped = _claim_block(fresh_claim, "predicate_1")
+    assert swapped.body == old.body
+    proposal_id = uow.artifacts.add_proposal(
+        artifact_id=artifact_id,
+        blocks=(kept, swapped),
+        base_revision_id=base,
+    )
+    return base, proposal_id, fresh_claim
+
+
+def test_evidence_swap_without_verdict_refuses_publish() -> None:
+    """본문이 같아도 근거가 갈린 블록은 결정 없이 실을 수 없다."""
+    uow = FakeUnitOfWork()
+    base, proposal_id, fresh_claim = _seed_evidence_swapped_document(uow)
+
+    with pytest.raises(PublishError) as error:
+        _publish(uow, proposal_id, base_revision_id=base)
+
+    assert error.value.code == "UNDECIDED_BLOCKS"
+    assert error.value.undecided == (1,)
+    # 거절이므로 새 claim은 확정되지 않는다.
+    assert uow.knowledge_candidates.status[fresh_claim] != "accepted"
+    assert len(uow.artifacts.revisions) == 1
+    assert uow.committed == 0
+
+
+def test_evidence_swap_publishes_once_a_human_approves_it() -> None:
+    """근거가 갈린 블록도 사람이 승인하면 실리고 새 claim이 확정된다."""
+    uow = FakeUnitOfWork()
+    base, proposal_id, fresh_claim = _seed_evidence_swapped_document(uow)
+    _record_verdict(uow, proposal_id, 1)
+
+    result = _publish(uow, proposal_id, base_revision_id=base)
+
+    assert result.verdict == "approved"
+    assert result.blocks_published == 2
+    assert uow.knowledge_candidates.status[fresh_claim] == "accepted"
+    assert result.revision_id is not None
+    stored = uow.artifacts.revision_blocks(result.revision_id)
+    assert stored[1].claim_ids == (fresh_claim,)

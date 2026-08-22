@@ -60,6 +60,9 @@ from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
     CODE_STALE_BLOCK,
 )
 from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
+    CODE_UNDECIDED_BLOCKS,
+)
+from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
     PublishError,
 )
 from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
@@ -865,3 +868,102 @@ def _source(claim_id: uuid.UUID, statement: str) -> BlockSource:
         observed_at=datetime(2026, 7, 1, tzinfo=timezone.utc),
         citation_verified=True,
     )
+
+
+def test_evidence_swap_refuses_publish_without_a_verdict(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """본문이 같고 근거만 갈린 블록은 결정 저널이 비면 실리지 않는다.
+
+    발행은 발행판과 달라지지 않은 블록의 결정 요구를 면제한다. 근거 교체가
+    미변경으로 새면 사람이 보지 않은 근거가 판에 오르고 그 claim이 실 DB에서
+    accepted까지 간다. 실 DB에서 claim 상태가 그대로인지까지 본다.
+    """
+    with session_factory() as session:
+        run_id = _extraction_run(session, workspace_id)
+        node_id = _entity_node(session, workspace_id)
+        old_claim = _claim(
+            session, workspace_id, run_id, node_id, "status", "운영 중"
+        )
+        fresh_claim = _claim(
+            session, workspace_id, run_id, node_id, "status", "운영 중"
+        )
+        session.commit()
+
+    definition = _definition_with_channel(session_factory, workspace_id)
+    published = _claim_section(old_claim)
+    swapped = _claim_section(fresh_claim)
+    assert published.body == swapped.body
+    assert block_content_hash(published) != block_content_hash(swapped)
+
+    with uow_factory() as uow:
+        artifact_id = uow.artifacts.get_or_create_definition_artifact(
+            definition_id=definition.id,
+            channel_id=definition.channel_id,
+            kind=definition.kind,
+            subject_node_id=node_id,
+            title="결제 기능",
+        )
+        seed_hash = blocks_content_hash((published,))
+        seed_proposal = uow.artifacts.add_or_revive_proposal(
+            artifact_id=artifact_id,
+            blocks=(published,),
+            content_hash=seed_hash,
+            idempotency_key=artifact_idempotency_key(
+                artifact_id, seed_hash, base_revision_id=None
+            ),
+            base_revision_id=None,
+        )
+        base_revision_id = uow.artifacts.add_revision(
+            artifact_id=artifact_id,
+            revision_number=1,
+            blocks=(published,),
+            source_proposal_id=seed_proposal,
+        )
+        swapped_hash = blocks_content_hash((swapped,))
+        proposal_id = uow.artifacts.add_or_revive_proposal(
+            artifact_id=artifact_id,
+            blocks=(swapped,),
+            content_hash=swapped_hash,
+            idempotency_key=artifact_idempotency_key(
+                artifact_id, swapped_hash, base_revision_id=base_revision_id
+            ),
+            base_revision_id=base_revision_id,
+        )
+        uow.commit()
+
+    with pytest.raises(PublishError) as error:
+        publish_artifact_proposal(
+            uow_factory(),
+            workspace_id=workspace_id,
+            proposal_id=proposal_id,
+            base_revision_id=base_revision_id,
+            reviewer=REVIEWER,
+        )
+
+    assert error.value.code == CODE_UNDECIDED_BLOCKS
+    assert error.value.undecided == (0,)
+
+    with session_factory() as session:
+        proposal = session.get(ProposalRow, proposal_id)
+        assert proposal is not None
+        assert proposal.status == "pending"
+        assert (
+            session.scalars(
+                select(RevisionRow.id).where(
+                    RevisionRow.artifact_id == artifact_id
+                )
+            ).all()
+            == [base_revision_id]
+        )
+        statuses = dict(
+            session.execute(
+                select(ClaimRow.id, ClaimRow.resolution_status).where(
+                    ClaimRow.id.in_([old_claim, fresh_claim])
+                )
+            ).all()
+        )
+        assert statuses[fresh_claim] != "accepted"
+        assert statuses[old_claim] != "accepted"
