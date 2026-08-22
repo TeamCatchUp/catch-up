@@ -12,6 +12,10 @@
 움직인다. 패자는 판에 남지 않는다 — 무엇이 갈렸었는지는 결정 저널이
 간직한다.
 
+담당자 규칙도 이 transaction 안에서 본다. 호출 표면이 미리 확인한 명단은
+발행이 확정되기까지 사이에 바뀔 수 있어, 그 확인만 믿으면 담당자가 지정된
+직후에 도착한 남의 발행이 그대로 실린다.
+
 조립 전에 두 겹의 낡음을 본다. 블록마다 결정 당시 본 내용의 지문을
 지금 본문과 다시 맞춰 보고(사람이 읽지 않은 문장이 실리는 것을 막는다),
 문서 전체로는 딛고 선 판이 아직 최신인지 본다(끼어든 승인이 조용히
@@ -78,6 +82,9 @@ CODE_STALE_BASE = "STALE_BASE_REVISION"
 CODE_STALE_BLOCK = "STALE_BLOCK"
 CODE_CONFLICT_RACE = "CONFLICT_RACE"
 CODE_INVALID = "INVALID"
+# 담당자가 정해진 문서를 담당자가 아닌 사람이 발행하려 한 경우다. 호출자는
+# 이것만 권한 응답으로 옮기고 나머지는 상태 응답으로 옮긴다.
+CODE_NOT_DOCUMENT_OWNER = "NOT_DOCUMENT_OWNER"
 
 # 블록 사유를 읽지 못했을 때 대신 쓰는 사유다. 변경안 저널 CHECK가 빈
 # 사유를 막으므로 합성 사유의 어느 자리도 비워 둘 수 없다.
@@ -212,6 +219,7 @@ def publish_artifact_proposal(
     undecided: str | None = None,
     rejection_reason: str | None = None,
     now: datetime | None = None,
+    decider_user_id: int | None = None,
 ) -> PublishResult:
     """블록 결정을 모아 변경안을 확정하고 그 결과를 돌려준다.
 
@@ -229,11 +237,17 @@ def publish_artifact_proposal(
     `rejection_reason`이 있어야 한다. 이미 결정이 있는 블록은 건드리지
     않는다.
 
+    `decider_user_id`를 주면 담당자 규칙을 이 transaction 안에서 강제한다.
+    담당자가 있고 결정자가 그중에 없으면 거절하고, 담당자가 없던 문서가 새
+    버전을 내면 결정자를 담당자로 등록한다. 전 블록 반려로 끝난 발행은
+    문서의 내용을 확정한 것이 아니므로 담당자를 만들지 않는다. 주지 않으면
+    둘 다 하지 않는다.
+
     Raises:
         PublishError: 발행을 받아들일 수 없을 때 던진다. code는
             PROPOSAL_NOT_FOUND·ALREADY_DECIDED·UNDECIDED_BLOCKS·
-            STALE_BASE_REVISION·STALE_BLOCK·CONFLICT_RACE·INVALID 중
-            하나다.
+            STALE_BASE_REVISION·STALE_BLOCK·CONFLICT_RACE·INVALID·
+            NOT_DOCUMENT_OWNER 중 하나다.
     """
     if not reviewer.strip():
         # 누가 발행했는지 없는 확정은 감사 기록이 되지 못한다.
@@ -255,6 +269,7 @@ def publish_artifact_proposal(
             rejection_reason=rejection_reason,
             decided_at=decided_at,
             resolved=resolved,
+            decider_user_id=decider_user_id,
         )
     except Exception as error:
         code = error.code if isinstance(error, PublishError) else "UNEXPECTED"
@@ -282,6 +297,7 @@ def _publish_in_transaction(
     rejection_reason: str | None,
     decided_at: datetime,
     resolved: list[uuid.UUID],
+    decider_user_id: int | None,
 ) -> PublishResult:
     """발행의 한 transaction을 연다.
 
@@ -312,6 +328,19 @@ def _publish_in_transaction(
                 CODE_ALREADY_DECIDED,
                 f"변경안 {proposal_id}는 이미 {proposal.status} 상태다",
             )
+        owner_user_ids: frozenset[int] = frozenset()
+        if decider_user_id is not None:
+            # 변경안 행을 잠근 뒤에 본다. 담당자 명단이 바뀌는 일과 발행이
+            # 같은 문서 행을 두고 줄을 서므로, 여기서 읽은 명단은 이
+            # transaction이 끝날 때까지 그대로다.
+            owner_user_ids = uow.artifacts.lock_owner_user_ids(
+                artifact_id=proposal.artifact_id
+            )
+            if owner_user_ids and decider_user_id not in owner_user_ids:
+                raise PublishError(
+                    CODE_NOT_DOCUMENT_OWNER,
+                    f"변경안 {proposal_id}의 문서는 담당자만 발행할 수 있다",
+                )
         if base_revision_id != proposal.base_revision_id:
             # 클라이언트가 본 기준 판과 변경안의 기준이 다르다. 화면이
             # 가리키던 문서와 지금 확정하려는 문서가 같지 않다는 뜻이다.
@@ -409,6 +438,15 @@ def _publish_in_transaction(
             if claim_ids:
                 claims_accepted = uow.knowledge_candidates.accept_claims(
                     claim_ids=claim_ids,
+                )
+            if decider_user_id is not None and not owner_user_ids:
+                # 담당자가 없던 문서의 책임자를 이 발행으로 정한다. 같은
+                # transaction이라 부여가 실패하면 판과 파생 모순 결정까지
+                # 함께 되감긴다.
+                uow.artifacts.add_owner_if_absent(
+                    artifact_id=proposal.artifact_id,
+                    user_id=decider_user_id,
+                    granted_by=decider_user_id,
                 )
             uow.commit()
         except ProposalAlreadyDecided as error:

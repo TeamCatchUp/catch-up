@@ -30,11 +30,13 @@ from sqlalchemy.orm import sessionmaker
 
 from catchup.configs.config import settings
 from catchup.db.models import ArtifactDefinition
+from catchup.db.models import ArtifactOwner as ArtifactOwnerRow
 from catchup.db.models import Channel
 from catchup.db.models import KnowledgeArtifact
 from catchup.db.models import KnowledgeArtifactChangeProposal as ProposalRow
 from catchup.db.models import KnowledgeArtifactRevision as RevisionRow
 from catchup.db.models import KnowledgeNode as NodeRow
+from catchup.db.models import User as UserRow
 from catchup.db.models import Workspace
 from catchup.knowledge_maintenance.adapters.postgres.repositories import (
     SqlAlchemyArtifactRepository,
@@ -47,6 +49,9 @@ from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import artifact_idempotency_key
 from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.domain.artifact import deserialize_blocks
+from catchup.knowledge_maintenance.services.review_artifact_proposal import (
+    CODE_NOT_DOCUMENT_OWNER,
+)
 from catchup.knowledge_maintenance.services.review_artifact_proposal import (
     ProposalReviewError,
 )
@@ -678,3 +683,294 @@ def test_approved_revert_reaches_new_revision(
             )
         ).one()
         assert deserialize_blocks(stored.blocks) == blocks_a
+
+
+# ======================= 담당자 규칙 강제와 자동 부여 =======================
+#
+# 담당자 규칙은 결정과 같은 transaction 안에서 다시 본다. 라우터의 사전
+# 검사는 별도 세션의 읽기라, 그 사이에 담당자가 지정되면 통과한 결정이
+# 그대로 확정된다. 부여도 같은 transaction에 두어 결정만 남고 담당자가
+# 없는 상태가 생기지 않게 한다.
+
+
+def _make_user(session_factory: Callable[[], Session], email: str) -> int:
+    """테스트용 사용자 한 명을 만들고 식별자를 돌려준다."""
+    with session_factory() as session:
+        user = UserRow(
+            email=email,
+            name="검토자",
+            provider="keycloak",
+            status="active",
+        )
+        session.add(user)
+        session.commit()
+        return user.id
+
+
+def _owner_ids(
+    session_factory: Callable[[], Session], artifact_id: uuid.UUID
+) -> set[int]:
+    """문서의 담당자 사용자 id를 읽는다."""
+    with session_factory() as session:
+        return set(
+            session.scalars(
+                select(ArtifactOwnerRow.user_id).where(
+                    ArtifactOwnerRow.artifact_id == artifact_id
+                )
+            ).all()
+        )
+
+
+def _insert_owner_after_read(
+    monkeypatch: pytest.MonkeyPatch,
+    insert_owner: Callable[[], None],
+) -> None:
+    """변경안을 읽은 직후에 다른 담당자 지정을 끼워 넣는다.
+
+    라우터가 담당자 명단을 읽고 통과시킨 뒤 결정이 확정되기 전에 관리자가
+    담당자를 지정하는 순간을 그대로 재현한다. 서비스가 자기 transaction에서
+    명단을 다시 읽지 않으면 이 결정이 그대로 확정된다.
+
+    한 번만 끼워 넣는다. 넣는 쪽도 같은 저장소를 지나갈 수 있어서, 막지
+    않으면 스스로를 다시 부른다.
+    """
+    original = SqlAlchemyArtifactRepository.get_proposal
+    fired = False
+
+    def _read_then_insert(self, **kwargs):
+        nonlocal fired
+        found = original(self, **kwargs)
+        if not fired:
+            fired = True
+            insert_owner()
+        return found
+
+    monkeypatch.setattr(
+        SqlAlchemyArtifactRepository, "get_proposal", _read_then_insert
+    )
+
+
+def test_approve_grants_owner_to_decider_when_none(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """담당자가 없던 문서를 승인하면 승인자가 담당자로 등록된다."""
+    artifact_id = _artifact_id(uow_factory, session_factory, workspace_id)
+    decider_id = _make_user(session_factory, f"decider-{uuid.uuid4().hex}@e.com")
+
+    with uow_factory() as uow:
+        proposal_id = _add(uow, artifact_id, _blocks("2026-09"))
+        uow.commit()
+
+    result = review_artifact_proposal(
+        uow_factory(),
+        proposal_id=proposal_id,
+        verdict="approved",
+        reviewer=f"user:{decider_id}",
+        decider_user_id=decider_id,
+    )
+
+    assert result.revision_number == 1
+    assert _owner_ids(session_factory, artifact_id) == {decider_id}
+
+
+def test_approve_without_decider_grants_nothing(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """결정자를 주지 않는 호출은 담당자를 만들지도 규칙을 강제하지도 않는다.
+
+    CLI 러너와 debug 표면이 이 경로로 지나간다. 그쪽 판정자는 사람이
+    아니어서 사용자 식별자로 옮길 수 없다.
+    """
+    artifact_id = _artifact_id(uow_factory, session_factory, workspace_id)
+    other_id = _make_user(session_factory, f"other-{uuid.uuid4().hex}@e.com")
+    with session_factory() as session:
+        session.add(
+            ArtifactOwnerRow(artifact_id=artifact_id, user_id=other_id)
+        )
+        session.commit()
+
+    with uow_factory() as uow:
+        proposal_id = _add(uow, artifact_id, _blocks("2026-09"))
+        uow.commit()
+
+    result = review_artifact_proposal(
+        uow_factory(),
+        proposal_id=proposal_id,
+        verdict="approved",
+        reviewer="cli-runner",
+    )
+
+    assert result.revision_number == 1
+    assert _owner_ids(session_factory, artifact_id) == {other_id}
+
+
+def test_reject_grants_no_owner(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """반려는 담당자를 만들지 않는다.
+
+    반려는 문서의 내용을 확정한 것이 아니므로 책임자가 정해졌다고 볼 수
+    없다.
+    """
+    artifact_id = _artifact_id(uow_factory, session_factory, workspace_id)
+    decider_id = _make_user(session_factory, f"rej-{uuid.uuid4().hex}@e.com")
+
+    with uow_factory() as uow:
+        proposal_id = _add(uow, artifact_id, _blocks("2026-09"))
+        uow.commit()
+
+    review_artifact_proposal(
+        uow_factory(),
+        proposal_id=proposal_id,
+        verdict="rejected",
+        reviewer=f"user:{decider_id}",
+        reason="근거가 부족하다",
+        decider_user_id=decider_id,
+    )
+
+    assert _owner_ids(session_factory, artifact_id) == set()
+
+
+def test_decision_is_refused_when_another_owner_exists(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """남이 담당하는 문서는 서비스가 결정을 거부한다."""
+    artifact_id = _artifact_id(uow_factory, session_factory, workspace_id)
+    owner_id = _make_user(session_factory, f"owner-{uuid.uuid4().hex}@e.com")
+    decider_id = _make_user(session_factory, f"late-{uuid.uuid4().hex}@e.com")
+    with session_factory() as session:
+        session.add(
+            ArtifactOwnerRow(artifact_id=artifact_id, user_id=owner_id)
+        )
+        session.commit()
+
+    with uow_factory() as uow:
+        proposal_id = _add(uow, artifact_id, _blocks("2026-09"))
+        uow.commit()
+
+    with pytest.raises(ProposalReviewError) as excinfo:
+        review_artifact_proposal(
+            uow_factory(),
+            proposal_id=proposal_id,
+            verdict="approved",
+            reviewer=f"user:{decider_id}",
+            decider_user_id=decider_id,
+        )
+
+    assert excinfo.value.code == CODE_NOT_DOCUMENT_OWNER
+    with session_factory() as session:
+        proposal = session.get(ProposalRow, proposal_id)
+        assert proposal is not None
+        assert proposal.status == "pending"
+    assert _owner_ids(session_factory, artifact_id) == {owner_id}
+
+
+def test_owner_assigned_after_router_check_blocks_decision(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """사전 검사를 지난 뒤 담당자가 지정되면 그 결정은 확정되지 않는다.
+
+    라우터의 사전 검사는 별도 세션의 잠금 없는 읽기다. 서비스가 자기
+    transaction에서 명단을 다시 보지 않으면, 지정 직후에 도착한 남의
+    결정이 그대로 실린다.
+    """
+    artifact_id = _artifact_id(uow_factory, session_factory, workspace_id)
+    owner_id = _make_user(session_factory, f"race-o-{uuid.uuid4().hex}@e.com")
+    decider_id = _make_user(session_factory, f"race-d-{uuid.uuid4().hex}@e.com")
+
+    with uow_factory() as uow:
+        proposal_id = _add(uow, artifact_id, _blocks("2026-09"))
+        uow.commit()
+
+    def _assign_owner() -> None:
+        with session_factory() as session:
+            session.add(
+                ArtifactOwnerRow(artifact_id=artifact_id, user_id=owner_id)
+            )
+            session.commit()
+
+    _insert_owner_after_read(monkeypatch, _assign_owner)
+
+    with pytest.raises(ProposalReviewError) as excinfo:
+        review_artifact_proposal(
+            uow_factory(),
+            proposal_id=proposal_id,
+            verdict="approved",
+            reviewer=f"user:{decider_id}",
+            decider_user_id=decider_id,
+        )
+
+    assert excinfo.value.code == CODE_NOT_DOCUMENT_OWNER
+    with session_factory() as session:
+        proposal = session.get(ProposalRow, proposal_id)
+        assert proposal is not None
+        assert proposal.status == "pending"
+        assert (
+            session.scalars(
+                select(RevisionRow).where(
+                    RevisionRow.artifact_id == artifact_id
+                )
+            ).all()
+            == []
+        )
+
+
+def test_approve_rolls_back_when_owner_grant_fails(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """담당자 부여가 터지면 승인과 판까지 함께 되감긴다.
+
+    부여가 결정과 다른 transaction에 있으면 결정만 확정된 채 오류가
+    나가고, 다시 시도해도 이미 결정된 변경안이라 막힌다. 그 상태가 남지
+    않는지 부여 지점을 터뜨려 잰다.
+    """
+    artifact_id = _artifact_id(uow_factory, session_factory, workspace_id)
+    decider_id = _make_user(session_factory, f"boom-{uuid.uuid4().hex}@e.com")
+
+    with uow_factory() as uow:
+        proposal_id = _add(uow, artifact_id, _blocks("2026-09"))
+        uow.commit()
+
+    def _fail(self, **kwargs) -> bool:
+        raise RuntimeError("담당자 부여가 실패했다")
+
+    monkeypatch.setattr(
+        SqlAlchemyArtifactRepository, "add_owner_if_absent", _fail
+    )
+
+    with pytest.raises(RuntimeError):
+        review_artifact_proposal(
+            uow_factory(),
+            proposal_id=proposal_id,
+            verdict="approved",
+            reviewer=f"user:{decider_id}",
+            decider_user_id=decider_id,
+        )
+
+    with session_factory() as session:
+        proposal = session.get(ProposalRow, proposal_id)
+        assert proposal is not None
+        assert proposal.status == "pending"
+        assert (
+            session.scalars(
+                select(RevisionRow).where(
+                    RevisionRow.artifact_id == artifact_id
+                )
+            ).all()
+            == []
+        )
+    assert _owner_ids(session_factory, artifact_id) == set()

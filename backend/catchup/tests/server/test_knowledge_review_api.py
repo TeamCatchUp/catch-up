@@ -88,10 +88,16 @@ from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPending
 from catchup.knowledge_maintenance.services.list_review_queue import ReviewQueueItem
 from catchup.knowledge_maintenance.services.list_review_queue import ReviewQueuePage
 from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
+    CODE_NOT_DOCUMENT_OWNER as PUBLISH_CODE_NOT_DOCUMENT_OWNER,
+)
+from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
     PublishError,
 )
 from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
     PublishResult,
+)
+from catchup.knowledge_maintenance.services.review_artifact_proposal import (
+    CODE_NOT_DOCUMENT_OWNER,
 )
 from catchup.knowledge_maintenance.services.review_artifact_proposal import (
     ProposalReviewError,
@@ -304,9 +310,12 @@ class _FakeArtifacts:
         *,
         proposal: StoredArtifactProposal | None = None,
         latest: tuple[uuid.UUID, int] | None = None,
+        owner_user_ids: frozenset[int] = frozenset(),
     ) -> None:
         self._proposal = proposal
         self._latest = latest
+        self._owner_user_ids = owner_user_ids
+        self.granted: list[tuple[uuid.UUID, int, int]] = []
 
     def get_proposal(
         self, *, proposal_id: uuid.UUID, for_update: bool = False
@@ -319,6 +328,19 @@ class _FakeArtifacts:
         self, *, artifact_id: uuid.UUID
     ) -> tuple[uuid.UUID, int] | None:
         return self._latest
+
+    def lock_owner_user_ids(
+        self, *, artifact_id: uuid.UUID
+    ) -> frozenset[int]:
+        """확정 transaction 안의 담당자 재확인을 흉내낸다."""
+        return self._owner_user_ids
+
+    def add_owner_if_absent(
+        self, *, artifact_id: uuid.UUID, user_id: int, granted_by: int
+    ) -> bool:
+        """부여 호출을 기록만 한다. 실제 쓰기는 저장소 테스트가 본다."""
+        self.granted.append((artifact_id, user_id, granted_by))
+        return True
 
 
 class _FakeMutations:
@@ -2240,14 +2262,20 @@ def _owner_ids(db: Session, artifact_id: uuid.UUID) -> set[int]:
     )
 
 
-def test_member_approves_artifact_without_owner_and_becomes_owner(
+def test_member_approves_artifact_without_owner(
     app: FastAPI,
     client: TestClient,
     db: Session,
     workspace_ids: tuple[int, int],
     as_user: Callable[[User], None],
 ) -> None:
-    """역할 없는 구성원이 담당자 없는 문서를 승인하고 담당자가 된다."""
+    """역할 없는 구성원이 담당자 없는 문서의 승인 경로를 지난다.
+
+    담당자 규칙을 다시 보고 담당자를 세우는 일은 서비스가 자기 transaction
+    안에서 한다. 라우터가 볼 것은 결정자를 실어 보내는지 하나다. 부여를
+    라우터가 별도 세션으로 하면 결정만 확정되고 담당자는 없는 상태가
+    남는다.
+    """
     workspace_id, _ = workspace_ids
     member = _make_user(db, email="plain-member@example.com")
     _join(db, user=member, workspace_id=workspace_id)
@@ -2278,17 +2306,66 @@ def test_member_approves_artifact_without_owner_and_becomes_owner(
 
     assert response.status_code == 200
     assert service.call_args.kwargs["reviewer"] == f"user:{member.id}"
-    assert _owner_ids(db, artifact_id) == {member.id}
+    assert service.call_args.kwargs["decider_user_id"] == member.id
 
 
-def test_member_publish_registers_owner(
+def test_reject_passes_decider_to_service(
     app: FastAPI,
     client: TestClient,
     db: Session,
     workspace_ids: tuple[int, int],
     as_user: Callable[[User], None],
 ) -> None:
-    """발행으로 확정한 구성원도 그 문서의 담당자가 된다."""
+    """반려도 결정자를 실어 보낸다.
+
+    담당자 규칙은 반려에도 걸린다. 반려만 결정자를 빼면 남이 담당하는
+    문서를 반려로 밀어 버릴 자리가 열린다. 부여는 서비스가 승인 계열에만
+    하므로 반려로 담당자가 생기지는 않는다.
+    """
+    workspace_id, _ = workspace_ids
+    member = _make_user(db, email="reject-member@example.com")
+    _join(db, user=member, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    as_user(member)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+    result = ReviewResult(
+        proposal_id=proposal_id,
+        verdict="rejected",
+        revision_id=None,
+        revision_number=None,
+        claims_accepted=0,
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.review_artifact_proposal",
+        return_value=result,
+    ) as service:
+        response = client.post(
+            f"/api/v1/knowledge-review/artifacts/{proposal_id}/reject",
+            json={"reason": "근거가 부족하다"},
+        )
+
+    assert response.status_code == 200
+    assert service.call_args.kwargs["decider_user_id"] == member.id
+    assert _owner_ids(db, artifact_id) == set()
+
+
+def test_member_publishes_artifact_without_owner(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """발행 경로도 결정자를 실어 보낸다."""
     workspace_id, _ = workspace_ids
     member = _make_user(db, email="publish-first@example.com")
     _join(db, user=member, workspace_id=workspace_id)
@@ -2317,31 +2394,30 @@ def test_member_publish_registers_owner(
     with patch(
         "catchup.server.knowledge_review.api.publish_artifact_proposal",
         return_value=result,
-    ):
+    ) as service:
         response = client.post(
             f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
             json={"base_revision_id": None},
         )
 
     assert response.status_code == 200
-    assert _owner_ids(db, artifact_id) == {member.id}
+    assert service.call_args.kwargs["decider_user_id"] == member.id
 
 
-def test_reject_does_not_register_owner(
+def test_service_owner_refusal_becomes_document_reviewer_403(
     app: FastAPI,
     client: TestClient,
     db: Session,
     workspace_ids: tuple[int, int],
     as_user: Callable[[User], None],
 ) -> None:
-    """반려는 담당자를 만들지 않는다.
+    """서비스가 담당자 규칙으로 거부하면 403 NOT_DOCUMENT_REVIEWER다.
 
-    반려는 문서의 내용을 확정한 것이 아니므로 책임자가 정해졌다고 볼 수
-    없다. 여기서 담당자가 생기면 지나가던 사람이 반려 한 번으로 그 문서를
-    잠근다.
+    라우터의 사전 검사를 지난 뒤 담당자가 지정되면 서비스만 그것을 본다.
+    그 거부가 409로 나가면 소비자는 권한 문제를 상태 문제로 읽는다.
     """
     workspace_id, _ = workspace_ids
-    member = _make_user(db, email="reject-member@example.com")
+    member = _make_user(db, email="race-member@example.com")
     _join(db, user=member, workspace_id=workspace_id)
     artifact_id = _make_artifact(db, workspace_id=workspace_id)
     as_user(member)
@@ -2353,38 +2429,30 @@ def test_reject_does_not_register_owner(
                 proposal_id=proposal_id, artifact_id=artifact_id
             )
         )
-    )
-    result = ReviewResult(
-        proposal_id=proposal_id,
-        verdict="rejected",
-        revision_id=None,
-        revision_number=None,
-        claims_accepted=0,
     )
 
     with patch(
         "catchup.server.knowledge_review.api.review_artifact_proposal",
-        return_value=result,
+        side_effect=ProposalReviewError(
+            "담당자가 아니다", code=CODE_NOT_DOCUMENT_OWNER
+        ),
     ):
-        response = client.post(
-            f"/api/v1/knowledge-review/artifacts/{proposal_id}/reject",
-            json={"reason": "근거가 부족하다"},
-        )
+        response = _approve(client, proposal_id)
 
-    assert response.status_code == 200
-    assert _owner_ids(db, artifact_id) == set()
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "NOT_DOCUMENT_REVIEWER"
 
 
-def test_publish_rejected_verdict_does_not_register_owner(
+def test_publish_owner_refusal_becomes_document_reviewer_403(
     app: FastAPI,
     client: TestClient,
     db: Session,
     workspace_ids: tuple[int, int],
     as_user: Callable[[User], None],
 ) -> None:
-    """전 블록 반려로 끝난 발행도 담당자를 만들지 않는다."""
+    """발행도 서비스의 담당자 거부를 403으로 옮긴다."""
     workspace_id, _ = workspace_ids
-    member = _make_user(db, email="publish-rejected@example.com")
+    member = _make_user(db, email="race-publish@example.com")
     _join(db, user=member, workspace_id=workspace_id)
     artifact_id = _make_artifact(db, workspace_id=workspace_id)
     as_user(member)
@@ -2396,80 +2464,21 @@ def test_publish_rejected_verdict_does_not_register_owner(
                 proposal_id=proposal_id, artifact_id=artifact_id
             )
         )
-    )
-    result = PublishResult(
-        proposal_id=proposal_id,
-        verdict="rejected",
-        revision_id=None,
-        revision_number=None,
-        blocks_published=0,
-        blocks_rejected=2,
-        contradictions_resolved=0,
-        claims_accepted=0,
     )
 
     with patch(
         "catchup.server.knowledge_review.api.publish_artifact_proposal",
-        return_value=result,
+        side_effect=PublishError(
+            PUBLISH_CODE_NOT_DOCUMENT_OWNER, "담당자가 아니다"
+        ),
     ):
         response = client.post(
             f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
             json={"base_revision_id": None},
         )
 
-    assert response.status_code == 200
-    assert _owner_ids(db, artifact_id) == set()
-
-
-def test_owner_grant_leaves_existing_owner_alone(
-    app: FastAPI,
-    client: TestClient,
-    db: Session,
-    workspace_ids: tuple[int, int],
-    as_user: Callable[[User], None],
-) -> None:
-    """이미 담당자가 있으면 확정해도 명단이 그대로다.
-
-    담당자 본인이 승인하는 흔한 경우다. 부여가 무조건 도는 자리면 담당자
-    한 명이 승인할 때마다 명단이 늘거나 granted_by가 덮인다.
-    """
-    workspace_id, _ = workspace_ids
-    owner = _make_user(db, email="idempotent-owner@example.com")
-    _join(db, user=owner, workspace_id=workspace_id)
-    artifact_id = _make_artifact(db, workspace_id=workspace_id)
-    _make_owner(db, artifact_id=artifact_id, user=owner)
-    as_user(owner)
-
-    proposal_id = uuid.uuid4()
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        artifacts=_FakeArtifacts(
-            proposal=_proposal(
-                proposal_id=proposal_id, artifact_id=artifact_id
-            )
-        )
-    )
-    result = ReviewResult(
-        proposal_id=proposal_id,
-        verdict="approved",
-        revision_id=uuid.uuid4(),
-        revision_number=1,
-        claims_accepted=1,
-    )
-
-    with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal",
-        return_value=result,
-    ):
-        response = _approve(client, proposal_id)
-
-    assert response.status_code == 200
-    assert _owner_ids(db, artifact_id) == {owner.id}
-    granted_by = db.scalars(
-        select(ArtifactOwner.granted_by).where(
-            ArtifactOwner.artifact_id == artifact_id
-        )
-    ).all()
-    assert list(granted_by) == [None]
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "NOT_DOCUMENT_REVIEWER"
 
 
 def test_member_cannot_approve_artifact_with_owner(

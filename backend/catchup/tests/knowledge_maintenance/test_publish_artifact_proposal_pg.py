@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
 from catchup.configs.config import settings
+from catchup.db.models import ArtifactOwner as ArtifactOwnerRow
 from catchup.db.models import KnowledgeArtifactChangeProposal as ProposalRow
 from catchup.db.models import KnowledgeArtifactRevision as RevisionRow
 from catchup.db.models import KnowledgeBlockVerdict as VerdictRow
@@ -40,7 +41,11 @@ from catchup.db.models import KnowledgeExtractionRun as RunRow
 from catchup.db.models import KnowledgeMutationOperation as OperationRow
 from catchup.db.models import KnowledgeNode as NodeRow
 from catchup.db.models import KnowledgeOntologySnapshot as SnapshotRow
+from catchup.db.models import User as UserRow
 from catchup.db.models import Workspace
+from catchup.knowledge_maintenance.adapters.postgres.repositories import (
+    SqlAlchemyArtifactRepository,
+)
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
@@ -55,6 +60,9 @@ from catchup.knowledge_maintenance.domain.artifact import blocks_content_hash
 from catchup.knowledge_maintenance.domain.artifact import deserialize_blocks
 from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
     CODE_CONFLICT_RACE,
+)
+from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
+    CODE_NOT_DOCUMENT_OWNER,
 )
 from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
     CODE_STALE_BLOCK,
@@ -967,3 +975,177 @@ def test_evidence_swap_refuses_publish_without_a_verdict(
         )
         assert statuses[fresh_claim] != "accepted"
         assert statuses[old_claim] != "accepted"
+
+
+# ======================= 담당자 규칙 강제와 자동 부여 =======================
+#
+# 발행도 단건 판정과 같은 규칙을 자기 transaction 안에서 다시 본다.
+# 라우터의 사전 검사만 믿으면, 그 검사와 발행 사이에 담당자가 지정돼도
+# 발행이 그대로 확정된다.
+
+
+def _make_user(session_factory: Callable[[], Session], email: str) -> int:
+    """테스트용 사용자 한 명을 만들고 식별자를 돌려준다."""
+    with session_factory() as session:
+        user = UserRow(
+            email=email,
+            name="검토자",
+            provider="keycloak",
+            status="active",
+        )
+        session.add(user)
+        session.commit()
+        return user.id
+
+
+def _owner_ids(
+    session_factory: Callable[[], Session], artifact_id: uuid.UUID
+) -> set[int]:
+    """문서의 담당자 사용자 id를 읽는다."""
+    with session_factory() as session:
+        return set(
+            session.scalars(
+                select(ArtifactOwnerRow.user_id).where(
+                    ArtifactOwnerRow.artifact_id == artifact_id
+                )
+            ).all()
+        )
+
+
+def test_publish_grants_owner_to_decider_when_none(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    seed: _Seed,
+) -> None:
+    """담당자가 없던 문서를 발행하면 발행자가 담당자로 등록된다."""
+    decider_id = _make_user(session_factory, f"pub-{uuid.uuid4().hex}@e.com")
+    _approve_all(uow_factory, seed)
+
+    result = publish_artifact_proposal(
+        uow_factory(),
+        workspace_id=workspace_id,
+        proposal_id=seed.proposal_id,
+        base_revision_id=None,
+        reviewer=f"user:{decider_id}",
+        decider_user_id=decider_id,
+    )
+
+    assert result.verdict == "approved"
+    assert _owner_ids(session_factory, seed.artifact_id) == {decider_id}
+
+
+def test_publish_rejected_grants_no_owner(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    seed: _Seed,
+) -> None:
+    """전 블록 반려로 끝난 발행은 담당자를 만들지 않는다."""
+    decider_id = _make_user(session_factory, f"pubrej-{uuid.uuid4().hex}@e.com")
+
+    result = publish_artifact_proposal(
+        uow_factory(),
+        workspace_id=workspace_id,
+        proposal_id=seed.proposal_id,
+        base_revision_id=None,
+        reviewer=f"user:{decider_id}",
+        undecided="reject",
+        rejection_reason="근거가 부족하다",
+        decider_user_id=decider_id,
+    )
+
+    assert result.verdict == "rejected"
+    assert _owner_ids(session_factory, seed.artifact_id) == set()
+
+
+def test_publish_is_refused_when_another_owner_exists(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    seed: _Seed,
+) -> None:
+    """남이 담당하는 문서는 발행도 서비스가 거부한다."""
+    owner_id = _make_user(session_factory, f"pubown-{uuid.uuid4().hex}@e.com")
+    decider_id = _make_user(session_factory, f"publate-{uuid.uuid4().hex}@e.com")
+    with session_factory() as session:
+        session.add(
+            ArtifactOwnerRow(artifact_id=seed.artifact_id, user_id=owner_id)
+        )
+        session.commit()
+    _approve_all(uow_factory, seed)
+
+    with pytest.raises(PublishError) as excinfo:
+        publish_artifact_proposal(
+            uow_factory(),
+            workspace_id=workspace_id,
+            proposal_id=seed.proposal_id,
+            base_revision_id=None,
+            reviewer=f"user:{decider_id}",
+            decider_user_id=decider_id,
+        )
+
+    assert excinfo.value.code == CODE_NOT_DOCUMENT_OWNER
+    with session_factory() as session:
+        proposal = session.get(ProposalRow, seed.proposal_id)
+        assert proposal is not None
+        assert proposal.status == "pending"
+        assert (
+            session.scalars(
+                select(RevisionRow).where(
+                    RevisionRow.artifact_id == seed.artifact_id
+                )
+            ).all()
+            == []
+        )
+
+
+def test_publish_rolls_back_when_owner_grant_fails(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+    seed: _Seed,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """담당자 부여가 터지면 발행과 파생 모순 결정까지 함께 되감긴다."""
+    decider_id = _make_user(session_factory, f"pubboom-{uuid.uuid4().hex}@e.com")
+    _approve_all(uow_factory, seed)
+
+    def _fail(self, **kwargs) -> bool:
+        raise RuntimeError("담당자 부여가 실패했다")
+
+    monkeypatch.setattr(
+        SqlAlchemyArtifactRepository, "add_owner_if_absent", _fail
+    )
+
+    with pytest.raises(RuntimeError):
+        publish_artifact_proposal(
+            uow_factory(),
+            workspace_id=workspace_id,
+            proposal_id=seed.proposal_id,
+            base_revision_id=None,
+            reviewer=f"user:{decider_id}",
+            decider_user_id=decider_id,
+        )
+
+    with session_factory() as session:
+        proposal = session.get(ProposalRow, seed.proposal_id)
+        assert proposal is not None
+        assert proposal.status == "pending"
+        assert (
+            session.scalars(
+                select(RevisionRow).where(
+                    RevisionRow.artifact_id == seed.artifact_id
+                )
+            ).all()
+            == []
+        )
+    assert _owner_ids(session_factory, seed.artifact_id) == set()
+    with uow_factory() as uow:
+        assert (
+            uow.mutation_proposals.get_contradiction_status(
+                workspace_id=workspace_id,
+                proposal_id=seed.release_contradiction,
+            )
+            == "pending"
+        )
