@@ -2563,6 +2563,209 @@ def test_non_member_cannot_approve(
     service.assert_not_called()
     assert _owner_ids(db, artifact_id) == set()
 
+# ======================= 결정 응답의 담당자 명단 =======================
+#
+# 승인이 담당자를 세우는데 응답이 그 사실을 담지 않으면, 화면은 결정
+# 직후의 담당자 표시를 고치려고 문서를 다시 읽어야 한다. 확정 뒤 시점의
+# 명단을 결정 응답에 함께 실어 그 왕복을 없앤다.
+#
+# 부여는 서비스가 자기 transaction에서 하므로, 여기서는 대역 서비스가
+# 호출되는 순간에 담당자 행을 넣어 그 순서를 흉내낸다. 라우터가 서비스보다
+# 먼저 명단을 읽으면 이 테스트가 빈 목록을 받는다.
+
+
+def _grants_owner(db: Session, artifact_id: uuid.UUID, user: User, result):
+    """서비스가 확정과 함께 담당자를 세우는 일을 흉내내는 side effect를 만든다."""
+
+    def _run(*args, **kwargs):
+        db.add(ArtifactOwner(artifact_id=artifact_id, user_id=user.id))
+        db.flush()
+        return result
+
+    return _run
+
+
+def _response_owner_ids(body: dict) -> list[int]:
+    """응답에 실린 담당자 사용자 id를 읽는다."""
+    return [owner["user_id"] for owner in body["owners"]]
+
+
+def test_approve_response_carries_owners_after_grant(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """승인 응답은 확정으로 세워진 담당자까지 담은 명단을 싣는다."""
+    workspace_id, _ = workspace_ids
+    member = _make_user(db, email="owners-approve@example.com")
+    _join(db, user=member, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    as_user(member)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+    result = ReviewResult(
+        proposal_id=proposal_id,
+        verdict="approved",
+        revision_id=uuid.uuid4(),
+        revision_number=1,
+        claims_accepted=1,
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.review_artifact_proposal",
+        side_effect=_grants_owner(db, artifact_id, member, result),
+    ):
+        response = _approve(client, proposal_id)
+
+    assert response.status_code == 200
+    assert _response_owner_ids(response.json()) == [member.id]
+
+
+def test_reject_response_carries_unchanged_owners(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """반려 응답의 명단은 그대로다. 반려는 담당자를 만들지 않는다."""
+    workspace_id, _ = workspace_ids
+    member = _make_user(db, email="owners-reject@example.com")
+    _join(db, user=member, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    as_user(member)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+    result = ReviewResult(
+        proposal_id=proposal_id,
+        verdict="rejected",
+        revision_id=None,
+        revision_number=None,
+        claims_accepted=0,
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.review_artifact_proposal",
+        return_value=result,
+    ):
+        response = client.post(
+            f"/api/v1/knowledge-review/artifacts/{proposal_id}/reject",
+            json={"reason": "근거가 부족하다"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["owners"] == []
+
+
+def test_publish_response_carries_owners_after_grant(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """발행 응답도 확정으로 세워진 담당자를 담은 명단을 싣는다."""
+    workspace_id, _ = workspace_ids
+    member = _make_user(db, email="owners-publish@example.com")
+    _join(db, user=member, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    as_user(member)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+    result = PublishResult(
+        proposal_id=proposal_id,
+        verdict="approved",
+        revision_id=uuid.uuid4(),
+        revision_number=1,
+        blocks_published=1,
+        blocks_rejected=0,
+        contradictions_resolved=0,
+        claims_accepted=1,
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.publish_artifact_proposal",
+        side_effect=_grants_owner(db, artifact_id, member, result),
+    ):
+        response = client.post(
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+            json={"base_revision_id": None},
+        )
+
+    assert response.status_code == 200
+    assert _response_owner_ids(response.json()) == [member.id]
+
+
+def test_approve_response_keeps_existing_owners(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """담당자가 있던 문서의 승인 응답은 그 명단을 그대로 싣는다.
+
+    부여는 담당자가 없던 문서에만 도므로 명단이 늘지 않는다. 사람 표시는
+    큐 목록·상세와 같은 조립을 거치므로 이름도 함께 실린다.
+    """
+    workspace_id, _ = workspace_ids
+    owner = _make_user(db, email="owners-existing@example.com")
+    _join(db, user=owner, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    _make_owner(db, artifact_id=artifact_id, user=owner)
+    as_user(owner)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+    result = ReviewResult(
+        proposal_id=proposal_id,
+        verdict="approved",
+        revision_id=uuid.uuid4(),
+        revision_number=1,
+        claims_accepted=1,
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.review_artifact_proposal",
+        return_value=result,
+    ):
+        response = _approve(client, proposal_id)
+
+    assert response.status_code == 200
+    owners = response.json()["owners"]
+    assert [item["user_id"] for item in owners] == [owner.id]
+    assert owners[0]["display_name"] == owner.name
+
+
 
 # ======================= 표면에 없는 운영 경로 =======================
 #
@@ -2645,6 +2848,9 @@ def test_approve_records_current_user_as_reviewer(
         "revision_id": str(revision_id),
         "revision_number": 3,
         "claims_accepted": 2,
+        # 대역 서비스는 담당자를 세우지 않으므로 명단은 비어 있다. 필드
+        # 자체가 늘 실린다는 것을 이 자리에서 함께 고정한다.
+        "owners": [],
     }
     assert service.call_args.kwargs["reviewer"] == f"user:{reviewer.id}"
     assert service.call_args.kwargs["verdict"] == "approved"
@@ -3439,6 +3645,7 @@ def test_publish_audit_records_proposal_id(
         "blocks_rejected": 1,
         "contradictions_resolved": 1,
         "claims_accepted": 4,
+        "owners": [],
     }
     assert service.call_args.kwargs["workspace_id"] == workspace_id
     assert service.call_args.kwargs["reviewer"] == f"user:{reviewer.id}"

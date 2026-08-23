@@ -327,6 +327,10 @@ class PublishResponse(BaseModel):
 
     전 블록이 반려됐으면 verdict가 rejected이고 판이 없어 revision 자리가
     비어 있다.
+
+    owners는 이 발행이 끝난 시점의 담당자 명단이다. 담당자가 없던 문서를
+    발행하면 발행한 사람이 담당자가 되므로, 명단을 함께 실어야 화면이
+    문서를 다시 읽지 않고 담당자 표시를 고칠 수 있다.
     """
 
     proposal_id: str
@@ -337,6 +341,7 @@ class PublishResponse(BaseModel):
     blocks_rejected: int
     contradictions_resolved: int
     claims_accepted: int
+    owners: list[OwnerResponse] = []
 
 
 class DecisionResponse(BaseModel):
@@ -344,6 +349,11 @@ class DecisionResponse(BaseModel):
 
     승인이면 새로 쌓인 판과 확정된 claim 수가 실리고, 반려면 판이 없어
     비어 있다.
+
+    owners는 이 결정이 끝난 시점의 담당자 명단이다. 담당자가 없던 문서를
+    승인하면 승인한 사람이 담당자가 되므로, 명단을 함께 실어야 화면이
+    문서를 다시 읽지 않고 담당자 표시를 고칠 수 있다. 반려는 담당자를
+    만들지 않으므로 있던 명단이 그대로 실린다.
     """
 
     proposal_id: str
@@ -351,3 +361,4 @@ class DecisionResponse(BaseModel):
     revision_id: str | None = None
     revision_number: int | None = None
     claims_accepted: int = 0
+    owners: list[OwnerResponse] = []

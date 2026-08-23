@@ -244,6 +244,26 @@ def _document_permission_error() -> HTTPException:
     )
 
 
+def _owners_after_decision(
+    db: Session, artifact_id: uuid.UUID
+) -> list[OwnerResponse]:
+    """확정이 끝난 시점의 담당자 명단을 응답 모양으로 읽는다.
+
+    결정 서비스가 자기 transaction을 커밋한 뒤에 부른다. 담당자 부여도 그
+    transaction 안에서 일어나므로, 커밋 뒤에 읽어야 새로 세워진 담당자가
+    명단에 들어온다.
+
+    조립은 큐 목록·상세와 같은 `owners_by_artifact`를 쓴다. 결정 응답만
+    따로 만들면 같은 사람이 화면 두 곳에서 다르게 보인다.
+
+    서비스가 아니라 여기서 읽는 이유는 명단이 사람 표시(이름·사진)를
+    담기 때문이다. 그 재료는 users 테이블에 있고, knowledge_maintenance는
+    그 쪽을 알지 않는다. 서비스 반환값에 담으려면 표시 전용 포트를 새로
+    내야 하는데, CLI 러너와 debug 표면은 그 값을 쓰지 않는다.
+    """
+    return owners_by_artifact(db, [artifact_id])[artifact_id]
+
+
 def _load_proposal_for_view(
     uow_factory: ReviewUowFactory,
     proposal_id: uuid.UUID,
@@ -528,7 +548,9 @@ def approve_artifact(
             403, 다툼 블록이 있거나 블록 결정이 시작됐거나 결정을 받아들일
             수 없으면 409를 던진다.
     """
-    _require_decidable_proposal(uow_factory, db, context, proposal_id)
+    proposal = _require_decidable_proposal(
+        uow_factory, db, context, proposal_id
+    )
     try:
         result = review_artifact_proposal(
             uow_factory(),
@@ -549,6 +571,7 @@ def approve_artifact(
         ),
         revision_number=result.revision_number,
         claims_accepted=result.claims_accepted,
+        owners=_owners_after_decision(db, proposal.artifact_id),
     )
 
 
@@ -592,7 +615,9 @@ def reject_artifact(
             code="REASON_REQUIRED",
             message="반려는 사유가 있어야 합니다.",
         )
-    _require_decidable_proposal(uow_factory, db, context, proposal_id)
+    proposal = _require_decidable_proposal(
+        uow_factory, db, context, proposal_id
+    )
     try:
         result = review_artifact_proposal(
             uow_factory(),
@@ -609,6 +634,7 @@ def reject_artifact(
     return DecisionResponse(
         proposal_id=str(result.proposal_id),
         verdict=result.verdict,
+        owners=_owners_after_decision(db, proposal.artifact_id),
     )
 
 
@@ -726,7 +752,9 @@ def publish_proposal(
             code="REASON_REQUIRED",
             message="반려는 사유가 있어야 합니다.",
         )
-    _require_decidable_proposal(uow_factory, db, context, proposal_id)
+    proposal = _require_decidable_proposal(
+        uow_factory, db, context, proposal_id
+    )
     try:
         result = publish_artifact_proposal(
             uow_factory(),
@@ -765,6 +793,7 @@ def publish_proposal(
         blocks_rejected=result.blocks_rejected,
         contradictions_resolved=result.contradictions_resolved,
         claims_accepted=result.claims_accepted,
+        owners=_owners_after_decision(db, proposal.artifact_id),
     )
 
 
