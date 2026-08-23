@@ -64,11 +64,18 @@ function resolveSelectedRowId(
   return rows.some((row) => row.id === selectedId) ? selectedId : (rows[0]?.id ?? null);
 }
 
+interface ReviewQueueModelOptions {
+  /** 처음 고를 안건의 힌트. 이 문서의 계류 안건을 한 번만 골라 준다 */
+  preselectArtifactId?: string | null;
+}
+
 /**
  * 검토 큐 화면의 조회 상태·판정 요청을 관리하는 페이지 모델 훅.
  * 반환값이 곧 화면 props다 — 라우트는 받아 넘기기만 한다.
  */
-export function useReviewQueueModel(): ReviewQueuePageProps {
+export function useReviewQueueModel({
+  preselectArtifactId = null,
+}: ReviewQueueModelOptions = {}): ReviewQueuePageProps {
   const router = useRouter();
 
   const [filters, setFilters] = useState(INITIAL_REVIEW_QUEUE_FILTER_STATE);
@@ -89,6 +96,15 @@ export function useReviewQueueModel(): ReviewQueuePageProps {
   const channels = channelsQuery.data;
   const members = membersQuery.data;
 
+  // 힌트는 목록이 처음 온 순간 한 번만 푼다 — 뒤이은 refetch에 다시 풀리면 선택이 되살아난다
+  const [preselectedId, setPreselectedId] = useState<string | null>(null);
+  const [preselectResolved, setPreselectResolved] = useState(preselectArtifactId === null);
+  if (!preselectResolved && queue !== undefined) {
+    setPreselectResolved(true);
+    // 이미 처리돼 큐에서 빠진 안건이면 null로 남는다 — 기본 선택이 그대로 선다
+    setPreselectedId(queue.items.find((item) => item.artifact.id === preselectArtifactId)?.proposal_id ?? null);
+  }
+
   // 서버가 하나씩만 받는 축의 다중 선택분을 응답 위에서 좁힌다
   const clientFilter = resolveClientQueueFilter(filters);
   const clientNarrowed = clientFilter.channelIds.length > 0 || clientFilter.ownerUserIds.length > 0;
@@ -98,7 +114,8 @@ export function useReviewQueueModel(): ReviewQueuePageProps {
   );
 
   const rows = useMemo(() => queueItems.map(mapReviewQueueItem), [queueItems]);
-  const selectedRowId = resolveSelectedRowId(selectedId, rows, decided?.proposalId ?? null);
+  // 고른 적이 없을 때만 힌트가 자리를 채운다 — 사용자의 선택이 언제나 앞선다
+  const selectedRowId = resolveSelectedRowId(selectedId ?? preselectedId, rows, decided?.proposalId ?? null);
   const selectedRow = rows.find((row) => row.id === selectedRowId);
   const selectedItem = queueItems.find((item) => item.proposal_id === selectedRowId);
 

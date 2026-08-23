@@ -7,6 +7,7 @@ import {
   WIKI_DOCUMENT_FIXTURE,
   WIKI_DOCUMENT_LAYOUT_FIXTURE,
 } from '../../fixtures/llmWikiDocumentFixtures';
+import WikiDocumentNotPublished from './states/WikiDocumentNotPublished';
 import WikiDocumentPageSkeleton from './states/WikiDocumentPageSkeleton';
 import WikiDocumentPage from './WikiDocumentPage';
 
@@ -39,7 +40,7 @@ const meta = {
         'narrative-missing-fallback',
         'channel-root-document',
         'first-load',
-        'unpublished-empty',
+        'not-published',
       ],
       reuseNotes: [
         'WikiPageHeader(detail)를 무수정 소비하고, 본문 타이포그래피는 공용 markdown.css(.markdown-body)를 쓴다 — 에디터와 같은 읽기 규격이라 새 타입 스케일을 만들지 않는다.',
@@ -55,8 +56,8 @@ const meta = {
         '블록 근거(sources)는 계약에 있으나 렌더하지 않는다 — 8/5 시안의 우측 근거 패널이 8/10 시안에서 사라졌다.',
         '문서는 열람 전용이다 — 편집 진입점·저장 경로를 두지 않는다(MVP 제외).',
         '작성자·유형/상태 태그·아바타 그룹은 표시 시안이 없어 비운다. 최종 편집자(last_edited_by)는 계약에 있고 매퍼가 싣지만 이 화면에는 자리가 없다 — SNB 케밥 메타에만 쓴다.',
-        '라우트 갈래는 셋이다 — isPending이면 골격(Loading), 문서가 없으면 빈 화면(Unpublished), 나머지가 데이터 화면이다.',
-        '미발행(404 ARTIFACT_NOT_PUBLISHED)·에러는 시안이 없어 화면을 만들지 않는다 — 토스트만 뜨고 자리는 빈 채로 남는다(알려진 구멍).',
+        '라우트 갈래는 넷이다 — isPending이면 골격(Loading), 미발행 404면 안내(Unpublished), 그 밖의 실패는 빈 화면, 나머지가 데이터 화면이다.',
+        '미발행 안내의 문구·조립은 시안이 없어 자작이다. 그 밖의 조회 실패는 여전히 시안이 없어 토스트만 뜬다.',
       ],
       layoutNotes: [
         '본문 폭은 max-w-260, 패딩 px-6·py-9 — 헤더는 폭을 흡수하고 본문만 가운데로 모인다.',
@@ -65,7 +66,7 @@ const meta = {
       ],
       interactionNotes: [
         '검토큐 헤더의 "미리보기"가 이 화면의 도달 경로다 — 발행본을 새 탭(/llm-wiki/{artifactId})으로 연다. 제안본 미리보기 표면은 없다.',
-        '아직 발행된 판이 없는 문서를 미리보기하면 새 탭에 Unpublished(빈 화면)가 뜬다.',
+        '아직 발행된 판이 없는 문서를 열면 Unpublished 안내가 뜨고, 버튼이 검토 큐로 그 문서의 안건을 골라 보낸다.',
       ],
     }),
   },
@@ -204,18 +205,20 @@ export const Loading: Story = {
 };
 
 /**
- * 미발행 문서(404 ARTIFACT_NOT_PUBLISHED). 라우트가 null을 반환해 빈 화면만 남고 안내는 토스트뿐이다.
- * 시안 없는 알려진 구멍이라 화면을 만들지 않고 지금 모습 그대로 남긴다.
+ * 미발행 문서(404 ARTIFACT_NOT_PUBLISHED). 라우트가 안내 화면으로 갈리고 실패 토스트는 뜨지 않는다.
+ * 버튼 콜백 어서션은 안내 컴포넌트 스토리에 있다.
  */
 export const Unpublished: Story = {
-  render: () => <></>,
+  render: () => <WikiDocumentNotPublished onOpenReviewQueue={fn()} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // 헤더도 안내도 없다 — 사용자에게는 아무것도 없는 화면이다.
-    await expect(canvasElement.querySelector('h1, h2, p, article')).toBeNull();
+    await expect(canvas.getByText('아직 첫 판이 발행되지 않았어요')).toBeInTheDocument();
+    await expect(canvas.getByText('첫 변경안이 검토를 기다리고 있어요')).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: '검토 큐에서 보기' })).toBeInTheDocument();
+
+    // 발행판이 없으니 제목·본문 자리는 서지 않고, 경로 마디도 풀 수 없다.
     await expect(canvas.queryByRole('heading')).toBeNull();
-    await expect(canvas.queryByRole('button')).toBeNull();
-    await expect(canvas.queryByRole('status')).toBeNull();
+    await expect(canvasElement.querySelector('[aria-current="page"]')).toBeNull();
   },
 };

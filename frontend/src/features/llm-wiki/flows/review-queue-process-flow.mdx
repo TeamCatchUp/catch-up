@@ -72,11 +72,12 @@ import * as QueueStories from '../components/review-queue/ReviewQueuePage.storie
 
 ## 미리보기가 닿는 곳
 
-헤더의 미리보기는 **발행본**을 새 탭으로 연다 — 지금 보는 제안본이 아니다. 제안본을 문서 모양으로
-보는 표면은 없다. 발행에 성공했을 때 토스트의 "열기"도 같은 화면으로 간다.
+헤더의 미리보기는 **판정을 반영한 제안본**을 문서 모양으로 새 탭에 연다 — 승인·미판정은 제안 내용,
+반려는 발행판 내용으로 합성된다. 발행 성공 토스트의 "열기"는 발행본 문서 화면으로 간다.
 
 <Canvas of={DocumentStories.Default} />
 
-아직 발행된 판이 없는 문서를 미리보기하면 새 탭에 빈 화면이 뜬다(404 `ARTIFACT_NOT_PUBLISHED`).
-[Unpublished](?path=/story/screens-llm-wiki-documentpage--unpublished)가 그 모습이고, 시안 없는
-알려진 구멍이라 안내 화면을 만들지 않았다.
+아직 발행된 판이 없는 문서를 열면 안내 화면이 뜬다(404 `ARTIFACT_NOT_PUBLISHED`).
+[Unpublished](?path=/story/screens-llm-wiki-documentpage--unpublished)가 그 모습이고, 버튼이
+`/llm-wiki/review?artifactId={id}`로 보내 그 문서의 계류 안건을 미리 골라 준다. 문구·조립은
+시안이 없어 자작이다.

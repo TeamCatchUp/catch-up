@@ -175,6 +175,73 @@ describe('useReviewQueueModel', () => {
     expect(result.current.selectedId).toBe(SECOND);
   });
 
+  it('artifactId 힌트가 있으면 그 문서의 안건이 골라진다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책'), queueItem(SECOND, '환불 문서 병합')]);
+    const { result } = renderHook(() => useReviewQueueModel({ preselectArtifactId: `art-${SECOND}` }), {
+      wrapper: makeWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.selectedId).toBe(SECOND));
+  });
+
+  it('힌트와 맞는 안건이 없으면(이미 처리됨) 기본 선택이 그대로 선다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책'), queueItem(SECOND, '환불 문서 병합')]);
+    const { result } = renderHook(() => useReviewQueueModel({ preselectArtifactId: 'art-gone' }), {
+      wrapper: makeWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+    expect(result.current.selectedId).toBe(FIRST);
+  });
+
+  it('힌트는 한 번만 먹는다 — 목록이 다시 와도 그 뒤의 선택을 덮지 않는다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책'), queueItem(SECOND, '환불 문서 병합')]);
+    const { result } = renderHook(() => useReviewQueueModel({ preselectArtifactId: `art-${SECOND}` }), {
+      wrapper: makeWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.selectedId).toBe(SECOND));
+    act(() => result.current.onSelectItem(FIRST));
+
+    // 거르기를 바꾸면 큐를 다시 부른다 — 그때 힌트가 되살아나면 안 된다
+    act(() => result.current.onFiltersChange({ ...result.current.filters, waitingId: 'within-7d' }));
+
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+    expect(result.current.selectedId).toBe(FIRST);
+  });
+
+  it('힌트는 목록이 처음 온 순간에만 풀린다 — 뒤늦게 나타난 안건에는 먹지 않는다', async () => {
+    let requestCount = 0;
+    server.use(
+      http.get('*/api/v1/knowledge-review/queue', () => {
+        requestCount += 1;
+        // 둘째 요청부터 힌트와 맞는 안건이 목록에 들어온다
+        const items =
+          requestCount === 1
+            ? [queueItem(FIRST, '결제 재시도 정책')]
+            : [queueItem(FIRST, '결제 재시도 정책'), queueItem(SECOND, '환불 문서 병합')];
+        return HttpResponse.json({ items, total: items.length, limit: 50, offset: 0 });
+      }),
+      http.get('*/api/v1/knowledge-review/queue/:proposalId', ({ params }) =>
+        HttpResponse.json(detail(String(params.proposalId), false)),
+      ),
+      http.get('*/api/v1/wiki/channels', () => HttpResponse.json({ channels: [] })),
+      http.get('*/api/v1/wiki/members', () => HttpResponse.json({ items: [] })),
+    );
+
+    const { result } = renderHook(() => useReviewQueueModel({ preselectArtifactId: `art-${SECOND}` }), {
+      wrapper: makeWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    expect(result.current.selectedId).toBe(FIRST);
+
+    act(() => result.current.onFiltersChange({ ...result.current.filters, waitingId: 'within-7d' }));
+
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+    expect(result.current.selectedId).toBe(FIRST);
+  });
+
   it('거른 결과에 보던 안건이 없으면 첫 줄로 내려온다', async () => {
     stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책'), queueItem(SECOND, '환불 문서 병합')]);
     const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
