@@ -24,6 +24,16 @@ export interface BlockDiffCardProps {
   onReject: (id: string) => void;
 }
 
+/** 카드 하단 설명 패널. 수정 이유와 반려 사유가 같은 시각을 쓴다 */
+function CardNotePanel({ label, body }: { label: string; body: string }) {
+  return (
+    <div className="bg-fill-normal-strong flex flex-col gap-2 rounded-xl px-4 py-3">
+      <span className="text-body-xsmall text-text-normal-alternative">{label}</span>
+      <p className="text-body-small text-text-normal-neutral">{body}</p>
+    </div>
+  );
+}
+
 /**
  * 블록 변경 1건 = 카드 1장. 본문 배치는 kind가 정한다 — modified는 좌우 비교, added·removed는 단일 패널.
  * 개별 블록 수정(연필) 버튼은 시안에 있으나 기능이 범위 밖이라 구현하지 않는다.
@@ -37,7 +47,14 @@ export default function BlockDiffCard({
   onReject,
 }: BlockDiffCardProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
-  const { id, kind, title, before, after, reason, rejected = false } = entry;
+  // 판정이 들어오면 접힘 기본값이 바뀐다 — 카드가 남아 있는 채로 상태만 따라가야 한다
+  const [appliedDefault, setAppliedDefault] = useState(defaultCollapsed);
+  if (appliedDefault !== defaultCollapsed) {
+    setAppliedDefault(defaultCollapsed);
+    setCollapsed(defaultCollapsed);
+  }
+
+  const { id, kind, title, before, after, reason, rejected = false, approved = false, rejectionReason } = entry;
   const ChevronIcon = collapsed ? IconArrowDropdownRight : IconArrowDropdownDown;
 
   return (
@@ -62,7 +79,9 @@ export default function BlockDiffCard({
             반려됨
           </span>
         ) : (
-          canReview && (
+          // 승인된 블록은 판정이 끝나 액션이 빠진다 — 대응 배지는 시안에 없어 자리가 비어 있다
+          canReview &&
+          !approved && (
             <>
               {/* outline은 테두리 1px이 더해져 solid와 높이가 어긋난다 — 양쪽에 같은 높이를 준다 */}
               {canReject && (
@@ -88,12 +107,9 @@ export default function BlockDiffCard({
               {after && <DiffText lines={after} tone="added" />}
             </div>
           )}
-          {reason && (
-            <div className="bg-fill-normal-strong flex flex-col gap-2 rounded-xl px-4 py-3">
-              <span className="text-body-xsmall text-text-normal-alternative">수정된 이유</span>
-              <p className="text-body-small text-text-normal-neutral">{reason}</p>
-            </div>
-          )}
+          {reason && <CardNotePanel label="수정된 이유" body={reason} />}
+          {/* 반려 사유는 검토자가 남긴 글이라 판정이 끝난 뒤에도 읽을 자리가 있어야 한다 */}
+          {rejected && rejectionReason && <CardNotePanel label="반려 사유" body={rejectionReason} />}
         </>
       )}
     </section>

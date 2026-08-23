@@ -46,28 +46,44 @@ function comparedPair(base: WikiBlock, proposed: WikiBlock): [string, string] {
     : [base.body, proposed.body];
 }
 
-/** 판정 요청에 필요한 값들. 승인됨 배지는 시안이 없어 rejected만 내보낸다 */
+/** 판정 요청에 필요한 값과 저장된 판정. 판정된 카드는 접히고 액션이 빠진다 */
 function verdictFields(proposed: WikiBlock) {
   return {
     blockIndex: proposed.blockIndex,
     blockContentHash: proposed.blockContentHash,
     rejected: proposed.verdict?.verdict === 'rejected',
+    approved: proposed.verdict?.verdict === 'approved',
+    rejectionReason: proposed.verdict?.rejectionReason ?? null,
   };
+}
+
+/** 양식이 블록 하나에 준 자리와 이름. 표로 묶인 블록은 그 행 이름이 블록 이름이다 */
+interface LayoutSlot {
+  position: number;
+  label?: string;
+}
+
+function indexLayoutSlots(layout: readonly WikiLayoutItem[]): Map<number, LayoutSlot> {
+  const slots = new Map<number, LayoutSlot>();
+
+  layout.forEach((item, position) => {
+    if (item.kind === 'block') slots.set(item.blockIndex, { position, label: item.heading });
+    if (item.kind === 'table') {
+      // 표의 행과 블록 자리는 같은 순서로 짝지어 온다 — rows[i]가 blockIndexes[i]의 이름이다
+      item.blockIndexes.forEach((blockIndex, at) => slots.set(blockIndex, { position, label: item.rows[at]?.label }));
+    }
+  });
+
+  return slots;
 }
 
 /**
  * 카드 순서만 양식 순서로 바꾼다. 자리에 이름이 없는 카드(빠진 블록)는 원래 순서대로 뒤에 남는다.
  * 판정에 쓰는 blockIndex·blockContentHash는 카드가 그대로 들고 있어 재배치와 무관하다.
  */
-function sortByLayout(entries: readonly BlockDiffEntry[], layout: readonly WikiLayoutItem[]): BlockDiffEntry[] {
-  const position = new Map<number, number>();
-  layout.forEach((item, index) => {
-    if (item.kind === 'block') position.set(item.blockIndex, index);
-    if (item.kind === 'table') item.blockIndexes.forEach((blockIndex) => position.set(blockIndex, index));
-  });
-
+function sortByLayout(entries: readonly BlockDiffEntry[], slots: ReadonlyMap<number, LayoutSlot>): BlockDiffEntry[] {
   const rank = (entry: BlockDiffEntry) =>
-    (entry.blockIndex === null ? undefined : position.get(entry.blockIndex)) ?? Number.MAX_SAFE_INTEGER;
+    (entry.blockIndex === null ? undefined : slots.get(entry.blockIndex)?.position) ?? Number.MAX_SAFE_INTEGER;
 
   return [...entries].sort((left, right) => rank(left) - rank(right));
 }
@@ -85,6 +101,9 @@ export function buildBlockDiff(
   layout: readonly WikiLayoutItem[] = [],
 ): BlockDiffEntry[] {
   const entries: BlockDiffEntry[] = [];
+  const slots = indexLayoutSlots(layout);
+  // 카드 제목은 양식이 붙인 사람용 이름이다 — 이름이 없는 자리만 블록 heading으로 남는다
+  const titleOf = (block: WikiBlock) => slots.get(block.blockIndex)?.label ?? block.heading;
 
   for (const change of changes) {
     const base = change.baseBlockIndex === null ? undefined : baseBlocks[change.baseBlockIndex];
@@ -112,7 +131,7 @@ export function buildBlockDiff(
       entries.push({
         id: `added-${change.blockIndex}`,
         kind: 'added',
-        title: proposed.heading,
+        title: titleOf(proposed),
         before: null,
         after: plainLines(displayBody(proposed)),
         reason: proposed.reason ?? null,
@@ -127,7 +146,7 @@ export function buildBlockDiff(
     entries.push({
       id: `modified-${change.blockIndex}`,
       kind: 'modified',
-      title: proposed.heading,
+      title: titleOf(proposed),
       before: toLines(parts, 'before'),
       after: toLines(parts, 'after'),
       reason: proposed.reason ?? null,
@@ -135,5 +154,5 @@ export function buildBlockDiff(
     });
   }
 
-  return layout.length > 0 ? sortByLayout(entries, layout) : entries;
+  return layout.length > 0 ? sortByLayout(entries, slots) : entries;
 }

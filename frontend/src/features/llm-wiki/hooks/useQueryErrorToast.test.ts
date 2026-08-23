@@ -61,6 +61,18 @@ describe('useQueryErrorToast', () => {
     expect(toastMock).toHaveBeenCalledTimes(1);
   });
 
+  // 합산 에러는 앞 쿼리가 복구되면 다른 쿼리 실패로 갈아탄다 — 새 문구가 묻히면 안 된다
+  it('실패가 다른 문구로 갈아타면 그 문구를 새로 띄운다', () => {
+    const { rerender } = renderHook(({ value }) => useQueryErrorToast(value), {
+      initialProps: { value: makeApiError('WIKI_LIST_FAILED', '목록을 읽지 못했습니다.') },
+    });
+
+    rerender({ value: makeApiError('WIKI_CHANNELS_FAILED', '채널을 읽지 못했습니다.') });
+
+    expect(toastMock).toHaveBeenCalledTimes(2);
+    expect(toastMock.mock.calls[1][0]).toBe('채널을 읽지 못했습니다.');
+  });
+
   it('에러가 걷혔다가 다시 서면 그때 다시 띄운다', () => {
     const error = makeApiError('WIKI_LIST_FAILED', '목록을 읽지 못했습니다.');
     const { rerender } = renderHook(({ value }: { value: unknown }) => useQueryErrorToast(value), {

@@ -16,21 +16,22 @@ function resolveMessage(error: unknown): string {
 
 /**
  * 조회 실패 하나를 토스트 하나로 흘린다. 여러 쿼리를 한 번에 맡기려면 에러를 합쳐서 넘긴다.
- * 재시도·리렌더로 같은 실패가 반복돼도, 에러가 걷혔다가 다시 설 때만 다시 띄운다.
+ * 재시도·리렌더로 같은 문구가 반복되면 넘기고, 문구가 갈리거나 걷혔다가 다시 설 때만 띄운다.
  */
 export function useQueryErrorToast(error: unknown, options?: ExternalToast): void {
-  const notified = useRef(false);
+  const notified = useRef<string | null>(null);
 
   useEffect(() => {
     if (error === null || error === undefined) {
-      notified.current = false;
+      notified.current = null;
       return;
     }
-    if (notified.current) return;
-    notified.current = true;
+
+    const message = resolveMessage(error);
+    if (notified.current === message) return;
+    notified.current = message;
 
     // id를 문구로 두면 같은 실패를 본 다른 화면 요소(SNB 등)와 토스트가 합쳐진다
-    const message = resolveMessage(error);
     toast(message, { id: message, ...options });
   }, [error, options]);
 }

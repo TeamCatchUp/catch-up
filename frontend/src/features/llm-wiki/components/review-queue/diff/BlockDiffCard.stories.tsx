@@ -19,6 +19,9 @@ const addedEntry = entries.find((e) => e.kind === 'added')!;
 const removedEntry = entries.find((e) => e.kind === 'removed')!;
 const [longEntry] = buildBlockDiff(LONG_BASE_WIKI_BLOCKS, LONG_PROPOSED_WIKI_BLOCKS, SINGLE_MODIFIED_BLOCK_CHANGES);
 
+/** 검토자가 반려에 남긴 글. 서버가 판정과 함께 저장해 상세로 다시 내려준다 */
+const REJECTION_REASON = '근거 VOC가 동일 고객사 3건이라 일반화하기 이르다';
+
 const meta = {
   title: 'Compositions/LLM Wiki/ReviewQueue/BlockDiffCard',
   component: BlockDiffCard,
@@ -44,6 +47,7 @@ const meta = {
         'removed',
         'collapsed',
         'rejected',
+        'approved',
         'long-text',
         'no-reason',
         'no-review-permission',
@@ -65,6 +69,8 @@ const meta = {
         '"수정된 이유"는 서버가 만든 요약 문구다(새 섹션·산문 갱신·근거 N건 추가·M건 폐기) — 사람이 쓴 설명이 아니다.',
         '본문은 narrative(사람용 산문)가 정본이고, 없는 블록(옛 데이터)만 body로 폴백한다 — Modified가 산문 경로, Added가 폴백 경로를 밟는다.',
         'canReview=false면 판정 버튼이 사라지고 열람만 남는다 — 값은 서버가 계산한 can_review이고 프론트는 재계산하지 않는다. 비활성+툴팁 안은 디자이너 미결이라 숨김으로 간다.',
+        '판정이 끝난 카드(approved·rejected)는 액션이 빠지고 접힌 채로 남는다. 반려만 배지가 서고 승인은 대응 시각이 없다 — 접힘 여부로만 미판정과 갈린다(알려진 구멍).',
+        '반려 사유는 서버가 판정과 함께 저장한 검토자 글이다 — 반려된 카드에서만 "수정된 이유"와 같은 패널로 낸다. 레이블 문구는 시안 없이 정한 자작분이다.',
       ],
       tokenNotes: [
         '패널 색은 8/7 실측 확정(17849:106867·17848:106179) — removed: bg-red-1(#FFFAFA)/좌측 바 2px red-40, added: bg-green-5(#E6FAF2)/좌측 바 2px green-60(#00985A). 패널 자체에는 padding도 radius도 없다.',
@@ -125,11 +131,16 @@ export const Added: Story = {
   },
 };
 
+/** 빠진 블록. 판정 경로가 없어 섹션이 canReview=false로 내려보낸다 — 열람만 남는다. */
 export const Removed: Story = {
-  args: { entry: removedEntry },
+  args: { entry: removedEntry, canReview: false },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('수동 재시도 안내')).toBeInTheDocument();
+
+    // 보낼 수 없는 요청의 버튼을 남기지 않는다 — 셰브런만 버튼이다
+    const names = canvas.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent);
+    await expect(names).toEqual(['접기']);
     // 초록(after) 패널이 없어야 한다
     await expect(canvasElement.querySelectorAll('[class*="border-green"]')).toHaveLength(0);
     // 색만으로 삭제를 알리지 않는다 — 고지 문구가 패널 안에 있어야 한다.
@@ -150,9 +161,12 @@ export const NoRejectPath: Story = {
   },
 };
 
-/** 반려 처리된 블록. 액션 버튼이 사라지고 "반려됨" 배지만 남는다. */
+/** 반려 처리된 블록. 액션 버튼이 사라지고 "반려됨" 배지만 남으며, 펼치면 반려 사유가 있다. */
 export const Rejected: Story = {
-  args: { entry: { ...modifiedEntry, rejected: true }, defaultCollapsed: true },
+  args: {
+    entry: { ...modifiedEntry, rejected: true, rejectionReason: REJECTION_REASON },
+    defaultCollapsed: true,
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
@@ -160,6 +174,33 @@ export const Rejected: Story = {
     // 판정이 끝났으므로 액션이 하나도 남으면 안 된다 — 셰브런만 버튼이다
     const names = canvas.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent);
     await expect(names).toEqual(['펼치기']);
+
+    // 검토자가 적은 사유가 읽을 자리를 갖는다 — "수정된 이유"와 같은 패널이다
+    await userEvent.click(canvas.getByRole('button', { name: '펼치기' }));
+    await expect(canvas.getByText('반려 사유')).toBeInTheDocument();
+    await expect(canvas.getByText(REJECTION_REASON)).toBeInTheDocument();
+  },
+};
+
+/**
+ * 승인 처리된 블록. 액션이 빠지고 접힌 채로 남는다 —
+ * 반려됨에 해당하는 "승인됨" 배지는 시안에 없어 접힘 자체가 유일한 표시다.
+ */
+export const Approved: Story = {
+  args: { entry: { ...modifiedEntry, approved: true }, defaultCollapsed: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // 판정이 끝났으므로 액션이 하나도 남으면 안 된다 — 셰브런만 버튼이다
+    const names = canvas.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent);
+    await expect(names).toEqual(['펼치기']);
+
+    // 승인에는 대응 배지가 없다
+    await expect(canvas.queryByText(/승인됨|반려됨/)).toBeNull();
+
+    // 열람은 그대로다 — 펼치면 본문이 돌아온다
+    await userEvent.click(canvas.getByRole('button', { name: '펼치기' }));
+    await expect(canvasElement.textContent).toContain('세 번까지');
   },
 };
 

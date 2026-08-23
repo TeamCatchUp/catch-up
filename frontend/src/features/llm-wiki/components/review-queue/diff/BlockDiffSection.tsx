@@ -57,11 +57,14 @@ export default function BlockDiffSection({
         )}
       </header>
 
+      {/* 판정이 끝난 카드는 접은 채로 남는다 — 결정한 블록을 다시 훑을 이유가 없다 */}
       {entries.map((entry) => (
         <BlockDiffCard
           key={entry.id}
           entry={entry}
-          canReview={canReview}
+          defaultCollapsed={Boolean(entry.approved || entry.rejected)}
+          // 판정 경로가 없는 카드(빠진 블록)는 열람만 남긴다 — 닿는 곳 없는 버튼을 두지 않는다
+          canReview={canReview && entry.blockIndex !== null}
           canReject={canReject}
           onApprove={onApprove}
           onReject={onReject}

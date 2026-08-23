@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { parseApiError } from '@/shared/api/errors';
 import { toast } from '@/shared/components/ui/toast';
@@ -35,6 +35,16 @@ interface BlockVerdictVariables extends ReviewBlockVerdictRequest {
 }
 
 /**
+ * 판정이 바꾸는 위키 캐시 — 문서 목록(상태·최근 활동)과 그 문서의 발행판뿐이다.
+ * 채널·구성원·preset은 판정으로 바뀌지 않아 뿌리째 무효화하지 않는다.
+ */
+function invalidateWikiArtifacts(queryClient: QueryClient, artifactId?: string) {
+  queryClient.invalidateQueries({ queryKey: [...wikiQueries.all(), 'artifacts'] });
+  // 문서 id를 아직 모르는 화면(상세 도착 전)은 목록만 되돌린다
+  if (artifactId) queryClient.invalidateQueries({ queryKey: wikiQueries.artifact(artifactId).queryKey });
+}
+
+/**
  * 블록 판정(PUT, 멱등). 성공·실패 모두 상세만 다시 읽는다 —
  * 큐 줄은 블록 판정으로 바뀌지 않고, 실패 대부분이 낡은 지문이라 재조회가 곧 복구다.
  */
@@ -56,15 +66,15 @@ export const useReviewBlockVerdictMutation = (proposalId: string) => {
   });
 };
 
-/** 발행. 큐에서 줄이 빠지고 문서 쪽 상태·최근 활동이 함께 바뀌어 두 뿌리를 모두 무효화한다. */
-export const useReviewPublishMutation = (proposalId: string) => {
+/** 발행. 큐에서 줄이 빠지고 문서 쪽 상태·최근 활동이 함께 바뀌어 큐 뿌리와 문서 캐시를 되돌린다. */
+export const useReviewPublishMutation = (proposalId: string, artifactId?: string) => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (body: ReviewPublishRequest): Promise<ReviewPublishDto> => publishReviewProposal(proposalId, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: knowledgeReviewQueries.all() });
-      queryClient.invalidateQueries({ queryKey: wikiQueries.all() });
+      invalidateWikiArtifacts(queryClient, artifactId);
     },
     onError: (error) => {
       const { code, message } = parseApiError(error);
@@ -80,14 +90,14 @@ export const useReviewPublishMutation = (proposalId: string) => {
  * 변경안 통째 반려. 사유가 비면 서버가 400으로 막는다.
  * 블록 판정이 시작된 변경안에는 쓸 수 없어 진입점은 판정 전 화면에만 놓을 수 있다.
  */
-export const useRejectReviewProposalMutation = (proposalId: string) => {
+export const useRejectReviewProposalMutation = (proposalId: string, artifactId?: string) => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (body: ReviewRejectRequest): Promise<ReviewDecisionDto> => rejectReviewProposal(proposalId, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: knowledgeReviewQueries.all() });
-      queryClient.invalidateQueries({ queryKey: wikiQueries.all() });
+      invalidateWikiArtifacts(queryClient, artifactId);
     },
     onError: (error) => {
       toast(parseApiError(error).message, REVIEW_TOAST_OPTIONS);
@@ -99,14 +109,14 @@ export const useRejectReviewProposalMutation = (proposalId: string) => {
  * 변경안 통째 승인. 새 revision이 발행되므로 큐와 문서 쪽을 함께 무효화한다.
  * 블록 판정이 시작된 변경안은 서버가 409로 막고, 그 메시지를 토스트로 보인다.
  */
-export const useApproveReviewProposalMutation = (proposalId: string) => {
+export const useApproveReviewProposalMutation = (proposalId: string, artifactId?: string) => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (): Promise<ReviewDecisionDto> => approveReviewProposal(proposalId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: knowledgeReviewQueries.all() });
-      queryClient.invalidateQueries({ queryKey: wikiQueries.all() });
+      invalidateWikiArtifacts(queryClient, artifactId);
     },
     onError: (error) => {
       toast(parseApiError(error).message, REVIEW_TOAST_OPTIONS);

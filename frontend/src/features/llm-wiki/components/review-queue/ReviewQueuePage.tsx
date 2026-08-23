@@ -49,6 +49,8 @@ export interface ReviewQueuePageProps {
   listPending?: boolean;
   /** 고른 안건의 상세를 기다리는 중인지 */
   detailPending?: boolean;
+  /** 판정 결과를 붙잡아 둔 상태인지. 목록이 비어도 상세를 빈 안내로 덮지 않는다 */
+  detailRetained?: boolean;
   selectedId: string | null;
   onSelectItem: (proposalId: string) => void;
 
@@ -77,7 +79,7 @@ export interface ReviewQueuePageProps {
 
   onPreview: () => void;
   onApproveBlock: (entry: BlockDiffEntry) => void;
-  /** canReject가 꺼져 있으면 호출되지 않는다 */
+  /** 카드 반려 클릭. 요청은 사유 입력을 거쳐 나간다 */
   onRejectBlock?: (entry: BlockDiffEntry) => void;
   onPublish: () => void;
 
@@ -89,7 +91,21 @@ export interface ReviewQueuePageProps {
   /** 변경안 통째 반려. 사유는 이미 트림돼 있다 */
   onRejectAll: (reason: string) => void;
   rejectPending?: boolean;
+
+  /** 블록 반려 사유 입력의 열림 상태. 어느 블록인지는 소비처가 든다 */
+  blockRejectDialogOpen?: boolean;
+  onBlockRejectDialogOpenChange?: (open: boolean) => void;
+  /** 블록 반려 확정. 사유는 이미 트림돼 있다 */
+  onRejectBlockSubmit?: (reason: string) => void;
+  blockRejectPending?: boolean;
 }
+
+/** 블록 반려 사유 입력의 문구. 전체 반려 다이얼로그를 그대로 쓰고 문구만 갈아 끼운다 */
+const BLOCK_REJECT_COPY = {
+  title: '블록 반려',
+  description: '반려 사유는 작성자에게 그대로 전달됩니다.',
+  submitLabel: '반려',
+} as const;
 
 /**
  * 검토 큐 화면 — 좌측 목록 · 헤더 아래로 중앙 제안 상세와 우측 문서 위치·담당자.
@@ -100,6 +116,7 @@ export default function ReviewQueuePage({
   totalCount,
   listPending = false,
   detailPending = false,
+  detailRetained = false,
   selectedId,
   onSelectItem,
   breadcrumbs,
@@ -125,22 +142,30 @@ export default function ReviewQueuePage({
   onRejectDialogOpenChange,
   onRejectAll,
   rejectPending = false,
+  blockRejectDialogOpen = false,
+  onBlockRejectDialogOpenChange,
+  onRejectBlockSubmit,
+  blockRejectPending = false,
 }: ReviewQueuePageProps) {
   const selectedIndex = items.findIndex((item) => item.id === selectedId);
-  // 목록이 비면 그릴 상세가 없다 — 좌측 머리글·필터만 남기고 안내로 대체한다
-  const isEmpty = items.length === 0 && !listPending;
+  // 목록이 비면 그릴 상세가 없다 — 다만 판정 결과를 붙잡아 둔 동안은 그 상세를 지키고 안내로 덮지 않는다
+  const isEmpty = items.length === 0 && !detailRetained && !listPending;
   // 목록을 아직 기다리는 동안에도 상세 자리는 골격으로 채운다
   const showDetailSkeleton = listPending || detailPending;
+  // 고른 안건이 목록에서 빠졌어도(판정 유지) 남은 안건이 있으면 다음으로 갈 수 있어야 한다
+  const canMoveNext = selectedIndex < 0 ? items.length > 0 : selectedIndex < items.length - 1;
 
   const prefersReducedMotion = usePrefersReducedMotion();
   // 상세가 넘어가는 방향. 목록에서 아래 안건을 고르면 아래에서, 위면 위에서 들어온다
-  const [swap, setSwap] = useState({ id: selectedId, index: selectedIndex, direction: 1 });
+  const [swap, setSwap] = useState({ id: selectedId, direction: 1 });
   if (swap.id !== selectedId) {
-    setSwap({ id: selectedId, index: selectedIndex, direction: selectedIndex < swap.index ? -1 : 1 });
+    // 자리는 지금 목록에서 다시 읽는다 — 줄이 빠진 뒤의 낡은 자리로 재면 방향이 뒤집힌다
+    const previousIndex = items.findIndex((item) => item.id === swap.id);
+    setSwap({ id: selectedId, direction: selectedIndex < previousIndex ? -1 : 1 });
   }
 
   const moveSelection = (offset: number) => {
-    const next = items[selectedIndex + offset];
+    const next = selectedIndex < 0 ? items[0] : items[selectedIndex + offset];
     if (next) onSelectItem(next.id);
   };
 
@@ -225,7 +250,7 @@ export default function ReviewQueuePage({
                   variant="icon-only-gray"
                   size="md"
                   aria-label="다음 변경사항"
-                  disabled={selectedIndex < 0 || selectedIndex >= items.length - 1}
+                  disabled={!canMoveNext}
                   onClick={() => moveSelection(1)}
                 >
                   <IconArrowDown aria-hidden className="size-6" />
@@ -313,6 +338,16 @@ export default function ReviewQueuePage({
             onOpenChange={onRejectDialogOpenChange}
             submitting={rejectPending}
             onSubmit={onRejectAll}
+          />
+
+          <RejectReasonDialog
+            open={blockRejectDialogOpen}
+            onOpenChange={(open) => onBlockRejectDialogOpenChange?.(open)}
+            title={BLOCK_REJECT_COPY.title}
+            description={BLOCK_REJECT_COPY.description}
+            submitLabel={BLOCK_REJECT_COPY.submitLabel}
+            submitting={blockRejectPending}
+            onSubmit={(reason) => onRejectBlockSubmit?.(reason)}
           />
         </div>
       )}

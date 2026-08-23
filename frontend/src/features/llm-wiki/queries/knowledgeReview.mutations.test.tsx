@@ -25,6 +25,11 @@ vi.mock('../api/knowledgeReviewRequests', () => reviewApi);
 vi.mock('@/shared/components/ui/toast', () => ({ toast: toastMock }));
 
 const PROPOSAL_ID = 'pr-1';
+const ARTIFACT_ID = 'ar-1';
+
+/** 판정으로 되돌리는 위키 캐시 — 문서 목록 전부와 그 문서의 발행판뿐이다 */
+const artifactListKey = [...wikiQueries.all(), 'artifacts'];
+const artifactDetailKey = wikiQueries.artifact(ARTIFACT_ID).queryKey;
 
 /** parseApiError가 읽는 최소 형태의 axios 에러 */
 const apiError = (code: string, message: string) => ({
@@ -124,7 +129,20 @@ describe('useReviewPublishMutation', () => {
     claims_accepted: 4,
   };
 
-  it('발행은 큐 뿌리와 위키 뿌리를 함께 무효화한다 — 줄이 빠지고 문서 상태도 바뀐다', async () => {
+  // 채널·구성원·preset(staleTime Infinity)은 판정으로 바뀌지 않는다 — 위키 뿌리를 통째로 되돌리지 않는다
+  it('발행은 큐 뿌리와 문서 목록·그 문서 상세만 무효화한다', async () => {
+    reviewApi.publishReviewProposal.mockResolvedValue(PUBLISH_RESPONSE);
+    const { wrapper, invalidatedKeys } = createHarness();
+    const { result } = renderHook(() => useReviewPublishMutation(PROPOSAL_ID, ARTIFACT_ID), { wrapper });
+
+    result.current.mutate({ base_revision_id: 'rv-8' });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(reviewApi.publishReviewProposal).toHaveBeenCalledWith(PROPOSAL_ID, { base_revision_id: 'rv-8' });
+    expect(invalidatedKeys()).toEqual([knowledgeReviewQueries.all(), artifactListKey, artifactDetailKey]);
+  });
+
+  it('문서 id를 모르면 목록만 되돌린다 — 상세는 되돌릴 자리를 못 짚는다', async () => {
     reviewApi.publishReviewProposal.mockResolvedValue(PUBLISH_RESPONSE);
     const { wrapper, invalidatedKeys } = createHarness();
     const { result } = renderHook(() => useReviewPublishMutation(PROPOSAL_ID), { wrapper });
@@ -132,8 +150,7 @@ describe('useReviewPublishMutation', () => {
     result.current.mutate({ base_revision_id: 'rv-8' });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(reviewApi.publishReviewProposal).toHaveBeenCalledWith(PROPOSAL_ID, { base_revision_id: 'rv-8' });
-    expect(invalidatedKeys()).toEqual([knowledgeReviewQueries.all(), wikiQueries.all()]);
+    expect(invalidatedKeys()).toEqual([knowledgeReviewQueries.all(), artifactListKey]);
   });
 
   it('낡은 상태로 막히면 상세만 다시 읽는다 — 뿌리까지 되돌리지 않는다', async () => {
@@ -181,15 +198,15 @@ describe('useRejectReviewProposalMutation', () => {
     expect(reviewApi.rejectReviewProposal).toHaveBeenCalledWith(PROPOSAL_ID, { reason: '근거가 부족해요.' });
   });
 
-  it('반려도 큐 뿌리와 위키 뿌리를 함께 무효화한다', async () => {
+  it('반려도 큐 뿌리와 문서 목록·그 문서 상세만 무효화한다', async () => {
     reviewApi.rejectReviewProposal.mockResolvedValue(REJECT_RESPONSE);
     const { wrapper, invalidatedKeys } = createHarness();
-    const { result } = renderHook(() => useRejectReviewProposalMutation(PROPOSAL_ID), { wrapper });
+    const { result } = renderHook(() => useRejectReviewProposalMutation(PROPOSAL_ID, ARTIFACT_ID), { wrapper });
 
     result.current.mutate({ reason: '근거가 부족해요.' });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(invalidatedKeys()).toEqual([knowledgeReviewQueries.all(), wikiQueries.all()]);
+    expect(invalidatedKeys()).toEqual([knowledgeReviewQueries.all(), artifactListKey, artifactDetailKey]);
   });
 
   it('실패하면 문구만 띄운다 — 반려에는 낡은 상태 재조회 분기가 없다', async () => {

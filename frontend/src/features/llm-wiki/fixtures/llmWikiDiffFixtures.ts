@@ -1,3 +1,4 @@
+import type { ReviewProposalDetailData } from '../api/knowledgeReviewDetailMappers';
 import type { WikiLayoutItem } from '../api/wikiDocumentMappers';
 import type { BlockChange, WikiBlock } from '../types/llmWikiDiff';
 
@@ -203,3 +204,44 @@ export const LONG_PROPOSED_WIKI_BLOCKS: readonly WikiBlock[] = [
 export const SINGLE_MODIFIED_BLOCK_CHANGES: readonly BlockChange[] = [
   { kind: 'modified', blockIndex: 0, baseBlockIndex: 0 },
 ];
+
+/**
+ * 검토 상세 표본. 기본은 기본 쌍(변경 3건)에 판정이 하나도 없는 상태다.
+ * 미리보기·상세 소비처가 블록·양식·변경 목록을 한 벌로 받아야 해서 묶어 둔다.
+ */
+export function reviewProposalDetail(overrides: Partial<ReviewProposalDetailData> = {}): ReviewProposalDetailData {
+  return {
+    proposalId: 'prop-payment-retry',
+    artifactId: 'artifact-payment-retry',
+    title: '결제 재시도 정책',
+    channelId: 'channel-payments',
+    folderId: 'folder-approval',
+    status: 'pending',
+    canReview: true,
+    baseRevisionId: 'rev-1',
+    owners: [],
+    blocks: [...PROPOSED_WIKI_BLOCKS],
+    layout: [...PROPOSED_WIKI_LAYOUT],
+    baseBlocks: [...BASE_WIKI_BLOCKS],
+    baseLayout: [],
+    changes: [...PROPOSED_BLOCK_CHANGES],
+    ...overrides,
+  };
+}
+
+/** 블록 하나에 판정을 얹은 사본. 지문은 그대로 둬야 낙관적 잠금 mock이 성립한다 */
+export function withBlockVerdict(source: WikiBlock, verdict: 'approved' | 'rejected'): WikiBlock {
+  return {
+    ...source,
+    verdict: {
+      proposalId: 'prop-payment-retry',
+      blockIndex: source.blockIndex,
+      blockContentHash: source.blockContentHash,
+      verdict,
+      rejectionReason: verdict === 'rejected' ? '근거가 한 건뿐이라 더 모으고 싶습니다' : null,
+      chosenWinnerClaimId: null,
+      reviewer: '직원10',
+      reviewedAt: '2026-08-21T02:00:00Z',
+    },
+  };
+}

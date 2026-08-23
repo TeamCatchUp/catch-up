@@ -111,6 +111,8 @@ export const NotShownWithRows: Story = {
           createdAt: '2024-09-02T01:00:00.000Z',
           lastActivityAt: '2024-12-15T06:00:00.000Z',
           lastActivityLabel: '3시간 전',
+          lastEditedBy: { userId: 1, displayName: '팀원F', profileImageUrl: null },
+          lastEditedAt: '2024-12-15T06:00:00.000Z',
         }}
       />
     </div>

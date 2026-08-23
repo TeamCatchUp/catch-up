@@ -12,6 +12,10 @@ import RejectReasonDialog from './RejectReasonDialog';
 interface RejectReasonDialogStoryArgs {
   initiallyOpen: boolean;
   submitting: boolean;
+  /** 생략하면 전체 반려 문구다 — 블록 반려는 같은 자리에 자기 문구를 준다 */
+  title?: string;
+  description?: string;
+  submitLabel?: string;
   onSubmit: (reason: string) => void;
 }
 
@@ -23,7 +27,15 @@ function StatefulRejectReasonDialog(args: RejectReasonDialogStoryArgs) {
       <Button variant="box-outline-gray" size="md" onClick={() => setOpen(true)}>
         사유 입력 열기
       </Button>
-      <RejectReasonDialog open={open} onOpenChange={setOpen} submitting={args.submitting} onSubmit={args.onSubmit} />
+      <RejectReasonDialog
+        open={open}
+        onOpenChange={setOpen}
+        title={args.title}
+        description={args.description}
+        submitLabel={args.submitLabel}
+        submitting={args.submitting}
+        onSubmit={args.onSubmit}
+      />
     </div>
   );
 }
@@ -46,9 +58,12 @@ const meta = {
       owner: 'feature',
       dataProfile: 'static',
       designSource: 'dev-preview',
-      states: ['closed', 'open', 'empty-reason', 'submitting'],
-      reuseNotes: ['Dialog·Button 프리미티브 조립 — ConfirmDialog의 여백·보더·버튼 배치를 따른다.'],
-      dataNotes: ['사유가 비면 서버가 400으로 막아 제출 버튼을 먼저 잠근다.'],
+      states: ['closed', 'open', 'empty-reason', 'submitting', 'block-copy'],
+      reuseNotes: [
+        'Dialog·Button 프리미티브 조립 — ConfirmDialog의 여백·보더·버튼 배치를 따른다.',
+        '전체 반려와 블록 반려가 같은 다이얼로그를 쓰고 문구(제목·설명·제출 라벨)만 갈아 끼운다 — 사유 입력의 규칙이 두 벌로 갈리지 않게.',
+      ],
+      dataNotes: ['사유가 비면 서버가 막아(변경안 400·블록 422) 제출 버튼을 먼저 잠근다.'],
     }),
   },
 } satisfies Meta<RejectReasonDialogStoryArgs>;
@@ -78,6 +93,32 @@ export const Playground: Story = {
       await expect(dialog.getByRole('button', { name: '전체 반려' })).toBeEnabled();
       await userEvent.click(dialog.getByRole('button', { name: '전체 반려' }));
       await expect(args.onSubmit).toHaveBeenCalledWith('근거 문서가 없습니다');
+    });
+  },
+};
+
+/** 블록 반려 — 같은 다이얼로그에 문구만 갈아 끼운다. 사유 규칙은 그대로다. */
+export const BlockReject: Story = {
+  args: {
+    initiallyOpen: true,
+    title: '블록 반려',
+    description: '반려 사유는 작성자에게 그대로 전달됩니다.',
+    submitLabel: '반려',
+  },
+  play: async ({ args, step, userEvent }) => {
+    const portal = within(document.body);
+    const dialog = within(await portal.findByRole('dialog'));
+
+    await step('전체 반려 문구가 남지 않는다', async () => {
+      await expect(dialog.getByText('블록 반려')).toBeInTheDocument();
+      await expect(dialog.queryByRole('button', { name: '전체 반려' })).toBeNull();
+    });
+
+    await step('사유 규칙은 전체 반려와 같다', async () => {
+      await expect(dialog.getByRole('button', { name: '반려' })).toBeDisabled();
+      await userEvent.type(dialog.getByRole('textbox', { name: '반려 사유' }), '  근거가 한 건뿐입니다  ');
+      await userEvent.click(dialog.getByRole('button', { name: '반려' }));
+      await expect(args.onSubmit).toHaveBeenCalledWith('근거가 한 건뿐입니다');
     });
   },
 };

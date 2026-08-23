@@ -40,7 +40,7 @@ const meta = {
       states: ['default', 'partially-decided', 'no-review-permission'],
       dataNotes: [
         '건수 배지는 entries.length다 — 시안의 "12"는 목업 값이고 계약이 아니다.',
-        '승인 판정에는 대응 표시가 없다(시안 부재) — 승인한 블록이 미판정과 같은 모습으로 남는 알려진 구멍이다. PartiallyDecided가 그 사실을 붙잡는다.',
+        '판정이 끝난 카드는 접힌 채로 액션 없이 남는다. 반려만 배지가 서고 승인은 대응 시각이 없어 접힘 여부로만 갈린다(알려진 구멍) — PartiallyDecided가 그 사실을 붙잡는다.',
         '변경 0건 빈 상태 스토리는 만들지 않는다(MISSING — 감사 계약). 검토 큐 상세 레이아웃 조립은 다음 단계다.',
         '전체 승인·반려는 판정이 시작된 뒤에도 잠그지 않는다 — 서버가 409로 거절하고 그 메시지를 토스트로 보인다.',
         '반려는 사유가 필수라 버튼이 곧바로 요청을 내지 않고 사유 입력 다이얼로그를 연다.',
@@ -92,30 +92,46 @@ export const Default: Story = {
 
     await expect(canvas.queryByRole('button', { name: /미리보기/ })).toBeNull();
     await expect(canvas.queryByRole('button', { name: '이 블록 수정' })).toBeNull();
+
+    // 빠진 블록 카드에는 판정 경로가 없다 — 승인·반려를 내지 않는다
+    const removedCard = canvas.getByText('수동 재시도 안내').closest('section')!;
+    await expect(within(removedCard).queryByRole('button', { name: '승인' })).toBeNull();
+    await expect(within(removedCard).queryByRole('button', { name: '반려' })).toBeNull();
   },
 };
 
 /**
  * 판정이 절반 진행된 상태 — 0번 승인, 1번 반려.
- * 반려만 배지가 서고 승인은 표시가 없어 미판정 카드와 구별되지 않는다(알려진 구멍).
+ * 둘 다 접히고 액션이 빠진다. 배지는 반려에만 서서 승인은 접힘 자체가 유일한 표시다(알려진 구멍).
  */
 export const PartiallyDecided: Story = {
   args: { entries: partiallyDecidedEntries },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // 반려된 블록만 판정 흔적이 남는다.
+    // 반려된 블록만 판정 흔적(배지)이 남는다.
     await expect(canvas.getAllByText('반려됨')).toHaveLength(1);
     const rejectedCard = canvas.getByText('PG 점검 시간 예외').closest('section')!;
     await expect(within(rejectedCard).getByText('반려됨')).toBeInTheDocument();
 
-    // 승인한 블록은 배지도 없고 버튼도 그대로다 — 미판정 카드와 같은 모습이라는 뜻이다.
+    // 판정된 두 카드 모두 접혀 있고 액션이 없다 — 남은 버튼은 셰브런뿐이다.
     const approvedCard = canvas.getByText('재시도 정책').closest('section')!;
     await expect(within(approvedCard).queryByText(/반려됨|승인됨/)).toBeNull();
-    await expect(within(approvedCard).getByRole('button', { name: '승인' })).toBeInTheDocument();
+    await expect(within(approvedCard).queryByRole('button', { name: '승인' })).toBeNull();
+    await expect(within(approvedCard).getByRole('button', { name: '펼치기' })).toBeInTheDocument();
+    await expect(within(rejectedCard).getByRole('button', { name: '펼치기' })).toBeInTheDocument();
+
+    // 미판정 카드(빠진 블록)는 펼친 채로 남는다 — 접힘이 판정 여부를 가른다.
+    const undecidedCard = canvas.getByText('수동 재시도 안내').closest('section')!;
+    await expect(within(undecidedCard).getByRole('button', { name: '접기' })).toBeInTheDocument();
 
     // 전체 승인·반려는 판정이 시작된 뒤에도 남는다 — 배타 관계는 서버가 409로 알린다.
     await expect(canvas.getByRole('button', { name: '전체 승인' })).toBeEnabled();
     await expect(canvas.getByRole('button', { name: '전체 반려' })).toBeEnabled();
+
+    // 반려한 이유는 펼치면 카드 안에 남아 있다 — 쓰기만 하고 못 읽는 값이 되면 안 된다.
+    await userEvent.click(within(rejectedCard).getByRole('button', { name: '펼치기' }));
+    await expect(within(rejectedCard).getByText('반려 사유')).toBeInTheDocument();
+    await expect(within(rejectedCard).getByText('점검 시간 근거가 한 건뿐이라 더 모으고 싶습니다')).toBeInTheDocument();
   },
 };
