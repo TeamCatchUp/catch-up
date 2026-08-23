@@ -52,7 +52,14 @@ export const WIKI_CHANNEL_FIXTURE: WikiChannelListItem = {
   workspaceId: 1,
   isAdmin: true,
   documentCount: 23,
-  folders: CHANNEL_FOLDER_ROW_FIXTURES.map(({ id, name }) => ({ id, name, channelId: 'channel-payment' })),
+  folders: CHANNEL_FOLDER_ROW_FIXTURES.map(({ id, name }) => ({
+    id,
+    name,
+    channelId: 'channel-payment',
+    createdAt: '2024-09-02T01:00:00.000Z',
+    createdBy: rowOwner(1, '팀원F'),
+    lastActivityAt: '2024-12-15T06:00:00.000Z',
+  })),
 };
 
 /** 폴더 페이지 대상 폴더 — 채널 mock의 첫 폴더를 그대로 쓴다(channelId 정합) */

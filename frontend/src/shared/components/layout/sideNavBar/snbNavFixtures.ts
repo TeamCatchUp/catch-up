@@ -97,7 +97,7 @@ export const WIKI_RAIL_ITEMS: readonly SnbNavFixtureItem[] = [
   { id: 'recent-wiki', label: '최근 위키', Icon: IconFolder },
 ];
 
-/** 최종 편집자·시각에 대응하는 API 필드가 없어 시안 문구를 표본으로 둔다 */
+/** 시안 문구 표본. 실 데이터는 목록 응답의 last_edited_by·last_edited_at으로 조립된다 */
 const SAMPLE_EDIT_META: readonly string[] = ['팀원G 최종 편집', '오늘 오전 12:30'];
 
 /** 채널 id → 그 채널의 관리자 여부. 전역 플래그가 아니다 — 채널마다 따로다 */

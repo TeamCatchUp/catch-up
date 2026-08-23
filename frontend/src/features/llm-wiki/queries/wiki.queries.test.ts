@@ -46,6 +46,8 @@ const DOCUMENT: WikiArtifactDocumentDto = {
   is_favorite: false,
   revision_id: 'rv-9',
   published_at: '2026-08-19T09:00:00Z',
+  last_edited_by: null,
+  last_edited_at: null,
   blocks: [],
 };
 
@@ -131,10 +133,17 @@ describe('wikiQueries.artifacts 키', () => {
   });
 
   it('담당자 조건은 서로 다른 자리다 — 미지정 필터가 특정 담당자 결과를 덮지 않는다', () => {
-    const byOwner = wikiQueries.artifacts({ owner_user_id: 7 }).queryKey;
+    const byOwner = wikiQueries.artifacts({ owner_user_id: [7] }).queryKey;
     const unassigned = wikiQueries.artifacts({ unassigned: true }).queryKey;
 
     expect(hashKey(byOwner)).not.toBe(hashKey(unassigned));
+  });
+
+  it('고른 담당자가 다르면 다른 자리다 — 다중 선택이 한 명 결과 위에 덮어쓰지 않는다', () => {
+    const one = wikiQueries.artifacts({ owner_user_id: [7] }).queryKey;
+    const two = wikiQueries.artifacts({ owner_user_id: [7, 9] }).queryKey;
+
+    expect(hashKey(one)).not.toBe(hashKey(two));
   });
 });
 

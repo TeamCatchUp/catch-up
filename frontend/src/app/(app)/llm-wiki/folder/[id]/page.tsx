@@ -15,7 +15,7 @@ const DEFAULT_PAGE_SIZE = 20;
 
 /**
  * 폴더 화면. 문서 목록은 limit/offset 쪽 나눔이라 total로 쪽 수를 센다.
- * 폴더 자체의 작성자에 대응하는 필드가 없어 제목 블록의 작성자 줄은 서지 않는다.
+ * 작성자 줄은 폴더를 만든 사람이고, 그 사람이 없는 폴더는 줄 자체가 서지 않는다.
  */
 export default function Page() {
   const router = useRouter();
@@ -64,6 +64,8 @@ export default function Page() {
       folder={folder}
       documentRows={documentRows}
       documentsLoading={documentsQuery.isPending}
+      authorName={folder.createdBy?.displayName}
+      authorProfileImageUrl={folder.createdBy?.profileImageUrl}
       pageSize={pageSize}
       currentPage={currentPage}
       totalPages={totalPages}

@@ -10,7 +10,7 @@ import WikiSpaceTitleBlock from './WikiSpaceTitleBlock';
 
 interface WikiChannelPageProps {
   channel: WikiChannelListItem;
-  /** 폴더 행 표시 데이터 — channel.folders와 1:1. 담당자·상태 표시 필드는 목록 API 미동봉분이다 */
+  /** 폴더 행 표시 데이터 — channel.folders와 1:1. 폴더에는 담당자·상태에 대응하는 필드가 없다 */
   folderRows: readonly FolderDocumentRowItem[];
   authorName?: string;
   authorProfileImageUrl?: string | null;

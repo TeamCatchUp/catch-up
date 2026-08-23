@@ -2,7 +2,7 @@ import type { DateRange } from 'react-day-picker';
 import { endOfDay, format, startOfDay } from 'date-fns';
 
 import type { WikiArtifactListParams, WikiArtifactStatusDto } from '../../api/wikiDto';
-import type { DocumentRowData, KnownDocumentStatus } from '../../types/llmWikiModel';
+import type { KnownDocumentStatus } from '../../types/llmWikiModel';
 import { getDocumentStatusLabel } from '../document/DocumentStatusBadge';
 import type { DashboardFilterId } from './DashboardFilterBar';
 
@@ -159,21 +159,7 @@ export function buildWikiArtifactParams(state: DashboardQueryState, pageSize: nu
     case 'created-at':
       return { ...common, created_after: filter.createdAfter, created_before: filter.createdBefore };
     case 'assignee':
-      // 서버는 담당자 한 명만 받는다 — 2인 이상 선택은 파라미터로 나가지 않고 받은 쪽에서 좁힌다.
-      return filter.ownerUserIds.length === 1 ? { ...common, owner_user_id: filter.ownerUserIds[0] } : common;
+      // 서버가 여러 담당자를 받아 그중 한 명이라도 담당인 문서를 돌려준다 — 화면은 다시 거르지 않는다.
+      return filter.ownerUserIds.length > 0 ? { ...common, owner_user_id: [...filter.ownerUserIds] } : common;
   }
-}
-
-/** 서버가 표현하지 못하는 담당자 다중 선택. 2인 이상 고른 경우에만 값이 있다. */
-export function resolveClientOwnerUserIds(filter: DashboardActiveFilter | null): readonly number[] {
-  return filter?.kind === 'assignee' && filter.ownerUserIds.length > 1 ? filter.ownerUserIds : [];
-}
-
-/** 고른 담당자 중 하나가 담당인 행만 남긴다. 빈 목록이면 원본을 그대로 돌려준다. */
-export function filterDocumentsByOwners(
-  documents: readonly DocumentRowData[],
-  ownerUserIds: readonly number[],
-): readonly DocumentRowData[] {
-  if (ownerUserIds.length === 0) return documents;
-  return documents.filter((row) => row.owners.some((owner) => ownerUserIds.includes(owner.userId)));
 }

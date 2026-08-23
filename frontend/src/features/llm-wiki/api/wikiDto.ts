@@ -21,6 +21,11 @@ export interface WikiFolderDto {
   id: string;
   name: string;
   channel_id: string;
+  created_at: string;
+  /** 만든 사람. 컬럼이 생기기 전 폴더와 사용자 행이 사라진 폴더는 null이다 */
+  created_by: WikiOwnerDto | null;
+  /** 폴더 안 문서가 마지막으로 움직인 시각. 문서가 없으면 null이다 */
+  last_activity_at: string | null;
 }
 
 /** 채널 안 정의 하나. folder_id가 null이면 채널 루트에 놓인다 */
@@ -69,6 +74,10 @@ export interface WikiArtifactListItemDto {
   latest_revision: WikiLatestRevisionDto | null;
   owners: WikiOwnerDto[];
   is_favorite: boolean;
+  /** 가장 최근 발행판의 승인자. 승인자가 사용자로 이어지지 않으면 null이다 */
+  last_edited_by: WikiOwnerDto | null;
+  /** 그 승인 시각. 발행판이 없으면 사람과 함께 null이다 */
+  last_edited_at: string | null;
 }
 
 /** total은 limit·offset을 걸기 전의 수다 — 쪽 수 계산의 유일한 재료다 */
@@ -130,6 +139,10 @@ export interface WikiArtifactDocumentDto {
   is_favorite: boolean;
   revision_id: string;
   published_at: string;
+  /** 지금 발행된 판의 승인자. 승인자가 사용자로 이어지지 않으면 null이다 */
+  last_edited_by: WikiOwnerDto | null;
+  /** 그 승인 시각. 사람이 null이어도 시각은 채워질 수 있다 */
+  last_edited_at: string | null;
   blocks: WikiDocumentBlockDto[];
   /** 표시 순서·이름만 정한다. 내용과 근거의 원천은 blocks다 — 구서버 응답에는 없다 */
   layout?: WikiLayoutItemDto[];
@@ -236,10 +249,10 @@ interface WikiArtifactListBaseParams {
 
 /**
  * 담당자 조건은 둘 중 하나만 실린다 — 함께 주면 서버가 422(CONFLICTING_OWNER_FILTERS)다.
- * 한쪽을 쓸 때 다른 키는 넣지 않는다(unassigned: false도 함께 두지 않는다).
+ * owner_user_id는 여러 명을 받고 그중 한 명이라도 담당인 문서를 모두 돌려준다.
  */
 type WikiArtifactOwnerFilter =
-  | { owner_user_id?: number; unassigned?: never }
+  | { owner_user_id?: number[]; unassigned?: never }
   | { owner_user_id?: never; unassigned?: boolean };
 
 export type WikiArtifactListParams = WikiArtifactListBaseParams & WikiArtifactOwnerFilter;

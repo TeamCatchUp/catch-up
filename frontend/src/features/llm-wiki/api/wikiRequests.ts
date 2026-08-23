@@ -29,11 +29,19 @@ export async function fetchWikiMembers(signal?: AbortSignal): Promise<WikiWorksp
   return res.data;
 }
 
+/**
+ * owner_user_id는 반복 파라미터로 나가야 서버가 읽는다 —
+ * axios 기본 직렬화는 `owner_user_id[]=`라 FastAPI가 값을 못 찾는다.
+ */
 export async function fetchWikiArtifacts(
   params: WikiArtifactListParams,
   signal?: AbortSignal,
 ): Promise<WikiArtifactListDto> {
-  const res = await api.get<WikiArtifactListDto>(API.wiki.artifacts, { params, signal });
+  const res = await api.get<WikiArtifactListDto>(API.wiki.artifacts, {
+    params,
+    paramsSerializer: { indexes: null },
+    signal,
+  });
   return res.data;
 }
 

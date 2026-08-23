@@ -57,7 +57,7 @@ const meta = {
       dataNotes: [
         'hover는 CSS 상태라 스토리로 고정하지 않는다.',
         '로딩·빈 목록·에러 상태는 시안에 없어 만들지 않는다.',
-        '하단 메타(최종 편집자·시각)에 대응하는 API 필드가 없다(백엔드 협상 B13). optional 슬롯이고 스토리 값은 시안 문구 표본이다.',
+        '하단 메타(최종 편집자·시각)는 optional 슬롯이다. 위키 트리는 문서 목록의 last_edited_by·last_edited_at으로 채우고, 스토리 값은 시안 문구 표본이다.',
       ],
       interactionNotes: [
         '항목 클릭은 onSelect만 호출한다 — 메뉴를 닫는 책임은 소비처에 있다.',

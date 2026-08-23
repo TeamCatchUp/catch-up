@@ -16,6 +16,8 @@ export const WIKI_DOCUMENT_FIXTURE: WikiDocumentData = {
   revisionId: 'rv-3',
   publishedAt: '2026-08-18T13:00:00Z',
   publishedLabel: '23시간 전',
+  lastEditedBy: { userId: 7, displayName: '팀원F', profileImageUrl: null },
+  lastEditedAt: '2026-08-18T13:00:00Z',
   blocks: [
     {
       blockIndex: 0,

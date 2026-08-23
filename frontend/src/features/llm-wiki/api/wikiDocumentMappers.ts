@@ -4,7 +4,7 @@ import { formatRelativeTime } from '@/shared/utils/formatDate';
 
 import type { DocumentOwner } from '../types/llmWikiModel';
 import type { WikiArtifactDocumentDto, WikiBlockSourceDto, WikiDocumentBlockDto, WikiLayoutItemDto } from './wikiDto';
-import { mapWikiOwners } from './wikiMappers';
+import { mapWikiOptionalOwner, mapWikiOwners } from './wikiMappers';
 
 /**
  * [BE] 블록 문장의 근거 인용. citationVerified는 검증/대조 실패/근거 없음 3값이다.
@@ -65,6 +65,10 @@ export interface WikiDocumentData {
   publishedAt: string;
   /** 발행 시각 표시 문자열 (예: "3시간 전") */
   publishedLabel: string;
+  /** [BE] 이 판을 승인한 사람. 표시 시안이 없어 화면에 나가지 않고 계약만 보존한다 */
+  lastEditedBy: DocumentOwner | null;
+  /** [BE] 그 승인 시각(ISO). 사람이 null이어도 시각은 채워질 수 있다 */
+  lastEditedAt: string | null;
   blocks: readonly WikiDocumentBlock[];
   /** 표시 순서·이름. 비면 blocks 순서가 곧 표시 순서다 */
   layout: readonly WikiLayoutItem[];
@@ -135,6 +139,8 @@ export function mapWikiArtifactDocument(dto: WikiArtifactDocumentDto): WikiDocum
     revisionId: dto.revision_id,
     publishedAt: dto.published_at,
     publishedLabel: formatRelativeTime(dto.published_at),
+    lastEditedBy: mapWikiOptionalOwner(dto.last_edited_by),
+    lastEditedAt: dto.last_edited_at,
     blocks: dto.blocks.map(mapWikiDocumentBlock),
     layout: mapWikiLayout(dto.layout),
   };

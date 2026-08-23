@@ -12,7 +12,7 @@ import WikiSpaceTitleBlock from './WikiSpaceTitleBlock';
 interface WikiFolderPageProps {
   channel: WikiChannel;
   folder: WikiFolder;
-  /** 문서 행 표시 데이터 — 담당자·상태 표시 필드는 목록 API 미동봉분이다 */
+  /** 문서 행 표시 데이터 — 담당자·상태·최근 활동 모두 문서 목록 응답에서 온다 */
   documentRows: readonly FolderDocumentRowItem[];
   /** 첫 조회가 끝나기 전인지. 쪽 이동은 이전 쪽을 그대로 두므로 여기 해당하지 않는다 */
   documentsLoading?: boolean;

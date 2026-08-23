@@ -10,12 +10,13 @@ import WikiSpacePageSkeleton from '@/features/llm-wiki/components/space/states/W
 import WikiChannelPage from '@/features/llm-wiki/components/space/WikiChannelPage';
 import { useQueryErrorToast } from '@/features/llm-wiki/hooks/useQueryErrorToast';
 import { wikiQueries } from '@/features/llm-wiki/queries/wiki.queries';
+import { formatRelativeTime } from '@/shared/utils/formatDate';
 
 const DEFAULT_PAGE_SIZE = 20;
 
 /**
  * 채널 화면. 폴더는 채널 목록 응답에 전량 실려 와서 쪽 나눔이 클라이언트 몫이다.
- * 담당자·상태·최근 활동은 폴더에 대응 필드가 없어 비운다.
+ * 담당자·상태는 폴더에 대응 필드가 없어 비운다 — 폴더의 created_by는 담당자가 아니다.
  */
 export default function Page() {
   const router = useRouter();
@@ -43,7 +44,14 @@ export default function Page() {
   const totalPages = Math.max(1, Math.ceil(channel.folders.length / pageSize));
   const folderRows: FolderDocumentRowItem[] = channel.folders
     .slice((currentPage - 1) * pageSize, currentPage * pageSize)
-    .map((folder) => ({ id: folder.id, name: folder.name, owners: [], status: '', lastActivityLabel: '' }));
+    .map((folder) => ({
+      id: folder.id,
+      name: folder.name,
+      owners: [],
+      status: '',
+      // 활동 시각이 없거나 키가 아예 없으면 칸을 비운다 — 없는 시각을 읽으면 "NaN일 전"이 나간다
+      lastActivityLabel: folder.lastActivityAt == null ? '' : formatRelativeTime(folder.lastActivityAt),
+    }));
 
   return (
     <WikiChannelPage

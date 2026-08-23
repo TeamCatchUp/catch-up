@@ -41,8 +41,9 @@ const meta = {
         '빈 표는 대시보드가 쓰는 DocumentTableEmptyState를 문구만 갈아 재사용한다 — 일러스트·여백은 승인 시안 그대로다.',
       ],
       dataNotes: [
-        '채널 mock은 ChannelListItemResponse 정합(WikiChannelListItem 소비) — 폴더 행의 담당자·상태·최근 활동과 작성자는 목록 API 미동봉(협상 대상, 감사 8/13 부록).',
-        '실 라우트는 그 네 칸을 빈 값으로 넘긴다 — FolderRowsWithoutMeta가 그때의 표 모습이다.',
+        '채널 mock은 ChannelListItemResponse 정합(WikiChannelListItem 소비) — 폴더 행의 최근 활동은 CAM-299의 last_activity_at으로 채워진다.',
+        '담당자·상태 칸은 계속 빈다 — 폴더의 created_by는 만든 사람이라 "담당자" 열의 뜻과 다르고, 폴더에는 상태가 없다. 채널 자체에는 작성자 필드가 없어 그 줄도 서지 않는다.',
+        '문서가 하나도 없는 폴더는 활동 시각이 null이라 그 칸까지 빈다 — FolderRowsWithoutMeta가 그때의 표 모습이다.',
         '상단 200px 커버는 바탕색만 시안값이고 콘텐츠는 미정(사진 가능성) — 안은 비워 둔다.',
         '쪽 크기 드롭다운은 대시보드와 같은 5종(10/20/30/40/50)이고 기본 20이다 — 옵션 목록은 미도시라 사용자 확정분이다. 폴더는 채널 목록 응답에 전량 실려 와 크기 변경이 slice 구간만 바꾼다.',
         '헤더 우측 kebab 버튼은 두 시안에 있으나 동작 정의가 없어 렌더하지 않는다(actions 슬롯 비움) — 디자이너 질문.',
@@ -126,7 +127,7 @@ export const PageSizeDropdown: Story = {
   },
 };
 
-/** 실 라우트가 넘기는 모습 — 폴더에 대응 필드가 없는 칸은 비고 작성자 줄은 서지 않는다. */
+/** 문서가 없는 폴더만 있는 채널 — 활동 시각까지 없어 메타 열 3칸이 모두 빈다. */
 export const FolderRowsWithoutMeta: Story = {
   args: {
     authorName: undefined,

@@ -49,6 +49,12 @@ export interface WikiFolder {
   id: string;
   name: string;
   channelId: string;
+  /** [BE] 폴더 생성 시각(ISO) */
+  createdAt: string;
+  /** [BE] 만든 사람. 컬럼이 생기기 전 폴더와 사용자 행이 사라진 폴더는 null이다 */
+  createdBy: DocumentOwner | null;
+  /** [BE] 폴더 안 문서가 마지막으로 움직인 시각(ISO). 문서가 없으면 null이다 */
+  lastActivityAt: string | null;
 }
 
 /**
@@ -85,6 +91,10 @@ export interface DocumentRowData {
   lastActivityAt: string;
   /** [SPEC] 최근 활동 표시 문자열 (예: "3시간 전", "2024.12.12") */
   lastActivityLabel: string;
+  /** [BE] 최근 발행판을 승인한 사람. 승인자가 사용자로 이어지지 않으면 null이다 */
+  lastEditedBy: DocumentOwner | null;
+  /** [BE] 그 승인 시각(ISO). 발행판이 없으면 사람과 함께 null이다 */
+  lastEditedAt: string | null;
 }
 
 /**

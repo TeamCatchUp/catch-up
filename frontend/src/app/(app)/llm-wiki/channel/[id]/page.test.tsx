@@ -32,6 +32,10 @@ const channelResponse = () => ({
         id: `fd-${index + 1}`,
         name: `폴더 ${index + 1}`,
         channel_id: 'ch-1',
+        created_at: '2026-08-19T00:00:00Z',
+        created_by: { user_id: 7, display_name: '팀원F', profile_image_url: null },
+        // 짝수 폴더는 안에 문서가 없어 활동 시각이 없다 — 빈 칸 경로도 함께 지난다
+        last_activity_at: index % 2 === 0 ? '2026-08-19T00:00:00Z' : null,
       })),
       purpose_presets: [],
       definitions: [],
@@ -65,6 +69,14 @@ describe('채널 화면 쪽 크기 배선', () => {
     expect(await screen.findByText('폴더 1')).toBeInTheDocument();
     expect(screen.getByText('폴더 20')).toBeInTheDocument();
     expect(screen.queryByText('폴더 21')).toBeNull();
+  });
+
+  // 최근 활동은 시각이 없을 수 있는 칸이다 — 없는 값을 읽으면 "NaN일 전"이 그대로 나간다
+  it('최근 활동 칸에 NaN이 서지 않는다', async () => {
+    renderPage();
+
+    expect(await screen.findByText('폴더 1')).toBeInTheDocument();
+    expect(screen.queryByText(/NaN/)).toBeNull();
   });
 
   it('쪽 크기를 바꾸면 1쪽으로 돌아가고 그 크기만큼만 남는다', async () => {

@@ -40,6 +40,8 @@ const document = (overrides: Partial<WikiArtifactDocumentDto> = {}): WikiArtifac
   is_favorite: true,
   revision_id: 'rv-9',
   published_at: '2026-08-19T09:00:00Z',
+  last_edited_by: { user_id: 7, display_name: '팀원F', profile_image_url: null },
+  last_edited_at: '2026-08-19T09:00:00Z',
   blocks: [block()],
   ...overrides,
 });

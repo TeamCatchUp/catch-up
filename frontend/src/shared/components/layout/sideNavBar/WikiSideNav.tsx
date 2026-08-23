@@ -222,10 +222,7 @@ export default function WikiSideNav({
     closeMenu();
   };
 
-  /*
-   * 하단 메타는 노드가 값을 들고 있을 때만 그린다 —
-   * 대응 API 필드가 없어 fixture 표본 외에는 비어 있다.
-   */
+  // 하단 메타는 노드가 값을 들고 있을 때만 그린다 — 조립은 소비처 몫이다
   const menuProps = () => {
     // 섹션의 + 는 채널만 만든다. 파일·폴더는 채널 아래에서만 생긴다
     if (menu?.kind === 'section-add') {

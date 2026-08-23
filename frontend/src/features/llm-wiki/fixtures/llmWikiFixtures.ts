@@ -26,6 +26,8 @@ const BASE_DOCUMENT_ROW: DocumentRowData = {
   createdAt: '2024-09-02T01:00:00.000Z',
   lastActivityAt: '2024-12-15T06:00:00.000Z',
   lastActivityLabel: '3시간 전',
+  lastEditedBy: documentOwner(1, '팀원F'),
+  lastEditedAt: '2024-12-15T06:00:00.000Z',
 };
 
 export const createDocumentRow = (overrides?: Partial<DocumentRowData>): DocumentRowData => ({
