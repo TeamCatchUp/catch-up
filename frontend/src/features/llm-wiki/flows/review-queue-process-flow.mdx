@@ -33,14 +33,14 @@ import * as QueueStories from '../components/review-queue/ReviewQueuePage.storie
 | 자리 | 지금 상태 | 이유 |
 | --- | --- | --- |
 | 카드 승인 | 열림 | |
-| 카드 반려 | 진입점이 닫혀 있다 | 사유가 필수(422)인데 사유 입력 시안이 없다 — [NoRejectPath](?path=/story/screens-llm-wiki-reviewqueuepage--no-reject-path) |
+| 카드 반려 | 열림 — 사유 입력을 거친다 | 사유가 필수(422)라 전체 반려의 다이얼로그를 재사용한다(전용 시안은 대기). 진입점을 닫은 배치는 [NoRejectPath](?path=/story/screens-llm-wiki-reviewqueuepage--no-reject-path) |
 | 최종 내보내기 | 항상 활성 | 미판정 블록이 남으면 서버가 409로 거절하고, 그 메시지가 토스트로 뜬다 |
 
 <Canvas of={BlockDiffStories.PartiallyDecided} />
 
-위에서 판정이 끝난 블록은 둘이다 — "재시도 정책"은 승인, "PG 점검 시간 예외"는 반려. 그런데 배지가
-서는 것은 반려뿐이다. **승인한 블록은 미판정 블록과 똑같이 보인다**(승인 표시 시안이 없어 만들지
-않았다). 어디까지 봤는지를 화면이 알려주지 않는 알려진 구멍이다.
+위에서 판정이 끝난 블록은 둘이다 — "재시도 정책"은 승인, "PG 점검 시간 예외"는 반려. 둘 다 접히고
+액션 자리를 각자의 배지가 대신한다 — **"승인됨"과 "반려됨"은 같은 자리·같은 셸이고 아이콘과 문구만
+다르다.** 어디까지 봤는지가 배지로 남고, 반려 카드는 펼치면 사유를 다시 읽을 수 있다.
 
 ## (b) 담당자 — 일괄 경로
 
