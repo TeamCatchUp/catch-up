@@ -70,14 +70,21 @@ const meta = {
       { kind: 'folder', label: '승인·실패 처리' },
       { kind: 'document', label: selected.title },
     ],
-    locationBreadcrumbs: [
-      { kind: 'channel', label: '결제' },
-      { kind: 'folder', label: '승인·실패 처리' },
-    ],
     title: selected.title,
     waitingLabel: selected.waitingLabel,
     summary: '재시도 한도가 1회에서 3회로 늘고 PG 점검 시간 예외가 추가되었습니다.',
-    participants: [{ id: '1', name: '팀원F', role: '리뷰어' }],
+    participants: [{ id: '1', userId: 1, name: '팀원F', role: '담당자' }],
+    // 타 담당자가 있는 문서를 채널 관리자가 보는 판 — 배너·추가·해제가 모두 선다
+    ownerNotice: 'other-owner',
+    canAssignOwners: true,
+    canRemoveOwners: true,
+    ownerCandidates: [
+      { id: '2', label: '직원10' },
+      { id: '3', label: '이진수' },
+      { id: '6', label: '팀원G', suffixLabel: '(나)' },
+    ],
+    onAssignOwners: fn(),
+    onRemoveOwner: fn(),
     entries,
     canReview: true,
     publishDisabled: false,
@@ -120,13 +127,14 @@ const meta = {
         'reject-reason',
         'block-reject-reason',
         'bulk-approved',
+        'owner-management',
         'empty-queue',
         'empty-by-filter',
         'list-first-load',
         'detail-first-load',
       ],
       reuseNotes: [
-        'ReviewQueueListHeader·ReviewQueueRow·ReviewQueueFilterDropdown·WikiPageHeader(detail)·ChangeSummaryCard·BlockDiffSection·DocumentLocationCard·ReviewParticipantsCard·ReviewPublishBar·RejectReasonDialog를 조립만 한다.',
+        'ReviewQueueListHeader·ReviewQueueRow·ReviewQueueFilterDropdown·WikiPageHeader(detail)·ChangeSummaryCard·BlockDiffSection·DocumentLocationCard·ReviewParticipantsCard(OwnerAddPopover·OwnerDetailPopover 동봉)·ReviewPublishBar·RejectReasonDialog를 조립만 한다.',
       ],
       dataNotes: [
         '화면은 데이터를 props로만 받는다 — 큐·상세 조회와 판정·발행 요청은 라우트가 낸다. 스토리는 MSW 없이 fixture를 주입한다.',
@@ -144,6 +152,8 @@ const meta = {
         '첫 로딩은 좌측 목록과 상세 자리에 각각 골격을 세운다(사용자 확정) — 시안 MISSING이라 행·카드 기하만 근사한 자작분이다. 목록을 기다리는 동안에는 빈 안내 대신 골격이 서서 "없음"으로 오독되지 않는다.',
         '상세 골격은 안건 교체와 같은 모션 상자(stepReplace) 안에서 상태만 갈아 끼운다 — 로딩이 별도 레이어로 튀지 않는다.',
         '에러 시각은 시안이 없어 만들지 않는다 — 조회 실패는 판정 토스트와 같은 자리(우하단)에 문구만 띄운다.',
+        '담당자 카드(8/24): 배너 분기·+ 버튼·추가 드롭다운·확인 모달·해제 팝오버는 라우트가 권한(can_manage_owners 규칙: 지정=관리자∨담당자 본인, 해제=관리자만)과 데이터를 실어 준다. 후보 직책(B17)·담당자 활동 시각(B18)은 API에 없어 그 구역을 비운다.',
+        '문서 위치 카드는 헤더와 같은 breadcrumbs를 그리고 마지막 문서 마디에 현재 위치 점(6px 파랑)을 찍는다 — NavTree는 점을 표현하지 못해 정적 마크업으로 교체했다.',
       ],
       layoutNotes: [
         '좌 300 · 우 350 고정, 중앙이 남는 폭을 흡수한다. 높이는 셸이 준다 — 스토리가 900 슬롯을 흉내낸다.',
@@ -181,6 +191,10 @@ export const Default: Story = {
     // 헤더가 우측 패널 위까지 뻗는지는 눈이 아니라 기하로 본다
     const sidePanel = canvas.getByText('문서 위치').closest('aside')!;
     await expect(header.getBoundingClientRect().right).toBeGreaterThanOrEqual(sidePanel.getBoundingClientRect().right);
+
+    // 우측 담당자 카드 — 배너와 추가 진입점이 권한과 함께 선다
+    await expect(canvas.getByText('담당자가 검토할 문서입니다')).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: '담당자 추가하기' })).toBeInTheDocument();
 
     // 중앙 — 요약과 diff 카드 3장
     await expect(canvas.getByText('변경 내용')).toBeInTheDocument();
@@ -309,6 +323,45 @@ export const BulkApproved: Story = {
     await expect(publish).toBeEnabled();
     await userEvent.click(publish);
     await expect(args.onPublish).toHaveBeenCalled();
+  },
+};
+
+/**
+ * 담당자 지정·해제 조작 — 추가는 후보 선택과 확인 모달을 거치고, 해제는 행 팝오버에서 나간다.
+ * 요청·토스트·권한 판정은 라우트 몫이라 콜백 호출만 본다.
+ */
+export const OwnerManagement: Story = {
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const portal = within(document.body);
+
+    // 추가 — 후보를 고르고 [추가하기] → 확인 모달의 [확인]까지 가야 지정이 나간다
+    await userEvent.click(canvas.getByRole('button', { name: '담당자 추가하기' }));
+    // 같은 이름이 좌측 목록 행에도 있어 드롭다운 안으로 좁혀 집는다
+    const search = await portal.findByPlaceholderText('담당자 검색');
+    const dropdown = within(search.closest('[role="dialog"]') as HTMLElement);
+    await userEvent.click(dropdown.getByText('직원10'));
+    const addButton = dropdown.getByRole('button', { name: '추가하기' });
+    await expect(addButton).toBeEnabled();
+    await userEvent.click(addButton);
+
+    await expect(await portal.findByText('담당자를 지정할까요?')).toBeInTheDocument();
+    await expect(
+      portal.getByText('지정하면 이 문서는 담당자가 검토하게 되고, 지금 하시던 검토를 마칠 수 없습니다.'),
+    ).toBeInTheDocument();
+    await userEvent.click(portal.getByRole('button', { name: '확인' }));
+    await expect(args.onAssignOwners).toHaveBeenCalledWith([2]);
+
+    // 모달이 다 내려가야 바깥이 aria-hidden에서 풀린다 — 다음 조작 전에 기다린다
+    await waitFor(async () => {
+      await expect(portal.queryByText('담당자를 지정할까요?')).toBeNull();
+    });
+
+    // 해제 — 담당자 행을 열면 300px 팝오버가 서고, 해제하기가 대상 user_id를 내보낸다
+    await userEvent.click(canvas.getByRole('button', { name: /팀원F/ }));
+    await expect(await portal.findByText('팀원F 님이 이 문서의 검토 담당자입니다')).toBeInTheDocument();
+    await userEvent.click(portal.getByRole('button', { name: '담당자 해제하기' }));
+    await expect(args.onRemoveOwner).toHaveBeenCalledWith(1);
   },
 };
 

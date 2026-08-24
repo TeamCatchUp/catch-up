@@ -162,6 +162,9 @@ function stubReviewEndpoints(items: readonly ReturnType<typeof queueItem>[]) {
     }),
     http.get('*/api/v1/wiki/channels', () => HttpResponse.json({ channels: [] })),
     http.get('*/api/v1/wiki/members', () => HttpResponse.json({ items: [] })),
+    http.get('*/api/v1/auth/me', () =>
+      HttpResponse.json({ user_id: 99, name: '검토자', email: 'reviewer@catchup.dev', role: 'user', status: 'active' }),
+    ),
   );
 
   return { verdictCalls };
@@ -320,6 +323,15 @@ describe('useReviewQueueModel', () => {
       ),
       http.get('*/api/v1/wiki/channels', () => HttpResponse.json({ channels: [] })),
       http.get('*/api/v1/wiki/members', () => HttpResponse.json({ items: [] })),
+      http.get('*/api/v1/auth/me', () =>
+        HttpResponse.json({
+          user_id: 99,
+          name: '검토자',
+          email: 'reviewer@catchup.dev',
+          role: 'user',
+          status: 'active',
+        }),
+      ),
     );
 
     const { result } = renderHook(() => useReviewQueueModel({ preselectArtifactId: `art-${SECOND}` }), {
@@ -347,5 +359,74 @@ describe('useReviewQueueModel', () => {
 
     await waitFor(() => expect(result.current.items).toHaveLength(0));
     expect(result.current.selectedId).toBeNull();
+  });
+
+  it('담당자 없는 문서 — 채널 관리자는 지정·해제가 열리고 배너와 자기 행(채널 관리자)이 선다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    server.use(
+      http.get('*/api/v1/wiki/channels', () =>
+        HttpResponse.json({
+          channels: [
+            {
+              id: 'ch-1',
+              name: '결제',
+              workspace_id: 1,
+              is_admin: true,
+              document_count: 0,
+              folders: [],
+              purpose_presets: [],
+              definitions: [],
+            },
+          ],
+        }),
+      ),
+    );
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.canAssignOwners).toBe(true));
+    expect(result.current.canRemoveOwners).toBe(true);
+    expect(result.current.ownerNotice).toBe('no-owner');
+    expect(result.current.participants).toEqual([
+      { id: '99', userId: 99, name: '검토자', isMe: true, role: '채널 관리자', avatarSrc: null },
+    ]);
+  });
+
+  it('타 담당자가 있는 문서 — 관리자가 아니면 지정·해제가 닫히고 배너만 선다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    server.use(
+      http.get('*/api/v1/knowledge-review/queue/:proposalId', ({ params }) =>
+        HttpResponse.json({
+          ...detail(String(params.proposalId), false),
+          owners: [{ user_id: 7, display_name: '팀원F', profile_image_url: null }],
+        }),
+      ),
+    );
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.participants).toHaveLength(1));
+    expect(result.current.participants[0]).toMatchObject({ userId: 7, role: '담당자', isMe: false });
+    expect(result.current.ownerNotice).toBe('other-owner');
+    expect(result.current.canAssignOwners).toBe(false);
+    expect(result.current.canRemoveOwners).toBe(false);
+  });
+
+  it('담당자 본인 — 지정은 열리지만 해제는 닫히고(관리자만) 배너가 없다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    server.use(
+      http.get('*/api/v1/knowledge-review/queue/:proposalId', ({ params }) =>
+        HttpResponse.json({
+          ...detail(String(params.proposalId), false),
+          owners: [{ user_id: 99, display_name: '검토자', profile_image_url: null }],
+        }),
+      ),
+    );
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.canAssignOwners).toBe(true));
+    expect(result.current.canRemoveOwners).toBe(false);
+    expect(result.current.ownerNotice).toBeNull();
+    expect(result.current.participants[0]).toMatchObject({ userId: 99, role: '담당자', isMe: true });
+    // 이미 담당자인 사람은 추가 후보에서 빠진다 — 멤버 목록이 비어 있어 후보도 빈다
+    expect(result.current.ownerCandidates).toEqual([]);
   });
 });

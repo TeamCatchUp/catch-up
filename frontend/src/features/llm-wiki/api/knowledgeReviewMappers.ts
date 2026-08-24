@@ -12,6 +12,7 @@ import type {
   ReviewQueueItemDto,
   ReviewVariantDto,
 } from './knowledgeReviewDto';
+import { mapWikiOwners } from './wikiMappers';
 
 export function mapBlockSource(dto: ReviewBlockSourceDto): BlockSource {
   return {
@@ -105,6 +106,7 @@ export function mapReviewQueueItem(dto: ReviewQueueItemDto): ReviewQueueRowData 
     id: dto.proposal_id,
     type: dto.origin,
     title: dto.artifact.title ?? dto.summary,
+    owners: mapWikiOwners(dto.owners),
     waitingLabel: formatRelativeTime(dto.created_at),
     status: mapChangeProposalStatus(dto.status),
     rejectionReason: null,

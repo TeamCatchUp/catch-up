@@ -7,6 +7,7 @@ import type {
   WikiArtifactDocumentDto,
   WikiArtifactListDto,
   WikiArtifactListParams,
+  WikiArtifactOwnerDto,
   WikiChannelListDto,
   WikiDefinitionPresetsDto,
   WikiFavoriteListDto,
@@ -72,6 +73,17 @@ export async function removeWikiFavorite(artifactId: string): Promise<void> {
 /** 문서 폴더 이동(검수 자격자). folder_id가 null이면 채널 바로 아래로 옮긴다. */
 export async function moveWikiArtifact(artifactId: string, folderId: string | null): Promise<void> {
   await api.patch(API.wiki.artifact(artifactId), { folder_id: folderId });
+}
+
+/** 담당자 지정(멱등, 채널 관리자 또는 담당자 본인). 응답은 지정 후 명단 전체다. */
+export async function assignWikiArtifactOwner(artifactId: string, userId: number): Promise<WikiArtifactOwnerDto> {
+  const res = await api.put<WikiArtifactOwnerDto>(API.wiki.artifactOwner(artifactId, userId));
+  return res.data;
+}
+
+/** 담당자 해제(멱등, 관리자만 — 담당자 본인도 불가). 없는 담당자를 떼도 204다. */
+export async function removeWikiArtifactOwner(artifactId: string, userId: number): Promise<void> {
+  await api.delete(API.wiki.artifactOwner(artifactId, userId));
 }
 
 /** 채널 이름 변경(채널 관리자). 응답 본문은 쓰지 않는다. */

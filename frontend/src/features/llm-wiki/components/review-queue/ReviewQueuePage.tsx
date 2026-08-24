@@ -23,7 +23,7 @@ import ChangeSummaryCard from './ChangeSummaryCard';
 import BlockDiffSection from './diff/BlockDiffSection';
 import DocumentLocationCard from './DocumentLocationCard';
 import RejectReasonDialog from './RejectReasonDialog';
-import ReviewParticipantsCard, { type ReviewParticipant } from './ReviewParticipantsCard';
+import ReviewParticipantsCard, { type OwnerNotice, type ReviewParticipant } from './ReviewParticipantsCard';
 import ReviewPublishBar from './ReviewPublishBar';
 import ReviewQueueFilterDropdown, {
   type ReviewQueueFilterOption,
@@ -52,15 +52,23 @@ export interface ReviewQueuePageProps {
   selectedId: string | null;
   onSelectItem: (proposalId: string) => void;
 
-  /** 상세 헤더의 경로. 마지막 마디가 현재 문서다 */
+  /** 상세 헤더의 경로. 마지막 마디가 현재 문서다 — 문서 위치 카드도 같은 경로를 그린다 */
   breadcrumbs: readonly DocumentBreadcrumb[];
-  /** 우측 "문서 위치" 카드의 경로 — 문서 마디를 뺀 채널 > 폴더다 */
-  locationBreadcrumbs: readonly DocumentBreadcrumb[];
   title: string;
   waitingLabel: string;
   /** [BE] 변경안 요약. 큐 목록 응답의 summary다 */
   summary: string;
   participants: readonly ReviewParticipant[];
+  /** 담당자 카드의 안내 배너 분기. null이면 배너 없음(내가 담당자) */
+  ownerNotice?: OwnerNotice | null;
+  /** 담당자 지정 권한 — 채널 관리자 또는 담당자 본인(백엔드 can_manage_owners) */
+  canAssignOwners?: boolean;
+  /** 담당자 해제 권한 — 관리자만 */
+  canRemoveOwners?: boolean;
+  /** 담당자 추가 후보. id는 user_id 문자열이다 */
+  ownerCandidates?: readonly ReviewQueueFilterOption[];
+  onAssignOwners?: (userIds: readonly number[]) => void;
+  onRemoveOwner?: (userId: number) => void;
 
   entries: readonly BlockDiffEntry[];
   /** [BE] can_review. 판정·발행 진입점 노출을 정한다 */
@@ -117,11 +125,16 @@ export default function ReviewQueuePage({
   selectedId,
   onSelectItem,
   breadcrumbs,
-  locationBreadcrumbs,
   title,
   waitingLabel,
   summary,
   participants,
+  ownerNotice = null,
+  canAssignOwners = false,
+  canRemoveOwners = false,
+  ownerCandidates = [],
+  onAssignOwners,
+  onRemoveOwner,
   entries,
   canReview,
   canReject = true,
@@ -322,10 +335,15 @@ export default function ReviewQueuePage({
 
             {/* 우측 — 문서 위치·담당자 */}
             <aside className="border-line-normal-neutral flex w-87.5 shrink-0 flex-col overflow-y-auto border-l">
-              <DocumentLocationCard breadcrumbs={locationBreadcrumbs} />
+              <DocumentLocationCard breadcrumbs={breadcrumbs} />
               <ReviewParticipantsCard
                 participants={participants}
-                stackAvatars={participants.map((participant) => ({ src: participant.avatarSrc ?? null }))}
+                notice={ownerNotice}
+                canAssign={canAssignOwners}
+                canRemove={canRemoveOwners}
+                candidates={ownerCandidates}
+                onAssign={onAssignOwners}
+                onRemove={onRemoveOwner}
               />
             </aside>
           </div>

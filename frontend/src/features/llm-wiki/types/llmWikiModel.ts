@@ -106,6 +106,8 @@ export interface ReviewQueueItemData {
   type: ReviewItemType;
   /** [BE] 행 제목 */
   title: string;
+  /** [BE] 담당자 목록. 빈 배열이 미지정이고 행은 없음·1인·스택 세 갈래로 그린다 */
+  owners: readonly DocumentOwner[];
   /** 대기 기간 표시 문자열 (예: "15시간 전") */
   waitingLabel: string;
   status: ChangeProposalStatus;

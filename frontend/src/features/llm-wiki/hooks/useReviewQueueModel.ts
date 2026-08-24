@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 
 import { buttonVariants } from '@/shared/components/ui/button';
 import { toast } from '@/shared/components/ui/toast';
+import { authQueries } from '@/shared/queries/auth.queries';
 
 import { mapReviewProposalDetail } from '../api/knowledgeReviewDetailMappers';
 import { mapReviewQueueItem, type ReviewQueueRowData } from '../api/knowledgeReviewMappers';
@@ -28,6 +29,10 @@ import {
 } from '../queries/knowledgeReview.mutations';
 import { knowledgeReviewQueries } from '../queries/knowledgeReview.queries';
 import { wikiQueries } from '../queries/wiki.queries';
+import {
+  useAssignWikiArtifactOwnersMutation,
+  useRemoveWikiArtifactOwnerMutation,
+} from '../queries/wikiArtifactOwners.mutations';
 import type { BlockDiffEntry } from '../types/llmWikiDiff';
 import type { DocumentBreadcrumb } from '../types/llmWikiModel';
 import { buildBlockDiff } from '../utils/diff/buildBlockDiff';
@@ -91,9 +96,11 @@ export function useReviewQueueModel({
   const queueQuery = useQuery(knowledgeReviewQueries.queue(params));
   const channelsQuery = useQuery(wikiQueries.channels());
   const membersQuery = useQuery(wikiQueries.members());
+  const meQuery = useQuery(authQueries.me());
   const queue = queueQuery.data;
   const channels = channelsQuery.data;
   const members = membersQuery.data;
+  const me = meQuery.data;
 
   // 힌트는 목록이 처음 온 순간 한 번만 푼다 — 뒤이은 refetch에 다시 풀리면 선택이 되살아난다
   const [preselectedId, setPreselectedId] = useState<string | null>(null);
@@ -132,6 +139,8 @@ export function useReviewQueueModel({
   const publishMutation = useReviewPublishMutation(selectedRowId ?? '', detail?.artifactId);
   const bulkApproveMutation = useReviewBulkApproveMutation(selectedRowId ?? '');
   const rejectAllMutation = useRejectReviewProposalMutation(selectedRowId ?? '', detail?.artifactId);
+  const assignOwnersMutation = useAssignWikiArtifactOwnersMutation();
+  const removeOwnerMutation = useRemoveWikiArtifactOwnerMutation();
 
   const entries = useMemo(
     () => (detail ? buildBlockDiff(detail.baseBlocks, detail.blocks, detail.changes, detail.layout) : []),
@@ -149,12 +158,62 @@ export function useReviewQueueModel({
     ? [...locationBreadcrumbs, { kind: 'document', label: title }]
     : locationBreadcrumbs;
 
-  const participants: ReviewParticipant[] = (detail?.owners ?? []).map((owner) => ({
+  const myUserId = me?.user_id ?? null;
+  const owners = detail?.owners ?? [];
+  const isMeOwner = myUserId !== null && owners.some((owner) => owner.userId === myUserId);
+  // 백엔드 can_manage_owners와 같은 판: 채널 문서는 그 채널 관리자, 미분류 문서는 전역 ADMIN이다
+  const isArtifactAdmin = detail
+    ? detail.channelId === null
+      ? me?.role === 'admin'
+      : (channels?.channels.find((channel) => channel.id === detail.channelId)?.is_admin ?? false)
+    : false;
+  const canAssignOwners = isArtifactAdmin || isMeOwner;
+  const canRemoveOwners = isArtifactAdmin;
+
+  const participants: ReviewParticipant[] = owners.map((owner) => ({
     id: String(owner.userId),
+    userId: owner.userId,
     name: owner.displayName,
-    role: '리뷰어',
+    isMe: owner.userId === myUserId,
+    role: '담당자',
     avatarSrc: owner.profileImageUrl,
   }));
+  // 담당자가 없으면 검수 폴백인 채널 관리자(나)가 행으로 선다 — 시안 18814:134579
+  if (detail !== null && participants.length === 0 && isArtifactAdmin && me && myUserId !== null) {
+    participants.push({
+      id: String(myUserId),
+      userId: myUserId,
+      name: me.name,
+      isMe: true,
+      role: '채널 관리자',
+      avatarSrc: me.picture ?? null,
+    });
+  }
+
+  const ownerNotice = detail === null ? null : owners.length === 0 ? 'no-owner' : isMeOwner ? null : 'other-owner';
+
+  const ownerIds = new Set(owners.map((owner) => owner.userId));
+  // 후보 행의 직책(B17)·(나) 외 보조 표기는 멤버 응답에 없어 비운다
+  const ownerCandidates = (members ? mapWikiMembers(members) : [])
+    .filter((member) => !ownerIds.has(member.userId))
+    .map((member) => ({
+      id: String(member.userId),
+      label: member.displayName,
+      suffixLabel: member.userId === myUserId ? '(나)' : undefined,
+    }));
+
+  const assignOwners = (userIds: readonly number[]) => {
+    if (!detail || userIds.length === 0) return;
+    assignOwnersMutation.mutate(
+      { artifactId: detail.artifactId, userIds },
+      { onSuccess: () => toast('담당자를 지정했습니다', REVIEW_TOAST_OPTIONS) },
+    );
+  };
+
+  const removeOwner = (userId: number) => {
+    if (!detail) return;
+    removeOwnerMutation.mutate({ artifactId: detail.artifactId, userId });
+  };
 
   const selectItem = (proposalId: string) => setSelectedId(proposalId);
 
@@ -258,11 +317,16 @@ export function useReviewQueueModel({
     selectedId: selectedRowId,
     onSelectItem: selectItem,
     breadcrumbs,
-    locationBreadcrumbs,
     title,
     waitingLabel: selectedRow?.waitingLabel ?? '',
     summary: selectedItem?.summary ?? '',
     participants,
+    ownerNotice,
+    canAssignOwners,
+    canRemoveOwners,
+    ownerCandidates,
+    onAssignOwners: assignOwners,
+    onRemoveOwner: removeOwner,
     entries,
     canReview: detail?.canReview ?? false,
     canReject: detail?.canReview ?? false,

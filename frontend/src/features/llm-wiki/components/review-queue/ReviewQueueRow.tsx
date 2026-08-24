@@ -1,7 +1,10 @@
 import IconAddSmall from '@/public/icons/icon/add_small.svg';
+import { Avatar } from '@/shared/components/ui/avatar';
+import { AvatarGroup } from '@/shared/components/ui/avatar-group';
 import { cn } from '@/shared/utils/cn';
 
 import type { ReviewQueueRowData } from '../../api/knowledgeReviewMappers';
+import type { DocumentOwner } from '../../types/llmWikiModel';
 
 interface ReviewQueueRowProps {
   /** 목록 응답 한 줄. baseRevisionId는 상세에서만 오므로 행 계약에 없다 */
@@ -15,12 +18,41 @@ interface ReviewQueueRowProps {
   secondaryTitle?: string;
 }
 
+/** 담당자 표기 3갈래 — 없음(대시+문구) / 1인(아바타+이름) / 2인 이상(스택+라벨). */
+function OwnerDisplay({ owners }: { owners: readonly DocumentOwner[] }) {
+  if (owners.length === 0) {
+    return (
+      <>
+        <span aria-hidden className="bg-line-normal-neutral h-0.5 w-4 shrink-0" />
+        <span className="text-body-xsmall text-text-normal-assistive truncate">담당자 없음</span>
+      </>
+    );
+  }
+
+  if (owners.length === 1) {
+    return (
+      <>
+        <Avatar size="small" src={owners[0].profileImageUrl} className="border-line-normal-assistive rounded-xl" />
+        <span className="text-body-xsmall text-text-normal-alternative shrink-0">담당자</span>
+        <span className="text-body-xsmall text-text-normal-neutral truncate">{owners[0].displayName}</span>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <AvatarGroup avatars={owners.map((owner) => ({ src: owner.profileImageUrl }))} size="small" max={3} />
+      <span className="text-body-xsmall text-text-normal-alternative shrink-0">담당자</span>
+    </>
+  );
+}
+
 /**
  * 검토 큐 좌측 목록의 행. 충돌(모순) 아이콘은 MVP 제외라 렌더하지 않는다.
  * 작성자·신뢰도·유형은 큐 응답에 없거나 시안 근거가 없어 렌더하지 않는다.
  */
 export default function ReviewQueueRow({ item, selected = false, onSelect, secondaryTitle }: ReviewQueueRowProps) {
-  const { id, title, waitingLabel } = item;
+  const { id, title, owners, waitingLabel } = item;
 
   // 행 높이는 결과값이다 — h-*로 못박지 않는다.
   return (
@@ -47,7 +79,12 @@ export default function ReviewQueueRow({ item, selected = false, onSelect, secon
         </span>
       )}
 
-      <span className="text-body-xsmall text-text-normal-assistive w-full truncate">{waitingLabel}</span>
+      <span className="flex w-full min-w-0 items-center gap-3">
+        <span className="flex min-w-0 flex-1 items-center gap-3">
+          <OwnerDisplay owners={owners} />
+        </span>
+        <span className="text-body-xsmall text-text-normal-assistive shrink-0">{waitingLabel}</span>
+      </span>
     </button>
   );
 }
