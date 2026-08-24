@@ -258,7 +258,7 @@ class FakeProposalRepository:
         """실 저장소처럼 같은 key의 행을 되살리거나 그대로 둔다.
 
         이미 결정된 행이면 내용을 갈지 않고 그 id를 그대로 돌려준다.
-        계류·접힘 행은 같은 자리에서 내용을 갈아끼우고 결정 흔적을
+        pending·abandoned 행은 같은 자리에서 내용을 갈아끼우고 결정 흔적을
         지운 뒤 되살린다.
         """
         existing = self.proposals.get(kwargs["idempotency_key"])
@@ -695,7 +695,7 @@ def test_auto_merge_leaves_already_decided_proposal_alone() -> None:
 
 
 def test_auto_merge_suppressed_when_human_unmerged_same_members() -> None:
-    """사람이 되돌린 구성은 자동 확정 대상에서 빠지고 계류로 남는다."""
+    """사람이 되돌린 구성은 자동 확정 대상에서 빠지고 pending으로 남는다."""
     uow = FakeUnitOfWork(_slack_group())
     uow.resolution_events = FakeResolutionEventRepository(suppressed=True)
 
@@ -1549,7 +1549,7 @@ def test_embedding_failure_falls_back_to_exact_name_groups() -> None:
 
 
 def test_group_with_two_existing_nodes_abstains_from_merge() -> None:
-    """기존 노드가 둘 이상 섞인 그룹은 병합하지 않고 계류한다."""
+    """기존 노드가 둘 이상 섞인 그룹은 합치지 않고 그대로 남긴다."""
     judge = FakePartitionJudge()
     candidate = _candidate(
         name="Google Workspace 연동 지원",
@@ -1576,7 +1576,7 @@ def test_group_with_two_existing_nodes_abstains_from_merge() -> None:
     assert result.groups_abstained == 1
     assert result.proposals_created == 0
     assert uow.mutation_proposals.proposals == {}
-    # 계류이므로 승격도 해소도 없다.
+    # 합치지 않고 남겼으므로 승격도 해소도 없다.
     assert result.singletons_promoted == 0
     assert uow.knowledge_candidates.resolved == {}
     assert len(uow.knowledge_nodes.nodes) == 2

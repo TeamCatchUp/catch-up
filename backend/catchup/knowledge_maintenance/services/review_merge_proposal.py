@@ -6,7 +6,7 @@
 없어졌다.
 
 이 서비스는 kill switch(`KNOWLEDGE_AUTO_MERGE_ENABLED`)를 꺼서 자동
-확정을 멈춘 상태에서 계류된 안건을 사람이 하나씩 결정하는 개발 도구다.
+확정을 멈춘 상태에서 pending 안건을 사람이 하나씩 결정하는 개발 도구다.
 결정을 proposal 행에 기록만 하고 적용하지 않는다. 적용은 결정 저널을
 소비하는 Applier의 몫이다. 결정(approved)과 적용(applied)을 분리해야
 Applier가 중간에 죽어도 결정이 사라지지 않는다.

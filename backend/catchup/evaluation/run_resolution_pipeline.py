@@ -8,7 +8,7 @@
 
 `KNOWLEDGE_AUTO_MERGE_ENABLED`가 켜져 있으면 해소가 병합 proposal을
 시스템 이름으로 승인하고, 이 스크립트가 곧바로 적용까지 이어서 돌린다.
-꺼져 있으면 승인도 적용도 하지 않고 proposal을 계류로 남긴다.
+꺼져 있으면 승인도 적용도 하지 않고 proposal을 pending으로 남긴다.
 
 여러 번 돌려도 안전하다. 해소된 후보는 스캔에서 빠지고, proposal은
 그룹당 pending 하나만 유지된다.
@@ -208,7 +208,7 @@ def main() -> None:
         f"  유사 이름 블록 {result.blocks_formed}"
         f"  | 분할 판정 {result.blocks_judged}"
         f" (실패 {result.blocks_failed})"
-        f"  | 병합 계류 {result.groups_abstained}"
+        f"  | 병합 abstain {result.groups_abstained}"
     )
 
     if auto_merge_enabled:
@@ -231,7 +231,7 @@ def main() -> None:
     else:
         print(
             "자동 병합이 꺼져 있다(KNOWLEDGE_AUTO_MERGE_ENABLED=false). "
-            "병합 안건은 계류로 남는다."
+            "병합 안건은 pending으로 남는다."
         )
 
     engine.dispose()

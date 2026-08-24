@@ -2137,7 +2137,7 @@ class SqlAlchemyMutationProposalRepository:
             ApprovedProposal(
                 proposal_id=row.id,
                 proposal_kind=row.proposal_kind,
-                # 승인 행에는 reviewer가 반드시 있지만 컬럼은 계류 행을
+                # 승인 행에는 reviewer가 반드시 있지만 컬럼은 pending 행을
                 # 위해 nullable이라 빈 문자열로 받아 둔다.
                 reviewer=row.reviewer or "",
                 detector=row.detector,
