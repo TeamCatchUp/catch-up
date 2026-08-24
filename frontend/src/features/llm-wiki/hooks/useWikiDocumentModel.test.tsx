@@ -104,7 +104,7 @@ describe('useWikiDocumentModel', () => {
     await waitFor(() => expect(result.current.document).not.toBeNull());
     expect(result.current.notPublished).toBe(false);
     expect(result.current.breadcrumbs).toEqual([
-      { kind: 'channel', label: '결제' },
+      { kind: 'channel', label: '결제', id: 'ch-1' },
       { kind: 'document', label: '결제 실패 대응 가이드' },
     ]);
     expect(toastMock).not.toHaveBeenCalled();

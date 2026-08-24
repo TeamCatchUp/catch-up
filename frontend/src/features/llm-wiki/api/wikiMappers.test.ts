@@ -143,13 +143,13 @@ describe('resolveDocumentBreadcrumbs', () => {
 
   it('채널·폴더 id를 이름 경로로 푼다', () => {
     expect(resolveDocumentBreadcrumbs(index, 'ch-1', 'fd-1')).toEqual([
-      { kind: 'channel', label: '결제' },
-      { kind: 'folder', label: '장애 대응' },
+      { kind: 'channel', label: '결제', id: 'ch-1' },
+      { kind: 'folder', label: '장애 대응', id: 'fd-1' },
     ]);
   });
 
   it('채널 루트 문서는 채널 마디만 만든다', () => {
-    expect(resolveDocumentBreadcrumbs(index, 'ch-2', null)).toEqual([{ kind: 'channel', label: '계정' }]);
+    expect(resolveDocumentBreadcrumbs(index, 'ch-2', null)).toEqual([{ kind: 'channel', label: '계정', id: 'ch-2' }]);
   });
 
   it('미분류 문서는 경로가 비어 있다', () => {
@@ -218,8 +218,8 @@ describe('mapWikiArtifactRows', () => {
     const rows = mapWikiArtifactRows([artifact()], createWikiLocationIndex([channel()]));
 
     expect(rows[0].breadcrumbs).toEqual([
-      { kind: 'channel', label: '결제' },
-      { kind: 'folder', label: '장애 대응' },
+      { kind: 'channel', label: '결제', id: 'ch-1' },
+      { kind: 'folder', label: '장애 대응', id: 'fd-1' },
     ]);
   });
 

@@ -106,11 +106,15 @@ export function resolveDocumentBreadcrumbs(
 ): DocumentBreadcrumb[] {
   const breadcrumbs: DocumentBreadcrumb[] = [];
 
-  const channelName = channelId === null ? undefined : index.channelNames.get(channelId);
-  if (channelName !== undefined) breadcrumbs.push({ kind: 'channel', label: channelName });
+  if (channelId !== null) {
+    const channelName = index.channelNames.get(channelId);
+    if (channelName !== undefined) breadcrumbs.push({ kind: 'channel', label: channelName, id: channelId });
+  }
 
-  const folderName = folderId === null ? undefined : index.folderNames.get(folderId);
-  if (folderName !== undefined) breadcrumbs.push({ kind: 'folder', label: folderName });
+  if (folderId !== null) {
+    const folderName = index.folderNames.get(folderId);
+    if (folderName !== undefined) breadcrumbs.push({ kind: 'folder', label: folderName, id: folderId });
+  }
 
   return breadcrumbs;
 }

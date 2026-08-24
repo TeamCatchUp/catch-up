@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import WikiDashboardPage from '@/features/llm-wiki/components/dashboard/WikiDashboardPage';
 import { useWikiDashboardModel } from '@/features/llm-wiki/hooks/useWikiDashboardModel';
 import { useWikiOnboardingGate } from '@/features/llm-wiki/hooks/useWikiOnboardingGate';
+import { wikiChannelHref, wikiFolderHref } from '@/features/llm-wiki/utils/wikiNavTree';
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -24,6 +25,11 @@ export default function Page() {
       pageSize={pageSize}
       onPageSizeChange={setPageSize}
       onDocumentClick={(documentId) => router.push(`/llm-wiki/${documentId}`)}
+      onBreadcrumbClick={(crumb) => {
+        if (crumb.id === undefined) return;
+        if (crumb.kind === 'channel') router.push(wikiChannelHref(crumb.id));
+        if (crumb.kind === 'folder') router.push(wikiFolderHref(crumb.id));
+      }}
     />
   );
 }

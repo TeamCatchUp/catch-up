@@ -25,6 +25,8 @@ export type BreadcrumbKind = KnownBreadcrumbKind | (string & {});
 export interface DocumentBreadcrumb {
   kind: BreadcrumbKind;
   label: string;
+  /** 이동 대상 id. 이름만으로 조립되는 정적 마디는 비운다 — 그 마디는 눌러도 이동이 없다 */
+  id?: string;
 }
 
 /**

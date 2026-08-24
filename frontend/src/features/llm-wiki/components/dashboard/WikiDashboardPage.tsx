@@ -6,7 +6,12 @@ import IconGrid from '@/public/icons/icon/grid.svg';
 import IconKebabHorizontal from '@/public/icons/icon/kebab_horizontal.svg';
 import { Button } from '@/shared/components/ui/button';
 
-import type { DocumentRowData, KnownDocumentStatus, ReviewStatCardData } from '../../types/llmWikiModel';
+import type {
+  DocumentBreadcrumb,
+  DocumentRowData,
+  KnownDocumentStatus,
+  ReviewStatCardData,
+} from '../../types/llmWikiModel';
 import DashboardDocumentRow, { DashboardDocumentTableHeader } from '../document/DashboardDocumentRow';
 import DocumentTableEmptyState from '../document/states/DocumentTableEmptyState';
 import DocumentTableSkeleton from '../document/states/DocumentTableSkeleton';
@@ -43,6 +48,8 @@ interface WikiDashboardPageProps {
   queryState: DashboardQueryState;
   onQueryStateChange: (next: DashboardQueryState) => void;
   onDocumentClick?: (documentId: string) => void;
+  /** 행 breadcrumb 마디 클릭. 이동은 소비처 몫이다 */
+  onBreadcrumbClick?: (breadcrumb: DocumentBreadcrumb) => void;
   /** 쪽 크기 선택. 소비처가 그 값을 들고 훅에 넘긴다. */
   onPageSizeChange?: (pageSize: number) => void;
   onMoreClick?: () => void;
@@ -60,6 +67,7 @@ export default function WikiDashboardPage({
   queryState,
   onQueryStateChange,
   onDocumentClick,
+  onBreadcrumbClick,
   onPageSizeChange,
   onMoreClick,
 }: WikiDashboardPageProps) {
@@ -89,8 +97,7 @@ export default function WikiDashboardPage({
 
   const handleStatusSelect = (status: KnownDocumentStatus) => applyFilter(createStatusFilter(status));
 
-  const handleCreatedAtChange = (range: DateRange | undefined) =>
-    applyFilter(createCreatedAtFilter(range), { range });
+  const handleCreatedAtChange = (range: DateRange | undefined) => applyFilter(createCreatedAtFilter(range), { range });
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
@@ -158,7 +165,12 @@ export default function WikiDashboardPage({
               ) : (
                 <div className="flex flex-col gap-1">
                   {documents.map((document) => (
-                    <DashboardDocumentRow key={document.id} document={document} onClick={onDocumentClick} />
+                    <DashboardDocumentRow
+                      key={document.id}
+                      document={document}
+                      onClick={onDocumentClick}
+                      onBreadcrumbClick={onBreadcrumbClick}
+                    />
                   ))}
                 </div>
               )}
