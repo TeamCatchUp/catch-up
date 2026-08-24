@@ -63,7 +63,11 @@ export default function OwnerAddPopover({ candidates, onAssign }: OwnerAddPopove
               </Button>
             </PopoverTrigger>
           </TooltipTrigger>
-          <TooltipContent>담당자 추가하기</TooltipContent>
+          {/* 우측 패널 끝의 버튼이라 툴팁은 좌측에 세운다. 아이콘+제목 구성은 시안 확정분 */}
+          <TooltipContent side="left" className="flex items-center gap-1.5">
+            <IconAddSmall aria-hidden className="size-5" />
+            담당자 추가하기
+          </TooltipContent>
         </Tooltip>
 
         <PopoverContent align="end" className="shadow-modal flex w-100 flex-col gap-3 p-0 pb-3">
