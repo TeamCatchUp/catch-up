@@ -270,6 +270,20 @@ class KnowledgeCandidateRepository(Protocol):
         """
         ...
 
+    def count_entities_resolved_to(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+    ) -> int:
+        """어떤 노드를 지금 가리키고 있는 entity 후보 수를 센다.
+
+        되돌림이 노드를 물리기 전에 쓴다. event가 세운 노드라도 그 뒤에
+        다른 후보가 같은 노드로 해소됐을 수 있고, 그 상태로 노드를 물리면
+        남은 후보와 그 후보로 읽히는 지식이 살아 있는 graph에서 사라진다.
+        """
+        ...
+
     def get_claim_validity(
         self,
         *,

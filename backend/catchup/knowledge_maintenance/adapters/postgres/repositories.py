@@ -1708,6 +1708,23 @@ class SqlAlchemyKnowledgeCandidateRepository:
             return None
         return (row[0], row[1])
 
+    def count_entities_resolved_to(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+    ) -> int:
+        """어떤 노드를 지금 가리키고 있는 entity 후보 수를 센다."""
+        found = self._session.scalar(
+            select(func.count())
+            .select_from(KnowledgeEntityCandidateRow)
+            .where(
+                KnowledgeEntityCandidateRow.workspace_id == workspace_id,
+                KnowledgeEntityCandidateRow.resolved_node_id == node_id,
+            )
+        )
+        return int(found or 0)
+
     def get_claim_validity(
         self,
         *,

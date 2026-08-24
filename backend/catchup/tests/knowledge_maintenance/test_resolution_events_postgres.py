@@ -317,6 +317,120 @@ def test_system_unmerge_is_not_a_human_unmerge(
     )
 
 
+def test_second_reversal_of_the_same_event_is_rejected(
+    repository: SqlAlchemyResolutionEventRepository,
+    session: Session,
+    workspace_id: int,
+) -> None:
+    """같은 원본을 두 번째로 되돌리는 행은 DB가 막는다.
+
+    되돌림 여부를 미리 읽어 보는 검사만으로는 두 운영자가 동시에 되돌릴 때
+    둘 다 통과한다. 원본 하나에 되돌림 행이 하나뿐이라는 것은 DB가 지켜야
+    한다.
+    """
+    merge_id = uuid.uuid4()
+    node_id = uuid.uuid4()
+    repository.record(
+        workspace_id=workspace_id,
+        event_id=merge_id,
+        event_type="merge_create_node",
+        decider="system",
+        decider_id=None,
+        node_id=node_id,
+        member_hash=MEMBER_HASH,
+        member_snapshot={},
+        basis={},
+    )
+    repository.record(
+        workspace_id=workspace_id,
+        event_id=uuid.uuid4(),
+        event_type="unmerge",
+        decider="human",
+        decider_id="reviewer-1",
+        node_id=node_id,
+        member_hash=MEMBER_HASH,
+        member_snapshot={},
+        basis={},
+        reverses_event_id=merge_id,
+    )
+    session.commit()
+
+    with pytest.raises(IntegrityError) as raised:
+        repository.record(
+            workspace_id=workspace_id,
+            event_id=uuid.uuid4(),
+            event_type="unmerge",
+            decider="human",
+            decider_id="reviewer-2",
+            node_id=node_id,
+            member_hash=MEMBER_HASH,
+            member_snapshot={},
+            basis={},
+            reverses_event_id=merge_id,
+        )
+
+    assert "uq_knowledge_resolution_events_reversal" in str(raised.value)
+    session.rollback()
+
+
+def test_second_reversal_from_another_transaction_is_rejected(
+    engine: Engine,
+    repository: SqlAlchemyResolutionEventRepository,
+    session: Session,
+    workspace_id: int,
+) -> None:
+    """다른 transaction에서 적는 두 번째 되돌림도 DB가 막는다.
+
+    두 운영자는 저마다 자기 transaction에서 되돌린다. 제약이 연결을 건너
+    지켜지지 않으면 한 원본에 되돌림 행이 둘 남는다.
+    """
+    merge_id = uuid.uuid4()
+    node_id = uuid.uuid4()
+    repository.record(
+        workspace_id=workspace_id,
+        event_id=merge_id,
+        event_type="merge_create_node",
+        decider="system",
+        decider_id=None,
+        node_id=node_id,
+        member_hash=MEMBER_HASH,
+        member_snapshot={},
+        basis={},
+    )
+    repository.record(
+        workspace_id=workspace_id,
+        event_id=uuid.uuid4(),
+        event_type="unmerge",
+        decider="human",
+        decider_id="reviewer-1",
+        node_id=node_id,
+        member_hash=MEMBER_HASH,
+        member_snapshot={},
+        basis={},
+        reverses_event_id=merge_id,
+    )
+    session.commit()
+
+    other_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    with other_factory() as other:
+        other_repository = SqlAlchemyResolutionEventRepository(other)
+        with pytest.raises(IntegrityError) as raised:
+            other_repository.record(
+                workspace_id=workspace_id,
+                event_id=uuid.uuid4(),
+                event_type="unmerge",
+                decider="human",
+                decider_id="reviewer-2",
+                node_id=node_id,
+                member_hash=MEMBER_HASH,
+                member_snapshot={},
+                basis={},
+                reverses_event_id=merge_id,
+            )
+        assert "uq_knowledge_resolution_events_reversal" in str(raised.value)
+        other.rollback()
+
+
 def test_unmerge_without_an_original_is_rejected(
     repository: SqlAlchemyResolutionEventRepository,
     session: Session,

@@ -18,6 +18,7 @@ from typing import Any
 from typing import Self
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from catchup.knowledge_maintenance.domain.entity_resolution import normalize_name
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
@@ -107,6 +108,23 @@ class FakeState:
 @dataclass
 class FakeCandidateRepo:
     state: FakeState
+
+    def get_entity_resolution(
+        self, *, candidate_id: uuid.UUID
+    ) -> tuple[str, uuid.UUID | None] | None:
+        row = self.state.candidates.get(candidate_id)
+        if row is None:
+            return None
+        return (row["resolution_status"], row["resolved_node_id"])
+
+    def count_entities_resolved_to(
+        self, *, workspace_id: int, node_id: uuid.UUID
+    ) -> int:
+        return sum(
+            1
+            for row in self.state.candidates.values()
+            if row["resolved_node_id"] == node_id
+        )
 
     def mark_entity_resolved(
         self,
@@ -337,6 +355,14 @@ class FakeUnitOfWork:
         self._snapshot = None
 
 
+def _applied(candidate_ids: list[uuid.UUID]) -> list[dict[str, str]]:
+    """실제로 적용한 후보와 그 후보의 병합 전 이름을 저널 모양으로 만든다."""
+    return [
+        {"candidate_id": str(candidate_id), "name": name}
+        for candidate_id, name in zip(candidate_ids, MEMBER_NAMES, strict=False)
+    ]
+
+
 def _seed_merge_into_node(state: FakeState) -> tuple[uuid.UUID, KnowledgeNode, list]:
     """기존 노드로 붙인 병합 event 하나를 심는다."""
     target = state.add_node()
@@ -370,6 +396,7 @@ def _seed_merge_into_node(state: FakeState) -> tuple[uuid.UUID, KnowledgeNode, l
             "proposed_type": "feature",
             "merge_into_node_id": str(target.id),
             "aliases_added": [PROPOSED_NAME],
+            "applied_members": _applied(candidate_ids),
         },
     )
     return event_id, target, candidate_ids
@@ -399,6 +426,7 @@ def _seed_merge_create_node(state: FakeState) -> tuple[uuid.UUID, KnowledgeNode,
             "proposed_type": "feature",
             "merge_into_node_id": None,
             "aliases_added": [PROPOSED_NAME],
+            "applied_members": _applied(candidate_ids),
         },
     )
     return event_id, created, candidate_ids
@@ -474,6 +502,49 @@ def test_second_rollback_of_same_event_is_rejected() -> None:
         )
 
 
+class _ConflictingEventRepo(FakeResolutionEventRepo):
+    """되돌림 행을 적을 때 DB의 unique 위반을 흉내 낸다.
+
+    두 운영자가 거의 동시에 같은 event를 되돌리면 미리 읽어 보는 검사는
+    양쪽 다 통과하고, 나중에 적는 쪽이 DB 제약에서 부딪힌다.
+    """
+
+    def record(self, **kwargs: Any) -> None:
+        if kwargs.get("reverses_event_id") is not None:
+            raise IntegrityError(
+                "INSERT INTO knowledge_resolution_events",
+                {},
+                Exception(
+                    "duplicate key value violates unique constraint "
+                    '"uq_knowledge_resolution_events_reversal"'
+                ),
+            )
+        super().record(**kwargs)
+
+
+def test_conflicting_reversal_is_reported_as_already_rolled_back() -> None:
+    """DB가 막은 두 번째 되돌림은 이미 되돌려졌다는 거부로 읽힌다."""
+    state = FakeState()
+    event_id, _target, candidate_ids = _seed_merge_into_node(state)
+    uow = FakeUnitOfWork(state)
+    uow.resolution_events = _ConflictingEventRepo(state)
+
+    with pytest.raises(RollbackError) as raised:
+        rollback_resolution_event(
+            uow,
+            workspace_id=WORKSPACE_ID,
+            event_id=event_id,
+            operator="ops:junsu",
+        )
+
+    assert "이미 되돌려진 event다" in str(raised.value)
+    assert uow.committed == 0
+    # 트랜잭션이 되돌아가므로 후보도 제자리에 남는다.
+    assert uow.rolled_back == 1
+    for candidate_id in candidate_ids:
+        assert state.candidates[candidate_id]["resolved_node_id"] is not None
+
+
 def test_rollback_of_unmerge_event_is_rejected() -> None:
     """되돌림 행은 되돌림의 대상이 아니다."""
     state = FakeState()
@@ -530,3 +601,118 @@ def test_merge_create_node_rollback_splits_candidates_and_retires_node() -> None
     assert unmerge["event_type"] == "unmerge"
     assert unmerge["node_id"] == result.new_node_ids[0]
     assert unmerge["reverses_event_id"] == event_id
+    assert unmerge["member_snapshot"]["node_retired"] is True
+
+
+def test_rollback_moves_only_the_members_the_event_applied() -> None:
+    """event가 실제로 붙이지 않은 후보는 되돌림도 건드리지 않는다.
+
+    승인과 적용 사이에 멤버 하나가 다른 노드로 먼저 해소되면 적용은 그
+    멤버를 건너뛴다. 저널의 판정 당시 구성에는 그 멤버가 남아 있으므로,
+    되돌림이 구성을 그대로 믿으면 이 event와 무관한 선행 해소를 지운다.
+    """
+    state = FakeState()
+    created = state.add_node(display_name=PROPOSED_NAME)
+    foreign = state.add_node(display_name="다른 대상")
+    applied_ids = [state.add_candidate(resolved_node_id=created.id) for _ in range(2)]
+    skipped_id = state.add_candidate(resolved_node_id=foreign.id)
+    event_id = state.add_event(
+        event_type="merge_create_node",
+        node_id=created.id,
+        member_snapshot={
+            "representative_candidate_id": str(applied_ids[0]),
+            "member_candidate_ids": [str(applied_ids[1]), str(skipped_id)],
+            "member_names": list(MEMBER_NAMES),
+            "proposed_name": PROPOSED_NAME,
+            "proposed_type": "feature",
+            "merge_into_node_id": None,
+            "aliases_added": [PROPOSED_NAME],
+            "applied_members": _applied(applied_ids),
+        },
+    )
+
+    result = rollback_resolution_event(
+        FakeUnitOfWork(state),
+        workspace_id=WORKSPACE_ID,
+        event_id=event_id,
+        operator="ops:junsu",
+    )
+
+    assert set(result.repointed_candidate_ids) == set(applied_ids)
+    assert skipped_id not in result.repointed_candidate_ids
+    # 먼저 해소돼 있던 후보는 제자리에 그대로 있다.
+    assert state.candidates[skipped_id]["resolved_node_id"] == foreign.id
+    assert len(result.new_node_ids) == len(applied_ids)
+
+
+def test_rollback_skips_a_member_that_now_points_elsewhere() -> None:
+    """event 이후 다른 노드로 옮겨진 후보는 되돌림이 덮지 않는다."""
+    state = FakeState()
+    event_id, created, candidate_ids = _seed_merge_create_node(state)
+    moved = state.add_node(display_name="옮겨 간 대상")
+    state.candidates[candidate_ids[2]]["resolved_node_id"] = moved.id
+
+    result = rollback_resolution_event(
+        FakeUnitOfWork(state),
+        workspace_id=WORKSPACE_ID,
+        event_id=event_id,
+        operator="ops:junsu",
+    )
+
+    assert set(result.repointed_candidate_ids) == set(candidate_ids[:2])
+    assert state.candidates[candidate_ids[2]]["resolved_node_id"] == moved.id
+    assert len(result.new_node_ids) == 2
+    assert state.node_by_id(created.id).lifecycle_state is NodeLifecycleState.RETIRED
+
+
+def test_rollback_keeps_the_node_when_a_later_candidate_still_points_to_it() -> None:
+    """event 이후 같은 노드로 해소된 후보가 있으면 노드를 물리지 않는다.
+
+    노드를 조건 없이 물리면 그 후보와 그 후보로 읽히는 지식이 살아 있는
+    graph에서 사라진다.
+    """
+    state = FakeState()
+    event_id, created, candidate_ids = _seed_merge_create_node(state)
+    later_id = state.add_candidate(resolved_node_id=created.id)
+
+    result = rollback_resolution_event(
+        FakeUnitOfWork(state),
+        workspace_id=WORKSPACE_ID,
+        event_id=event_id,
+        operator="ops:junsu",
+    )
+
+    assert set(result.repointed_candidate_ids) == set(candidate_ids)
+    assert state.node_by_id(created.id).lifecycle_state is NodeLifecycleState.ACTIVE
+    assert state.candidates[later_id]["resolved_node_id"] == created.id
+
+    unmerge = state.events[-1]
+    assert unmerge["member_snapshot"]["node_retired"] is False
+
+
+def test_rollback_without_applied_members_is_rejected() -> None:
+    """무엇을 실제로 붙였는지 없는 event는 되돌리지 않는다."""
+    state = FakeState()
+    created = state.add_node(display_name=PROPOSED_NAME)
+    candidate_id = state.add_candidate(resolved_node_id=created.id)
+    event_id = state.add_event(
+        event_type="merge_create_node",
+        node_id=created.id,
+        member_snapshot={
+            "representative_candidate_id": str(candidate_id),
+            "member_candidate_ids": [],
+            "member_names": list(MEMBER_NAMES),
+            "proposed_name": PROPOSED_NAME,
+            "proposed_type": "feature",
+            "merge_into_node_id": None,
+            "aliases_added": [],
+        },
+    )
+
+    with pytest.raises(RollbackError):
+        rollback_resolution_event(
+            FakeUnitOfWork(state),
+            workspace_id=WORKSPACE_ID,
+            event_id=event_id,
+            operator="ops:junsu",
+        )

@@ -5796,4 +5796,14 @@ class KnowledgeResolutionEvent(Base):
             "workspace_id",
             "member_hash",
         ),
+        # 한 원본에 되돌림 행은 하나뿐이다. 서비스가 되돌림 여부를 미리
+        # 읽어 보기는 하지만 그것은 잠금 없는 읽기라, 두 운영자가 거의
+        # 동시에 되돌리면 둘 다 통과한다. 원본당 한 번이라는 규칙은 DB가
+        # 지킨다.
+        Index(
+            "uq_knowledge_resolution_events_reversal",
+            "reverses_event_id",
+            unique=True,
+            postgresql_where=text("reverses_event_id IS NOT NULL"),
+        ),
     )

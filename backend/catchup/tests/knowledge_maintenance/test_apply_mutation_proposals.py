@@ -928,9 +928,51 @@ def test_merge_into_node_records_human_resolution_event() -> None:
     assert snapshot["proposed_type"] == "feature"
     assert snapshot["merge_into_node_id"] == str(existing.id)
     assert snapshot["aliases_added"] == ["결제 기능"]
+    assert snapshot["applied_members"] == [
+        {"candidate_id": str(representative), "name": "결제"},
+        {"candidate_id": str(member), "name": "결제 기능"},
+    ]
     assert event["basis"]["detector"] == "catchup.entity_duplicate"
     assert event["basis"]["detector_version"] == "1"
     assert event["basis"]["reason"] == "같은 대상이다"
+
+
+def test_resolution_event_records_only_the_members_it_applied() -> None:
+    """저널의 실적용 목록에는 이번 적용이 실제로 옮긴 후보만 들어간다.
+
+    승인과 적용 사이에 다른 노드로 먼저 해소된 멤버는 적용이 건너뛴다.
+    되돌림은 이 목록만 되감으므로, 건너뛴 멤버가 섞이면 이 병합과 무관한
+    선행 해소를 지운다. 판정 당시 구성인 member_candidate_ids는 근거로
+    그대로 남는다.
+    """
+    state = FakeState()
+    foreign = state.add_node()
+    representative = state.add_candidate()
+    member = state.add_candidate()
+    already = state.add_candidate(
+        status="merged",
+        resolved_node_id=foreign.id,
+    )
+    state.add_approved_merge(
+        representative=representative,
+        members=(member, already),
+        resolver_metadata={
+            "member_hash": "hash-merge",
+            "member_names": ["결제", "결제 기능", "페이먼트"],
+        },
+    )
+
+    result, _ = _run(state)
+
+    assert result.proposals_applied == 1
+    assert result.candidates_already_resolved == 1
+    snapshot = state.events[0]["member_snapshot"]
+    assert snapshot["member_candidate_ids"] == [str(member), str(already)]
+    assert snapshot["applied_members"] == [
+        {"candidate_id": str(representative), "name": "결제"},
+        {"candidate_id": str(member), "name": "결제 기능"},
+    ]
+    assert state.candidates[already]["resolved_node_id"] == foreign.id
 
 
 def test_merge_into_node_with_existing_alias_records_no_alias() -> None:

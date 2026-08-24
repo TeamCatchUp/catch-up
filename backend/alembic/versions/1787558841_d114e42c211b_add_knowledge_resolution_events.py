@@ -88,10 +88,23 @@ def upgrade() -> None:
         'knowledge_resolution_events',
         ['workspace_id', 'member_hash'],
     )
+    # 한 원본에 되돌림 행은 하나뿐이다. 되돌림 서비스가 미리 읽어 보는
+    # 검사는 잠금이 없어 두 운영자가 동시에 되돌리면 둘 다 통과한다.
+    op.create_index(
+        'uq_knowledge_resolution_events_reversal',
+        'knowledge_resolution_events',
+        ['reverses_event_id'],
+        unique=True,
+        postgresql_where=sa.text('reverses_event_id IS NOT NULL'),
+    )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
+    op.drop_index(
+        'uq_knowledge_resolution_events_reversal',
+        table_name='knowledge_resolution_events',
+    )
     op.drop_index(
         'ix_knowledge_resolution_events_member_hash',
         table_name='knowledge_resolution_events',

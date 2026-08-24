@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable
+from collections.abc import Mapping
 from dataclasses import dataclass
 from dataclasses import field
 from types import TracebackType
@@ -114,6 +115,10 @@ class _Tally:
     `aliases_added`는 셈이 아니라 이번 적용이 실제로 기록한 별칭이다.
     저널은 계획이 아니라 일어난 일을 적어야 되돌림이 그 값을 믿을 수
     있으므로, 별칭을 남긴 자리에서 직접 채운다.
+
+    `applied_members`도 같은 이유로 둔다. 이번 적용이 실제로 해소 상태를
+    바꾼 후보와 그 후보의 병합 전 이름을 담는다. 이미 다른 노드로 해소돼
+    건너뛴 후보는 이 병합이 옮긴 것이 아니므로 넣지 않는다.
     """
 
     resolved: int = 0
@@ -123,6 +128,7 @@ class _Tally:
     closed_already: int = 0
     skipped_superseded: int = 0
     aliases_added: list[str] = field(default_factory=list)
+    applied_members: list[tuple[uuid.UUID, str]] = field(default_factory=list)
 
 
 def apply_mutation_proposals(
@@ -246,6 +252,7 @@ def _apply_one(
         )
 
     tally = _Tally()
+    names_by_candidate = _names_by_candidate(proposal)
     with uow_factory() as uow:
         nodes_by_sequence: dict[int, uuid.UUID] = {}
         for operation in sorted(operations, key=lambda item: item.sequence):
@@ -254,6 +261,7 @@ def _apply_one(
                     uow,
                     workspace_id=workspace_id,
                     operation=operation,
+                    names_by_candidate=names_by_candidate,
                     tally=tally,
                 )
                 if created is not None:
@@ -263,6 +271,7 @@ def _apply_one(
                     uow,
                     operation=operation,
                     nodes_by_sequence=nodes_by_sequence,
+                    names_by_candidate=names_by_candidate,
                     tally=tally,
                 )
             else:
@@ -280,6 +289,48 @@ def _apply_one(
         )
         uow.commit()
     return tally
+
+
+def _names_by_candidate(proposal: ApprovedProposal) -> dict[uuid.UUID, str]:
+    """후보마다 병합 전 이름을 판정 근거에서 찾아 둔다.
+
+    판정 근거의 member_names는 대표를 앞에 두고 멤버를 명령 순서대로 적은
+    목록이다. 후보 행에서 이름을 다시 읽지 않는 이유는 적용 시점에 그
+    행이 이미 다른 상태로 바뀌어 있을 수 있어서다. 대응하는 이름이 없으면
+    병합이 지은 proposed_name으로 물러난다.
+    """
+    ordered = sorted(proposal.operations, key=lambda item: item.sequence)
+    create = next(
+        (item for item in ordered if item.operation_type == "create_entity"),
+        None,
+    )
+    proposed_name = (
+        ""
+        if create is None
+        else str(create.operation_data.get("proposed_name", ""))
+    )
+    raw_names = proposal.resolver_metadata.get("member_names")
+    names = (
+        [str(name) for name in raw_names] if isinstance(raw_names, list) else []
+    )
+
+    candidate_ids: list[uuid.UUID] = []
+    if create is not None and create.entity_candidate_id is not None:
+        candidate_ids.append(create.entity_candidate_id)
+    candidate_ids.extend(
+        item.entity_candidate_id
+        for item in ordered
+        if item.operation_type == "merge_entity"
+        and item.entity_candidate_id is not None
+    )
+    return {
+        candidate_id: (
+            names[position]
+            if position < len(names) and names[position]
+            else proposed_name
+        )
+        for position, candidate_id in enumerate(candidate_ids)
+    }
 
 
 def _record_resolution_event(
@@ -364,6 +415,13 @@ def _record_resolution_event(
         "proposed_type": str(create.operation_data.get("proposed_type", "")),
         "merge_into_node_id": merge_into,
         "aliases_added": list(tally.aliases_added),
+        # 판정 당시 구성(member_candidate_ids·member_names)은 근거로 남기고,
+        # 되돌림이 되감을 대상은 이 목록이다. 이번 적용이 실제로 해소 상태를
+        # 바꾼 후보만 들어 있다.
+        "applied_members": [
+            {"candidate_id": str(candidate_id), "name": name}
+            for candidate_id, name in tally.applied_members
+        ],
     }
     basis = {
         "detector": proposal.detector,
@@ -388,6 +446,7 @@ def _apply_create(
     *,
     workspace_id: int,
     operation: StoredOperation,
+    names_by_candidate: Mapping[uuid.UUID, str],
     tally: _Tally,
 ) -> uuid.UUID | None:
     """대표 후보로 canonical 노드를 만들거나 기존 노드를 재사용한다.
@@ -441,6 +500,7 @@ def _apply_create(
             candidate_id=candidate_id,
             node_id_raw=target_raw,
             proposed_name=proposed_name,
+            member_name=names_by_candidate.get(candidate_id, proposed_name),
             tally=tally,
         )
 
@@ -468,6 +528,9 @@ def _apply_create(
         resolved_node_id=node.id,
     )
     tally.resolved += 1
+    tally.applied_members.append(
+        (candidate_id, names_by_candidate.get(candidate_id, proposed_name))
+    )
     return node.id
 
 
@@ -478,6 +541,7 @@ def _merge_into_existing_node(
     candidate_id: uuid.UUID,
     node_id_raw: object,
     proposed_name: str,
+    member_name: str,
     tally: _Tally,
 ) -> uuid.UUID:
     """대표 후보를 이미 서 있는 노드로 붙인다.
@@ -526,6 +590,7 @@ def _merge_into_existing_node(
         resolved_node_id=node_id,
     )
     tally.resolved += 1
+    tally.applied_members.append((candidate_id, member_name))
     return node_id
 
 
@@ -534,6 +599,7 @@ def _apply_merge(
     *,
     operation: StoredOperation,
     nodes_by_sequence: dict[int, uuid.UUID],
+    names_by_candidate: Mapping[uuid.UUID, str],
     tally: _Tally,
 ) -> None:
     """멤버 후보를 대표의 노드로 해소한다."""
@@ -567,6 +633,9 @@ def _apply_merge(
         resolved_node_id=target_node_id,
     )
     tally.resolved += 1
+    tally.applied_members.append(
+        (candidate_id, names_by_candidate.get(candidate_id, ""))
+    )
 
 
 def _apply_supersede(

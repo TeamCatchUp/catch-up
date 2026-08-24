@@ -64,8 +64,10 @@ def _describe(
         )
 
     snapshot = event.member_snapshot
-    member_ids = snapshot.get("member_candidate_ids")
-    member_count = 1 + (len(member_ids) if isinstance(member_ids, list) else 0)
+    # 되돌림이 되감는 것은 그 병합이 실제로 옮긴 후보다. 판정 당시 구성인
+    # member_candidate_ids에는 적용이 건너뛴 후보도 들어 있다.
+    applied = snapshot.get("applied_members")
+    member_count = len(applied) if isinstance(applied, list) else 0
     aliases = snapshot.get("aliases_added")
     alias_names = aliases if isinstance(aliases, list) else []
 
@@ -74,7 +76,7 @@ def _describe(
     print(f"  종류 {event.event_type}  | 결정자 {event.decider}")
     print(f"  노드 {event.node_id}")
     print(f"  이름 {snapshot.get('proposed_name')}")
-    print(f"  되돌릴 후보 {member_count}건 (대표 포함)")
+    print(f"  되돌릴 후보 {member_count}건 (실제로 옮긴 후보)")
     if event.event_type == "merge_into_node":
         print(f"  제거할 별칭 {len(alias_names)}건: {alias_names}")
     else:
