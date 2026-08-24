@@ -804,6 +804,60 @@ class SqlAlchemyKnowledgeNodeRepository:
         )
         self._session.flush()
 
+    def remove_alias(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+        normalized_alias: str,
+    ) -> None:
+        """확정이 남긴 이름 단서 하나를 노드에서 거둔다.
+
+        source가 "system"인 행만 지운다. 같은 표기를 다른 관찰이 따로
+        붙여 두었을 수 있어, 정규화 이름만 보고 지우면 되돌림과 무관한
+        단서까지 사라진다.
+        """
+        row = self._session.scalar(
+            select(KnowledgeNodeAliasRow).where(
+                KnowledgeNodeAliasRow.workspace_id == workspace_id,
+                KnowledgeNodeAliasRow.node_id == node_id,
+                KnowledgeNodeAliasRow.normalized_alias == normalized_alias,
+                KnowledgeNodeAliasRow.source == "system",
+            )
+        )
+        if row is None:
+            return
+        self._session.delete(row)
+        self._session.flush()
+
+    def retire_entity_node(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+    ) -> None:
+        """entity 노드를 퇴역 상태로 물린다.
+
+        행을 지우지 않는다. 저널과 지난 기록이 이 노드를 계속 가리키므로
+        노드는 남되 살아 있는 노드를 보는 경로에서만 빠져야 한다.
+
+        Raises:
+            ValueError: 노드가 없을 때 던진다.
+        """
+        row = self._session.scalar(
+            select(KnowledgeNodeRow).where(
+                KnowledgeNodeRow.workspace_id == workspace_id,
+                KnowledgeNodeRow.id == node_id,
+            )
+        )
+        if row is None:
+            raise ValueError(f"unknown knowledge node: {node_id}")
+        row.lifecycle_state = NodeLifecycleState.RETIRED.value
+        # merged_into_node_id는 비운다. lifecycle이 merged가 아닌 행에
+        # 흡수처가 남아 있으면 DB CHECK가 막는다.
+        row.merged_into_node_id = None
+        self._session.flush()
+
 
 class SqlAlchemyKnowledgeCandidateRepository:
     """추출 결과의 영속성을 PostgreSQL로 구현한다."""

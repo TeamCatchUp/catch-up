@@ -196,6 +196,37 @@ class KnowledgeNodeRepository(Protocol):
         """노드에 이름 단서를 남긴다. 같은 정규화 alias면 넘어간다."""
         ...
 
+    def remove_alias(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+        normalized_alias: str,
+    ) -> None:
+        """확정이 남긴 이름 단서 하나를 노드에서 거둔다.
+
+        되돌림이 쓴다. 같은 표기가 다른 관찰에서 따로 붙어 있을 수 있어
+        정규화 이름만으로 지우면 되돌림과 무관한 단서까지 함께 사라진다.
+        그래서 확정이 남긴 표시(source가 "system")가 붙은 행만 지운다.
+        지울 행이 없으면 아무것도 하지 않는다.
+        """
+        ...
+
+    def retire_entity_node(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+    ) -> None:
+        """entity 노드를 퇴역 상태로 물린다.
+
+        되돌림이 쓴다. 확정이 세운 노드에서 후보가 전부 떠나면 그 노드는
+        가리키는 것이 없는 빈 자리로 남는데, 지우지는 않는다. 저널과 지난
+        기록이 그 노드를 계속 가리키기 때문이다. 대신 lifecycle을 물려
+        살아 있는 노드를 보는 경로에서 빠지게 한다.
+        """
+        ...
+
     def ensure_for_resource(
         self,
         *,
