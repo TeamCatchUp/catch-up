@@ -143,6 +143,8 @@ class ResolutionResult:
         proposals_abandoned: 멤버가 달라져 접은 proposal 수를 나타낸다.
         groups_judged: LLM이 판정한 그룹 수를 나타낸다.
         groups_failed: 판정에 실패해 건너뛴 그룹 수를 나타낸다.
+        groups_abstained: 기존 노드가 둘 이상 섞여 병합을 미룬 그룹 수를
+            나타낸다.
         singletons_promoted: 후보가 하나뿐이라 판정 없이 노드로 승격한
             후보 수를 나타낸다. 후보 하나가 노드 하나다.
         blocks_formed: 이름 유사도로 만들어진 판정 블록 가운데 멤버가
@@ -160,6 +162,7 @@ class ResolutionResult:
     proposals_abandoned: int = 0
     groups_judged: int = 0
     groups_failed: int = 0
+    groups_abstained: int = 0
     singletons_promoted: int = 0
     blocks_formed: int = 0
     blocks_judged: int = 0
@@ -330,6 +333,7 @@ def resolve_entity_candidates(
         proposals_abandoned=fuzzy.abandoned,
         groups_judged=fuzzy.judged,
         groups_failed=fuzzy.failed,
+        groups_abstained=fuzzy.abstained,
         singletons_promoted=fuzzy.promoted,
         blocks_formed=fuzzy.blocks_formed,
         blocks_judged=fuzzy.blocks_judged,
@@ -345,6 +349,7 @@ def resolve_entity_candidates(
         proposals_abandoned=result.proposals_abandoned,
         groups_judged=result.groups_judged,
         groups_failed=result.groups_failed,
+        groups_abstained=result.groups_abstained,
         singletons_promoted=result.singletons_promoted,
         blocks_formed=result.blocks_formed,
         blocks_judged=result.blocks_judged,
@@ -374,10 +379,27 @@ class _FuzzyCounts:
     abandoned: int = 0
     judged: int = 0
     failed: int = 0
+    abstained: int = 0
     promoted: int = 0
     blocks_formed: int = 0
     blocks_judged: int = 0
     blocks_failed: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class _GroupOutcome:
+    """분할 그룹 하나를 처리한 결과를 표현한다.
+
+    Attributes:
+        created: 이 그룹이 새로 쓴 제안 수를 나타낸다. 0 또는 1이다.
+        abstained: 병합을 미뤘으면 1이다.
+        settled: 이번 그룹에서 처리를 마친 후보 id들을 담는다. 제안을
+            썼든 미뤘든 여기 담긴 후보는 이번 라운드에 승격하지 않는다.
+    """
+
+    created: int = 0
+    abstained: int = 0
+    settled: frozenset[uuid.UUID] = frozenset()
 
 
 def _external_key(candidate: StoredEntityCandidate) -> str | None:
@@ -730,6 +752,7 @@ def _judge_name_blocks(
     created = 0
     judged = 0
     failed = 0
+    abstained = 0
     promoted = 0
     formed = 0
     # 판정을 받은 후보만 그 결과대로 처리하고, 남은 후보는 승격한다.
@@ -767,7 +790,7 @@ def _judge_name_blocks(
         )
 
         for group in partition.groups:
-            group_created, group_settled = _apply_identity_group(
+            outcome = _apply_identity_group(
                 workspace_id=workspace_id,
                 block=block,
                 group=group,
@@ -775,8 +798,9 @@ def _judge_name_blocks(
                 node_by_id=node_by_id,
                 uow=uow,
             )
-            created += group_created
-            settled.update(group_settled)
+            created += outcome.created
+            abstained += outcome.abstained
+            settled.update(outcome.settled)
 
     for candidate in candidates:
         if candidate.id in settled:
@@ -791,6 +815,7 @@ def _judge_name_blocks(
 
     return _FuzzyCounts(
         created=created,
+        abstained=abstained,
         promoted=promoted,
         blocks_formed=formed,
         blocks_judged=judged,
@@ -806,19 +831,22 @@ def _apply_identity_group(
     candidate_by_id: dict[str, StoredEntityCandidate],
     node_by_id: dict[str, _NodeMember],
     uow: ResolutionUnitOfWork,
-) -> tuple[int, set[uuid.UUID]]:
+) -> _GroupOutcome:
     """분할 그룹 하나를 병합 제안으로 옮긴다.
 
     멤버가 둘 이상이고 후보가 하나라도 있는 그룹만 제안이 된다. 기존
-    노드가 섞여 있으면 그 노드로 붙이는 제안이고, 후보끼리면 새 노드를
-    세우는 제안이다. 어느 쪽이든 확정은 사람의 승인 뒤 적용이 한다.
+    노드가 하나 섞여 있으면 그 노드로 붙이는 제안이고, 후보끼리면 새
+    노드를 세우는 제안이다. 어느 쪽이든 확정은 사람의 승인 뒤 적용이
+    한다.
+
+    기존 노드가 둘 이상 섞인 그룹은 제안을 쓰지 않고 이번 라운드에서
+    계류한다. 그런 그룹은 사실상 노드끼리의 병합인데, 승인 뒤 적용
+    경로는 후보를 노드 하나에 붙이는 일만 할 줄 안다. 그대로 두면 후보만
+    한쪽 노드로 가고 갈라진 노드는 갈라진 채 남는 반쪽 실행이 된다.
 
     혼자 남은 후보는 승격 대상이므로 여기서 처리하지 않고 부르는 쪽에
     남긴다. 기존 노드만 모인 그룹도 건드리지 않는다 — 서 있는 노드끼리
     합치는 일은 이 단계의 몫이 아니다.
-
-    Returns:
-        (새로 쓴 제안 수, 이번 그룹에서 처리를 마친 후보 id들)을 준다.
     """
     members = [
         candidate_by_id[member_id]
@@ -826,10 +854,26 @@ def _apply_identity_group(
         if member_id in candidate_by_id
     ]
     if not members or len(group.member_ids) < 2:
-        return 0, set()
+        return _GroupOutcome()
 
     members = sorted(members, key=lambda member: (member.created_at, member.id))
-    settled = {member.id for member in members}
+    settled = frozenset(member.id for member in members)
+
+    node_ids = {
+        node_by_id[member_id].node_id
+        for member_id in group.member_ids
+        if member_id in node_by_id
+    }
+    if len(node_ids) > 1:
+        logger.info(
+            "merge_abstained_multi_node",
+            workspace_id=workspace_id,
+            entity_type=block.entity_type,
+            node_count=len(node_ids),
+            candidate_count=len(members),
+        )
+        return _GroupOutcome(abstained=1, settled=settled)
+
     target = _merge_target(block, group, node_by_id)
     key = block_idempotency_key(group.member_ids)
     member_hash = _member_hash(list(group.member_ids))
@@ -841,7 +885,7 @@ def _apply_identity_group(
         uow=uow,
     )
     if unchanged:
-        return 0, settled
+        return _GroupOutcome(settled=settled)
 
     names = ", ".join(f"'{member.proposed_name}'" for member in members)
     if target is None:
@@ -873,7 +917,7 @@ def _apply_identity_group(
         merge_into_node_id=None if target is None else target.node_id,
         uow=uow,
     )
-    return 1, settled
+    return _GroupOutcome(created=1, settled=settled)
 
 
 def _merge_target(
@@ -881,12 +925,16 @@ def _merge_target(
     group: IdentityGroup,
     node_by_id: dict[str, _NodeMember],
 ) -> _NodeMember | None:
-    """그룹에 섞인 기존 노드 가운데 붙일 곳 하나를 고른다.
+    """그룹에 섞인 기존 노드의 이름 가운데 붙일 곳 하나를 고른다.
 
-    블록 멤버 순서로 가장 앞선 노드를 고른다. 판정이 돌려준 순서는
+    부르는 쪽이 서로 다른 노드가 둘 이상인 그룹을 이미 걸러내므로 여기
+    도달한 그룹의 노드는 많아야 하나다. 다만 한 노드가 이름을 여럿
+    가지면 그 이름마다 멤버가 하나씩이라 고를 것이 여러 개 남는다.
+
+    블록 멤버 순서로 가장 앞선 이름을 고른다. 판정이 돌려준 순서는
     호출마다 달라질 수 있지만 블록 순서는 고정이라, 같은 그룹이면 늘 같은
-    노드로 간다. 노드가 둘 이상 섞였어도 하나만 고른다 — 서 있는 노드끼리
-    합치는 일은 이 단계의 몫이 아니다.
+    이름을 고른다. 어느 이름을 고르든 노드는 같지만, 검토 문장에 실리는
+    별칭이 실행마다 흔들리지 않게 하려는 것이다.
     """
     assigned = set(group.member_ids)
     for member in block.members:

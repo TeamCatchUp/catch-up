@@ -197,6 +197,7 @@ def main() -> None:
         f"  유사 이름 블록 {result.blocks_formed}"
         f"  | 분할 판정 {result.blocks_judged}"
         f" (실패 {result.blocks_failed})"
+        f"  | 병합 계류 {result.groups_abstained}"
     )
 
     engine.dispose()

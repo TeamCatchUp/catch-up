@@ -1352,3 +1352,70 @@ def test_embedding_failure_falls_back_to_exact_name_groups() -> None:
     assert result.blocks_formed == 0
     assert result.groups_judged == 1
     assert result.proposals_created == 1
+
+
+def test_group_with_two_existing_nodes_abstains_from_merge() -> None:
+    """기존 노드가 둘 이상 섞인 그룹은 병합하지 않고 계류한다."""
+    judge = FakePartitionJudge()
+    candidate = _candidate(
+        name="Google Workspace 연동 지원",
+        entity_type="feature_request",
+        method=ExtractionMethod.LLM,
+    )
+    uow = FakeUnitOfWork([candidate])
+    _promoted_node(
+        uow, name="Google Workspace 연동", entity_type="feature_request"
+    )
+    _promoted_node(
+        uow, name="Google Workspace 커넥터", entity_type="feature_request"
+    )
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE,
+        judge=judge,
+        uow=uow,
+        name_embedder=_google_embedder(),
+    )
+
+    assert result.blocks_formed == 1
+    assert result.blocks_judged == 1
+    assert result.groups_abstained == 1
+    assert result.proposals_created == 0
+    assert uow.mutation_proposals.proposals == {}
+    # 계류이므로 승격도 해소도 없다.
+    assert result.singletons_promoted == 0
+    assert uow.knowledge_candidates.resolved == {}
+    assert len(uow.knowledge_nodes.nodes) == 2
+
+
+def test_group_with_two_aliases_of_one_node_still_merges() -> None:
+    """같은 노드의 별칭이 여럿이어도 노드가 하나면 병합 제안을 쓴다."""
+    judge = FakePartitionJudge()
+    candidate = _candidate(
+        name="Google Workspace 연동 지원",
+        entity_type="feature_request",
+        method=ExtractionMethod.LLM,
+    )
+    uow = FakeUnitOfWork([candidate])
+    existing = _promoted_node(
+        uow, name="Google Workspace 연동", entity_type="feature_request"
+    )
+    uow.knowledge_nodes.add_alias(
+        workspace_id=WORKSPACE,
+        node_id=existing.id,
+        alias="Google Workspace 커넥터",
+        normalized_alias=normalize_name("Google Workspace 커넥터"),
+        source="system",
+    )
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE,
+        judge=judge,
+        uow=uow,
+        name_embedder=_google_embedder(),
+    )
+
+    assert result.groups_abstained == 0
+    assert result.proposals_created == 1
+    (stored,) = uow.mutation_proposals.proposals.values()
+    assert stored["kwargs"]["merge_into_node_id"] == existing.id
