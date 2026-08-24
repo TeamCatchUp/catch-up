@@ -80,7 +80,7 @@ export const Expanded: Story = {
     const canvas = within(canvasElement);
     const panel = canvas.getByTestId('move-target-picker');
 
-    // 시안 실측 300×380
+    // 패널 규격은 어서션이 든 값이 정본이다
     await expect(panel.getBoundingClientRect().width).toBe(300);
     await expect(panel.getBoundingClientRect().height).toBe(380);
 

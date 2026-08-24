@@ -199,8 +199,8 @@ export const TableAlignment: Story = {
     await expect(folderTable.queryByText('담당자')).toBeNull();
     await expect(folderTable.queryByText('상태')).toBeNull();
 
-    // 폴더 표: 메타가 96 한 칸으로 줄고 뺀 332는 이름 열이 흡수한다.
-    // 마지막 열은 두 표 모두 우측 끝 96이라 같은 자리에 선다 — 화면을 오가도 열이 튀지 않는다.
+    // 폴더 표: 메타가 최근 활동 한 칸으로 줄고 남는 폭은 이름 열이 흡수한다.
+    // 마지막 열은 두 표 모두 우측 끝 같은 자리에 선다 — 화면을 오가도 열이 튀지 않는다.
     const folderActivity = folderTable.getByText('최근 활동');
     const documentActivity = documentTable.getByText('최근 활동');
     await expect(folderActivity.getBoundingClientRect().width).toBe(96);

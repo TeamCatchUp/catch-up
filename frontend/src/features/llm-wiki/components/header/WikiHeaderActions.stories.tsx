@@ -61,7 +61,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof WikiHeaderActions>;
 
-/** 채널 헤더(main) — 36px 사각 버튼 2개. */
+/** 채널 헤더(main) — 사각 버튼 2개. 크기는 play 어서션이 잰다. */
 export const MainChannel: Story = {
   args: { variant: 'main' },
   play: async ({ canvasElement }) => {
@@ -82,7 +82,7 @@ export const MainChannel: Story = {
   },
 };
 
-/** 폴더 헤더(detail) — 28px 원형 버튼 2개. main과 갈리는 유일한 기하다. */
+/** 폴더 헤더(detail) — 원형 버튼 2개. main과 갈리는 유일한 기하다. */
 export const DetailFolder: Story = {
   args: { variant: 'detail', kind: 'folder', name: '폴더명' },
   play: async ({ canvasElement }) => {

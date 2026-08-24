@@ -80,13 +80,13 @@ export const Default: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // 헤더는 breadcrumb가 아니라 아이콘 + 제목이다(8/24 시안).
+    // 헤더는 breadcrumb가 아니라 아이콘 + 제목이다.
     const header = canvas.getByRole('banner');
     await expect(canvas.queryByRole('navigation')).toBeNull();
     await expect(getComputedStyle(header).paddingLeft).toBe('64px');
     await expect(header).toHaveTextContent('결제');
 
-    // 헤더 우측 액션 — main 규격 36px 두 개.
+    // 헤더 우측 액션 — main 규격 두 개. 크기는 아래 어서션이 잰다.
     const copyLink = canvas.getByRole('button', { name: '링크 복사' });
     await expect(copyLink.getBoundingClientRect().width).toBe(36);
     await expect(canvas.getByRole('button', { name: '작업 더보기' })).toBeInTheDocument();

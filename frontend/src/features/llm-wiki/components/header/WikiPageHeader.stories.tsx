@@ -134,7 +134,7 @@ export const Dashboard: Story = {
   },
 };
 
-/** 채널 — 시안 17752:45516대로 main형이다(breadcrumb가 아니라 아이콘 + 제목). */
+/** 채널 — main형이다(breadcrumb가 아니라 아이콘 + 제목). */
 export const Channel: Story = {
   args: {
     variant: 'main',

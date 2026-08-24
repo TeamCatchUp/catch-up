@@ -10,7 +10,7 @@ import SnbRenamePopover from '@/shared/components/layout/sideNavBar/SnbRenamePop
 import { Button } from '@/shared/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
 
-/** 버튼 규격은 헤더 variant에 묶인다 — main 36px/radius 8, detail 28px/radius full. */
+/** 버튼 규격은 헤더 variant에 묶인다 — main과 detail이 크기·모서리를 가른다. */
 const ACTION_SPEC = {
   main: { size: 'md', box: undefined, icon: 'size-6' },
   detail: { size: 'sm', box: 'size-7', icon: 'size-5' },

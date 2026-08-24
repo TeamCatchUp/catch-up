@@ -77,12 +77,12 @@ export const Default: Story = {
     // breadcrumb 2마디: 채널 마디는 버튼, 폴더 마디가 현재 페이지다.
     const currentCrumb = canvasElement.querySelector('[aria-current="page"]')!;
     await expect(currentCrumb).toHaveTextContent('승인·실패 처리');
-    // 현재 마디에는 아이콘이 없다 — 이전 마디만 갖는다(8/24 시안).
+    // 현재 마디에는 아이콘이 없다 — 이전 마디만 갖는다.
     await expect(currentCrumb.querySelectorAll('svg')).toHaveLength(0);
     await userEvent.click(canvas.getByRole('button', { name: '결제' }));
     await expect(args.onBreadcrumbClick).toHaveBeenCalledWith({ kind: 'channel', label: '결제' }, 0);
 
-    // 헤더 우측 액션 — detail 규격 28px 두 개.
+    // 헤더 우측 액션 — detail 규격 두 개. 크기는 아래 어서션이 잰다.
     const copyLink = canvas.getByRole('button', { name: '링크 복사' });
     await expect(copyLink.getBoundingClientRect().width).toBe(28);
     await expect(canvas.getByRole('button', { name: '작업 더보기' })).toBeInTheDocument();
