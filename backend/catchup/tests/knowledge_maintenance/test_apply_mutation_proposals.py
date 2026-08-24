@@ -977,6 +977,50 @@ def test_merge_without_member_hash_fails_that_proposal() -> None:
     assert state.nodes == []
 
 
+def test_superseded_representative_without_member_hash_fails() -> None:
+    """노드가 서지 않아도 member_hash 없는 병합은 실패로 남는다.
+
+    검사가 노드 유무 뒤에 있으면 이 조합만 검사를 빠져나가 적용 완료로
+    끝난다. 저널 없는 결정이 조용히 닫히는 자리다.
+    """
+    state = FakeState()
+    representative = state.add_candidate(status="superseded")
+    proposal_id = state.add_approved_merge(
+        representative=representative,
+        members=(),
+        resolver_metadata={"reason": "같은 대상이다"},
+    )
+
+    result, _ = _run(state)
+
+    assert result.proposals_applied == 0
+    assert result.proposals_failed == 1
+    assert state.events == []
+    assert state.proposals[proposal_id]["status"] == "approved"
+
+
+def test_reused_node_event_records_no_alias() -> None:
+    """별칭을 더하지 않은 적용은 저널에도 더한 것으로 적지 않는다."""
+    state = FakeState()
+    existing_node = uuid.uuid4()
+    representative = state.add_candidate(
+        status="merged", resolved_node_id=existing_node
+    )
+    member = state.add_candidate()
+    state.add_approved_merge(
+        representative=representative, members=(member,)
+    )
+
+    result, _ = _run(state)
+
+    assert result.proposals_applied == 1
+    assert state.aliases == []
+    assert len(state.events) == 1
+    event = state.events[0]
+    assert event["node_id"] == existing_node
+    assert event["member_snapshot"]["aliases_added"] == []
+
+
 def test_contradiction_apply_records_no_resolution_event() -> None:
     """모순 판정의 적용은 해소 저널을 건드리지 않는다."""
     state = FakeState()

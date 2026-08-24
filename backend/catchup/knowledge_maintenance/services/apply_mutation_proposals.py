@@ -15,6 +15,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
+from dataclasses import field
 from types import TracebackType
 from typing import Protocol
 from typing import Self
@@ -109,7 +110,12 @@ class ApplyResult:
 
 @dataclass
 class _Tally:
-    """proposal 하나를 적용하는 동안의 셈을 담는다."""
+    """proposal 하나를 적용하는 동안의 셈을 담는다.
+
+    `aliases_added`는 셈이 아니라 이번 적용이 실제로 기록한 별칭이다.
+    저널은 계획이 아니라 일어난 일을 적어야 되돌림이 그 값을 믿을 수
+    있으므로, 별칭을 남긴 자리에서 직접 채운다.
+    """
 
     resolved: int = 0
     already: int = 0
@@ -117,6 +123,7 @@ class _Tally:
     invalidated: int = 0
     closed_already: int = 0
     skipped_superseded: int = 0
+    aliases_added: list[str] = field(default_factory=list)
 
 
 def apply_mutation_proposals(
@@ -266,6 +273,7 @@ def _apply_one(
             workspace_id=workspace_id,
             proposal=proposal,
             nodes_by_sequence=nodes_by_sequence,
+            tally=tally,
         )
         uow.mutation_proposals.mark_applied(
             workspace_id=workspace_id,
@@ -281,14 +289,19 @@ def _record_resolution_event(
     workspace_id: int,
     proposal: ApprovedProposal,
     nodes_by_sequence: dict[int, uuid.UUID],
+    tally: _Tally,
 ) -> None:
     """병합 확정 한 건을 해소 event 저널에 남긴다.
 
     병합 안건에만 쓴다. 모순 안건은 노드를 세우지도 붙이지도 않아 저널에
     남길 확정이 없다.
 
-    대표가 재추출로 은퇴해 노드가 서지 않았으면 남기지 않는다. 합쳐진
-    것이 없으므로 되돌릴 것도 없다.
+    member_hash 검사를 노드 유무보다 먼저 한다. 순서가 반대면 대표가
+    은퇴해 노드가 서지 않은 안건은 검사를 건너뛰고 적용 완료로 끝나,
+    member_hash 없는 병합 안건이 조용히 결정 저널에서 사라진다.
+
+    검사를 지난 뒤 대표가 재추출로 은퇴해 노드가 서지 않았으면 남기지
+    않는다. 합쳐진 것이 없으므로 되돌릴 것도 없다.
 
     Raises:
         ApplyOperationError: 병합 안건인데 판정 근거에 member_hash가
@@ -306,9 +319,6 @@ def _record_resolution_event(
     if not create_operations:
         return
     create = min(create_operations, key=lambda item: item.sequence)
-    node_id = nodes_by_sequence.get(create.sequence)
-    if node_id is None:
-        return
 
     metadata = dict(proposal.resolver_metadata)
     member_hash = metadata.get("member_hash")
@@ -316,6 +326,10 @@ def _record_resolution_event(
         raise ApplyOperationError(
             f"병합 안건에 member_hash가 없다: {proposal.proposal_id}"
         )
+
+    node_id = nodes_by_sequence.get(create.sequence)
+    if node_id is None:
+        return
 
     merge_into_raw = create.operation_data.get("merge_into_node_id")
     merge_into = None if merge_into_raw is None else str(merge_into_raw)
@@ -350,7 +364,7 @@ def _record_resolution_event(
         "proposed_name": proposed_name,
         "proposed_type": str(create.operation_data.get("proposed_type", "")),
         "merge_into_node_id": merge_into,
-        "aliases_added": [proposed_name],
+        "aliases_added": list(tally.aliases_added),
     }
     basis = {
         "detector": proposal.detector,
@@ -446,6 +460,7 @@ def _apply_create(
         normalized_alias=normalize_name(proposed_name),
         source="system",
     )
+    tally.aliases_added.append(proposed_name)
     uow.knowledge_candidates.mark_entity_resolved(
         candidate_id=candidate_id,
         status=EntityResolutionStatus.ACCEPTED,
@@ -499,6 +514,7 @@ def _merge_into_existing_node(
         normalized_alias=normalize_name(proposed_name),
         source="system",
     )
+    tally.aliases_added.append(proposed_name)
     uow.knowledge_candidates.mark_entity_resolved(
         candidate_id=candidate_id,
         status=EntityResolutionStatus.MERGED,
