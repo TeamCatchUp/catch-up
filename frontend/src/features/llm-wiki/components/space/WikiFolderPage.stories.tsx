@@ -59,7 +59,10 @@ const meta = {
         '에러·404 스토리는 만들지 않는다 — 디자인 MISSING 유지. 에러는 빈 화면을 두고 토스트로만 알린다.',
       ],
       tokenNotes: ['채널 페이지와 동일 매핑 — ChannelPage 스토리 tokenNotes 참조.'],
-      layoutNotes: ['채널 페이지와 동일 산술(px-20·py-9·gap-9·gap-8) — 기하 어서션은 ChannelPage 스토리가 잰다.'],
+      layoutNotes: [
+        '채널 페이지와 동일 산술(px-20·py-9·gap-9·gap-8) — 기하 어서션은 ChannelPage 스토리가 잰다.',
+        '[8/24 재실측 17762:104787] 상단 200px 커버가 시안에서 사라졌다(사용자 확인) — 부재 어서션만 이 스토리가 따로 잰다.',
+      ],
     }),
   },
 } satisfies Meta<typeof WikiFolderPage>;
@@ -88,6 +91,9 @@ export const Default: Story = {
 
     await expect(canvas.getByRole('heading', { level: 1, name: '승인·실패 처리' })).toBeInTheDocument();
     await expect(canvas.getByText('작성자')).toBeInTheDocument();
+
+    // 헤더 바로 다음은 콘텐츠다 — 커버 잔재(aria-hidden 띠)가 되살아나면 안 된다.
+    await expect(canvasElement.querySelector('header + div[aria-hidden]')).toBeNull();
 
     // 문서 행 3개 — 선두 아이콘은 문서다(file_filled 루트 fill=none — folder_filled는 currentColor).
     for (const row of FOLDER_DOCUMENT_ROW_FIXTURES) {

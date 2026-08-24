@@ -54,7 +54,7 @@ const meta = {
         '채널 mock은 ChannelListItemResponse 정합(WikiChannelListItem 소비) — 폴더 행의 최근 활동은 CAM-299의 last_activity_at으로 채워진다.',
         '담당자·상태 열은 만들지 않는다 — 폴더의 created_by는 만든 사람이라 "담당자" 열의 뜻과 다르고, 폴더에는 상태가 없다. 채널 자체에는 작성자 필드가 없어 그 줄도 서지 않는다.',
         '문서가 하나도 없는 폴더는 활동 시각이 null이라 그 칸까지 빈다 — FolderRowsWithoutMeta가 그때의 표 모습이다.',
-        '상단 200px 커버는 바탕색만 시안값이고 콘텐츠는 미정(사진 가능성) — 안은 비워 둔다.',
+        '[8/24 재실측 17724:185191] 상단 200px 커버가 시안에서 사라졌다(사용자 확인) — 헤더 아래는 py-9 여백 뒤 바로 제목 블록이다.',
         '쪽 크기 드롭다운은 대시보드와 같은 5종(10/20/30/40/50)이고 기본 20이다 — 옵션 목록은 미도시라 사용자 확정분이다. 폴더는 채널 목록 응답에 전량 실려 와 크기 변경이 slice 구간만 바꾼다.',
         '[8/24 시안 17752:45516] 헤더가 breadcrumb 1마디에서 아이콘+제목(main)으로 돌아왔고, 우측에 링크 복사·케밥이 생겼다. 케밥 항목은 이름 바꾸기 하나뿐이다 — 시안의 채널 설정 보기·도움말·버전 기록은 목적지가 없고 하단 메타는 채널에 대응 필드가 없다.',
         '이름 바꾸기는 채널 관리자(isAdmin)에게만 온다 — 아니면 케밥이 서지 않고 링크 복사만 남는다.',
@@ -97,15 +97,12 @@ export const Default: Story = {
     await expect(canvas.getByText('작성자')).toBeInTheDocument();
     await expect(canvas.getByText('팀원G')).toBeInTheDocument();
 
-    // 상단 커버(200) + py(36)만큼 제목 블록이 헤더에서 떨어진다.
+    // 커버가 시안에서 빠져 제목 블록은 py(36)만큼만 헤더에서 떨어진다.
     const titleRow = canvas.getByRole('heading', { level: 1 }).parentElement!;
-    await expect(titleRow.getBoundingClientRect().top - header.getBoundingClientRect().bottom).toBeCloseTo(236, 0);
+    await expect(titleRow.getBoundingClientRect().top - header.getBoundingClientRect().bottom).toBeCloseTo(36, 0);
 
-    // 커버는 콘텐츠가 비어도 시안의 바탕색을 갖는다 — 투명이면 200px 공백으로 보인다.
-    const cover = canvasElement.querySelector('header + div[aria-hidden]') as HTMLElement;
-    await expect(cover.getBoundingClientRect().height).toBe(200);
-    await expect(getComputedStyle(cover).backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
-    await expect(cover).toBeEmptyDOMElement();
+    // 헤더 바로 다음은 콘텐츠다 — 커버 잔재(aria-hidden 띠)가 되살아나면 안 된다.
+    await expect(canvasElement.querySelector('header + div[aria-hidden]')).toBeNull();
 
     // 표: 폴더 표는 이름 + 최근 활동 2열뿐이다 — 폴더에 없는 담당자·상태 열을 두지 않는다.
     await expect(canvas.getByText('문서')).toBeInTheDocument();

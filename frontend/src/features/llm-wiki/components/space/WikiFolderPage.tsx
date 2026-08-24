@@ -74,9 +74,6 @@ export default function WikiFolderPage({
         }
       />
 
-      {/* 상단 커버 — 바탕만 시안값이고 콘텐츠는 미정이라 비워 둔다 */}
-      <div aria-hidden className="bg-fill-normal-strong h-50 shrink-0" />
-
       <div className="flex flex-col gap-9 px-20 py-9">
         <WikiSpaceTitleBlock
           icon={<IconFolderFilled />}
