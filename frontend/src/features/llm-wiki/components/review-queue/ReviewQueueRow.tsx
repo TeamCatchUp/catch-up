@@ -18,7 +18,7 @@ interface ReviewQueueRowProps {
   secondaryTitle?: string;
 }
 
-/** 담당자 표기 3갈래 — 없음(기본 아바타+문구) / 1인(아바타+이름) / 2인 이상(스택+라벨). */
+/** 담당자 표기 3갈래 — 없음(기본 아바타+문구) / 1인(아바타+이름) / 2인 이상(스택+"외 N명" 요약). */
 function OwnerDisplay({ owners }: { owners: readonly DocumentOwner[] }) {
   if (owners.length === 0) {
     return (
@@ -33,7 +33,6 @@ function OwnerDisplay({ owners }: { owners: readonly DocumentOwner[] }) {
     return (
       <>
         <Avatar size="small" src={owners[0].profileImageUrl} className="border-line-normal-assistive rounded-xl" />
-        <span className="text-body-xsmall text-text-normal-alternative shrink-0">담당자</span>
         <span className="text-body-xsmall text-text-normal-neutral truncate">{owners[0].displayName}</span>
       </>
     );
@@ -42,7 +41,9 @@ function OwnerDisplay({ owners }: { owners: readonly DocumentOwner[] }) {
   return (
     <>
       <AvatarGroup avatars={owners.map((owner) => ({ src: owner.profileImageUrl }))} size="small" max={3} />
-      <span className="text-body-xsmall text-text-normal-alternative shrink-0">담당자</span>
+      <span className="text-body-xsmall text-text-normal-neutral truncate">
+        {owners[0].displayName}님 외 {owners.length - 1}명
+      </span>
     </>
   );
 }

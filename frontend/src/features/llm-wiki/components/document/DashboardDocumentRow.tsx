@@ -49,12 +49,7 @@ export default function DashboardDocumentRow({ document, onClick, onBreadcrumbCl
       )}
     >
       {/* 행 전체 클릭 — 마디 버튼과의 중첩을 피해 오버레이로 분리한다 */}
-      <button
-        type="button"
-        aria-label={title}
-        onClick={() => onClick?.(id)}
-        className="absolute inset-0 rounded-lg"
-      />
+      <button type="button" aria-label={title} onClick={() => onClick?.(id)} className="absolute inset-0 rounded-lg" />
 
       {/* 문서 열 — 이 행에서 폭을 흡수하는 유일한 슬롯 */}
       <span className="flex min-w-55 flex-1 items-center gap-4">
@@ -96,8 +91,14 @@ export default function DashboardDocumentRow({ document, onClick, onBreadcrumbCl
 
       <span className={DASHBOARD_DOCUMENT_META_GRID}>
         {/* 담당자 열 — 이름이 바로 옆이라 아바타 alt는 비운다(중복 낭독 방지).
-            전원을 세로로 쌓아 행 높이가 인원수만큼 늘어난다. 미지정(빈 배열)은 자리만 비운다 */}
+            전원을 세로로 쌓아 행 높이가 인원수만큼 늘어난다. 미지정(빈 배열)은 기본 아바타+문구 */}
         <span className="flex min-w-0 flex-col gap-1">
+          {owners.length === 0 && (
+            <span className="flex min-w-0 items-center gap-3">
+              <Avatar size="small" className="border-line-normal-assistive shrink-0 rounded-xl" />
+              <span className="text-body-small text-text-normal-assistive truncate">담당자 없음</span>
+            </span>
+          )}
           {owners.map((owner) => (
             <span key={owner.userId} className="flex min-w-0 items-center gap-3">
               <Avatar

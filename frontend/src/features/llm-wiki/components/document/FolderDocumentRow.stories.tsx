@@ -51,6 +51,7 @@ const meta = {
         '행 상태는 시안에 도시된 검토 완료만 픽스처로 쓴다 — 다른 상태 행·폴더 배지 집계 의미는 미도시(디자이너 질문 유지).',
         '[8/24] 폴더 행은 담당자·상태 열을 두지 않는다 — 폴더에 대응 필드가 없어 항상 빈 열이었다. 시안 두 노드는 mock 데이터로 네 열을 모두 채우지만 실 응답에는 없다(사용자 지시).',
         '담당자는 문서 행에만 있는 owners[] 복수 계약이다. 2인 이상은 세로 스택으로 전원 렌더한다(사용자 확정) — 대시보드 행과 같은 표기이고 시안 없이 정한 자작분이다.',
+        '담당자 미지정 행은 디자이너 확정 노드 18929:96828 규격 적용(2026-08-24) — 기본 프로필 아바타 + "담당자 없음" 문구, 대시보드 행과 동일 조합(문구는 열 스케일 body/small + text-text-normal-assistive).',
       ],
       tokenNotes: [
         '이름 #33363D = text-text-normal-normal + heading(sb)/small. 아이콘 셸 #F7F7F8 = bg-fill-normal-strong, 아이콘 #B1B8BE = text-icon-normal-alternative.',
@@ -154,15 +155,17 @@ export const MultipleOwners: Story = {
   },
 };
 
-/** 담당자 미지정(빈 배열). 표기 시안이 없어 자리만 비운다 — 열 폭은 유지된다. */
+/** 담당자 미지정(빈 배열). 기본 아바타 + "담당자 없음" 문구가 선다 — 열 폭은 유지된다. */
 export const UnassignedOwner: Story = {
   args: { kind: 'document', item: createFolderDocumentRow({ owners: [] }) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
     await expect(canvas.queryByText('팀원F')).toBeNull();
-    // 아바타까지 함께 빠져야 자리 비움이다 — 이름만 빠지면 빈 아바타가 남는다.
-    await expect(canvasElement.querySelector('.border-line-normal-assistive')).toBeNull();
+    // 이름 대신 기본 프로필 폴백 아바타 + 문구가 선다 — 빈 칸이 되살아나면 여기서 잡힌다.
+    await expect(canvas.getByText('담당자 없음')).toBeInTheDocument();
+    await expect(canvasElement.querySelector('svg[viewBox="0 0 40 40"]')).not.toBeNull();
+    await expect(canvasElement.querySelector('.border-line-normal-assistive')).not.toBeNull();
 
     await expect(canvas.getByText('2일 전').getBoundingClientRect().width).toBe(96);
   },

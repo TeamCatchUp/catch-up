@@ -43,7 +43,7 @@ const meta = {
       dataNotes: [
         '2026-08-13 재실측(대시보드 17595:148922): 태그 열이 소멸하고 담당자(아바타+이름) 열로 교체됐다 — tags·hasConflictIcon 계약 제거.',
         '충돌(error) 아이콘 행이 새 표 15행 어디에도 없다 — 구 "배지·에러 공존 규칙" 질문은 "충돌 표시 이동처" 질문으로 대체(design-request).',
-        '담당자 미지정 행의 표시는 MISSING — 스탯 카드에 지표(담당자 미지정)는 있으나 행 시안이 없다. 발명하지 않고 디자이너 질문.',
+        '담당자 미지정 행은 디자이너 확정 노드 18929:96828 규격 적용(2026-08-24) — 기본 프로필 아바타 + "담당자 없음" 문구. 아바타는 1인 표기와 같은 조합이고, 문구는 이 행의 담당자 열 스케일(body/small)에 색만 text-text-normal-assistive(#B1B8BE)다.',
         '담당자는 실 API(GET /wiki/artifacts) owners[] 복수 계약이다. 2인 이상은 세로 스택으로 전원 렌더한다(사용자 확정) — 시안 MISSING이라 아바타 그룹·+N 배지 대신 1인 표기를 그대로 쌓은 자작 표기다.',
         '로딩 골격은 표 단위(DocumentTableSkeleton)라 이 행에는 없다. 빈 상태 스토리도 만들지 않는다 — 디자인 MISSING 유지.',
       ],
@@ -165,21 +165,21 @@ export const MultipleOwnersGrowRow: Story = {
     const tripleRow = canvas.getByRole('button', { name: '세 명이 맡은 문서' }).parentElement!;
 
     await expect(canvas.getByText('서지호')).toBeInTheDocument();
-    await expect(tripleRow.getBoundingClientRect().height).toBeGreaterThan(
-      singleRow.getBoundingClientRect().height,
-    );
+    await expect(tripleRow.getBoundingClientRect().height).toBeGreaterThan(singleRow.getBoundingClientRect().height);
   },
 };
 
-/** 담당자 미지정(빈 배열). 표기 시안이 없어 자리만 비운다 — 열 폭은 유지된다. */
+/** 담당자 미지정(빈 배열). 기본 아바타 + "담당자 없음" 문구가 선다 — 열 폭은 유지된다. */
 export const UnassignedOwner: Story = {
   args: { document: createDocumentRow({ owners: [] }) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
     await expect(canvas.queryByText('팀원F')).toBeNull();
-    // 아바타까지 함께 빠져야 자리 비움이다 — 이름만 빠지면 빈 아바타가 남는다.
-    await expect(canvasElement.querySelector('.border-line-normal-assistive')).toBeNull();
+    // 이름 대신 기본 프로필 폴백 아바타 + 문구가 선다 — 빈 칸이 되살아나면 여기서 잡힌다.
+    await expect(canvas.getByText('담당자 없음')).toBeInTheDocument();
+    await expect(canvasElement.querySelector('svg[viewBox="0 0 40 40"]')).not.toBeNull();
+    await expect(canvasElement.querySelector('.border-line-normal-assistive')).not.toBeNull();
 
     await expect(canvas.getByText('3시간 전').getBoundingClientRect().width).toBe(96);
   },
@@ -229,11 +229,17 @@ export const TableAlignment: Story = {
     // 최근 활동 열: 우측 정렬 열이라 우변으로 잰다.
     const activityHeader = canvas.getByText('최근 활동');
     const activityCell = canvas.getByText('3시간 전');
-    await expect(activityCell.getBoundingClientRect().right).toBeCloseTo(activityHeader.getBoundingClientRect().right, 1);
+    await expect(activityCell.getBoundingClientRect().right).toBeCloseTo(
+      activityHeader.getBoundingClientRect().right,
+      1,
+    );
 
     // 행마다 검산이 흔들리지 않는지 두 번째 행(검토 대기)도 같은 열에 있어야 한다.
     const pendingOwnerCell = canvas.getByText('직원10').parentElement!;
-    await expect(pendingOwnerCell.getBoundingClientRect().left).toBeCloseTo(ownerHeader.getBoundingClientRect().left, 1);
+    await expect(pendingOwnerCell.getBoundingClientRect().left).toBeCloseTo(
+      ownerHeader.getBoundingClientRect().left,
+      1,
+    );
   },
 };
 

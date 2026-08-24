@@ -87,8 +87,14 @@ export default function FolderDocumentRow({ kind, item, onClick }: FolderDocumen
         {kind === 'document' && (
           <>
             {/* 담당자 열 — 이름이 바로 옆이라 아바타 alt는 비운다(중복 낭독 방지).
-                전원을 세로로 쌓아 행 높이가 인원수만큼 늘어난다. 미지정(빈 배열)은 자리만 비운다 */}
+                전원을 세로로 쌓아 행 높이가 인원수만큼 늘어난다. 미지정(빈 배열)은 기본 아바타+문구 */}
             <span className="flex min-w-0 flex-col gap-1">
+              {!owners?.length && (
+                <span className="flex min-w-0 items-center gap-3">
+                  <Avatar size="small" className="border-line-normal-assistive shrink-0 rounded-xl" />
+                  <span className="text-body-small text-text-normal-assistive truncate">담당자 없음</span>
+                </span>
+              )}
               {owners?.map((owner) => (
                 <span key={owner.userId} className="flex min-w-0 items-center gap-3">
                   <Avatar

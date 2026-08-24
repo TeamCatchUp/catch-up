@@ -34,6 +34,7 @@ const meta = {
       dataNotes: [
         '작성자·신뢰도는 계약에서 제거됐다 — 실 API 응답에 없다. Default play가 아바타·이름의 부재를 가드한다.',
         '담당자는 큐 응답 owners[]가 원천이다(18814:133231 정본). 없음 케이스는 노드 간 갈림(대시 유무·스케일)이 있었으나 디자이너 확정 노드 18929:96828로 확정(2026-08-24) — 기본 아바타 + 문구이고 대시는 폐기.',
+        '1인·복수 표기도 확정 노드로 닫혔다(18929:96740·18929:96764, 2026-08-24) — "담당자" 라벨 폐기. 1인은 아바타+이름, 복수는 스택+"OOO님 외 N명" 요약. 스택 규격(겹침 -6·원형·#F7F7F8 링·+N 칩 흰 배경 #6D7882·최대 3)은 공용 AvatarGroup과 이미 일치해 소비만 유지.',
         '충돌(모순) 아이콘 행은 MVP 제외 — hasConflictIcon 필드는 [BE] contains_conflict 대응이라 계약만 보존하고 렌더하지 않는다.',
         '유형 배지도 만들지 않는다 — 백엔드 3종↔명세 6유형 불일치로 체계 미정. 8/6 재확인에서도 행에는 유형 표기가 없었다. 대신 상세 패널 헤더에 "유형 / 상태 태그"(17845:105886) 자리표시 텍스트가 새로 생겼다 — 배지가 붙는다면 행이 아니라 상세다.',
         '빈 큐·로딩·에러·처리 피드백(pending/성공/실패)·stale 거부 스토리는 만들지 않는다(감사 §7 금지 목록).',
@@ -42,7 +43,8 @@ const meta = {
       tokenNotes: [
         '제목 #33363D = text-text-normal-normal, heading(sb)/small = text-heading-small.',
         '대기 기간 #B1B8BE = text-text-normal-assistive, body(md)/xsmall = text-body-xsmall.',
-        '담당자 없음(18929:96828로 확정, 2026-08-24): 기본 프로필 아바타 25 radius 12 보더 #F4F4F5 = border-line-normal-assistive + 문구 #B1B8BE = text-text-normal-assistive, body(md)/xsmall — 1인 아바타와 같은 규격이고 라벨·이름만 없다. 라벨 "담당자" #6D7882 = text-normal-alternative, 이름 #464C53 = text-normal-neutral.',
+        '담당자 없음(18929:96828로 확정, 2026-08-24): 기본 프로필 아바타 25 radius 12 보더 #F4F4F5 = border-line-normal-assistive + 문구 #B1B8BE = text-text-normal-assistive, body(md)/xsmall — 1인 아바타와 같은 규격이고 이름만 없다. 이름·"외 N명" 요약 #464C53 = text-normal-neutral + body(md)/xsmall.',
+        '+N 칩 그림자는 코드 shadow-button(0 0 4px 8%)이 시안 Shadow/Button(0 4px 8px 15%)과 어긋난다 — 공용 토큰이라 이 행에서 손대지 않는다(드리프트 기록).',
         '행 하단 구분선 #EAEBEC = Line/Normal/Neutral = border-line-normal-neutral, 1px 하단만.',
         '선택 채움 #F7F7F8 = Fill/Normal/Strong = bg-fill-normal-strong. 비선택 행은 fills=[] — 투명이다.',
         'add_small 칩은 #F7F7F8 배경(bg-fill-normal-strong) + radius/rounded 1000(rounded-full) + 아이콘 #6D7882 = text-icon-normal-neutral.',
@@ -111,7 +113,7 @@ export const Selected: Story = {
   },
 };
 
-/** 담당자 1인 — 아바타(25, radius 12) + "담당자" 라벨 + 이름. */
+/** 담당자 1인 — 아바타(25, radius 12) + 이름. 라벨은 없다. */
 export const OwnerSingle: Story = {
   args: {
     item: createReviewQueueItem({
@@ -122,15 +124,15 @@ export const OwnerSingle: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await expect(canvas.getByText('담당자')).toBeInTheDocument();
     await expect(canvas.getByText('직원10')).toBeInTheDocument();
+    await expect(canvas.queryByText('담당자')).toBeNull();
     await expect(canvas.queryByText('담당자 없음')).toBeNull();
     // 이미지 없는 담당자는 기본 프로필로 폴백한다 — 아바타 슬롯 자체는 서야 한다.
     await expect(canvasElement.querySelector('svg[viewBox="0 0 40 40"]')).not.toBeNull();
   },
 };
 
-/** 담당자 2인 이상 — AvatarGroup 스택(최대 3) + 초과분 "+N" 칩 + "담당자" 라벨. 이름은 접힌다. */
+/** 담당자 2인 이상 — AvatarGroup 스택(최대 3) + 초과분 "+N" 칩 + "OOO님 외 N명" 요약. */
 export const OwnerStack: Story = {
   args: {
     item: createReviewQueueItem({
@@ -146,10 +148,11 @@ export const OwnerStack: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await expect(canvas.getByText('담당자')).toBeInTheDocument();
+    await expect(canvas.getByText('이진수님 외 3명')).toBeInTheDocument();
     await expect(canvas.getByText('+1')).toBeInTheDocument();
-    // 스택에는 이름이 서지 않는다 — 명단은 우측 담당자 카드 몫이다.
+    // 명단 나열은 하지 않는다 — 첫 담당자만 요약에 서고 전체 명단은 우측 담당자 카드 몫이다.
     await expect(canvas.queryByText('이진수')).toBeNull();
+    await expect(canvas.queryByText('담당자')).toBeNull();
     await expect(canvasElement.querySelectorAll('svg[viewBox="0 0 40 40"]')).toHaveLength(3);
   },
 };
