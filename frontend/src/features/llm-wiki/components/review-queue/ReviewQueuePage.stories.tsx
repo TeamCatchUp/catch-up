@@ -119,9 +119,7 @@ const meta = {
         'no-reject-path',
         'reject-reason',
         'block-reject-reason',
-        'decided',
-        'next-from-decided',
-        'queue-cleared-by-others',
+        'bulk-approved',
         'empty-queue',
         'empty-by-filter',
         'list-first-load',
@@ -135,11 +133,11 @@ const meta = {
         'diff 카드 짝짓기는 서버 block_changes가 정한다. 프론트는 자리만 따라가고 단어 강조만 만든다 — 같은 안건이 소비자마다 다르게 보이지 않기 위해서다.',
         '발행 버튼은 항상 열려 있다(사용자 확정). 변경 없는 블록은 판정할 카드가 없어 미판정으로 잠그면 발행이 영영 막혔다. 서버가 미판정을 거부하면 그 메시지를 토스트로 보인다 — 일괄 처리(undecided)는 사람이 보지 않은 블록을 자동 승인하게 되어 쓰지 않는다.',
         '카드별 반려도 전체 반려와 같은 사유 입력 다이얼로그를 거친다 — 문구만 갈아 끼운다. 빈 사유는 서버가 막는다(변경안 400·블록 422).',
-        '판정이 끝난 안건(통째 승인·반려·발행)은 큐에서 줄이 빠져도 상세가 남는다 — 전 카드가 접히고 판정·발행 진입점이 거둬진다(Decided). 다른 안건을 고르면 풀린다.',
-        '상세를 지킬지는 detailRetained 하나가 정한다 — 붙잡아 둔 판정이 없는데 목록이 비면(타 검토자 처리) 빈 안내가 선다.',
-        '고른 안건이 목록에서 빠져도 "다음"은 남은 첫 줄로 간다 — 판정 뒤 검토 흐름이 끊기면 안 된다.',
+        '전체 승인은 미판정 카드에 블록 판정을 일괄로 보낼 뿐이다 — 다시 읽은 상세의 판정으로 카드가 접히고 발행 바는 활성으로 남는다(BulkApproved). 발행은 별도 클릭이다.',
+        '전체 반려·발행에 성공하면 그 안건이 큐에서 빠지고 소비처가 다음 안건을 골라 준다 — 남은 안건이 없으면 빈 안내가 선다. 화면은 받은 selectedId를 그릴 뿐이다.',
+        '고른 안건이 목록에서 빠진 순간에도 "다음"은 남은 첫 줄로 간다 — 판정 뒤 검토 흐름이 끊기면 안 된다.',
         '미리보기는 발행본이 아니라 판정 반영 제안본을 새 탭으로 연다 — 발행된 적 없는 문서도 열린다.',
-        '전체 승인·반려는 판정이 시작된 뒤에도 잠기지 않는다 — 서버가 409로 거절하고 그 메시지를 토스트로 보인다(발행 버튼과 같은 정책).',
+        '전체 반려는 판정이 시작된 뒤에도 잠기지 않는다 — 서버가 409로 거절하고 그 메시지를 토스트로 보인다(발행 버튼과 같은 정책).',
         '채널·담당자 축은 서버가 하나씩만 받는다 — 둘 이상 고르면 파라미터로 나가지 않고 받은 쪽에서 좁힌다. 좁히기는 라우트가 맡고 화면은 관여하지 않는다.',
         '빈 큐는 시안이 없다(감사 MISSING·높음). 새 시각을 만들지 않고 대시보드 빈 표와 같은 일러스트·타이포를 쓰며, 필터 결과 0건도 같은 안내다 — 문구를 가르는 근거가 없다. 디자이너 확인 대상.',
         '목록이 비면 좌측 머리글과 필터는 남는다 — 필터로 비운 경우 되돌릴 경로가 사라지면 안 된다.',
@@ -289,74 +287,28 @@ export const BlockRejectReason: Story = {
 };
 
 /**
- * 통째 판정이 끝난 뒤. 큐에서 줄이 빠져도 상세는 그 자리에 남고,
- * 전 카드가 판정된 채로 접혀 판정·발행 진입점이 사라진다.
+ * 전체 승인이 돌아온 뒤. 카드마다 승인 판정이 서서 전부 접히고 안건은 큐에 남는다 —
+ * 발행은 별도 클릭이라 하단 바가 활성으로 남아야 한다.
  */
-export const Decided: Story = {
-  args: {
-    items: [],
-    totalCount: 0,
-    detailRetained: true,
-    entries: entries.map((entry) => ({ ...entry, approved: true })),
-    canReview: false,
-    publishDisabled: true,
-  },
-  play: async ({ canvasElement }) => {
+export const BulkApproved: Story = {
+  args: { entries: entries.map((entry) => ({ ...entry, approved: true })) },
+  play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // 목록이 비어도 빈 안내가 상세를 덮지 않는다 — 고른 안건이 남아 있기 때문이다
-    await expect(canvas.queryByText('요청된 변경사항이 없어요')).toBeNull();
-    await expect(canvas.getByRole('heading', { level: 2, name: selected.title })).toBeInTheDocument();
-
-    // 카드는 남되 전부 접혀 있고 판정 진입점이 없다
+    // 판정된 카드는 접힌 채로 남는다 — 결정한 블록을 다시 훑을 이유가 없다
     await expect(canvas.getByText('재시도 정책')).toBeInTheDocument();
     await expect(canvas.getAllByRole('button', { name: '펼치기' })).toHaveLength(entries.length);
     await expect(canvas.queryAllByRole('button', { name: '승인' })).toHaveLength(0);
-    await expect(canvas.queryByRole('button', { name: '전체 승인' })).toBeNull();
-    await expect(canvas.queryByRole('button', { name: '최종 내보내기' })).toBeNull();
 
-    // 열람은 그대로다 — 미리보기로 결과를 확인할 수 있어야 한다
-    await expect(canvas.getByRole('button', { name: /미리보기/ })).toBeInTheDocument();
-  },
-};
+    // 안건이 큐에 남아 있어 목록·상세가 그대로다
+    await expect(canvas.getByRole('heading', { level: 2, name: selected.title })).toBeInTheDocument();
+    await expect(canvas.queryByText('요청된 변경사항이 없어요.')).toBeNull();
 
-/**
- * 판정한 안건이 큐에서 빠진 뒤. 상세는 남지만 목록에는 그 줄이 없다 —
- * 그래도 다음 안건으로 넘어갈 수 있어야 검토가 이어진다.
- */
-export const NextFromDecided: Story = {
-  args: {
-    items: REVIEW_QUEUE_ITEM_FIXTURES.slice(1),
-    totalCount: REVIEW_QUEUE_ITEM_FIXTURES.length - 1,
-    detailRetained: true,
-    entries: entries.map((entry) => ({ ...entry, approved: true })),
-    canReview: false,
-    publishDisabled: true,
-  },
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    const header = canvas.getByRole('navigation', { name: '현재 위치' }).closest('header')!;
-
-    const next = within(header).getByRole('button', { name: '다음 변경사항' });
-    await expect(next).toBeEnabled();
-
-    await userEvent.click(next);
-    await expect(args.onSelectItem).toHaveBeenCalledWith(REVIEW_QUEUE_ITEM_FIXTURES[1].id);
-  },
-};
-
-/**
- * 다른 검토자가 마지막 안건을 처리해 목록이 빈 경우. 붙잡아 둔 판정이 없으므로
- * 빈 안내가 서고 유령 상세·활성 발행 버튼이 남지 않는다.
- */
-export const QueueClearedByOthers: Story = {
-  args: { items: [], totalCount: 0, entries: [], participants: [] },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-
-    await expect(canvas.getByText('요청된 변경사항이 없어요')).toBeInTheDocument();
-    await expect(canvas.queryByRole('heading', { level: 2, name: selected.title })).toBeNull();
-    await expect(canvas.queryByRole('button', { name: '최종 내보내기' })).toBeNull();
+    // 발행은 아직 남은 단계다 — 바가 활성으로 서 있어야 흐름이 이어진다
+    const publish = canvas.getByRole('button', { name: '최종 내보내기' });
+    await expect(publish).toBeEnabled();
+    await userEvent.click(publish);
+    await expect(args.onPublish).toHaveBeenCalled();
   },
 };
 
@@ -398,7 +350,7 @@ export const EmptyQueue: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await expect(canvas.getByText('요청된 변경사항이 없어요')).toBeInTheDocument();
+    await expect(canvas.getByText('요청된 변경사항이 없어요.')).toBeInTheDocument();
 
     // 머리글의 건수는 0으로 남는다 — 목록 자리만 비운다.
     await expect(canvas.getByText('요청된 변경사항')).toBeInTheDocument();
@@ -427,7 +379,7 @@ export const EmptyByFilter: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await expect(canvas.getByText('요청된 변경사항이 없어요')).toBeInTheDocument();
+    await expect(canvas.getByText('요청된 변경사항이 없어요.')).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: '필터' })).toBeInTheDocument();
   },
 };
@@ -445,7 +397,7 @@ export const ListFirstLoad: Story = {
     await expect(canvas.getByRole('status', { name: '변경사항 불러오는 중' })).toBeInTheDocument();
 
     // 빈 안내는 서지 않는다 — 로딩과 "없음"이 같은 시각이면 안 된다.
-    await expect(canvas.queryByText('요청된 변경사항이 없어요')).toBeNull();
+    await expect(canvas.queryByText('요청된 변경사항이 없어요.')).toBeNull();
 
     // 좌측 머리글과 필터는 남는다 — 골격이 패널을 통째로 대체하지 않는다.
     await expect(canvas.getByText('요청된 변경사항')).toBeInTheDocument();

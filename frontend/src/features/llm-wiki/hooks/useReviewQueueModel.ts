@@ -16,14 +16,14 @@ import {
   filterQueueItems,
   INITIAL_REVIEW_QUEUE_FILTER_STATE,
   resolveClientQueueFilter,
-  type ReviewQueueFilterState,
 } from '../components/review-queue/reviewQueueFilters';
 import type { ReviewQueuePageProps } from '../components/review-queue/ReviewQueuePage';
 import {
+  type BlockApproveTarget,
   REVIEW_TOAST_OPTIONS,
-  useApproveReviewProposalMutation,
   useRejectReviewProposalMutation,
   useReviewBlockVerdictMutation,
+  useReviewBulkApproveMutation,
   useReviewPublishMutation,
 } from '../queries/knowledgeReview.mutations';
 import { knowledgeReviewQueries } from '../queries/knowledgeReview.queries';
@@ -39,29 +39,29 @@ const QUEUE_PAGE_SIZE = 50;
 /** 전역 토스트가 1초라 액션 버튼을 누를 시간이 없다 — 이 토스트만 길게 연다 */
 const ACTION_TOAST_DURATION = 6000;
 
-/**
- * 통째 판정이 끝난 안건의 상세. 큐에서 줄이 빠져도 판정된 카드로 남겨야 해서 붙잡아 둔다.
- * 서버는 결정된 변경안 상세도 열어 주지만, 승인 뒤에는 발행판과 같아져 변경 목록이 비므로 화면이 든다.
- */
-interface DecidedDetailSnapshot {
-  proposalId: string;
-  entries: readonly BlockDiffEntry[];
-  waitingLabel: string;
-  summary: string;
+/** 지금 그릴 안건. 고른 안건이 목록에 남아 있으면 지키고, 빠졌으면 첫 줄로 내려온다. */
+function resolveSelectedRowId(selectedId: string | null, rows: readonly ReviewQueueRowData[]): string | null {
+  if (selectedId === null) return rows[0]?.id ?? null;
+  return rows.some((row) => row.id === selectedId) ? selectedId : (rows[0]?.id ?? null);
 }
 
 /**
- * 지금 그릴 안건. 고른 안건이 목록에 남아 있으면 지키고, 빠졌으면 첫 줄로 내려온다.
- * 판정을 붙잡아 둔 안건만은 큐에서 빠져도 지킨다 — 결과를 확인할 자리가 사라지면 안 된다.
+ * 지금 안건이 큐에서 빠진 뒤 갈 자리. 다음 줄, 마지막이면 이전 줄, 혼자였으면 없음이다.
+ * 줄이 빠지기 전에 재야 결정적이라 요청을 내는 시점에 부른다.
  */
-function resolveSelectedRowId(
-  selectedId: string | null,
-  rows: readonly ReviewQueueRowData[],
-  decidedId: string | null,
-): string | null {
-  if (selectedId === null) return rows[0]?.id ?? null;
-  if (selectedId === decidedId) return selectedId;
-  return rows.some((row) => row.id === selectedId) ? selectedId : (rows[0]?.id ?? null);
+function resolveNextRowId(rows: readonly ReviewQueueRowData[], currentId: string | null): string | null {
+  const index = rows.findIndex((row) => row.id === currentId);
+  if (index < 0) return null;
+  return rows[index + 1]?.id ?? rows[index - 1]?.id ?? null;
+}
+
+/** 일괄 승인이 보낼 카드. 판정 경로가 없는 카드(빠진 블록)와 이미 판정된 카드는 빠진다 */
+function collectApproveTargets(entries: readonly BlockDiffEntry[]): BlockApproveTarget[] {
+  return entries.flatMap((entry) =>
+    entry.blockIndex === null || entry.blockContentHash === null || entry.approved || entry.rejected
+      ? []
+      : [{ blockIndex: entry.blockIndex, block_content_hash: entry.blockContentHash }],
+  );
 }
 
 interface ReviewQueueModelOptions {
@@ -82,7 +82,6 @@ export function useReviewQueueModel({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectingEntry, setRejectingEntry] = useState<BlockDiffEntry | null>(null);
-  const [decided, setDecided] = useState<DecidedDetailSnapshot | null>(null);
 
   const params = useMemo(
     () => buildReviewQueueParams(filters, { limit: QUEUE_PAGE_SIZE, offset: 0, now: new Date() }),
@@ -115,7 +114,7 @@ export function useReviewQueueModel({
 
   const rows = useMemo(() => queueItems.map(mapReviewQueueItem), [queueItems]);
   // 고른 적이 없을 때만 힌트가 자리를 채운다 — 사용자의 선택이 언제나 앞선다
-  const selectedRowId = resolveSelectedRowId(selectedId ?? preselectedId, rows, decided?.proposalId ?? null);
+  const selectedRowId = resolveSelectedRowId(selectedId ?? preselectedId, rows);
   const selectedRow = rows.find((row) => row.id === selectedRowId);
   const selectedItem = queueItems.find((item) => item.proposal_id === selectedRowId);
 
@@ -131,7 +130,7 @@ export function useReviewQueueModel({
 
   const verdictMutation = useReviewBlockVerdictMutation(selectedRowId ?? '');
   const publishMutation = useReviewPublishMutation(selectedRowId ?? '', detail?.artifactId);
-  const approveAllMutation = useApproveReviewProposalMutation(selectedRowId ?? '', detail?.artifactId);
+  const bulkApproveMutation = useReviewBulkApproveMutation(selectedRowId ?? '');
   const rejectAllMutation = useRejectReviewProposalMutation(selectedRowId ?? '', detail?.artifactId);
 
   const entries = useMemo(
@@ -157,42 +156,7 @@ export function useReviewQueueModel({
     avatarSrc: owner.profileImageUrl,
   }));
 
-  // 큐에서 줄이 빠져도 고른 상세는 그대로 둔다 — 판정 결과를 확인할 자리가 사라지면 안 된다
-  const decidedDetail = decided?.proposalId === selectedRowId ? decided : null;
-  const displayedEntries = decidedDetail?.entries ?? entries;
-
-  const selectItem = (proposalId: string) => {
-    setSelectedId(proposalId);
-    setDecided(null);
-  };
-
-  // 거르기가 바뀌면 붙잡아 둔 안건을 놓는다 — 고른 안건은 새 목록에 남아 있을 때만 지켜진다
-  const changeFilters = (next: ReviewQueueFilterState) => {
-    setFilters(next);
-    setDecided(null);
-  };
-
-  /**
-   * 판정이 끝난 직후의 카드 모습을 붙잡는다. 큐에서 줄이 빠져도 이 화면이 남는다.
-   * verdict를 주면 전 카드가 그 판정으로 접히고, 주지 않으면 지금 판정 상태(발행 시점)를 그대로 얼린다.
-   */
-  const freezeDecision = (verdict?: 'approved' | 'rejected') => {
-    if (selectedRowId === null) return;
-    setSelectedId(selectedRowId);
-    setDecided({
-      proposalId: selectedRowId,
-      entries:
-        verdict === undefined
-          ? entries
-          : entries.map((entry) => ({
-              ...entry,
-              approved: verdict === 'approved',
-              rejected: verdict === 'rejected',
-            })),
-      waitingLabel: selectedRow?.waitingLabel ?? '',
-      summary: selectedItem?.summary ?? '',
-    });
-  };
+  const selectItem = (proposalId: string) => setSelectedId(proposalId);
 
   const approveBlock = (entry: BlockDiffEntry) => {
     // 판정 경로가 없는 카드(발행판에서만 빠진 블록)는 요청 자체가 성립하지 않는다
@@ -225,22 +189,35 @@ export function useReviewQueueModel({
     );
   };
 
+  /**
+   * 전체 승인은 미판정 카드에 블록 판정을 일괄로 보낸다 — 발행은 별도 클릭으로 남는다.
+   * 보낼 카드가 없으면(전부 판정됨·빠진 블록만) 요청 자체가 성립하지 않는다.
+   */
   const approveAll = () => {
-    approveAllMutation.mutate(undefined, {
-      onSuccess: () => {
-        freezeDecision('approved');
-        toast(`${entries.length}건 모두 승인했습니다`, REVIEW_TOAST_OPTIONS);
+    const targets = collectApproveTargets(entries);
+    if (targets.length === 0) return;
+
+    bulkApproveMutation.mutate(targets, {
+      onSuccess: ({ requested, failed, message }) => {
+        if (failed === 0) {
+          toast(`${requested}건 모두 승인했습니다`, REVIEW_TOAST_OPTIONS);
+          return;
+        }
+        // 성공분은 이미 서버에 남았다 — 다시 읽은 상세가 그만큼을 판정된 카드로 보인다
+        toast(`${failed}건을 승인하지 못했습니다. ${message ?? ''}`.trim(), REVIEW_TOAST_OPTIONS);
       },
     });
   };
 
   const rejectAll = (reason: string) => {
+    const nextRowId = resolveNextRowId(rows, selectedRowId);
     rejectAllMutation.mutate(
       { reason },
       {
         onSuccess: () => {
           setRejectDialogOpen(false);
-          freezeDecision('rejected');
+          // 기각된 안건은 큐에서 빠진다 — 다음 안건으로 옮겨 검토 흐름을 잇는다
+          setSelectedId(nextRowId);
           toast(`${entries.length}건 모두 반려했습니다`, REVIEW_TOAST_OPTIONS);
         },
       },
@@ -250,12 +227,13 @@ export function useReviewQueueModel({
   const publish = () => {
     if (!detail) return;
     const { artifactId } = detail;
+    const nextRowId = resolveNextRowId(rows, selectedRowId);
     publishMutation.mutate(
       { base_revision_id: detail.baseRevisionId },
       {
         onSuccess: () => {
-          // 발행 시점엔 전 블록에 판정이 있다 — 지금 카드 모습을 그대로 얼려 판정 화면을 지킨다
-          freezeDecision();
+          // 발행된 안건도 큐에서 빠진다 — 남은 안건이 없으면 빈 안내가 선다
+          setSelectedId(nextRowId);
           toast('내보내기를 완료했습니다', {
             ...REVIEW_TOAST_OPTIONS,
             duration: ACTION_TOAST_DURATION,
@@ -277,30 +255,27 @@ export function useReviewQueueModel({
     totalCount: clientNarrowed ? rows.length : (queue?.total ?? 0),
     listPending: queueQuery.isPending,
     detailPending: selectedRowId !== null && detailQuery.isPending,
-    // 판정을 붙잡아 둔 동안에는 목록이 비어도 상세를 빈 안내로 덮지 않는다
-    detailRetained: decidedDetail !== null,
     selectedId: selectedRowId,
     onSelectItem: selectItem,
     breadcrumbs,
     locationBreadcrumbs,
     title,
-    waitingLabel: decidedDetail?.waitingLabel ?? selectedRow?.waitingLabel ?? '',
-    summary: decidedDetail?.summary ?? selectedItem?.summary ?? '',
+    waitingLabel: selectedRow?.waitingLabel ?? '',
+    summary: selectedItem?.summary ?? '',
     participants,
-    entries: displayedEntries,
-    // 결정이 끝난 안건에는 남은 판정이 없다 — 권한 없음과 같은 모습으로 진입점을 거둔다
-    canReview: decidedDetail === null && (detail?.canReview ?? false),
+    entries,
+    canReview: detail?.canReview ?? false,
     canReject: detail?.canReview ?? false,
     // 변경 없는 블록은 판정할 카드가 없어 미판정으로 잠그면 발행이 영영 막힌다.
     // 열어 두고, 서버가 미판정을 거부하면 그 메시지를 토스트로 보인다(사용자 확정).
-    publishDisabled: detail === null || decidedDetail !== null,
+    publishDisabled: detail === null,
     channelOptions: (channels?.channels ?? []).map((channel) => ({ id: channel.id, label: channel.name })),
     assigneeOptions: (members ? mapWikiMembers(members) : []).map((member) => ({
       id: String(member.userId),
       label: member.displayName,
     })),
     filters,
-    onFiltersChange: changeFilters,
+    onFiltersChange: setFilters,
     onPreview: preview,
     onApproveBlock: approveBlock,
     onRejectBlock: rejectBlock,

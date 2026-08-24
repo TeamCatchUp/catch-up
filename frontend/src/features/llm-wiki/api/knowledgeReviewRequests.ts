@@ -53,9 +53,3 @@ export async function rejectReviewProposal(
   const res = await api.post<ReviewDecisionDto>(API.knowledgeReview.reject(proposalId), body);
   return res.data;
 }
-
-/** 변경안 통째 승인. 블록 판정이 시작된 변경안은 서버가 409로 막는다. */
-export async function approveReviewProposal(proposalId: string): Promise<ReviewDecisionDto> {
-  const res = await api.post<ReviewDecisionDto>(API.knowledgeReview.approve(proposalId));
-  return res.data;
-}

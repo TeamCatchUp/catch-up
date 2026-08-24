@@ -34,97 +34,137 @@ const queueItem = (proposalId: string, title: string) => ({
   can_review: true,
 });
 
-/** 판정이 끝난 블록 하나. 발행 직전에는 전 블록에 이 판정이 서 있다 */
-const decidedBlock = () => ({
-  block_index: 0,
+/** 미판정 변경안 블록. 일괄 승인이 판정을 보낼 대상이다 */
+const proposedBlock = (blockIndex: number, heading: string) => ({
+  block_index: blockIndex,
   block_kind: 'claim_section',
-  heading: '재시도 정책',
-  body: '3회까지 재시도한다.',
+  heading,
+  body: `${heading} 새 본문`,
   claim_ids: [],
   proposal_ids: [],
   ontology_version: null,
-  block_content_hash: 'h-0',
+  block_content_hash: `h-${blockIndex}`,
   narrative: null,
   relation_ids: [],
   sources: [],
   variants: null,
-  verdict: {
-    proposal_id: FIRST,
-    block_index: 0,
-    block_content_hash: 'h-0',
-    verdict: 'approved',
-    rejection_reason: null,
-    chosen_winner_claim_id: null,
-    reviewer: '직원10',
-    reviewed_at: '2026-08-20T01:00:00Z',
-  },
+  verdict: null,
   markdown: '',
   change_reason: null,
 });
 
-const baseBlock = () => ({
-  block_index: 0,
+/** 저장된 승인 판정. 이 값이 서면 카드가 접히고 일괄 승인 대상에서 빠진다 */
+const blockVerdict = (proposalId: string, blockIndex: number) => ({
+  proposal_id: proposalId,
+  block_index: blockIndex,
+  block_content_hash: `h-${blockIndex}`,
+  verdict: 'approved',
+  rejection_reason: null,
+  chosen_winner_claim_id: null,
+  reviewer: '직원10',
+  reviewed_at: '2026-08-20T01:00:00Z',
+});
+
+const baseBlock = (blockIndex: number, heading: string) => ({
+  block_index: blockIndex,
   block_kind: 'claim_section',
-  heading: '재시도 정책',
-  body: '1회 재시도한다.',
+  heading,
+  body: `${heading} 이전 본문`,
   narrative: null,
   claim_ids: [],
   relation_ids: [],
   sources: [],
 });
 
-/** 발행 뒤에는 변경 목록이 비어 상세가 "변경 0건"으로 온다 */
-const detail = (proposalId: string, published: boolean) => ({
+/**
+ * 카드 3장 — 수정·추가·빠진 블록. 빠진 블록은 변경안에 자리가 없어 판정 경로도 없다.
+ * 발행 뒤에는 변경 목록이 비어 상세가 "변경 0건"으로 온다.
+ */
+const detail = (proposalId: string, decided: boolean, approvedBlocks: ReadonlySet<number> = new Set()) => ({
   proposal_id: proposalId,
-  status: published ? 'approved' : 'pending',
+  status: decided ? 'approved' : 'pending',
   artifact: { id: `art-${proposalId}`, title: '결제 재시도 정책', channel_id: 'ch-1', folder_id: null },
   origin: 'compiled',
   created_at: '2026-08-20T00:00:00Z',
   base_revision_id: 'rev-1',
   contains_conflict: false,
   owners: [],
-  can_review: !published,
-  blocks: [decidedBlock()],
+  can_review: !decided,
+  blocks: [proposedBlock(0, '재시도 정책'), proposedBlock(1, 'PG 점검 시간 예외')].map((block) =>
+    approvedBlocks.has(block.block_index) ? { ...block, verdict: blockVerdict(proposalId, block.block_index) } : block,
+  ),
   layout: [],
-  base_blocks: [baseBlock()],
+  base_blocks: [baseBlock(0, '재시도 정책'), baseBlock(1, '수동 재시도 안내')],
   base_layout: [],
-  block_changes: published ? [] : [{ change: 'modified', block_index: 0, base_block_index: 0 }],
+  block_changes: decided
+    ? []
+    : [
+        { change: 'modified', block_index: 0, base_block_index: 0 },
+        { change: 'added', block_index: 1, base_block_index: null },
+        { change: 'removed', block_index: null, base_block_index: 1 },
+      ],
   read_set: { claim_ids: [], proposal_ids: [], relation_ids: [] },
   conflicts: [],
 });
 
-/** 발행 성공 뒤 큐에서 줄이 빠지는 서버. 상세도 변경 0건으로 바뀐다 */
+/** 발행·기각에 성공한 안건이 큐에서 빠지는 서버. 블록 판정 요청은 자리만 받아 적는다 */
 function stubReviewEndpoints(items: readonly ReturnType<typeof queueItem>[]) {
-  let published = false;
+  const dropped = new Set<string>();
+  const approved = new Map<string, Set<number>>();
+  const verdictCalls: string[] = [];
 
   server.use(
-    http.get('*/api/v1/knowledge-review/queue', () =>
-      HttpResponse.json({
-        items: published ? [] : items,
-        total: published ? 0 : items.length,
-        limit: 50,
-        offset: 0,
-      }),
-    ),
-    http.get('*/api/v1/knowledge-review/queue/:proposalId', ({ params }) =>
-      HttpResponse.json(detail(String(params.proposalId), published)),
-    ),
-    http.post('*/api/v1/knowledge-review/queue/:proposalId/publish', () => {
-      published = true;
+    http.get('*/api/v1/knowledge-review/queue', () => {
+      const rest = items.filter((item) => !dropped.has(item.proposal_id));
+      return HttpResponse.json({ items: rest, total: rest.length, limit: 50, offset: 0 });
+    }),
+    http.get('*/api/v1/knowledge-review/queue/:proposalId', ({ params }) => {
+      const proposalId = String(params.proposalId);
+      return HttpResponse.json(detail(proposalId, dropped.has(proposalId), approved.get(proposalId) ?? new Set()));
+    }),
+    http.put('*/api/v1/knowledge-review/queue/:proposalId/blocks/:blockIndex/verdict', ({ params }) => {
+      const proposalId = String(params.proposalId);
+      verdictCalls.push(String(params.blockIndex));
+      approved.set(proposalId, (approved.get(proposalId) ?? new Set()).add(Number(params.blockIndex)));
       return HttpResponse.json({
-        proposal_id: FIRST,
+        proposal_id: proposalId,
+        block_index: Number(params.blockIndex),
+        block_content_hash: `h-${params.blockIndex}`,
+        verdict: 'approved',
+        rejection_reason: null,
+        chosen_winner_claim_id: null,
+        reviewer: '직원10',
+        reviewed_at: '2026-08-20T01:00:00Z',
+      });
+    }),
+    http.post('*/api/v1/knowledge-review/queue/:proposalId/publish', ({ params }) => {
+      dropped.add(String(params.proposalId));
+      return HttpResponse.json({
+        proposal_id: String(params.proposalId),
         verdict: 'published',
         revision_id: 'rev-2',
         revision_number: 2,
-        blocks_published: 1,
+        blocks_published: 2,
         blocks_rejected: 0,
         contradictions_resolved: 0,
-        claims_accepted: 1,
+        claims_accepted: 2,
+      });
+    }),
+    http.post('*/api/v1/knowledge-review/artifacts/:proposalId/reject', ({ params }) => {
+      dropped.add(String(params.proposalId));
+      return HttpResponse.json({
+        proposal_id: String(params.proposalId),
+        verdict: 'rejected',
+        revision_id: null,
+        revision_number: null,
+        claims_accepted: 0,
       });
     }),
     http.get('*/api/v1/wiki/channels', () => HttpResponse.json({ channels: [] })),
     http.get('*/api/v1/wiki/members', () => HttpResponse.json({ items: [] })),
   );
+
+  return { verdictCalls };
 }
 
 beforeEach(() => {
@@ -132,32 +172,85 @@ beforeEach(() => {
 });
 
 describe('useReviewQueueModel', () => {
-  it('발행에 성공하면 판정 화면이 그대로 남는다 — 줄이 빠져도 빈 안내로 넘어가지 않는다', async () => {
-    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+  it('전체 승인은 판정 경로가 있는 카드 수만큼 블록 판정을 보낸다 — 빠진 블록은 빠진다', async () => {
+    const { verdictCalls } = stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
     const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
 
-    await waitFor(() => expect(result.current.entries).toHaveLength(1));
+    // 카드는 셋인데 그중 하나는 발행판에서만 빠진 블록이라 보낼 경로가 없다
+    await waitFor(() => expect(result.current.entries).toHaveLength(3));
 
-    act(() => result.current.onPublish());
+    act(() => result.current.onApproveAll());
 
-    await waitFor(() => expect(result.current.detailRetained).toBe(true));
-    // 큐에서 줄이 빠져도 고른 안건과 카드가 남는다 — 변경 0건 상세로 갈아타지 않는다
-    await waitFor(() => expect(result.current.items).toHaveLength(0));
+    await waitFor(() => expect(verdictCalls).toHaveLength(2));
+    expect([...verdictCalls].sort()).toEqual(['0', '1']);
+
+    // 발행은 별도 클릭이다 — 안건이 큐에 남고 발행 바도 열려 있다
+    expect(result.current.items).toHaveLength(1);
     expect(result.current.selectedId).toBe(FIRST);
-    expect(result.current.entries).toHaveLength(1);
-    expect(result.current.entries[0].approved).toBe(true);
-
-    // 판정이 끝난 화면이라 판정·발행 진입점이 거둬진다
-    expect(result.current.canReview).toBe(false);
-    expect(result.current.publishDisabled).toBe(true);
+    expect(result.current.publishDisabled).toBe(false);
   });
 
-  it('붙잡아 둔 판정이 없으면 목록이 빈 뒤 상세를 지키지 않는다', async () => {
-    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+  it('보낼 카드가 없으면 전체 승인이 요청을 내지 않는다', async () => {
+    const { verdictCalls } = stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.entries).toHaveLength(3));
+
+    act(() => result.current.onApproveAll());
+    // 다시 읽은 상세가 판정을 물고 오면 보낼 대상이 비어야 한다
+    await waitFor(() => expect(result.current.entries.filter((entry) => entry.approved)).toHaveLength(2));
+
+    act(() => result.current.onApproveAll());
+    expect(verdictCalls).toHaveLength(2);
+  });
+
+  it('발행에 성공하면 다음 안건으로 넘어간다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책'), queueItem(SECOND, '환불 문서 병합')]);
     const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
 
     await waitFor(() => expect(result.current.selectedId).toBe(FIRST));
-    expect(result.current.detailRetained).toBe(false);
+
+    act(() => result.current.onPublish());
+
+    await waitFor(() => expect(result.current.selectedId).toBe(SECOND));
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+  });
+
+  it('마지막 안건을 발행하면 이전 안건으로 올라간다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책'), queueItem(SECOND, '환불 문서 병합')]);
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+    act(() => result.current.onSelectItem(SECOND));
+    await waitFor(() => expect(result.current.entries).toHaveLength(3));
+
+    act(() => result.current.onPublish());
+
+    await waitFor(() => expect(result.current.selectedId).toBe(FIRST));
+  });
+
+  it('하나뿐인 안건을 발행하면 고를 안건이 없어진다 — 빈 안내가 선다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.entries).toHaveLength(3));
+
+    act(() => result.current.onPublish());
+
+    await waitFor(() => expect(result.current.items).toHaveLength(0));
+    expect(result.current.selectedId).toBeNull();
+  });
+
+  it('전체 반려에 성공하면 다음 안건으로 넘어간다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책'), queueItem(SECOND, '환불 문서 병합')]);
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.selectedId).toBe(FIRST));
+
+    act(() => result.current.onRejectAll('근거 문서가 없습니다'));
+
+    await waitFor(() => expect(result.current.selectedId).toBe(SECOND));
+    expect(result.current.rejectDialogOpen).toBe(false);
   });
 
   it('거르기를 바꿔도 보던 안건이 새 목록에 있으면 선택이 남는다', async () => {

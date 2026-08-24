@@ -11,12 +11,7 @@ import type {
   ReviewPublishRequest,
   ReviewRejectRequest,
 } from '../api/knowledgeReviewDto';
-import {
-  approveReviewProposal,
-  publishReviewProposal,
-  rejectReviewProposal,
-  submitReviewBlockVerdict,
-} from '../api/knowledgeReviewRequests';
+import { publishReviewProposal, rejectReviewProposal, submitReviewBlockVerdict } from '../api/knowledgeReviewRequests';
 import { knowledgeReviewQueries } from './knowledgeReview.queries';
 import { wikiQueries } from './wiki.queries';
 
@@ -32,6 +27,20 @@ export const REVIEW_TOAST_OPTIONS = { position: 'bottom-right' } as const;
 interface BlockVerdictVariables extends ReviewBlockVerdictRequest {
   /** 경로에 실리는 블록 자리. 화면이 본 블록의 값을 그대로 보낸다 */
   blockIndex: number;
+}
+
+/** 일괄 승인이 보낼 블록 하나. 판정 경로가 있는 카드만 여기 담긴다 */
+export interface BlockApproveTarget {
+  blockIndex: number;
+  block_content_hash: string;
+}
+
+/** 일괄 승인 결과. 일부만 실패해도 성공분은 서버에 남는다 */
+export interface BulkApproveResult {
+  requested: number;
+  failed: number;
+  /** 첫 실패의 서버 문구. 전부 성공하면 null */
+  message: string | null;
 }
 
 /**
@@ -66,6 +75,35 @@ export const useReviewBlockVerdictMutation = (proposalId: string) => {
   });
 };
 
+/**
+ * 블록 판정 일괄 전송(승인). 개별 판정과 같은 PUT을 병렬로 보내고 성패를 세어 돌려준다.
+ * 일부만 실패해도 상세를 다시 읽는다 — 성공분의 판정이 카드에 서야 한다.
+ */
+export const useReviewBulkApproveMutation = (proposalId: string) => {
+  const queryClient = useQueryClient();
+  const detailKey = knowledgeReviewQueries.queueItem(proposalId).queryKey;
+
+  return useMutation({
+    mutationFn: async (targets: readonly BlockApproveTarget[]): Promise<BulkApproveResult> => {
+      const settled = await Promise.allSettled(
+        targets.map(({ blockIndex, block_content_hash }) =>
+          submitReviewBlockVerdict(proposalId, blockIndex, { verdict: 'approved', block_content_hash }),
+        ),
+      );
+      const rejected = settled.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+
+      return {
+        requested: targets.length,
+        failed: rejected.length,
+        message: rejected.length > 0 ? parseApiError(rejected[0].reason).message : null,
+      };
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+  });
+};
+
 /** 발행. 큐에서 줄이 빠지고 문서 쪽 상태·최근 활동이 함께 바뀌어 큐 뿌리와 문서 캐시를 되돌린다. */
 export const useReviewPublishMutation = (proposalId: string, artifactId?: string) => {
   const queryClient = useQueryClient();
@@ -95,25 +133,6 @@ export const useRejectReviewProposalMutation = (proposalId: string, artifactId?:
 
   return useMutation({
     mutationFn: (body: ReviewRejectRequest): Promise<ReviewDecisionDto> => rejectReviewProposal(proposalId, body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: knowledgeReviewQueries.all() });
-      invalidateWikiArtifacts(queryClient, artifactId);
-    },
-    onError: (error) => {
-      toast(parseApiError(error).message, REVIEW_TOAST_OPTIONS);
-    },
-  });
-};
-
-/**
- * 변경안 통째 승인. 새 revision이 발행되므로 큐와 문서 쪽을 함께 무효화한다.
- * 블록 판정이 시작된 변경안은 서버가 409로 막고, 그 메시지를 토스트로 보인다.
- */
-export const useApproveReviewProposalMutation = (proposalId: string, artifactId?: string) => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (): Promise<ReviewDecisionDto> => approveReviewProposal(proposalId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: knowledgeReviewQueries.all() });
       invalidateWikiArtifacts(queryClient, artifactId);

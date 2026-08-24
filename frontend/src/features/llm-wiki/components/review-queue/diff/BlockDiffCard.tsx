@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { type ComponentType, type SVGProps, useState } from 'react';
 
 import IconArrowDropdownDown from '@/public/icons/icon/arrow_dropdown_down.svg';
 import IconArrowDropdownRight from '@/public/icons/icon/arrow_dropdown_right.svg';
+import IconCheckCircle from '@/public/icons/icon/check_circle.svg';
 import IconDelete2 from '@/public/icons/icon/delete_2.svg';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
@@ -22,6 +23,22 @@ export interface BlockDiffCardProps {
   onApprove: (id: string) => void;
   /** 제안 기각 */
   onReject: (id: string) => void;
+}
+
+/** 판정이 끝난 블록의 헤더 표시. 승인·반려가 같은 자리에서 같은 시각을 쓴다 */
+const VERDICT_BADGES = {
+  approved: { Icon: IconCheckCircle, label: '승인됨' },
+  rejected: { Icon: IconDelete2, label: '반려됨' },
+} as const;
+
+/** 시안은 비활성 버튼이지만 누를 수 없는 표시라 span으로 낸다 */
+function VerdictBadge({ Icon, label }: { Icon: ComponentType<SVGProps<SVGSVGElement>>; label: string }) {
+  return (
+    <span className="bg-fill-normal-interaction-inactive border-line-normal-normal text-body-xsmall text-text-normal-assistive flex h-7.5 shrink-0 items-center gap-1 rounded-lg border px-2">
+      <Icon aria-hidden className="text-icon-normal-assistive size-5" />
+      {label}
+    </span>
+  );
 }
 
 /** 카드 하단 설명 패널. 수정 이유와 반려 사유가 같은 시각을 쓴다 */
@@ -56,6 +73,8 @@ export default function BlockDiffCard({
 
   const { id, kind, title, before, after, reason, rejected = false, approved = false, rejectionReason } = entry;
   const ChevronIcon = collapsed ? IconArrowDropdownRight : IconArrowDropdownDown;
+  // 판정이 끝나면 액션 자리를 배지가 대신한다 — 반려·승인 둘 다 흔적을 남긴다
+  const verdictBadge = (rejected && VERDICT_BADGES.rejected) || (approved && VERDICT_BADGES.approved) || null;
 
   return (
     <section className="border-line-normal-neutral flex flex-col gap-4 rounded-xl border px-5 py-4">
@@ -72,16 +91,10 @@ export default function BlockDiffCard({
         </Button>
         <h3 className="text-heading-medium text-text-normal-normal min-w-0 flex-1 truncate">{title}</h3>
 
-        {rejected ? (
-          // 시안은 비활성 버튼이지만 누를 수 없는 표시라 span으로 낸다.
-          <span className="bg-fill-normal-interaction-inactive border-line-normal-normal text-body-xsmall text-text-normal-assistive flex h-7.5 shrink-0 items-center gap-1 rounded-lg border px-2">
-            <IconDelete2 aria-hidden className="text-icon-normal-assistive size-5" />
-            반려됨
-          </span>
+        {verdictBadge ? (
+          <VerdictBadge Icon={verdictBadge.Icon} label={verdictBadge.label} />
         ) : (
-          // 승인된 블록은 판정이 끝나 액션이 빠진다 — 대응 배지는 시안에 없어 자리가 비어 있다
-          canReview &&
-          !approved && (
+          canReview && (
             <>
               {/* outline은 테두리 1px이 더해져 solid와 높이가 어긋난다 — 양쪽에 같은 높이를 준다 */}
               {canReject && (

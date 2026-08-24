@@ -162,7 +162,7 @@ export const JUDGED_PROPOSED_BLOCKS: readonly WikiBlock[] = [
 
 /**
  * 판정이 절반 진행된 변경안 — 0번은 승인, 1번은 반려.
- * 승인 판정은 카드에 대응 표시가 없어 미판정과 같은 모습으로 남는다.
+ * 카드는 각자의 판정 배지를 달고 접힌 채로 남는다.
  */
 export const PARTIALLY_JUDGED_PROPOSED_BLOCKS: readonly WikiBlock[] = PROPOSED_WIKI_BLOCKS.map(
   (wikiBlock, index): WikiBlock => ({

@@ -175,7 +175,7 @@ export const API = {
       `${API_PREFIX}/knowledge-review/queue/${proposalId}/blocks/${blockIndex}/verdict`, // PUT 블록 승인/반려 (멱등)
     publish: (proposalId: string) => `${API_PREFIX}/knowledge-review/queue/${proposalId}/publish`, // POST 블록 판정 마감 후 발행
     // approve·reject는 blocks 경로가 아니라 artifacts 경로다 — 블록 판정이 시작된 변경안에는 쓸 수 없다
-    approve: (proposalId: string) => `${API_PREFIX}/knowledge-review/artifacts/${proposalId}/approve`, // POST 변경안 전체 승인
+    approve: (proposalId: string) => `${API_PREFIX}/knowledge-review/artifacts/${proposalId}/approve`, // POST 변경안 전체 승인 (미사용 — 전체 승인은 블록 판정을 일괄 전송한다)
     reject: (proposalId: string) => `${API_PREFIX}/knowledge-review/artifacts/${proposalId}/reject`, // POST 변경안 전체 반려 (사유 필수)
   },
 

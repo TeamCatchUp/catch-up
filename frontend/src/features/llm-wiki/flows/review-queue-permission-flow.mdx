@@ -39,8 +39,8 @@ import * as QueueStories from '../components/review-queue/ReviewQueuePage.storie
 
 <Canvas of={BlockDiffStories.Default} />
 
-전체 승인·반려는 판정이 시작된 뒤에도 잠그지 않는다. 보낼 수 없는 요청은 서버가 409로 거절하고,
-그 메시지를 토스트로 보인다.
+전체 승인은 미판정 카드에 블록 판정을 일괄로 보내는 것이라 판정이 시작된 뒤에도 성립한다. 전체 반려는
+그렇지 않지만 잠그지 않는다 — 보낼 수 없는 요청은 서버가 409로 거절하고, 그 메시지를 토스트로 보인다.
 
 ## 4. 반려는 사유를 거친다
 

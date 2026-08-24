@@ -7,6 +7,7 @@ import {
   REVIEW_TOAST_OPTIONS,
   useRejectReviewProposalMutation,
   useReviewBlockVerdictMutation,
+  useReviewBulkApproveMutation,
   useReviewPublishMutation,
 } from './knowledgeReview.mutations';
 import { knowledgeReviewQueries } from './knowledgeReview.queries';
@@ -16,7 +17,6 @@ const reviewApi = vi.hoisted(() => ({
   submitReviewBlockVerdict: vi.fn(),
   publishReviewProposal: vi.fn(),
   rejectReviewProposal: vi.fn(),
-  approveReviewProposal: vi.fn(),
 }));
 const toastMock = vi.hoisted(() => vi.fn());
 
@@ -114,6 +114,44 @@ describe('useReviewBlockVerdictMutation', () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(toastMock).toHaveBeenCalledWith('검토 권한이 없어요.', REVIEW_TOAST_OPTIONS);
     expect(invalidatedKeys()).toEqual([]);
+  });
+});
+
+describe('useReviewBulkApproveMutation', () => {
+  const TARGETS = [
+    { blockIndex: 0, block_content_hash: 'h-0' },
+    { blockIndex: 2, block_content_hash: 'h-2' },
+  ];
+
+  it('받은 카드 수만큼 승인 판정을 보낸다', async () => {
+    reviewApi.submitReviewBlockVerdict.mockResolvedValue({});
+    const { wrapper } = createHarness();
+    const { result } = renderHook(() => useReviewBulkApproveMutation(PROPOSAL_ID), { wrapper });
+
+    result.current.mutate(TARGETS);
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(reviewApi.submitReviewBlockVerdict).toHaveBeenCalledTimes(2);
+    expect(reviewApi.submitReviewBlockVerdict).toHaveBeenCalledWith(PROPOSAL_ID, 2, {
+      verdict: 'approved',
+      block_content_hash: 'h-2',
+    });
+    expect(result.current.data).toEqual({ requested: 2, failed: 0, message: null });
+  });
+
+  // 하나가 막혀도 나머지는 서버에 남는다 — 실패 건수와 서버 문구를 소비처로 올린다
+  it('일부만 실패해도 성공분을 살리고 첫 실패의 문구를 돌려준다', async () => {
+    reviewApi.submitReviewBlockVerdict
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(apiError('STALE_BLOCK', '다른 검토자가 먼저 판정했어요.'));
+    const { wrapper, invalidatedKeys } = createHarness();
+    const { result } = renderHook(() => useReviewBulkApproveMutation(PROPOSAL_ID), { wrapper });
+
+    result.current.mutate(TARGETS);
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({ requested: 2, failed: 1, message: '다른 검토자가 먼저 판정했어요.' });
+    expect(invalidatedKeys()).toEqual([detailKey]);
   });
 });
 

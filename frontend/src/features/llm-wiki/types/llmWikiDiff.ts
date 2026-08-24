@@ -103,6 +103,6 @@ export interface BlockDiffEntry {
   rejected?: boolean;
   /** [BE] 그 반려에 검토자가 적은 사유. 반려된 카드에서만 값이 있다 */
   rejectionReason?: string | null;
-  /** [SPEC] 승인 처리된 블록. 액션 버튼이 빠지고 접히지만 대응 배지는 시안에 없다 */
+  /** [SPEC] 승인 처리된 블록. 헤더의 액션 버튼이 "승인됨" 배지로 대체된다 */
   approved?: boolean;
 }

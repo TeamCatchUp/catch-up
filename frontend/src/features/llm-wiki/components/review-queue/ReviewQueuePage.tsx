@@ -49,8 +49,6 @@ export interface ReviewQueuePageProps {
   listPending?: boolean;
   /** 고른 안건의 상세를 기다리는 중인지 */
   detailPending?: boolean;
-  /** 판정 결과를 붙잡아 둔 상태인지. 목록이 비어도 상세를 빈 안내로 덮지 않는다 */
-  detailRetained?: boolean;
   selectedId: string | null;
   onSelectItem: (proposalId: string) => void;
 
@@ -83,7 +81,7 @@ export interface ReviewQueuePageProps {
   onRejectBlock?: (entry: BlockDiffEntry) => void;
   onPublish: () => void;
 
-  /** 변경안 통째 승인 */
+  /** 미판정 카드 일괄 승인. 발행은 별도 액션으로 남는다 */
   onApproveAll: () => void;
   /** 사유 입력 다이얼로그의 열림 상태. 요청 성패를 아는 소비처가 든다 */
   rejectDialogOpen: boolean;
@@ -116,7 +114,6 @@ export default function ReviewQueuePage({
   totalCount,
   listPending = false,
   detailPending = false,
-  detailRetained = false,
   selectedId,
   onSelectItem,
   breadcrumbs,
@@ -148,11 +145,11 @@ export default function ReviewQueuePage({
   blockRejectPending = false,
 }: ReviewQueuePageProps) {
   const selectedIndex = items.findIndex((item) => item.id === selectedId);
-  // 목록이 비면 그릴 상세가 없다 — 다만 판정 결과를 붙잡아 둔 동안은 그 상세를 지키고 안내로 덮지 않는다
-  const isEmpty = items.length === 0 && !detailRetained && !listPending;
+  // 목록이 비면 그릴 상세가 없다 — 첫 조회를 기다리는 동안에는 골격이 서고 안내는 서지 않는다
+  const isEmpty = items.length === 0 && !listPending;
   // 목록을 아직 기다리는 동안에도 상세 자리는 골격으로 채운다
   const showDetailSkeleton = listPending || detailPending;
-  // 고른 안건이 목록에서 빠졌어도(판정 유지) 남은 안건이 있으면 다음으로 갈 수 있어야 한다
+  // 고른 안건이 목록에서 빠진 순간에도 남은 안건이 있으면 다음으로 갈 수 있어야 한다
   const canMoveNext = selectedIndex < 0 ? items.length > 0 : selectedIndex < items.length - 1;
 
   const prefersReducedMotion = usePrefersReducedMotion();
