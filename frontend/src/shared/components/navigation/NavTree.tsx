@@ -53,7 +53,7 @@ const MORE_ACTION = '추가 작업';
 const ADD_ACTION = '하위 페이지 추가';
 
 /** 행 hover·포커스에서만 나타나는 행 액션 버튼. 동작은 소비처 핸들러가 안다. */
-function RowActionButton({
+export function RowActionButton({
   label,
   tooltip,
   Icon,

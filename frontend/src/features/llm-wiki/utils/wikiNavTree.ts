@@ -51,7 +51,9 @@ export function buildWikiNavTree(
     const documents = documentsByChannel.get(channel.id) ?? [];
 
     const folders: WikiTreeNode[] = channel.folders.map((folder) => {
-      const children = documents.filter((item) => item.folder_id === folder.id).map((item) => documentNode(item, channel.id));
+      const children = documents
+        .filter((item) => item.folder_id === folder.id)
+        .map((item) => documentNode(item, channel.id));
       return {
         id: folder.id,
         kind: 'folder',
@@ -65,7 +67,9 @@ export function buildWikiNavTree(
     });
 
     // 채널 루트 문서만 채널 아래에 둔다 — 폴더 소속 문서는 그 폴더 아래에 이미 붙었다
-    const rootDocuments = documents.filter((item) => item.folder_id === null).map((item) => documentNode(item, channel.id));
+    const rootDocuments = documents
+      .filter((item) => item.folder_id === null)
+      .map((item) => documentNode(item, channel.id));
     const children = [...folders, ...rootDocuments];
 
     return {
@@ -91,5 +95,7 @@ export function buildWikiFavorites(items: readonly WikiFavoriteItemDto[]): WikiS
     id: item.artifact_id,
     label: item.title,
     href: wikiDocumentHref(item.artifact_id),
+    channelId: item.channel_id,
+    folderId: item.folder_id,
   }));
 }

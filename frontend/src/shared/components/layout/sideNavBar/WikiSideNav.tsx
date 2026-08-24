@@ -10,13 +10,14 @@ import IconEditSquare from '@/public/icons/icon/edit_square.svg';
 import IconFile from '@/public/icons/icon/file.svg';
 import IconFolder from '@/public/icons/icon/folder.svg';
 import IconGrid from '@/public/icons/icon/grid.svg';
+import IconMore from '@/public/icons/icon/kebab_horizontal_400.svg';
 import IconLink from '@/public/icons/icon/link.svg';
 import IconStar from '@/public/icons/icon/star.svg';
 import IconStarOff from '@/public/icons/icon/star_off.svg';
 import IconUpdate from '@/public/icons/icon/update.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
 import { UserMenuContent } from '@/shared/components/layout/sideNavBar/modal/UserModal';
-import NavTree, { type NavTreeNode } from '@/shared/components/navigation/NavTree';
+import NavTree, { type NavTreeNode, RowActionButton } from '@/shared/components/navigation/NavTree';
 import { Popover, PopoverAnchor, PopoverContent } from '@/shared/components/ui/popover';
 import { usePrefersReducedMotion } from '@/shared/hooks/usePrefersReducedMotion';
 import { disclosureExpand, disclosureExpandReduced, MotionState } from '@/shared/motion';
@@ -63,6 +64,10 @@ export interface WikiSideNavFavorite {
   id: string;
   label: string;
   href?: string;
+  /** 소속 채널. 케밥의 옮기기가 대상 채널을 찾을 때 쓴다 */
+  channelId?: string | null;
+  /** 소속 폴더. 옮기기 패널의 현재 위치 판정에 쓴다 */
+  folderId?: string | null;
 }
 
 // 기본값을 리터럴로 두면 렌더마다 새 참조가 되어 아래 useMemo가 매번 다시 돈다
@@ -170,9 +175,9 @@ export default function WikiSideNav({
   const isOnboarding = pathname.startsWith('/llm-wiki/onboarding');
   const profileMenu = <UserMenuContent userName={user?.name} userEmail={user?.email} />;
 
-  // 트리 행·섹션 머리글에서 연 메뉴. 앵커는 눌린 버튼이라 호출부가 넘겨준다
+  // 트리 행·즐겨찾기 행·섹션 머리글에서 연 메뉴. 앵커는 눌린 버튼이라 호출부가 넘겨준다
   const [menu, setMenu] = useState<{
-    kind: 'row-more' | 'row-add' | 'section-add';
+    kind: 'row-more' | 'row-add' | 'section-add' | 'favorite-more';
     nodeId?: string;
     anchor: HTMLElement;
   } | null>(null);
@@ -194,9 +199,26 @@ export default function WikiSideNav({
     ? { nodeId: moveOpenNodeId, kind: 'more' as const }
     : nameInput
       ? { nodeId: nameInput.node.id, kind: nameInput.mode === 'rename' ? ('more' as const) : ('add' as const) }
-      : menu && menu.nodeId && menu.kind !== 'section-add'
+      : menu && menu.nodeId && (menu.kind === 'row-more' || menu.kind === 'row-add')
         ? { nodeId: menu.nodeId, kind: menu.kind === 'row-more' ? ('more' as const) : ('add' as const) }
         : undefined;
+
+  // 즐겨찾기 행은 그 채널을 아직 펼치지 않아 트리에 없을 수 있다 — 즐겨찾기 데이터로 문서 노드를 지어 보완한다
+  const resolveMenuNode = (nodeId: string | undefined): WikiTreeNode | undefined => {
+    if (nodeId === undefined) return undefined;
+    const fromTree = findTreeNode(nodes, nodeId);
+    if (fromTree) return fromTree;
+    const favorite = favorites.find((item) => item.id === nodeId);
+    if (!favorite || favorite.href === undefined) return undefined;
+    return {
+      id: favorite.id,
+      kind: 'document',
+      channelId: favorite.channelId ?? '',
+      href: favorite.href,
+      label: favorite.label,
+      favorite: true,
+    };
+  };
 
   const isChannelAdmin = (channelId: string) => channelAdmins[channelId] === true;
   /** 문서는 이름 변경 API가 없고, 채널·폴더는 그 채널 관리자만 바꿀 수 있다 */
@@ -219,7 +241,7 @@ export default function WikiSideNav({
   }, [nodes, channelAdmins]);
 
   const select = (actionId: SnbMenuActionId) => () => {
-    const node = menu?.nodeId ? findTreeNode(nodes, menu.nodeId) : undefined;
+    const node = resolveMenuNode(menu?.nodeId);
     // 이름 바꾸기·폴더 추가는 눌린 자리에 입력 팝오버를 이어 띄운다 — 보낼 수 없는 노드에서는 열지 않는다
     if (actionId === 'rename' && menu && canRename(node)) setNameInput({ mode: 'rename', node, anchor: menu.anchor });
     // 폴더는 채널 바로 아래에만 생긴다
@@ -249,7 +271,7 @@ export default function WikiSideNav({
         groups: [[{ id: 'folder', label: '폴더', Icon: IconFolder, onSelect: select('folder') }]],
       };
     }
-    const node = menu?.nodeId ? findTreeNode(nodes, menu.nodeId) : undefined;
+    const node = resolveMenuNode(menu?.nodeId);
     // 즐겨찾기는 artifact 단위 API라 문서 행에만 건다 — 채널·폴더에는 보낼 경로가 없다
     const favoriteItems =
       node?.kind === 'document'
@@ -378,16 +400,29 @@ export default function WikiSideNav({
         />
         {/* 행이 하나도 없으면 본문 자체를 열지 않는다 — 빈 상자만큼 머리글이 밀린다 */}
         <SnbSectionBody open={favoritesOpen && favorites.length > 0}>
-          {favorites.map((item) => (
-            <SnbNavRow
-              key={item.id}
-              Icon={IconFile}
-              label={item.label}
-              selected={item.href !== undefined && item.href === pathname}
-              disabled={item.href === undefined}
-              onClick={item.href === undefined ? undefined : go(item.href)}
-            />
-          ))}
+          {favorites.map((item) => {
+            const menuOpen = menu?.kind === 'favorite-more' && menu.nodeId === item.id;
+            return (
+              <SnbNavRow
+                key={item.id}
+                Icon={IconFile}
+                label={item.label}
+                selected={item.href !== undefined && item.href === pathname}
+                disabled={item.href === undefined}
+                onClick={item.href === undefined ? undefined : go(item.href)}
+                actionsOpen={menuOpen || moveOpenNodeId === item.id}
+                actions={
+                  <RowActionButton
+                    label={`${item.label} 추가 작업`}
+                    tooltip="추가 작업"
+                    Icon={IconMore}
+                    active={menuOpen}
+                    onClick={(trigger) => setMenu({ kind: 'favorite-more', nodeId: item.id, anchor: trigger })}
+                  />
+                }
+              />
+            );
+          })}
         </SnbSectionBody>
       </div>
       <div className="flex flex-col">

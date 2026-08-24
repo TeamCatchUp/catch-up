@@ -118,11 +118,21 @@ describe('buildWikiChannelAdmins·buildWikiFavorites', () => {
     });
   });
 
-  it('즐겨찾기는 문서 경로를 목적지로 갖는다', () => {
+  it('즐겨찾기는 문서 경로를 목적지로 갖고 소속 채널·폴더를 함께 편다', () => {
     const favorites = buildWikiFavorites([
-      { artifact_id: 'ar-1', title: '결제 실패 대응', kind: 'policy', channel_id: 'ch-1', folder_id: null, favorited_at: '2026-08-02T00:00:00Z' },
+      {
+        artifact_id: 'ar-1',
+        title: '결제 실패 대응',
+        kind: 'policy',
+        channel_id: 'ch-1',
+        folder_id: null,
+        favorited_at: '2026-08-02T00:00:00Z',
+      },
     ]);
 
-    expect(favorites).toEqual([{ id: 'ar-1', label: '결제 실패 대응', href: '/llm-wiki/ar-1' }]);
+    // 채널·폴더는 즐겨찾기 케밥(옮기기·현재 위치 판정)이 쓴다
+    expect(favorites).toEqual([
+      { id: 'ar-1', label: '결제 실패 대응', href: '/llm-wiki/ar-1', channelId: 'ch-1', folderId: null },
+    ]);
   });
 });

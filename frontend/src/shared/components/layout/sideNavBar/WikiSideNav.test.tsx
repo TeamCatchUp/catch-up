@@ -391,6 +391,48 @@ describe('WikiSideNav 펼침', () => {
     expect(onMenuAction).toHaveBeenCalledWith('doc-1', 'favorite');
   });
 
+  it('즐겨찾기 행의 케밥은 트리에 없는 문서에서도 문서 메뉴를 연다', async () => {
+    const user = userEvent.setup();
+    const onMenuAction = vi.fn();
+    renderWikiNav({
+      treeNodes: [],
+      favorites: [{ id: 'fav-doc-1', label: '즐겨찾기 문서', href: '/llm-wiki/fav-doc-1', channelId: 'channel-1' }],
+      onMenuAction,
+    });
+
+    await user.click(screen.getByRole('button', { name: '즐겨찾기 문서 추가 작업' }));
+
+    const menu = within(screen.getByTestId('snb-dropdown-menu'));
+    expect(menu.getByText('파일')).toBeInTheDocument();
+    expect(menu.getByRole('button', { name: '즐겨찾기 해제' })).toBeInTheDocument();
+    expect(menu.getByRole('button', { name: '링크 복사' })).toBeInTheDocument();
+    expect(menu.getByRole('button', { name: '옮기기' })).toBeInTheDocument();
+    // 시안의 이름 바꾸기는 문서 이름 변경 API가 없어 트리 문서 케밥과 같은 판정으로 뺀다
+    expect(menu.queryByRole('button', { name: '이름 바꾸기' })).toBeNull();
+
+    await user.click(menu.getByRole('button', { name: '즐겨찾기 해제' }));
+    expect(onMenuAction).toHaveBeenCalledWith('fav-doc-1', 'unfavorite');
+    expect(screen.queryByTestId('snb-dropdown-menu')).toBeNull();
+  });
+
+  it('즐겨찾기 케밥의 옮기기는 즐겨찾기 데이터로 지은 문서 노드를 넘긴다', async () => {
+    const user = userEvent.setup();
+    const onMoveRequest = vi.fn();
+    renderWikiNav({
+      treeNodes: [],
+      favorites: [{ id: 'fav-doc-1', label: '즐겨찾기 문서', href: '/llm-wiki/fav-doc-1', channelId: 'channel-1' }],
+      onMoveRequest,
+    });
+
+    await user.click(screen.getByRole('button', { name: '즐겨찾기 문서 추가 작업' }));
+    await user.click(screen.getByRole('button', { name: '옮기기' }));
+
+    expect(onMoveRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'fav-doc-1', kind: 'document', channelId: 'channel-1' }),
+      expect.any(HTMLElement),
+    );
+  });
+
   it('관리자가 아닌 채널의 케밥에는 링크 복사만 남고 구분선이 없다', async () => {
     const user = userEvent.setup();
     renderWikiNav();
