@@ -29,7 +29,13 @@ from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
 from catchup.knowledge_maintenance.ports.knowledge_nodes import ActiveEntityAlias
+from catchup.knowledge_maintenance.ports.mutation_proposals import (
+    MergeProposalAlreadyDecided,
+)
 from catchup.knowledge_maintenance.ports.name_embedder import NameEmbeddingError
+from catchup.knowledge_maintenance.services.resolve_entity_candidates import (
+    SYSTEM_REVIEWER,
+)
 from catchup.knowledge_maintenance.services.resolve_entity_candidates import (
     block_idempotency_key,
 )
@@ -229,10 +235,41 @@ class FakeProposalRepository:
         self.proposals[kwargs["idempotency_key"]] = {
             "id": proposal_id,
             "status": "pending",
+            "reviewer": None,
             "resolver_metadata": dict(kwargs["resolver_metadata"]),
             "kwargs": kwargs,
         }
         return proposal_id
+
+    def mark_merge_approved(self, *, workspace_id, proposal_id, reviewer):
+        del workspace_id
+        for record in self.proposals.values():
+            if record["id"] != proposal_id:
+                continue
+            if record["status"] != "pending":
+                raise MergeProposalAlreadyDecided(str(proposal_id))
+            record["status"] = "approved"
+            record["reviewer"] = reviewer
+            return
+        raise MergeProposalAlreadyDecided(str(proposal_id))
+
+
+class FakeResolutionEventRepository:
+    """사람의 되돌림 기록 조회를 흉내 낸다.
+
+    `suppressed`가 참이면 어떤 구성을 물어도 되돌림이 있다고 답한다.
+    물어본 member_hash를 남겨 두어 서비스가 어느 구성을 조회했는지
+    테스트가 확인한다.
+    """
+
+    def __init__(self, *, suppressed: bool = False) -> None:
+        self.suppressed = suppressed
+        self.queried: list[str] = []
+
+    def has_human_unmerge(self, *, workspace_id, member_hash):
+        del workspace_id
+        self.queried.append(member_hash)
+        return self.suppressed
 
 
 class FakeUnitOfWork:
@@ -240,6 +277,7 @@ class FakeUnitOfWork:
         self.knowledge_candidates = FakeCandidateRepository(candidates)
         self.knowledge_nodes = FakeNodeRepository()
         self.mutation_proposals = FakeProposalRepository()
+        self.resolution_events = FakeResolutionEventRepository()
         self.committed = False
 
     def __enter__(self):
@@ -545,6 +583,79 @@ def test_same_verdict_writes_one_proposal_per_group() -> None:
     assert len(kwargs["merge_candidate_ids"]) == 1
     # 후보는 pending 유지 — 적용은 승인 트랜잭션의 일이다.
     assert uow.knowledge_candidates.resolved == {}
+
+
+def _same_verdict_judge() -> FakeJudge:
+    return FakeJudge(
+        IdentityVerdict(
+            same=True,
+            reason="같은 제품이다",
+            proposed_type="integration",
+            proposed_name="Slack",
+        )
+    )
+
+
+def test_auto_merge_approves_proposal_as_system() -> None:
+    """자동 확정을 켜면 방금 쓴 병합 안건이 시스템 승인으로 끝맺는다."""
+    uow = FakeUnitOfWork(_slack_group())
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE,
+        judge=_same_verdict_judge(),
+        uow=uow,
+        auto_merge_enabled=True,
+    )
+
+    assert result.proposals_created == 1
+    stored = uow.mutation_proposals.proposals[group_idempotency_key("slack")]
+    assert stored["status"] == "approved"
+    assert stored["reviewer"] == "system:auto_merge"
+    assert SYSTEM_REVIEWER == "system:auto_merge"
+
+
+def test_auto_merge_off_leaves_proposal_pending() -> None:
+    """자동 확정을 끄면 지금까지처럼 검토 대기로 남는다."""
+    uow = FakeUnitOfWork(_slack_group())
+
+    resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=_same_verdict_judge(), uow=uow
+    )
+
+    stored = uow.mutation_proposals.proposals[group_idempotency_key("slack")]
+    assert stored["status"] == "pending"
+    assert stored["reviewer"] is None
+    assert uow.resolution_events.queried == []
+
+
+def test_auto_merge_suppressed_when_human_unmerged_same_members() -> None:
+    """사람이 되돌린 구성은 자동 확정 대상에서 빠지고 계류로 남는다."""
+    uow = FakeUnitOfWork(_slack_group())
+    uow.resolution_events = FakeResolutionEventRepository(suppressed=True)
+
+    with capture_logs() as logs:
+        resolve_entity_candidates(
+            workspace_id=WORKSPACE,
+            judge=_same_verdict_judge(),
+            uow=uow,
+            auto_merge_enabled=True,
+        )
+
+    stored = uow.mutation_proposals.proposals[group_idempotency_key("slack")]
+    assert stored["status"] == "pending"
+    assert stored["reviewer"] is None
+    # 조회한 구성이 이번 안건의 구성과 같은지 본다.
+    assert uow.resolution_events.queried == [
+        stored["resolver_metadata"]["member_hash"]
+    ]
+    suppressed = [
+        entry for entry in logs if entry["event"] == "auto_merge_suppressed"
+    ]
+    assert len(suppressed) == 1
+    assert suppressed[0]["workspace_id"] == WORKSPACE
+    assert suppressed[0]["member_hash"] == (
+        stored["resolver_metadata"]["member_hash"]
+    )
 
 
 def test_false_verdict_logs_group_and_reason() -> None:
@@ -1192,6 +1303,23 @@ def test_similar_names_land_in_one_block_and_one_proposal() -> None:
     # 모델이 지은 이름은 제안 값으로만 남고 검토 문장에는 안 실린다.
     assert kwargs["proposed_name"] == "정규 이름 제안"
     assert "정규 이름 제안" not in kwargs["summary"]
+
+
+def test_auto_merge_approves_block_proposal_as_system() -> None:
+    """블록 판정이 낸 병합 안건도 자동 확정을 켜면 시스템이 승인한다."""
+    uow = FakeUnitOfWork(_google_candidates())
+
+    resolve_entity_candidates(
+        workspace_id=WORKSPACE,
+        judge=FakePartitionJudge(),
+        uow=uow,
+        name_embedder=_google_embedder(),
+        auto_merge_enabled=True,
+    )
+
+    (stored,) = uow.mutation_proposals.proposals.values()
+    assert stored["status"] == "approved"
+    assert stored["reviewer"] == SYSTEM_REVIEWER
 
 
 def test_candidate_matching_existing_node_becomes_duplicate_proposal() -> None:

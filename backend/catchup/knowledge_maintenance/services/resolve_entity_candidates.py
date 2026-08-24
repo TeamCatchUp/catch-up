@@ -69,9 +69,17 @@ from catchup.knowledge_maintenance.ports.mutation_proposals import (
 )
 from catchup.knowledge_maintenance.ports.name_embedder import NameEmbedder
 from catchup.knowledge_maintenance.ports.name_embedder import NameEmbeddingError
+from catchup.knowledge_maintenance.ports.resolution_events import (
+    ResolutionEventRepository,
+)
 from catchup.observability.logging import get_logger
 
 logger = get_logger(__name__)
+
+# 시스템이 자동으로 승인했을 때 결정 저널에 남기는 검토자 이름이다.
+# 사람 검토자와 값이 겹치지 않아야 나중에 "누가 정했나"를 이 값 하나로
+# 가를 수 있다.
+SYSTEM_REVIEWER = "system:auto_merge"
 
 JUDGE_DETECTOR = "catchup.name_group_judge"
 JUDGE_DETECTOR_VERSION = "1"
@@ -115,6 +123,7 @@ class ResolutionUnitOfWork(Protocol):
     knowledge_candidates: KnowledgeCandidateRepository
     knowledge_nodes: KnowledgeNodeRepository
     mutation_proposals: MutationProposalRepository
+    resolution_events: ResolutionEventRepository
 
     def __enter__(self) -> Self: ...
 
@@ -175,6 +184,7 @@ def resolve_entity_candidates(
     judge: IdentityJudge | None,
     uow: ResolutionUnitOfWork,
     name_embedder: NameEmbedder | None = None,
+    auto_merge_enabled: bool = False,
 ) -> ResolutionResult:
     """pending entity 후보를 해소하고 집계를 돌려준다.
 
@@ -185,6 +195,11 @@ def resolve_entity_candidates(
     분할 판정을 한 번 받는다. None이면 지금까지처럼 정규화 이름이 완전히
     같은 후보끼리만 묶어 판정한다 — judge가 없을 때와 같은 원칙으로,
     재료가 없으면 있던 경로만 탄다.
+
+    auto_merge_enabled가 참이면 이번에 쓴 병합 계획서를 시스템이 그
+    자리에서 승인한다. 기본값은 거짓이라 명시한 호출자만 자동 확정을
+    얻는다. 켠 경우에도 사람이 되돌린 적 있는 구성은 승인하지 않고 검토
+    큐에 남긴다.
     """
     with uow:
         pending = uow.knowledge_candidates.find_pending_entity_candidates(
@@ -321,6 +336,7 @@ def resolve_entity_candidates(
                 judge=judge,
                 name_embedder=name_embedder,
                 uow=uow,
+                auto_merge_enabled=auto_merge_enabled,
             )
 
         uow.commit()
@@ -556,6 +572,7 @@ def _judge_name_groups(
     candidates: list[StoredEntityCandidate],
     judge: IdentityJudge,
     uow: ResolutionUnitOfWork,
+    auto_merge_enabled: bool = False,
 ) -> _FuzzyCounts:
     """같은 정규화 이름 그룹을 판정하고 proposal을 쓴다.
 
@@ -635,7 +652,7 @@ def _judge_name_groups(
         if not verdict.same:
             continue
 
-        _write_merge_proposal(
+        proposal_id = _write_merge_proposal(
             workspace_id=workspace_id,
             key=key,
             members=members,
@@ -657,6 +674,13 @@ def _judge_name_groups(
             uow=uow,
         )
         created += 1
+        if auto_merge_enabled and proposal_id is not None:
+            _auto_approve(
+                workspace_id=workspace_id,
+                proposal_id=proposal_id,
+                member_hash=member_hash,
+                uow=uow,
+            )
 
     return _FuzzyCounts(
         created=created,
@@ -674,6 +698,7 @@ def _resolve_fuzzy(
     judge: IdentityJudge,
     name_embedder: NameEmbedder | None,
     uow: ResolutionUnitOfWork,
+    auto_merge_enabled: bool = False,
 ) -> _FuzzyCounts:
     """fuzzy 단계의 후보군 형성 방식을 고른다.
 
@@ -689,6 +714,7 @@ def _resolve_fuzzy(
             candidates=candidates,
             judge=judge,
             uow=uow,
+            auto_merge_enabled=auto_merge_enabled,
         )
     try:
         return _judge_name_blocks(
@@ -697,6 +723,7 @@ def _resolve_fuzzy(
             judge=judge,
             name_embedder=name_embedder,
             uow=uow,
+            auto_merge_enabled=auto_merge_enabled,
         )
     except NameEmbeddingError as error:
         logger.warning(
@@ -710,6 +737,7 @@ def _resolve_fuzzy(
             candidates=candidates,
             judge=judge,
             uow=uow,
+            auto_merge_enabled=auto_merge_enabled,
         )
 
 
@@ -720,6 +748,7 @@ def _judge_name_blocks(
     judge: IdentityJudge,
     name_embedder: NameEmbedder,
     uow: ResolutionUnitOfWork,
+    auto_merge_enabled: bool = False,
 ) -> _FuzzyCounts:
     """이름 유사도 블록마다 분할 판정을 받아 proposal을 쓴다.
 
@@ -797,6 +826,7 @@ def _judge_name_blocks(
                 candidate_by_id=candidate_by_id,
                 node_by_id=node_by_id,
                 uow=uow,
+                auto_merge_enabled=auto_merge_enabled,
             )
             created += outcome.created
             abstained += outcome.abstained
@@ -831,6 +861,7 @@ def _apply_identity_group(
     candidate_by_id: dict[str, StoredEntityCandidate],
     node_by_id: dict[str, _NodeMember],
     uow: ResolutionUnitOfWork,
+    auto_merge_enabled: bool = False,
 ) -> _GroupOutcome:
     """분할 그룹 하나를 병합 제안으로 옮긴다.
 
@@ -895,7 +926,7 @@ def _apply_identity_group(
             f"후보 {len(members)}건을 기존 '{target.alias}'로 병합: {names}"
         )
 
-    _write_merge_proposal(
+    proposal_id = _write_merge_proposal(
         workspace_id=workspace_id,
         key=key,
         members=members,
@@ -917,6 +948,13 @@ def _apply_identity_group(
         merge_into_node_id=None if target is None else target.node_id,
         uow=uow,
     )
+    if auto_merge_enabled and proposal_id is not None:
+        _auto_approve(
+            workspace_id=workspace_id,
+            proposal_id=proposal_id,
+            member_hash=member_hash,
+            uow=uow,
+        )
     return _GroupOutcome(created=1, settled=settled)
 
 
@@ -1047,7 +1085,7 @@ def _write_merge_proposal(
     proposed_name: str,
     merge_into_node_id: uuid.UUID | None,
     uow: ResolutionUnitOfWork,
-) -> None:
+) -> uuid.UUID | None:
     """후보들을 하나로 모으는 계획서를 쓴다.
 
     첫 후보가 대표다. `merge_into_node_id`가 있으면 대표가 새 노드를
@@ -1057,9 +1095,15 @@ def _write_merge_proposal(
     그대로 실리는 문장이라, 아직 승인되지 않은 모델의 작명이 확정된 이름처럼
     읽히기 때문이다. 그 이름은 사람이 승인 여부를 정할 제안 값으로만
     (operation의 proposed_name과 resolver_metadata에) 남긴다.
+
+    Returns:
+        방금 쓴 계류 계획서의 id를 준다. 같은 key에 이미 결정이 내려져
+        있으면 저장소가 그 결정 행의 id를 그대로 돌려주므로, 계류가
+        아닌 것을 확인해 None을 준다. 이미 사람이 결정한 안건을 뒤의
+        자동 승인이 다시 건드리지 않게 하려는 것이다.
     """
     representative = members[0]
-    uow.mutation_proposals.add_duplicate_proposal(
+    proposal_id = uow.mutation_proposals.add_duplicate_proposal(
         workspace_id=workspace_id,
         idempotency_key=key,
         trigger_entity_candidate_id=representative.id,
@@ -1072,6 +1116,44 @@ def _write_merge_proposal(
         proposed_type=proposed_type,
         proposed_name=proposed_name,
         merge_into_node_id=merge_into_node_id,
+    )
+    pending = uow.mutation_proposals.find_pending_by_idempotency_key(
+        workspace_id=workspace_id,
+        idempotency_key=key,
+    )
+    if pending is None or pending.id != proposal_id:
+        return None
+    return proposal_id
+
+
+def _auto_approve(
+    *,
+    workspace_id: int,
+    proposal_id: uuid.UUID,
+    member_hash: str,
+    uow: ResolutionUnitOfWork,
+) -> None:
+    """방금 쓴 병합 계획서를 시스템 이름으로 승인한다.
+
+    같은 멤버 구성을 사람이 되돌린 적이 있으면 승인하지 않고 계류
+    상태로 남긴다. 사람이 갈라 놓은 구성을 판정기 재실행이 다시 붙이면
+    사람의 결정이 조용히 뒤집히기 때문이다. 이때는 안건이 검토 큐에
+    남아 사람이 다시 판단한다.
+    """
+    if uow.resolution_events.has_human_unmerge(
+        workspace_id=workspace_id,
+        member_hash=member_hash,
+    ):
+        logger.info(
+            "auto_merge_suppressed",
+            workspace_id=workspace_id,
+            member_hash=member_hash,
+        )
+        return
+    uow.mutation_proposals.mark_merge_approved(
+        workspace_id=workspace_id,
+        proposal_id=proposal_id,
+        reviewer=SYSTEM_REVIEWER,
     )
 
 
