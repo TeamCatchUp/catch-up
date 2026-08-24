@@ -344,9 +344,14 @@ export function useReviewQueueModel({
     publishMutation.mutate(
       { base_revision_id: detail.baseRevisionId },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
           // 발행된 안건은 큐에서 빠진다 — 발행한 행을 그대로 보고 있을 때만 다음 안건으로 옮긴다
           if (selectedRowIdRef.current === publishedRowId) setSelectedId(nextRowId);
+          // 전 블록 반려 종결은 새 판이 없다 — 열어 볼 발행본이 없어 안내만 남긴다
+          if (result.verdict === 'rejected') {
+            toast('모든 변경을 반려해 문서를 바꾸지 않고 종결했습니다');
+            return;
+          }
           toast('내보내기를 완료했습니다', {
             duration: ACTION_TOAST_DURATION,
             action: { label: '열기', onClick: () => router.push(`/llm-wiki/${artifactId}`) },

@@ -271,6 +271,31 @@ describe('useReviewQueueModel', () => {
     expect(result.current.selectedId).toBeNull();
   });
 
+  it('전 블록 반려로 종결되면 열기 없는 안내 토스트가 뜬다 — 새 판이 없다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    server.use(
+      http.post('*/api/v1/knowledge-review/queue/:proposalId/publish', ({ params }) =>
+        HttpResponse.json({
+          proposal_id: params.proposalId,
+          verdict: 'rejected',
+          revision_id: null,
+          revision_number: null,
+          blocks_published: 0,
+          blocks_rejected: 2,
+          contradictions_resolved: 0,
+          claims_accepted: 0,
+        }),
+      ),
+    );
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.entries).toHaveLength(3));
+    act(() => result.current.onPublish());
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalledWith('모든 변경을 반려해 문서를 바꾸지 않고 종결했습니다'));
+    expect(toastMock).not.toHaveBeenCalledWith('내보내기를 완료했습니다', expect.anything());
+  });
+
   it('전체 반려는 판정 경로가 있는 카드마다 반려 판정을 보내고 화면에 남는다', async () => {
     const { verdictCalls } = stubReviewEndpoints([
       queueItem(FIRST, '결제 재시도 정책'),

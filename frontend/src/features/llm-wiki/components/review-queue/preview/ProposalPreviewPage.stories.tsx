@@ -10,7 +10,7 @@ import {
 } from '../../../fixtures/llmWikiDiffFixtures';
 import type { DocumentBreadcrumb } from '../../../types/llmWikiModel';
 import { composeProposalPreview } from './composeProposalPreview';
-import ProposalPreviewPage from './ProposalPreviewPage';
+import ProposalPreviewPage, { PREVIEW_GUIDE } from './ProposalPreviewPage';
 
 const [MODIFIED, ADDED] = PROPOSED_WIKI_BLOCKS;
 
@@ -48,6 +48,7 @@ const meta = {
         '합성 규칙: 승인·미판정은 제안 블록, 반려는 발행판 블록으로 되돌리고 되돌릴 자리가 없으면(신규 블록) 뺀다.',
         '백엔드 발행(_assemble)은 반려 블록을 발행판으로 되돌리지 않고 통째로 뺀다 — 미리보기의 되돌림은 사용자 확정 규칙이라 그 자리에서 갈린다.',
         '발행 시각 자리에는 미리보기 표기가 선다 — 아직 판이 아니라 실을 시각이 없다.',
+        '본문 위 안내 배너는 시안 없는 자작이다(사용자 확정 문구) — 담당자 카드 안내 배너 패턴을 그대로 쓴다.',
       ],
       layoutNotes: ['본문 폭 max-w-260·좌우 24는 문서 열람 화면과 같은 값이다.'],
     }),
@@ -65,6 +66,8 @@ export const Undecided: Story = {
     await expect(canvas.getByRole('heading', { level: 1, name: '결제 재시도 정책' })).toBeInTheDocument();
     // 발행 시각 자리 — 아직 판이 아니라는 표기가 선다
     await expect(canvas.getByText('검토 중인 제안본 미리보기')).toBeInTheDocument();
+    // 본문 위 안내 — 판정 반영본이고 내보내기 전에는 문서가 바뀌지 않는다는 계약
+    await expect(canvas.getByText(PREVIEW_GUIDE)).toBeInTheDocument();
 
     // 양식 순서(PG → 재시도)가 저장 순서(재시도 → PG)를 이긴다
     const headings = canvas.getAllByRole('heading', { level: 2 }).map((node) => node.textContent);
