@@ -4,10 +4,8 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  REVIEW_TOAST_OPTIONS,
-  useRejectReviewProposalMutation,
   useReviewBlockVerdictMutation,
-  useReviewBulkApproveMutation,
+  useReviewBulkVerdictMutation,
   useReviewPublishMutation,
 } from './knowledgeReview.mutations';
 import { knowledgeReviewQueries } from './knowledgeReview.queries';
@@ -16,7 +14,6 @@ import { wikiQueries } from './wiki.queries';
 const reviewApi = vi.hoisted(() => ({
   submitReviewBlockVerdict: vi.fn(),
   publishReviewProposal: vi.fn(),
-  rejectReviewProposal: vi.fn(),
 }));
 const toastMock = vi.hoisted(() => vi.fn());
 
@@ -100,7 +97,7 @@ describe('useReviewBlockVerdictMutation', () => {
     result.current.mutate({ blockIndex: 2, verdict: 'approved', block_content_hash: 'stale' });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(toastMock).toHaveBeenCalledWith('다른 검토자가 먼저 판정했어요.', REVIEW_TOAST_OPTIONS);
+    expect(toastMock).toHaveBeenCalledWith('다른 검토자가 먼저 판정했어요.');
     expect(invalidatedKeys()).toEqual([detailKey]);
   });
 
@@ -112,23 +109,23 @@ describe('useReviewBlockVerdictMutation', () => {
     result.current.mutate({ blockIndex: 2, verdict: 'approved', block_content_hash: 'h-2' });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(toastMock).toHaveBeenCalledWith('검토 권한이 없어요.', REVIEW_TOAST_OPTIONS);
+    expect(toastMock).toHaveBeenCalledWith('검토 권한이 없어요.');
     expect(invalidatedKeys()).toEqual([]);
   });
 });
 
-describe('useReviewBulkApproveMutation', () => {
+describe('useReviewBulkVerdictMutation', () => {
   const TARGETS = [
     { blockIndex: 0, block_content_hash: 'h-0' },
     { blockIndex: 2, block_content_hash: 'h-2' },
   ];
 
-  it('받은 카드 수만큼 승인 판정을 보낸다', async () => {
+  it('받은 카드 수만큼 같은 판정을 보낸다', async () => {
     reviewApi.submitReviewBlockVerdict.mockResolvedValue({});
     const { wrapper } = createHarness();
-    const { result } = renderHook(() => useReviewBulkApproveMutation(PROPOSAL_ID), { wrapper });
+    const { result } = renderHook(() => useReviewBulkVerdictMutation(PROPOSAL_ID), { wrapper });
 
-    result.current.mutate(TARGETS);
+    result.current.mutate({ targets: TARGETS, verdict: 'approved' });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(reviewApi.submitReviewBlockVerdict).toHaveBeenCalledTimes(2);
@@ -139,15 +136,35 @@ describe('useReviewBulkApproveMutation', () => {
     expect(result.current.data).toEqual({ requested: 2, failed: 0, message: null });
   });
 
+  it('반려는 전 블록에 같은 사유를 실어 보낸다', async () => {
+    reviewApi.submitReviewBlockVerdict.mockResolvedValue({});
+    const { wrapper } = createHarness();
+    const { result } = renderHook(() => useReviewBulkVerdictMutation(PROPOSAL_ID), { wrapper });
+
+    result.current.mutate({ targets: TARGETS, verdict: 'rejected', rejection_reason: '근거가 부족해요.' });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(reviewApi.submitReviewBlockVerdict).toHaveBeenCalledWith(PROPOSAL_ID, 0, {
+      verdict: 'rejected',
+      rejection_reason: '근거가 부족해요.',
+      block_content_hash: 'h-0',
+    });
+    expect(reviewApi.submitReviewBlockVerdict).toHaveBeenCalledWith(PROPOSAL_ID, 2, {
+      verdict: 'rejected',
+      rejection_reason: '근거가 부족해요.',
+      block_content_hash: 'h-2',
+    });
+  });
+
   // 하나가 막혀도 나머지는 서버에 남는다 — 실패 건수와 서버 문구를 소비처로 올린다
   it('일부만 실패해도 성공분을 살리고 첫 실패의 문구를 돌려준다', async () => {
     reviewApi.submitReviewBlockVerdict
       .mockResolvedValueOnce({})
       .mockRejectedValueOnce(apiError('STALE_BLOCK', '다른 검토자가 먼저 판정했어요.'));
     const { wrapper, invalidatedKeys } = createHarness();
-    const { result } = renderHook(() => useReviewBulkApproveMutation(PROPOSAL_ID), { wrapper });
+    const { result } = renderHook(() => useReviewBulkVerdictMutation(PROPOSAL_ID), { wrapper });
 
-    result.current.mutate(TARGETS);
+    result.current.mutate({ targets: TARGETS, verdict: 'approved' });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual({ requested: 2, failed: 1, message: '다른 검토자가 먼저 판정했어요.' });
@@ -192,14 +209,16 @@ describe('useReviewPublishMutation', () => {
   });
 
   it('낡은 상태로 막히면 상세만 다시 읽는다 — 뿌리까지 되돌리지 않는다', async () => {
-    reviewApi.publishReviewProposal.mockRejectedValue(apiError('UNDECIDED_BLOCKS', '아직 판정하지 않은 블록이 있어요.'));
+    reviewApi.publishReviewProposal.mockRejectedValue(
+      apiError('UNDECIDED_BLOCKS', '아직 판정하지 않은 블록이 있어요.'),
+    );
     const { wrapper, invalidatedKeys } = createHarness();
     const { result } = renderHook(() => useReviewPublishMutation(PROPOSAL_ID), { wrapper });
 
     result.current.mutate({ base_revision_id: 'rv-8' });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(toastMock).toHaveBeenCalledWith('아직 판정하지 않은 블록이 있어요.', REVIEW_TOAST_OPTIONS);
+    expect(toastMock).toHaveBeenCalledWith('아직 판정하지 않은 블록이 있어요.');
     expect(invalidatedKeys()).toEqual([detailKey]);
   });
 
@@ -211,51 +230,7 @@ describe('useReviewPublishMutation', () => {
     result.current.mutate({ base_revision_id: 'rv-8' });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(toastMock).toHaveBeenCalledWith('발행 권한이 없어요.', REVIEW_TOAST_OPTIONS);
-    expect(invalidatedKeys()).toEqual([]);
-  });
-});
-
-describe('useRejectReviewProposalMutation', () => {
-  const REJECT_RESPONSE = {
-    proposal_id: PROPOSAL_ID,
-    verdict: 'rejected',
-    revision_id: null,
-    revision_number: null,
-    claims_accepted: 0,
-  };
-
-  it('반려는 blocks가 아니라 artifacts 경로로 가고 사유를 실어 보낸다', async () => {
-    reviewApi.rejectReviewProposal.mockResolvedValue(REJECT_RESPONSE);
-    const { wrapper } = createHarness();
-    const { result } = renderHook(() => useRejectReviewProposalMutation(PROPOSAL_ID), { wrapper });
-
-    result.current.mutate({ reason: '근거가 부족해요.' });
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(reviewApi.rejectReviewProposal).toHaveBeenCalledWith(PROPOSAL_ID, { reason: '근거가 부족해요.' });
-  });
-
-  it('반려도 큐 뿌리와 문서 목록·그 문서 상세만 무효화한다', async () => {
-    reviewApi.rejectReviewProposal.mockResolvedValue(REJECT_RESPONSE);
-    const { wrapper, invalidatedKeys } = createHarness();
-    const { result } = renderHook(() => useRejectReviewProposalMutation(PROPOSAL_ID, ARTIFACT_ID), { wrapper });
-
-    result.current.mutate({ reason: '근거가 부족해요.' });
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(invalidatedKeys()).toEqual([knowledgeReviewQueries.all(), artifactListKey, artifactDetailKey]);
-  });
-
-  it('실패하면 문구만 띄운다 — 반려에는 낡은 상태 재조회 분기가 없다', async () => {
-    reviewApi.rejectReviewProposal.mockRejectedValue(apiError('ALREADY_DECIDED', '이미 판정된 변경안이에요.'));
-    const { wrapper, invalidatedKeys } = createHarness();
-    const { result } = renderHook(() => useRejectReviewProposalMutation(PROPOSAL_ID), { wrapper });
-
-    result.current.mutate({ reason: '근거가 부족해요.' });
-
-    await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(toastMock).toHaveBeenCalledWith('이미 판정된 변경안이에요.', REVIEW_TOAST_OPTIONS);
+    expect(toastMock).toHaveBeenCalledWith('발행 권한이 없어요.');
     expect(invalidatedKeys()).toEqual([]);
   });
 });

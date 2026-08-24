@@ -86,10 +86,12 @@ describe('useQueryErrorToast', () => {
   });
 
   it('토스트 옵션을 그대로 넘기고 id로 같은 문구를 하나로 묶는다', () => {
-    renderHook(() => useQueryErrorToast(makeApiError('WIKI_LIST_FAILED', '목록을 읽지 못했습니다.'), {
-      position: 'bottom-right',
-    }));
+    renderHook(() =>
+      useQueryErrorToast(makeApiError('WIKI_LIST_FAILED', '목록을 읽지 못했습니다.'), {
+        duration: 6000,
+      }),
+    );
 
-    expect(toastMock.mock.calls[0][1]).toMatchObject({ id: '목록을 읽지 못했습니다.', position: 'bottom-right' });
+    expect(toastMock.mock.calls[0][1]).toMatchObject({ id: '목록을 읽지 못했습니다.', duration: 6000 });
   });
 });

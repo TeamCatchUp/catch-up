@@ -4,7 +4,6 @@ import { parseApiError } from '@/shared/api/errors';
 import { toast } from '@/shared/components/ui/toast';
 
 import { assignWikiArtifactOwner, removeWikiArtifactOwner } from '../api/wikiRequests';
-import { REVIEW_TOAST_OPTIONS } from './knowledgeReview.mutations';
 import { knowledgeReviewQueries } from './knowledgeReview.queries';
 import { wikiQueries } from './wiki.queries';
 
@@ -44,7 +43,7 @@ export const useAssignWikiArtifactOwnersMutation = () => {
     },
     // 자격이 없으면 403(NOT_OWNER_MANAGER)이 온다 — 서버 문구를 그대로 띄운다
     onError: (error) => {
-      toast(parseApiError(error).message, REVIEW_TOAST_OPTIONS);
+      toast(parseApiError(error).message);
     },
   });
 };
@@ -60,7 +59,7 @@ export const useRemoveWikiArtifactOwnerMutation = () => {
       invalidateOwnerConsumers(queryClient, artifactId);
     },
     onError: (error) => {
-      toast(parseApiError(error).message, REVIEW_TOAST_OPTIONS);
+      toast(parseApiError(error).message);
     },
   });
 };

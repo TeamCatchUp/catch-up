@@ -6,13 +6,11 @@ import { API } from '@/shared/api/endpoints';
 import type {
   ReviewBlockVerdictDto,
   ReviewBlockVerdictRequest,
-  ReviewDecisionDto,
   ReviewProposalDetailDto,
   ReviewPublishDto,
   ReviewPublishRequest,
   ReviewQueuePageDto,
   ReviewQueueParams,
-  ReviewRejectRequest,
 } from './knowledgeReviewDto';
 
 export async function fetchReviewQueue(params: ReviewQueueParams, signal?: AbortSignal): Promise<ReviewQueuePageDto> {
@@ -37,19 +35,7 @@ export async function submitReviewBlockVerdict(
 }
 
 /** 발행. 블록 판정이 남아 있으면 서버가 UNDECIDED_BLOCKS로 막는다. */
-export async function publishReviewProposal(
-  proposalId: string,
-  body: ReviewPublishRequest,
-): Promise<ReviewPublishDto> {
+export async function publishReviewProposal(proposalId: string, body: ReviewPublishRequest): Promise<ReviewPublishDto> {
   const res = await api.post<ReviewPublishDto>(API.knowledgeReview.publish(proposalId), body);
-  return res.data;
-}
-
-/** 변경안 통째 반려. 사유가 비면 서버가 400으로 막는다. */
-export async function rejectReviewProposal(
-  proposalId: string,
-  body: ReviewRejectRequest,
-): Promise<ReviewDecisionDto> {
-  const res = await api.post<ReviewDecisionDto>(API.knowledgeReview.reject(proposalId), body);
   return res.data;
 }

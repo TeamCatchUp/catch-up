@@ -137,14 +137,6 @@ export interface ReviewProposalDetailDto {
   conflicts: ReviewConflictDto[];
 }
 
-export interface ReviewDecisionDto {
-  proposal_id: string;
-  verdict: string;
-  revision_id: string | null;
-  revision_number: number | null;
-  claims_accepted: number;
-}
-
 export interface ReviewPublishDto {
   proposal_id: string;
   verdict: string;
@@ -181,8 +173,4 @@ export interface ReviewPublishRequest {
   base_revision_id: string | null;
   undecided?: 'approve' | 'reject' | null;
   rejection_reason?: string | null;
-}
-
-export interface ReviewRejectRequest {
-  reason: string;
 }

@@ -20,11 +20,9 @@ import {
 } from '../components/review-queue/reviewQueueFilters';
 import type { ReviewQueuePageProps } from '../components/review-queue/ReviewQueuePage';
 import {
-  type BlockApproveTarget,
-  REVIEW_TOAST_OPTIONS,
-  useRejectReviewProposalMutation,
+  type BlockVerdictTarget,
   useReviewBlockVerdictMutation,
-  useReviewBulkApproveMutation,
+  useReviewBulkVerdictMutation,
   useReviewPublishMutation,
 } from '../queries/knowledgeReview.mutations';
 import { knowledgeReviewQueries } from '../queries/knowledgeReview.queries';
@@ -60,8 +58,8 @@ function resolveNextRowId(rows: readonly ReviewQueueRowData[], currentId: string
   return rows[index + 1]?.id ?? rows[index - 1]?.id ?? null;
 }
 
-/** 일괄 승인이 보낼 카드. 판정 경로가 없는 카드(빠진 블록)와 이미 판정된 카드는 빠진다 */
-function collectApproveTargets(entries: readonly BlockDiffEntry[]): BlockApproveTarget[] {
+/** 일괄 판정(전체 승인·반려)이 보낼 카드. 판정 경로가 없는 카드(빠진 블록)와 이미 판정된 카드는 빠진다 */
+function collectVerdictTargets(entries: readonly BlockDiffEntry[]): BlockVerdictTarget[] {
   return entries.flatMap((entry) =>
     entry.blockIndex === null || entry.blockContentHash === null || entry.approved || entry.rejected
       ? []
@@ -129,16 +127,12 @@ export function useReviewQueueModel({
   const detailDto = detailQuery.data;
   const detail = useMemo(() => (detailDto ? mapReviewProposalDetail(detailDto) : null), [detailDto]);
 
-  // 이 화면의 조회 실패는 판정 토스트와 같은 자리(우하단)에 한 번만 뜬다
-  useQueryErrorToast(
-    queueQuery.error ?? detailQuery.error ?? channelsQuery.error ?? membersQuery.error,
-    REVIEW_TOAST_OPTIONS,
-  );
+  // 이 화면의 조회 실패는 판정 토스트와 같은 전역 자리에 한 번만 뜬다
+  useQueryErrorToast(queueQuery.error ?? detailQuery.error ?? channelsQuery.error ?? membersQuery.error);
 
   const verdictMutation = useReviewBlockVerdictMutation(selectedRowId ?? '');
   const publishMutation = useReviewPublishMutation(selectedRowId ?? '', detail?.artifactId);
-  const bulkApproveMutation = useReviewBulkApproveMutation(selectedRowId ?? '');
-  const rejectAllMutation = useRejectReviewProposalMutation(selectedRowId ?? '', detail?.artifactId);
+  const bulkVerdictMutation = useReviewBulkVerdictMutation(selectedRowId ?? '');
   const assignOwnersMutation = useAssignWikiArtifactOwnersMutation();
   const removeOwnerMutation = useRemoveWikiArtifactOwnerMutation();
 
@@ -206,7 +200,7 @@ export function useReviewQueueModel({
     if (!detail || userIds.length === 0) return;
     assignOwnersMutation.mutate(
       { artifactId: detail.artifactId, userIds },
-      { onSuccess: () => toast('담당자를 지정했습니다', REVIEW_TOAST_OPTIONS) },
+      { onSuccess: () => toast('담당자를 지정했습니다') },
     );
   };
 
@@ -253,31 +247,47 @@ export function useReviewQueueModel({
    * 보낼 카드가 없으면(전부 판정됨·빠진 블록만) 요청 자체가 성립하지 않는다.
    */
   const approveAll = () => {
-    const targets = collectApproveTargets(entries);
+    const targets = collectVerdictTargets(entries);
     if (targets.length === 0) return;
 
-    bulkApproveMutation.mutate(targets, {
-      onSuccess: ({ requested, failed, message }) => {
-        if (failed === 0) {
-          toast(`${requested}건 모두 승인했습니다`, REVIEW_TOAST_OPTIONS);
-          return;
-        }
-        // 성공분은 이미 서버에 남았다 — 다시 읽은 상세가 그만큼을 판정된 카드로 보인다
-        toast(`${failed}건을 승인하지 못했습니다. ${message ?? ''}`.trim(), REVIEW_TOAST_OPTIONS);
+    bulkVerdictMutation.mutate(
+      { targets, verdict: 'approved' },
+      {
+        onSuccess: ({ requested, failed, message }) => {
+          if (failed === 0) {
+            toast(`${requested}건 모두 승인했습니다`);
+            return;
+          }
+          // 성공분은 이미 서버에 남았다 — 다시 읽은 상세가 그만큼을 판정된 카드로 보인다
+          toast(`${failed}건을 승인하지 못했습니다. ${message ?? ''}`.trim());
+        },
       },
-    });
+    );
   };
 
+  /**
+   * 전체 반려도 전체 승인과 같은 블록 판정 일괄 전송이다 — 사유를 전 블록이 공유한다.
+   * 판정만 쌓이고 안건은 큐에 남는다 — 종결은 최종 내보내기 몫이다.
+   */
   const rejectAll = (reason: string) => {
-    const nextRowId = resolveNextRowId(rows, selectedRowId);
-    rejectAllMutation.mutate(
-      { reason },
+    const targets = collectVerdictTargets(entries);
+    // 보낼 카드가 없으면(전부 판정됨·빠진 블록만) 요청 없이 다이얼로그만 닫는다
+    if (targets.length === 0) {
+      setRejectDialogOpen(false);
+      return;
+    }
+
+    bulkVerdictMutation.mutate(
+      { targets, verdict: 'rejected', rejection_reason: reason },
       {
-        onSuccess: () => {
+        onSuccess: ({ requested, failed, message }) => {
           setRejectDialogOpen(false);
-          // 기각된 안건은 큐에서 빠진다 — 다음 안건으로 옮겨 검토 흐름을 잇는다
-          setSelectedId(nextRowId);
-          toast(`${entries.length}건 모두 반려했습니다`, REVIEW_TOAST_OPTIONS);
+          if (failed === 0) {
+            toast(`${requested}건 모두 반려했습니다`);
+            return;
+          }
+          // 성공분은 이미 서버에 남았다 — 다시 읽은 상세가 그만큼을 판정된 카드로 보인다
+          toast(`${failed}건을 반려하지 못했습니다. ${message ?? ''}`.trim());
         },
       },
     );
@@ -294,7 +304,6 @@ export function useReviewQueueModel({
           // 발행된 안건도 큐에서 빠진다 — 남은 안건이 없으면 빈 안내가 선다
           setSelectedId(nextRowId);
           toast('내보내기를 완료했습니다', {
-            ...REVIEW_TOAST_OPTIONS,
             duration: ACTION_TOAST_DURATION,
             action: { label: '열기', onClick: () => router.push(`/llm-wiki/${artifactId}`) },
             classNames: { actionButton: buttonVariants({ variant: 'capsule-outline-mono', size: 'md' }) },
@@ -348,7 +357,7 @@ export function useReviewQueueModel({
     rejectDialogOpen,
     onRejectDialogOpenChange: setRejectDialogOpen,
     onRejectAll: rejectAll,
-    rejectPending: rejectAllMutation.isPending,
+    rejectPending: bulkVerdictMutation.isPending,
     blockRejectDialogOpen: rejectingEntry !== null,
     onBlockRejectDialogOpenChange: (open: boolean) => {
       if (!open) setRejectingEntry(null);

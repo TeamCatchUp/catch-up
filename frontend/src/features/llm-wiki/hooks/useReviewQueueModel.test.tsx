@@ -53,17 +53,23 @@ const proposedBlock = (blockIndex: number, heading: string) => ({
   change_reason: null,
 });
 
-/** 저장된 승인 판정. 이 값이 서면 카드가 접히고 일괄 승인 대상에서 빠진다 */
-const blockVerdict = (proposalId: string, blockIndex: number) => ({
+/** 저장된 블록 판정. 이 값이 서면 카드가 접히고 일괄 판정 대상에서 빠진다 */
+const blockVerdict = (proposalId: string, blockIndex: number, verdict = 'approved', reason: string | null = null) => ({
   proposal_id: proposalId,
   block_index: blockIndex,
   block_content_hash: `h-${blockIndex}`,
-  verdict: 'approved',
-  rejection_reason: null,
+  verdict,
+  rejection_reason: reason,
   chosen_winner_claim_id: null,
   reviewer: '직원10',
   reviewed_at: '2026-08-20T01:00:00Z',
 });
+
+/** 스텁 서버가 블록마다 받아 적는 판정 */
+interface SavedVerdict {
+  verdict: string;
+  reason: string | null;
+}
 
 const baseBlock = (blockIndex: number, heading: string) => ({
   block_index: blockIndex,
@@ -80,7 +86,11 @@ const baseBlock = (blockIndex: number, heading: string) => ({
  * 카드 3장 — 수정·추가·빠진 블록. 빠진 블록은 변경안에 자리가 없어 판정 경로도 없다.
  * 발행 뒤에는 변경 목록이 비어 상세가 "변경 0건"으로 온다.
  */
-const detail = (proposalId: string, decided: boolean, approvedBlocks: ReadonlySet<number> = new Set()) => ({
+const detail = (
+  proposalId: string,
+  decided: boolean,
+  decidedBlocks: ReadonlyMap<number, SavedVerdict> = new Map(),
+) => ({
   proposal_id: proposalId,
   status: decided ? 'approved' : 'pending',
   artifact: { id: `art-${proposalId}`, title: '결제 재시도 정책', channel_id: 'ch-1', folder_id: null },
@@ -90,9 +100,12 @@ const detail = (proposalId: string, decided: boolean, approvedBlocks: ReadonlySe
   contains_conflict: false,
   owners: [],
   can_review: !decided,
-  blocks: [proposedBlock(0, '재시도 정책'), proposedBlock(1, 'PG 점검 시간 예외')].map((block) =>
-    approvedBlocks.has(block.block_index) ? { ...block, verdict: blockVerdict(proposalId, block.block_index) } : block,
-  ),
+  blocks: [proposedBlock(0, '재시도 정책'), proposedBlock(1, 'PG 점검 시간 예외')].map((block) => {
+    const saved = decidedBlocks.get(block.block_index);
+    return saved
+      ? { ...block, verdict: blockVerdict(proposalId, block.block_index, saved.verdict, saved.reason) }
+      : block;
+  }),
   layout: [],
   base_blocks: [baseBlock(0, '재시도 정책'), baseBlock(1, '수동 재시도 안내')],
   base_layout: [],
@@ -107,11 +120,11 @@ const detail = (proposalId: string, decided: boolean, approvedBlocks: ReadonlySe
   conflicts: [],
 });
 
-/** 발행·기각에 성공한 안건이 큐에서 빠지는 서버. 블록 판정 요청은 자리만 받아 적는다 */
+/** 발행에 성공한 안건이 큐에서 빠지는 서버. 블록 판정 요청은 자리와 판정 본문을 받아 적는다 */
 function stubReviewEndpoints(items: readonly ReturnType<typeof queueItem>[]) {
   const dropped = new Set<string>();
-  const approved = new Map<string, Set<number>>();
-  const verdictCalls: string[] = [];
+  const decided = new Map<string, Map<number, SavedVerdict>>();
+  const verdictCalls: { blockIndex: string; verdict: string; reason: string | null }[] = [];
 
   server.use(
     http.get('*/api/v1/knowledge-review/queue', () => {
@@ -120,22 +133,16 @@ function stubReviewEndpoints(items: readonly ReturnType<typeof queueItem>[]) {
     }),
     http.get('*/api/v1/knowledge-review/queue/:proposalId', ({ params }) => {
       const proposalId = String(params.proposalId);
-      return HttpResponse.json(detail(proposalId, dropped.has(proposalId), approved.get(proposalId) ?? new Set()));
+      return HttpResponse.json(detail(proposalId, dropped.has(proposalId), decided.get(proposalId) ?? new Map()));
     }),
-    http.put('*/api/v1/knowledge-review/queue/:proposalId/blocks/:blockIndex/verdict', ({ params }) => {
+    http.put('*/api/v1/knowledge-review/queue/:proposalId/blocks/:blockIndex/verdict', async ({ params, request }) => {
       const proposalId = String(params.proposalId);
-      verdictCalls.push(String(params.blockIndex));
-      approved.set(proposalId, (approved.get(proposalId) ?? new Set()).add(Number(params.blockIndex)));
-      return HttpResponse.json({
-        proposal_id: proposalId,
-        block_index: Number(params.blockIndex),
-        block_content_hash: `h-${params.blockIndex}`,
-        verdict: 'approved',
-        rejection_reason: null,
-        chosen_winner_claim_id: null,
-        reviewer: '직원10',
-        reviewed_at: '2026-08-20T01:00:00Z',
-      });
+      const blockIndex = Number(params.blockIndex);
+      const body = (await request.json()) as { verdict: string; rejection_reason?: string | null };
+      const saved = { verdict: body.verdict, reason: body.rejection_reason ?? null };
+      verdictCalls.push({ blockIndex: String(params.blockIndex), verdict: saved.verdict, reason: saved.reason });
+      decided.set(proposalId, (decided.get(proposalId) ?? new Map()).set(blockIndex, saved));
+      return HttpResponse.json(blockVerdict(proposalId, blockIndex, saved.verdict, saved.reason));
     }),
     http.post('*/api/v1/knowledge-review/queue/:proposalId/publish', ({ params }) => {
       dropped.add(String(params.proposalId));
@@ -148,16 +155,6 @@ function stubReviewEndpoints(items: readonly ReturnType<typeof queueItem>[]) {
         blocks_rejected: 0,
         contradictions_resolved: 0,
         claims_accepted: 2,
-      });
-    }),
-    http.post('*/api/v1/knowledge-review/artifacts/:proposalId/reject', ({ params }) => {
-      dropped.add(String(params.proposalId));
-      return HttpResponse.json({
-        proposal_id: String(params.proposalId),
-        verdict: 'rejected',
-        revision_id: null,
-        revision_number: null,
-        claims_accepted: 0,
       });
     }),
     http.get('*/api/v1/wiki/channels', () => HttpResponse.json({ channels: [] })),
@@ -185,7 +182,8 @@ describe('useReviewQueueModel', () => {
     act(() => result.current.onApproveAll());
 
     await waitFor(() => expect(verdictCalls).toHaveLength(2));
-    expect([...verdictCalls].sort()).toEqual(['0', '1']);
+    expect(verdictCalls.map((call) => call.blockIndex).sort()).toEqual(['0', '1']);
+    expect(verdictCalls.every((call) => call.verdict === 'approved')).toBe(true);
 
     // 발행은 별도 클릭이다 — 안건이 큐에 남고 발행 바도 열려 있다
     expect(result.current.items).toHaveLength(1);
@@ -244,16 +242,46 @@ describe('useReviewQueueModel', () => {
     expect(result.current.selectedId).toBeNull();
   });
 
-  it('전체 반려에 성공하면 다음 안건으로 넘어간다', async () => {
-    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책'), queueItem(SECOND, '환불 문서 병합')]);
+  it('전체 반려는 미판정 카드마다 반려 판정을 보내고 화면에 남는다', async () => {
+    const { verdictCalls } = stubReviewEndpoints([
+      queueItem(FIRST, '결제 재시도 정책'),
+      queueItem(SECOND, '환불 문서 병합'),
+    ]);
     const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
 
-    await waitFor(() => expect(result.current.selectedId).toBe(FIRST));
+    await waitFor(() => expect(result.current.entries).toHaveLength(3));
 
+    act(() => result.current.onRejectDialogOpenChange(true));
     act(() => result.current.onRejectAll('근거 문서가 없습니다'));
 
-    await waitFor(() => expect(result.current.selectedId).toBe(SECOND));
+    // 사유는 전 블록이 공유한다 — 빠진 블록은 판정 경로가 없어 여기서도 빠진다
+    await waitFor(() => expect(verdictCalls).toHaveLength(2));
+    expect(verdictCalls.every((call) => call.verdict === 'rejected')).toBe(true);
+    expect(verdictCalls.every((call) => call.reason === '근거 문서가 없습니다')).toBe(true);
+
+    // 화면 유지 — 다이얼로그만 닫히고 안건이 큐에 남는다. 종결은 최종 내보내기 몫이다
+    await waitFor(() => expect(result.current.rejectDialogOpen).toBe(false));
+    expect(result.current.selectedId).toBe(FIRST);
+    expect(result.current.items).toHaveLength(2);
+
+    // 다시 읽은 상세의 판정으로 카드가 "반려됨"으로 접힌다
+    await waitFor(() => expect(result.current.entries.filter((entry) => entry.rejected)).toHaveLength(2));
+  });
+
+  it('보낼 카드가 없으면 전체 반려는 요청 없이 다이얼로그만 닫는다', async () => {
+    const { verdictCalls } = stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.entries).toHaveLength(3));
+
+    act(() => result.current.onRejectAll('근거 문서가 없습니다'));
+    await waitFor(() => expect(result.current.entries.filter((entry) => entry.rejected)).toHaveLength(2));
+
+    act(() => result.current.onRejectDialogOpenChange(true));
+    act(() => result.current.onRejectAll('두 번째 사유'));
+
     expect(result.current.rejectDialogOpen).toBe(false);
+    expect(verdictCalls).toHaveLength(2);
   });
 
   it('거르기를 바꿔도 보던 안건이 새 목록에 있으면 선택이 남는다', async () => {

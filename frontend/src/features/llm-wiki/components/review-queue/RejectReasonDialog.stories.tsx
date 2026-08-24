@@ -63,7 +63,7 @@ const meta = {
         'Dialog·Button 프리미티브 조립 — ConfirmDialog의 여백·보더·버튼 배치를 따른다.',
         '전체 반려와 블록 반려가 같은 다이얼로그를 쓰고 문구(제목·설명·제출 라벨)만 갈아 끼운다 — 사유 입력의 규칙이 두 벌로 갈리지 않게.',
       ],
-      dataNotes: ['사유가 비면 서버가 막아(변경안 400·블록 422) 제출 버튼을 먼저 잠근다.'],
+      dataNotes: ['사유가 비면 서버가 422로 막아 제출 버튼을 먼저 잠근다. 전체 반려의 사유는 전 블록이 공유한다.'],
     }),
   },
 } satisfies Meta<RejectReasonDialogStoryArgs>;

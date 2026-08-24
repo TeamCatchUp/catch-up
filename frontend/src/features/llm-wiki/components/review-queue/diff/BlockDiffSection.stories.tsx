@@ -42,7 +42,7 @@ const meta = {
         '건수 배지는 entries.length다 — 시안의 "12"는 목업 값이고 계약이 아니다.',
         '판정이 끝난 카드는 접힌 채로 액션 없이 남고 승인·반려 모두 배지가 선다 — PartiallyDecided가 두 배지를 함께 붙잡는다.',
         '변경 0건 빈 상태 스토리는 만들지 않는다(MISSING — 감사 계약). 검토 큐 상세 레이아웃 조립은 다음 단계다.',
-        '전체 승인·반려는 판정이 시작된 뒤에도 잠그지 않는다 — 서버가 409로 거절하고 그 메시지를 토스트로 보인다.',
+        '전체 승인·반려는 판정이 시작된 뒤에도 잠그지 않는다 — 미판정 카드에만 블록 판정을 보내고 기판정 카드는 건너뛴다.',
         '반려는 사유가 필수라 버튼이 곧바로 요청을 내지 않고 사유 입력 다이얼로그를 연다.',
         '미리보기는 헤더 액션으로 옮겨갔다 — 이 섹션은 판정 진입점만 든다.',
       ],
@@ -127,7 +127,7 @@ export const PartiallyDecided: Story = {
     const undecidedCard = canvas.getByText('수동 재시도 안내').closest('section')!;
     await expect(within(undecidedCard).getByRole('button', { name: '접기' })).toBeInTheDocument();
 
-    // 전체 승인·반려는 판정이 시작된 뒤에도 남는다 — 배타 관계는 서버가 409로 알린다.
+    // 전체 승인·반려는 판정이 시작된 뒤에도 남는다 — 미판정 카드에만 보내므로 잠글 이유가 없다.
     await expect(canvas.getByRole('button', { name: '전체 승인' })).toBeEnabled();
     await expect(canvas.getByRole('button', { name: '전체 반려' })).toBeEnabled();
 

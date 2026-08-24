@@ -85,9 +85,7 @@ describe('useAssignWikiArtifactOwnersMutation', () => {
     result.current.mutate({ artifactId: ARTIFACT_ID, userIds: [7] });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(toastMock).toHaveBeenCalledWith('이 문서의 담당자를 지정할 자격이 없습니다.', {
-      position: 'bottom-right',
-    });
+    expect(toastMock).toHaveBeenCalledWith('이 문서의 담당자를 지정할 자격이 없습니다.');
     expect(invalidatedKeys()).toEqual(OWNER_CONSUMER_KEYS);
   });
 });
@@ -114,9 +112,7 @@ describe('useRemoveWikiArtifactOwnerMutation', () => {
     result.current.mutate({ artifactId: ARTIFACT_ID, userId: 7 });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(toastMock).toHaveBeenCalledWith('이 문서의 담당자를 해제할 자격이 없습니다.', {
-      position: 'bottom-right',
-    });
+    expect(toastMock).toHaveBeenCalledWith('이 문서의 담당자를 해제할 자격이 없습니다.');
     expect(invalidatedKeys()).toEqual([]);
   });
 });

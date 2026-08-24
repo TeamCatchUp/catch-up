@@ -35,14 +35,7 @@ interface RejectReasonFormProps {
 }
 
 /** 닫히면 통째로 언마운트돼 이전 사유가 남지 않는다 */
-function RejectReasonForm({
-  title,
-  description,
-  submitLabel,
-  submitting,
-  onCancel,
-  onSubmit,
-}: RejectReasonFormProps) {
+function RejectReasonForm({ title, description, submitLabel, submitting, onCancel, onSubmit }: RejectReasonFormProps) {
   const [reason, setReason] = useState('');
   const trimmed = reason.trim();
 
@@ -81,7 +74,7 @@ function RejectReasonForm({
 }
 
 /**
- * 반려 사유 입력. 서버가 빈 사유를 막아(변경안 400·블록 422) 진입점에서 먼저 잠근다.
+ * 반려 사유 입력. 서버가 빈 사유를 422로 막아 진입점에서 먼저 잠근다.
  * 전용 시안이 없어 ConfirmDialog의 여백·보더·버튼 배치를 그대로 따른다.
  */
 export default function RejectReasonDialog({
