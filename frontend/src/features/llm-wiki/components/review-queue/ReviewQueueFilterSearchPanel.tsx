@@ -1,6 +1,6 @@
 'use client';
 
-import { type ComponentType, type SVGProps, useEffect, useMemo, useRef, useState } from 'react';
+import { type ComponentType, type ReactNode, type SVGProps, useEffect, useMemo, useRef, useState } from 'react';
 
 import IconCancelSmall from '@/public/icons/icon/cancel_small.svg';
 import IconTextfieldDelete from '@/public/icons/icon/TextfiledDelete.svg';
@@ -9,6 +9,8 @@ import { Command, CommandEmpty, CommandItem, CommandList } from '@/shared/compon
 export interface ReviewQueueFilterOption {
   id: string;
   label: string;
+  /** 이름 바로 뒤의 흐린 표기. 담당자 추가의 "(나)" 자리다. */
+  suffixLabel?: string;
   /** 행 우측 보조 라벨. 시안의 직책("PM") 자리이고 데이터 공급원은 미정이다. */
   trailingLabel?: string;
 }
@@ -22,6 +24,8 @@ interface ReviewQueueFilterSearchPanelProps {
   placeholder: string;
   /** 칩·행 좌측 글리프. 담당자는 person_filled, 채널은 wiki_channel_filled다. */
   OptionIcon: ComponentType<SVGProps<SVGSVGElement>>;
+  /** 검색창 우측 슬롯. 담당자 추가의 [추가하기] 버튼 자리다. */
+  trailingAction?: ReactNode;
 }
 
 /**
@@ -34,6 +38,7 @@ export default function ReviewQueueFilterSearchPanel({
   onToggle,
   placeholder,
   OptionIcon,
+  trailingAction,
 }: ReviewQueueFilterSearchPanelProps) {
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -60,12 +65,12 @@ export default function ReviewQueueFilterSearchPanel({
 
   return (
     <Command shouldFilter={false} className="flex flex-col gap-3 rounded-none">
-      <div className="px-2.5">
+      <div className="flex gap-2 px-2.5">
         {/* 칩이 쌓이면 검색창이 40에서 150까지 자라고 그 안에서 스크롤한다 — 선택 개수 상한은 없다 */}
         <div
           role="presentation"
           onClick={() => inputRef.current?.focus()}
-          className="bg-fill-normal-strong focus-within:border-line-primary-normal flex max-h-37.5 min-h-10 cursor-text gap-2 overflow-hidden rounded-lg border-[1.5px] border-transparent px-3 py-2"
+          className="bg-fill-normal-strong focus-within:border-line-primary-normal flex max-h-37.5 min-h-10 min-w-0 flex-1 cursor-text gap-2 overflow-hidden rounded-lg border-[1.5px] border-transparent px-3 py-2"
         >
           {/* 스크롤은 이 안에서 난다 — 늘어난 칩이 검색창 밖으로 흘러나가지 않게 min-h-0로 높이를 가둔다 */}
           <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 overflow-y-auto">
@@ -127,6 +132,8 @@ export default function ReviewQueueFilterSearchPanel({
             </button>
           )}
         </div>
+
+        {trailingAction}
       </div>
 
       {/* cmdk가 항목을 sizer div로 한 겹 감싸서, 행 간격은 그 안쪽에 걸어야 한다 */}
@@ -142,7 +149,10 @@ export default function ReviewQueueFilterSearchPanel({
             <span className="border-line-normal-neutral bg-fill-normal-strong flex size-8.5 shrink-0 items-center justify-center rounded-full border p-1.5">
               <OptionIcon aria-hidden className="text-icon-normal-normal size-5" />
             </span>
-            <span className="min-w-0 flex-1 truncate">{option.label}</span>
+            <span className="flex min-w-0 flex-1 items-center gap-1.5">
+              <span className="min-w-0 truncate">{option.label}</span>
+              {option.suffixLabel && <span className="text-text-normal-assistive shrink-0">{option.suffixLabel}</span>}
+            </span>
             {option.trailingLabel && (
               <span className="text-body-xsmall text-text-normal-assistive max-w-18 min-w-7.5 shrink-0 truncate">
                 {option.trailingLabel}

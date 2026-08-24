@@ -6,7 +6,7 @@ interface WikiSpaceTitleBlockProps {
   /** 제목 앞 아이콘 — 채널·폴더 화면이 서로 다른 걸 주입한다 */
   icon: ReactNode;
   name: string;
-  /** 작성자 표시명 — 백엔드 대응이 없어(협상 대상) 값이 없으면 줄 자체를 그리지 않는다 */
+  /** 작성자 표시명. 값이 없으면 줄 자체를 그리지 않는다 — 채널에는 대응 필드가 없다 */
   authorName?: string;
   authorProfileImageUrl?: string | null;
 }

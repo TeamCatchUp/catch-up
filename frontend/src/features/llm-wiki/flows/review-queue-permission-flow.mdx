@@ -39,8 +39,8 @@ import * as QueueStories from '../components/review-queue/ReviewQueuePage.storie
 
 <Canvas of={BlockDiffStories.Default} />
 
-전체 승인·반려는 판정이 시작된 뒤에도 잠그지 않는다. 보낼 수 없는 요청은 서버가 409로 거절하고,
-그 메시지를 토스트로 보인다.
+전체 승인·반려는 판정 경로가 있는 전 카드에 블록 판정을 일괄로 보내는 것이라 판정이 시작된 뒤에도
+성립한다 — 이미 내린 판정도 덮어쓰므로 두 버튼 모두 잠그지 않는다.
 
 ## 4. 반려는 사유를 거친다
 
@@ -61,7 +61,7 @@ import * as QueueStories from '../components/review-queue/ReviewQueuePage.storie
 
 같은 버튼이 사라지거나 잠기지만 역할과 무관한 경우가 둘 있다. 권한 문제로 읽지 않도록 따로 둔다.
 
-| 스토리 | 무엇이 갈리나 | 이유 |
-| --- | --- | --- |
-| [PublishLocked](?path=/story/screens-llm-wiki-reviewqueuepage--publish-locked) | 최종 내보내기가 잠긴다(사라지지 않는다) | 상세 응답이 아직 없다. 미판정 블록은 잠금 사유가 아니다 |
-| [NoRejectPath](?path=/story/screens-llm-wiki-reviewqueuepage--no-reject-path) | 블록 반려가 사라지고 승인만 남는다 | 블록 반려는 사유가 필수인데 사유 입력 시안이 없어 라우트가 진입점을 닫아 두었다 |
+| 스토리                                                                         | 무엇이 갈리나                           | 이유                                                                                                                                                                         |
+| ------------------------------------------------------------------------------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [PublishLocked](?path=/story/screens-llm-wiki-reviewqueuepage--publish-locked) | 최종 내보내기가 잠긴다(사라지지 않는다) | 상세 응답이 아직 없거나 판정하지 않은 카드가 남았다                                                                                                                          |
+| [NoRejectPath](?path=/story/screens-llm-wiki-reviewqueuepage--no-reject-path)  | 블록 반려가 사라지고 승인만 남는다      | 실제 라우트의 카드 반려는 열려 있다 — `can_review`를 따르고 전체 반려와 같은 사유 다이얼로그를 거친다. 이 스토리는 `canReject=false` 배치가 어떻게 보이는지 잡아 두는 데모다 |

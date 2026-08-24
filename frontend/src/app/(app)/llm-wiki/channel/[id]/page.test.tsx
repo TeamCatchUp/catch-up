@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,18 +20,22 @@ vi.mock('@/shared/components/ui/toast', () => ({ toast: vi.fn() }));
 
 const FOLDER_COUNT = 25;
 
-const channelResponse = () => ({
+const channelResponse = (isAdmin = true) => ({
   channels: [
     {
       id: 'ch-1',
       name: '결제',
       workspace_id: 1,
-      is_admin: true,
+      is_admin: isAdmin,
       document_count: 0,
       folders: Array.from({ length: FOLDER_COUNT }, (_, index) => ({
         id: `fd-${index + 1}`,
         name: `폴더 ${index + 1}`,
         channel_id: 'ch-1',
+        created_at: '2026-08-19T00:00:00Z',
+        created_by: { user_id: 7, display_name: '팀원F', profile_image_url: null },
+        // 짝수 폴더는 안에 문서가 없어 활동 시각이 없다 — 빈 칸 경로도 함께 지난다
+        last_activity_at: index % 2 === 0 ? '2026-08-19T00:00:00Z' : null,
       })),
       purpose_presets: [],
       definitions: [],
@@ -58,6 +62,38 @@ async function selectPageSize(user: ReturnType<typeof userEvent.setup>, current:
   await user.click(await screen.findByRole('menuitem', { name: next }));
 }
 
+describe('헤더 액션 배선', () => {
+  it('관리자면 케밥이 서고 이름 바꾸기가 채널 PATCH로 나간다', async () => {
+    const bodies: unknown[] = [];
+    server.use(
+      http.patch('*/api/v1/wiki/channels/ch-1', async ({ request }) => {
+        bodies.push(await request.json());
+        return HttpResponse.json({});
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: '작업 더보기' }));
+    await user.click(await screen.findByRole('button', { name: '이름 바꾸기' }));
+
+    const field = await screen.findByRole('textbox', { name: '이름 바꾸기' });
+    expect(field).toHaveValue('결제');
+    await user.clear(field);
+    await user.type(field, '결제 운영{Enter}');
+
+    await waitFor(() => expect(bodies).toEqual([{ name: '결제 운영' }]));
+  });
+
+  it('관리자가 아니면 링크 복사만 남고 케밥이 서지 않는다', async () => {
+    server.use(http.get('*/api/v1/wiki/channels', () => HttpResponse.json(channelResponse(false))));
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: '링크 복사' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '작업 더보기' })).toBeNull();
+  });
+});
+
 describe('채널 화면 쪽 크기 배선', () => {
   it('기본 20개씩 잘라 내고 나머지는 다음 쪽으로 넘긴다', async () => {
     renderPage();
@@ -65,6 +101,14 @@ describe('채널 화면 쪽 크기 배선', () => {
     expect(await screen.findByText('폴더 1')).toBeInTheDocument();
     expect(screen.getByText('폴더 20')).toBeInTheDocument();
     expect(screen.queryByText('폴더 21')).toBeNull();
+  });
+
+  // 최근 활동은 시각이 없을 수 있는 칸이다 — 없는 값을 읽으면 "NaN일 전"이 그대로 나간다
+  it('최근 활동 칸에 NaN이 서지 않는다', async () => {
+    renderPage();
+
+    expect(await screen.findByText('폴더 1')).toBeInTheDocument();
+    expect(screen.queryByText(/NaN/)).toBeNull();
   });
 
   it('쪽 크기를 바꾸면 1쪽으로 돌아가고 그 크기만큼만 남는다', async () => {

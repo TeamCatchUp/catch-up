@@ -12,8 +12,8 @@ interface DeletedBlockPanelProps {
  */
 export default function DeletedBlockPanel({ lines }: DeletedBlockPanelProps) {
   return (
-    <div className="bg-red-1 border-red-40 flex flex-col gap-2 border-l-2 px-3 py-2">
-      <p className="text-body-xsmall text-red-50 flex items-center gap-1.5">
+    <div className="bg-surface-red-subtle border-accent-red-default flex flex-col gap-2 border-l-2 px-3 py-2">
+      <p className="text-body-xsmall text-status-destructive flex items-center gap-1.5">
         <IconBackspace aria-hidden className="size-5" />
         콘텐츠를 삭제함
       </p>

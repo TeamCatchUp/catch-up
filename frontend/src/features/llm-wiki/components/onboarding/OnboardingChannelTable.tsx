@@ -28,13 +28,10 @@ export default function OnboardingChannelTable({
   onRetry,
 }: OnboardingChannelTableProps) {
   const prefersReducedMotion = usePrefersReducedMotion();
-  // 골격·에러·빈 안내·표는 같은 자리를 나눠 쓴다 — 어느 것이 서 있는지가 교체의 키다
-  const stateKey = status === 'ready' && rows.length === 0 ? 'empty' : status;
 
   const renderBody = () => {
     if (status === 'loading') return <OnboardingChannelTableSkeleton />;
     if (status === 'error') return <OnboardingChannelErrorNotice onRetry={onRetry} />;
-    if (rows.length === 0) return <OnboardingChannelEmptyState />;
 
     return (
       <div className="overflow-x-auto">
@@ -51,25 +48,33 @@ export default function OnboardingChannelTable({
             </tr>
           </thead>
           <tbody role="rowgroup" className="block">
-            {rows.map((row) => (
-              <tr key={row.channel.credentialId} role="row" className={cn(ONBOARDING_CHANNEL_TABLE_GRID, 'py-3')}>
-                <td role="cell" className="flex min-w-0 items-center gap-3">
-                  <IconTagChannel className="text-icon-normal-neutral size-5.5 shrink-0" />
-                  <span className="text-body-small text-text-normal-neutral truncate">{row.channel.name}</span>
+            {rows.length === 0 ? (
+              <tr role="row" className="block">
+                <td role="cell" className="block">
+                  <OnboardingChannelEmptyState />
                 </td>
               </tr>
-            ))}
+            ) : (
+              rows.map((row) => (
+                <tr key={row.channel.credentialId} role="row" className={cn(ONBOARDING_CHANNEL_TABLE_GRID, 'py-3')}>
+                  <td role="cell" className="flex min-w-0 items-center gap-3">
+                    <IconTagChannel className="text-icon-normal-neutral size-5.5 shrink-0" />
+                    <span className="text-body-small text-text-normal-neutral truncate">{row.channel.name}</span>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
     );
   };
 
-  // 행이 늘고 주는 것은 같은 표 안의 일이라 애니메이션하지 않는다 — 교체는 상태가 바뀔 때만이다
+  // 행이 늘고 주는 것은 같은 표 안의 일이라 애니메이션하지 않는다 — 빈 안내도 표 안이라 교체 대상이 아니다
   return (
     <AnimatePresence mode="wait" initial={false}>
       <motion.div
-        key={stateKey}
+        key={status}
         variants={prefersReducedMotion ? panelStateFadeInReduced : panelStateFadeIn}
         initial={MotionState.Hidden}
         animate={MotionState.Visible}

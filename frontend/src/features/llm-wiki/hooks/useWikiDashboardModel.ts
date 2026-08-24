@@ -9,9 +9,7 @@ import { createWikiLocationIndex, mapWikiArtifactRows } from '../api/wikiMappers
 import {
   buildWikiArtifactParams,
   type DashboardQueryState,
-  filterDocumentsByOwners,
   INITIAL_DASHBOARD_QUERY_STATE,
-  resolveClientOwnerUserIds,
 } from '../components/dashboard/dashboardFilters';
 import type { ReviewQueueFilterOption } from '../components/review-queue/ReviewQueueFilterSearchPanel';
 import { wikiQueries } from '../queries/wiki.queries';
@@ -36,7 +34,7 @@ interface UseWikiDashboardModelReturn {
 
 /**
  * 대시보드 화면의 조회 상태와 데이터를 관리하는 페이지 모델 훅.
- * 문서 표는 서버가 거른 한 쪽을 그대로 그리고, 담당자 2인 이상 선택만 받은 쪽에서 더 좁힌다.
+ * 문서 표는 서버가 거른 한 쪽을 그대로 그린다 — 담당자 다중 선택도 서버 파라미터다.
  */
 export function useWikiDashboardModel(pageSize: number): UseWikiDashboardModelReturn {
   const [queryState, setQueryState] = useState<DashboardQueryState>(INITIAL_DASHBOARD_QUERY_STATE);
@@ -69,8 +67,9 @@ export function useWikiDashboardModel(pageSize: number): UseWikiDashboardModelRe
   const myUserId = meQuery.data?.user_id ?? undefined;
 
   const pendingReviewStat = useQuery(wikiQueries.artifacts({ status: 'pending_review', limit: STAT_LIMIT }));
+  // 담당자를 모르는 동안에도 빈 배열을 실어 둔다 — undefined 프로퍼티는 캐시 키에서 탈락해 전체 지표와 겹친다
   const myAssignedStat = useQuery({
-    ...wikiQueries.artifacts({ owner_user_id: myUserId, limit: STAT_LIMIT }),
+    ...wikiQueries.artifacts({ owner_user_id: myUserId === undefined ? [] : [myUserId], limit: STAT_LIMIT }),
     enabled: myUserId !== undefined,
   });
   const unassignedStat = useQuery(wikiQueries.artifacts({ unassigned: true, limit: STAT_LIMIT }));
@@ -93,10 +92,10 @@ export function useWikiDashboardModel(pageSize: number): UseWikiDashboardModelRe
     [channelsQuery.data],
   );
 
-  const documents = useMemo(() => {
-    const rows = mapWikiArtifactRows(listQuery.data?.items ?? [], locationIndex);
-    return filterDocumentsByOwners(rows, resolveClientOwnerUserIds(queryState.filter));
-  }, [listQuery.data, locationIndex, queryState.filter]);
+  const documents = useMemo(
+    () => mapWikiArtifactRows(listQuery.data?.items ?? [], locationIndex),
+    [listQuery.data, locationIndex],
+  );
 
   const assigneeOptions = useMemo<readonly ReviewQueueFilterOption[]>(
     () =>

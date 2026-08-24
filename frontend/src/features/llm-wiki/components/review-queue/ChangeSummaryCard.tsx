@@ -1,9 +1,9 @@
 import IconAiFilled from '@/public/icons/icon/ai_filled.svg';
 
-/** 시안의 AI 오버레이 그라데이션 2겹. 코드 토큰이 없어 컴포넌트 로컬로 둔다 */
+/** 시안의 AI 오버레이 그라데이션 2겹. 색 스탑은 모드 토큰이고 기하만 컴포넌트 로컬이다 */
 const AI_GRADIENT =
-  'radial-gradient(5.08% 137.64% at 0.69% 7.96%, rgba(223, 228, 255, 0.8) 0%, rgba(255, 255, 255, 0) 100%), ' +
-  'radial-gradient(90.98% 94.18% at 47.32% 50.44%, #fff 0%, rgba(255, 255, 255, 0) 51.01%, rgba(218, 243, 255, 0.8) 90.17%)';
+  'radial-gradient(5.08% 137.64% at 0.69% 7.96%, var(--fill-overlay-gradient-ai-start) 0%, var(--fill-overlay-gradient-ai-mid) 100%), ' +
+  'radial-gradient(90.98% 94.18% at 47.32% 50.44%, var(--fill-overlay-gradient-ai-core) 0%, var(--fill-overlay-gradient-ai-mid) 51.01%, var(--fill-overlay-gradient-ai-end) 90.17%)';
 
 interface ChangeSummaryCardProps {
   changeCount: number;
@@ -16,7 +16,7 @@ interface ChangeSummaryCardProps {
 export default function ChangeSummaryCard({ changeCount, affectedDocumentsLabel, body }: ChangeSummaryCardProps) {
   return (
     <section
-      className="border-line-normal-neutral bg-fill-overlay-background flex flex-col gap-3 rounded-xl border px-5 py-4"
+      className="border-line-normal-neutral bg-fill-overlay-background-elevated flex flex-col gap-3 rounded-xl border px-5 py-4"
       style={{ backgroundImage: AI_GRADIENT }}
     >
       <div className="flex items-center gap-1.5">
@@ -26,7 +26,7 @@ export default function ChangeSummaryCard({ changeCount, affectedDocumentsLabel,
           <span>변경 {changeCount}건</span>
           {affectedDocumentsLabel && (
             <>
-              <span aria-hidden className="bg-fill-primary-normal-interaction-inactive size-1 rounded-full" />
+              <span aria-hidden className="bg-fill-primary-normal-interaction-hover-assistive size-1 rounded-full" />
               <span>{affectedDocumentsLabel}</span>
             </>
           )}

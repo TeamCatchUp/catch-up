@@ -175,6 +175,7 @@ describe('mapReviewQueueItem', () => {
       id: 'pr-1',
       type: 'compiled',
       title: '결제 실패 대응 가이드',
+      owners: [{ userId: 7, displayName: '팀원F', profileImageUrl: null }],
       waitingLabel: '3시간 전',
       status: 'pending',
       rejectionReason: null,

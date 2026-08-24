@@ -3,8 +3,8 @@
 import { formatRelativeTime } from '@/shared/utils/formatDate';
 
 import type { DocumentOwner } from '../types/llmWikiModel';
-import type { WikiArtifactDocumentDto, WikiBlockSourceDto, WikiDocumentBlockDto } from './wikiDto';
-import { mapWikiOwners } from './wikiMappers';
+import type { WikiArtifactDocumentDto, WikiBlockSourceDto, WikiDocumentBlockDto, WikiLayoutItemDto } from './wikiDto';
+import { mapWikiOptionalOwner, mapWikiOwners } from './wikiMappers';
 
 /**
  * [BE] 블록 문장의 근거 인용. citationVerified는 검증/대조 실패/근거 없음 3값이다.
@@ -36,6 +36,21 @@ export interface WikiDocumentBlock {
   sources: readonly WikiDocumentSource[];
 }
 
+/** [BE] 레이아웃 표의 한 행. label이 칸 이름이고 value는 산문(없으면 값 표기)이다 */
+export interface WikiLayoutRow {
+  label: string;
+  value: string;
+}
+
+/**
+ * [BE] 표시 항목 하나. blockIndex는 blocks[] 자리 그대로다.
+ * 미지 item_kind는 이 union에 자리가 없고 매퍼가 떨군다.
+ */
+export type WikiLayoutItem =
+  | { kind: 'block'; heading: string; blockIndex: number }
+  | { kind: 'table'; heading: string; blockIndexes: readonly number[]; rows: readonly WikiLayoutRow[] }
+  | { kind: 'placeholder'; heading: string; text: string };
+
 /** 지금 발행된 판 하나. 발행판이 없는 문서는 이 계약에 도달하지 못한다(404) */
 export interface WikiDocumentData {
   artifactId: string;
@@ -50,7 +65,13 @@ export interface WikiDocumentData {
   publishedAt: string;
   /** 발행 시각 표시 문자열 (예: "3시간 전") */
   publishedLabel: string;
+  /** [BE] 이 판을 승인한 사람. 표시 시안이 없어 화면에 나가지 않고 계약만 보존한다 */
+  lastEditedBy: DocumentOwner | null;
+  /** [BE] 그 승인 시각(ISO). 사람이 null이어도 시각은 채워질 수 있다 */
+  lastEditedAt: string | null;
   blocks: readonly WikiDocumentBlock[];
+  /** 표시 순서·이름. 비면 blocks 순서가 곧 표시 순서다 */
+  layout: readonly WikiLayoutItem[];
 }
 
 /** 화면에 실리는 본문. 산문이 정본이고 없으면 값 표기로 폴백한다 — 검토 큐 diff와 같은 규칙이다 */
@@ -80,6 +101,32 @@ export function mapWikiDocumentBlock(dto: WikiDocumentBlockDto): WikiDocumentBlo
   };
 }
 
+/** 미지 item_kind와 가리킬 블록이 없는 block 항목은 그릴 수 없어 떨군다 */
+function mapWikiLayoutItem(dto: WikiLayoutItemDto): WikiLayoutItem | null {
+  if (dto.item_kind === 'block') {
+    return typeof dto.block_index === 'number'
+      ? { kind: 'block', heading: dto.heading, blockIndex: dto.block_index }
+      : null;
+  }
+  if (dto.item_kind === 'table') {
+    return {
+      kind: 'table',
+      heading: dto.heading,
+      blockIndexes: dto.block_indexes ?? [],
+      rows: (dto.rows ?? []).map((row) => ({ label: row.label, value: row.value })),
+    };
+  }
+  if (dto.item_kind === 'placeholder') {
+    return { kind: 'placeholder', heading: dto.heading, text: dto.text ?? '' };
+  }
+  return null;
+}
+
+/** 레이아웃이 비면 blocks 순서가 표시 순서라는 뜻이다 — 키가 없는 구서버 응답도 여기로 온다 */
+export function mapWikiLayout(dtos: readonly WikiLayoutItemDto[] | undefined): WikiLayoutItem[] {
+  return (dtos ?? []).map(mapWikiLayoutItem).filter((item): item is WikiLayoutItem => item !== null);
+}
+
 export function mapWikiArtifactDocument(dto: WikiArtifactDocumentDto): WikiDocumentData {
   return {
     artifactId: dto.artifact_id,
@@ -92,6 +139,9 @@ export function mapWikiArtifactDocument(dto: WikiArtifactDocumentDto): WikiDocum
     revisionId: dto.revision_id,
     publishedAt: dto.published_at,
     publishedLabel: formatRelativeTime(dto.published_at),
+    lastEditedBy: mapWikiOptionalOwner(dto.last_edited_by),
+    lastEditedAt: dto.last_edited_at,
     blocks: dto.blocks.map(mapWikiDocumentBlock),
+    layout: mapWikiLayout(dto.layout),
   };
 }

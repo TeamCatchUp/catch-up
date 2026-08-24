@@ -19,6 +19,8 @@ const meta = {
     onPageChange: fn(),
     onPageSizeChange: fn(),
     onFolderClick: fn(),
+    onCopyLink: fn(),
+    onRenameSubmit: fn(),
   },
   parameters: {
     ...catchupParameters({
@@ -34,18 +36,28 @@ const meta = {
         nodeId: '17724:185191',
       },
       viewport: { width: 1200, height: 1440 },
-      states: ['default', 'folder-rows-without-meta', 'long-names-narrow-viewport', 'empty', 'page-size-dropdown'],
+      states: [
+        'default',
+        'folder-rows-without-meta',
+        'long-names-narrow-viewport',
+        'empty',
+        'page-size-dropdown',
+        'header-menu',
+        'non-admin',
+      ],
       reuseNotes: [
-        'WikiPageHeader(detail·채널 1마디)·DashboardDocumentTableHeader·FolderDocumentRow·공용 Pagination을 조립만 한다 — 전부 무수정 소비.',
-        '표 열은 대시보드와 같은 상수(DASHBOARD_DOCUMENT_META_GRID) 공유라 이 화면에서 재정의하지 않는다.',
+        'WikiPageHeader(main·아이콘+제목)·WikiHeaderActions·FolderDocumentTableHeader·FolderDocumentRow·공용 Pagination을 조립만 한다 — 전부 무수정 소비.',
+        '[8/24 사용자 지시] 폴더 표는 담당자·상태 열을 두지 않는다 — 폴더에 대응 필드가 없어 항상 빈 열이었다. 셸(padding 6·gap 36)은 대시보드 상수를 계속 공유하고 메타 그리드만 96 한 칸으로 갈린다(FolderDocumentTableHeader kind="folder"). 대시보드·폴더 페이지 표는 그대로다.',
         '빈 표는 대시보드가 쓰는 DocumentTableEmptyState를 문구만 갈아 재사용한다 — 일러스트·여백은 승인 시안 그대로다.',
       ],
       dataNotes: [
-        '채널 mock은 ChannelListItemResponse 정합(WikiChannelListItem 소비) — 폴더 행의 담당자·상태·최근 활동과 작성자는 목록 API 미동봉(협상 대상, 감사 8/13 부록).',
-        '실 라우트는 그 네 칸을 빈 값으로 넘긴다 — FolderRowsWithoutMeta가 그때의 표 모습이다.',
-        '상단 200px 커버는 바탕색만 시안값이고 콘텐츠는 미정(사진 가능성) — 안은 비워 둔다.',
+        '채널 mock은 ChannelListItemResponse 정합(WikiChannelListItem 소비) — 폴더 행의 최근 활동은 CAM-299의 last_activity_at으로 채워진다.',
+        '담당자·상태 열은 만들지 않는다 — 폴더의 created_by는 만든 사람이라 "담당자" 열의 뜻과 다르고, 폴더에는 상태가 없다. 채널 자체에는 작성자 필드가 없어 그 줄도 서지 않는다.',
+        '문서가 하나도 없는 폴더는 활동 시각이 null이라 그 칸까지 빈다 — FolderRowsWithoutMeta가 그때의 표 모습이다.',
+        '[8/24 재실측 17724:185191] 상단 200px 커버가 시안에서 사라졌다(사용자 확인) — 헤더 아래는 py-9 여백 뒤 바로 제목 블록이다.',
         '쪽 크기 드롭다운은 대시보드와 같은 5종(10/20/30/40/50)이고 기본 20이다 — 옵션 목록은 미도시라 사용자 확정분이다. 폴더는 채널 목록 응답에 전량 실려 와 크기 변경이 slice 구간만 바꾼다.',
-        '헤더 우측 kebab 버튼은 두 시안에 있으나 동작 정의가 없어 렌더하지 않는다(actions 슬롯 비움) — 디자이너 질문.',
+        '[8/24 시안 17752:45516] 헤더가 breadcrumb 1마디에서 아이콘+제목(main)으로 돌아왔고, 우측에 링크 복사·케밥이 생겼다. 케밥 항목은 이름 바꾸기 하나뿐이다 — 시안의 채널 설정 보기·도움말·버전 기록은 목적지가 없고 하단 메타는 채널에 대응 필드가 없다.',
+        '이름 바꾸기는 채널 관리자(isAdmin)에게만 온다 — 아니면 케밥이 서지 않고 링크 복사만 남는다.',
         '빈 채널 문구 "폴더가 없어요"는 시안 없이 지었다 — 대시보드 승인 문구 "문서가 없어요"의 어형을 그대로 따랐다(디자이너 확인 대상).',
         '이 화면의 첫 로딩은 채널 이름조차 없는 단계라 표가 아니라 페이지째 골격이다 — 라우트가 WikiSpacePageSkeleton으로 덮고 그 스토리가 따로 있다. 에러 스토리는 만들지 않는다(디자인 MISSING 유지, 토스트로만 알린다).',
       ],
@@ -68,28 +80,35 @@ export const Default: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // 헤더는 채널 1마디 breadcrumb이고, 그 마디가 현재 페이지다.
-    const currentCrumb = canvasElement.querySelector('[aria-current="page"]')!;
-    await expect(currentCrumb).toHaveTextContent('결제');
+    // 헤더는 breadcrumb가 아니라 아이콘 + 제목이다.
+    const header = canvas.getByRole('banner');
+    await expect(canvas.queryByRole('navigation')).toBeNull();
+    await expect(getComputedStyle(header).paddingLeft).toBe('64px');
+    await expect(header).toHaveTextContent('결제');
+
+    // 헤더 우측 액션 — main 규격 두 개. 크기는 아래 어서션이 잰다.
+    const copyLink = canvas.getByRole('button', { name: '링크 복사' });
+    await expect(copyLink.getBoundingClientRect().width).toBe(36);
+    await expect(canvas.getByRole('button', { name: '작업 더보기' })).toBeInTheDocument();
+    await userEvent.click(copyLink);
+    await expect(args.onCopyLink).toHaveBeenCalled();
 
     await expect(canvas.getByRole('heading', { level: 1, name: '결제' })).toBeInTheDocument();
     await expect(canvas.getByText('작성자')).toBeInTheDocument();
     await expect(canvas.getByText('팀원G')).toBeInTheDocument();
 
-    // 상단 커버(200) + py(36)만큼 제목 블록이 헤더에서 떨어진다.
-    const banner = canvas.getByRole('banner');
+    // 커버가 시안에서 빠져 제목 블록은 py(36)만큼만 헤더에서 떨어진다.
     const titleRow = canvas.getByRole('heading', { level: 1 }).parentElement!;
-    await expect(titleRow.getBoundingClientRect().top - banner.getBoundingClientRect().bottom).toBeCloseTo(236, 0);
+    await expect(titleRow.getBoundingClientRect().top - header.getBoundingClientRect().bottom).toBeCloseTo(36, 0);
 
-    // 커버는 콘텐츠가 비어도 시안의 바탕색을 갖는다 — 투명이면 200px 공백으로 보인다.
-    const cover = canvasElement.querySelector('header + div[aria-hidden]') as HTMLElement;
-    await expect(cover.getBoundingClientRect().height).toBe(200);
-    await expect(getComputedStyle(cover).backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
-    await expect(cover).toBeEmptyDOMElement();
+    // 헤더 바로 다음은 콘텐츠다 — 커버 잔재(aria-hidden 띠)가 되살아나면 안 된다.
+    await expect(canvasElement.querySelector('header + div[aria-hidden]')).toBeNull();
 
-    // 표: 헤더 라벨과 폴더 행 4개.
+    // 표: 폴더 표는 이름 + 최근 활동 2열뿐이다 — 폴더에 없는 담당자·상태 열을 두지 않는다.
     await expect(canvas.getByText('문서')).toBeInTheDocument();
-    await expect(canvas.getByText('담당자')).toBeInTheDocument();
+    await expect(canvas.getByText('최근 활동')).toBeInTheDocument();
+    await expect(canvas.queryByText('담당자')).toBeNull();
+    await expect(canvas.queryByText('상태')).toBeNull();
     for (const row of CHANNEL_FOLDER_ROW_FIXTURES) {
       await expect(canvas.getByText(row.name)).toBeInTheDocument();
     }
@@ -110,6 +129,43 @@ export const Default: Story = {
   },
 };
 
+/** 헤더 케밥 — 목적지가 있는 항목만 남는다. 이름 바꾸기는 같은 자리에서 입력으로 이어진다. */
+export const HeaderMenu: Story = {
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    await userEvent.click(canvas.getByRole('button', { name: '작업 더보기' }));
+
+    await expect(await body.findByText('작업 더보기', { selector: 'span' })).toBeInTheDocument();
+    // 시안의 채널 설정 보기·도움말·버전 기록은 목적지가 없어 항목을 만들지 않는다
+    for (const absent of ['채널 설정 보기', '도움말', '버전 기록']) {
+      await expect(body.queryByRole('button', { name: absent })).toBeNull();
+    }
+    // 하단 메타(최종 편집자·시각)는 채널에 대응 필드가 없어 비운다
+    await expect(body.queryByTestId('snb-dropdown-menu-meta')).toBeNull();
+
+    await userEvent.click(body.getByRole('button', { name: '이름 바꾸기' }));
+    const field = await body.findByRole('textbox', { name: '이름 바꾸기' });
+    await expect(field).toHaveValue('결제');
+
+    await userEvent.clear(field);
+    await userEvent.type(field, '결제 운영{Enter}');
+    await expect(args.onRenameSubmit).toHaveBeenCalledWith('결제 운영');
+  },
+};
+
+/** 관리자가 아닌 채널 — 케밥이 서지 않고 링크 복사만 남는다. */
+export const NonAdmin: Story = {
+  args: { onRenameSubmit: undefined },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByRole('button', { name: '링크 복사' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: '작업 더보기' })).toBeNull();
+  },
+};
+
 /** 쪽 크기 드롭다운. 대시보드 푸터와 같은 부품·같은 5종이고 고른 값은 소비처로 나간다. */
 export const PageSizeDropdown: Story = {
   play: async ({ args, canvasElement }) => {
@@ -126,17 +182,11 @@ export const PageSizeDropdown: Story = {
   },
 };
 
-/** 실 라우트가 넘기는 모습 — 폴더에 대응 필드가 없는 칸은 비고 작성자 줄은 서지 않는다. */
+/** 문서가 없는 폴더만 있는 채널 — 활동 시각까지 없어 메타 칸이 빈다. */
 export const FolderRowsWithoutMeta: Story = {
   args: {
     authorName: undefined,
-    folderRows: CHANNEL_FOLDER_ROW_FIXTURES.map(({ id, name }) => ({
-      id,
-      name,
-      owners: [],
-      status: '',
-      lastActivityLabel: '',
-    })),
+    folderRows: CHANNEL_FOLDER_ROW_FIXTURES.map(({ id, name }) => ({ id, name, lastActivityLabel: '' })),
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

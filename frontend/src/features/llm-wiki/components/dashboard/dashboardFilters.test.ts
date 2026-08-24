@@ -1,7 +1,7 @@
 import { endOfDay, startOfDay } from 'date-fns';
 import { describe, expect, it } from 'vitest';
 
-import { createDocumentRow, DOCUMENT_ROW_FIXTURES, REVIEW_STAT_CARD_FIXTURES } from '../../fixtures/llmWikiFixtures';
+import { REVIEW_STAT_CARD_FIXTURES } from '../../fixtures/llmWikiFixtures';
 import {
   buildWikiArtifactParams,
   createAssigneeFilter,
@@ -11,10 +11,8 @@ import {
   DASHBOARD_STATUS_OPTIONS,
   type DashboardActiveFilter,
   type DashboardQueryState,
-  filterDocumentsByOwners,
   getFilterAxis,
   INITIAL_DASHBOARD_QUERY_STATE,
-  resolveClientOwnerUserIds,
   resolveStatFilter,
 } from './dashboardFilters';
 
@@ -62,7 +60,7 @@ describe('dashboardFilters', () => {
     const filter = filterOf('stat-my-assigned');
 
     expect(getFilterAxis(filter)).toBe('assignee');
-    expect(paramsOf(filter)).toMatchObject({ owner_user_id: MY_USER_ID });
+    expect(paramsOf(filter)).toMatchObject({ owner_user_id: [MY_USER_ID] });
   });
 
   it('담당자 미지정은 unassigned=true로 나간다 — owner_user_id와 함께 실리면 서버가 422다', () => {
@@ -94,32 +92,17 @@ describe('dashboardFilters', () => {
   it('담당자 한 명은 서버가 거른다 — 표에서 다시 좁히지 않는다', () => {
     const filter = createAssigneeFilter([{ id: '2', label: '직원10' }])!;
 
-    expect(paramsOf(filter)).toMatchObject({ owner_user_id: 2 });
-    expect(resolveClientOwnerUserIds(filter)).toEqual([]);
+    expect(paramsOf(filter)).toMatchObject({ owner_user_id: [2] });
   });
 
-  it('담당자 2인 이상은 서버가 표현하지 못한다 — 파라미터에서 빠지고 받은 쪽에서 좁힌다', () => {
+  it('담당자 2인 이상도 서버 파라미터로 나간다 — 고른 전원이 실린다', () => {
     const filter = createAssigneeFilter([
       { id: '2', label: '직원10' },
       { id: '3', label: '이진수' },
     ])!;
 
     expect(filter.label).toBe('직원10, 이진수');
-    expect(paramsOf(filter)).not.toHaveProperty('owner_user_id');
-    expect(resolveClientOwnerUserIds(filter)).toEqual([2, 3]);
-  });
-
-  it('담당자로 좁히면 고른 사람 중 하나가 담당인 행만 남는다', () => {
-    const result = filterDocumentsByOwners(DOCUMENT_ROW_FIXTURES, [2, 3]);
-
-    expect(result.length).toBeGreaterThan(0);
-    expect(result.every((row) => row.owners.some((owner) => owner.userId === 2 || owner.userId === 3))).toBe(true);
-    // 미지정 행이 섞이면 "고른 사람"의 뜻이 무너진다
-    expect(result.some((row) => row.owners.length === 0)).toBe(false);
-  });
-
-  it('좁힐 담당자가 없으면 원본을 그대로 돌려준다 — 표는 항상 같은 배열 계약을 받는다', () => {
-    expect(filterDocumentsByOwners(DOCUMENT_ROW_FIXTURES, [])).toBe(DOCUMENT_ROW_FIXTURES);
+    expect(paramsOf(filter)).toMatchObject({ owner_user_id: [2, 3] });
   });
 
   it('숫자가 아닌 담당자 id는 세지 않는다 — 서버 파라미터에 NaN이 실리면 안 된다', () => {
@@ -195,13 +178,7 @@ describe('dashboardFilters', () => {
     ]);
   });
 
-  it('담당자 미지정 필터는 담당자가 있는 행을 걸러내지 않는다 — 좁히기는 서버 몫이다', () => {
-    const blankOwner = createDocumentRow({
-      id: 'doc-blank-owner',
-      owners: [{ userId: 99, displayName: '', profileImageUrl: null }],
-    });
-
-    expect(resolveClientOwnerUserIds({ kind: 'unassigned', label: '미지정' })).toEqual([]);
-    expect(filterDocumentsByOwners([blankOwner], [])).toEqual([blankOwner]);
+  it('담당자 축의 좁히기는 전부 서버 몫이다 — 미지정도 owner_user_id를 실어 보내지 않는다', () => {
+    expect(paramsOf({ kind: 'unassigned', label: '미지정' })).not.toHaveProperty('owner_user_id');
   });
 });

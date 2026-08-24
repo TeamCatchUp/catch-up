@@ -9,6 +9,7 @@ import {
   LONG_PROPOSED_WIKI_BLOCKS,
   PROPOSED_BLOCK_CHANGES,
   PROPOSED_WIKI_BLOCKS,
+  PROPOSED_WIKI_LAYOUT,
   SINGLE_MODIFIED_BLOCK_CHANGES,
 } from './llmWikiDiffFixtures';
 
@@ -21,6 +22,29 @@ describe('llmWikiDiffFixtures', () => {
     const entries = buildBlockDiff(BASE_WIKI_BLOCKS, PROPOSED_WIKI_BLOCKS, PROPOSED_BLOCK_CHANGES);
     expect(entries.map((e) => e.kind)).toEqual(['modified', 'added', 'removed']);
     expect(entries.map((e) => e.title)).toEqual(['재시도 정책', 'PG 점검 시간 예외', '수동 재시도 안내']);
+  });
+
+  it('양식을 함께 주면 카드 순서만 바뀐다 — 카드 구성은 그대로다', () => {
+    const plain = buildBlockDiff(BASE_WIKI_BLOCKS, PROPOSED_WIKI_BLOCKS, PROPOSED_BLOCK_CHANGES);
+    const laid = buildBlockDiff(BASE_WIKI_BLOCKS, PROPOSED_WIKI_BLOCKS, PROPOSED_BLOCK_CHANGES, PROPOSED_WIKI_LAYOUT);
+
+    expect(laid.map((entry) => entry.kind)).toEqual(['added', 'modified', 'removed']);
+    expect(laid.map((entry) => entry.id).sort()).toEqual(plain.map((entry) => entry.id).sort());
+  });
+
+  it('양식이 가리키는 자리가 변경안 블록에 실재한다 — 없으면 순서 검사가 공허하다', () => {
+    for (const item of PROPOSED_WIKI_LAYOUT) {
+      if (item.kind === 'block') expect(PROPOSED_WIKI_BLOCKS[item.blockIndex]).toBeDefined();
+    }
+  });
+
+  it('사유 문구는 서버 문체(존댓말) 표본이다 — 컴파일 문장과 개수 문구가 같은 자리에 섞인다', () => {
+    const reasons = [...PROPOSED_WIKI_BLOCKS, ...LONG_PROPOSED_WIKI_BLOCKS]
+      .map((wikiBlock) => wikiBlock.reason)
+      .filter((reason): reason is string => Boolean(reason));
+
+    expect(reasons.length).toBeGreaterThan(0);
+    for (const reason of reasons) expect(reason).toMatch(/니다\.$/);
   });
 
   it('긴 문단 쌍은 modified 한 카드를 내고 단어 강조를 포함한다', () => {

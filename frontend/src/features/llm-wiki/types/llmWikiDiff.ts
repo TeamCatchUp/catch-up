@@ -99,9 +99,10 @@ export interface BlockDiffEntry {
    */
   blockIndex: number | null;
   blockContentHash: string | null;
-  /**
-   * [SPEC] 반려 처리된 블록. 헤더의 액션 버튼이 "반려됨" 배지로 대체된다.
-   * 승인됨 배지는 시안에 없어 대응 값을 만들지 않는다 — 그래서 불리언이다.
-   */
+  /** [SPEC] 반려 처리된 블록. 헤더의 액션 버튼이 "반려됨" 배지로 대체된다 */
   rejected?: boolean;
+  /** [BE] 그 반려에 검토자가 적은 사유. 반려된 카드에서만 값이 있다 */
+  rejectionReason?: string | null;
+  /** [SPEC] 승인 처리된 블록. 헤더의 액션 버튼이 "승인됨" 배지로 대체된다 */
+  approved?: boolean;
 }

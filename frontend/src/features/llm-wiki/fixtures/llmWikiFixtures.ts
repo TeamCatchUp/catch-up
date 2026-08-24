@@ -26,6 +26,8 @@ const BASE_DOCUMENT_ROW: DocumentRowData = {
   createdAt: '2024-09-02T01:00:00.000Z',
   lastActivityAt: '2024-12-15T06:00:00.000Z',
   lastActivityLabel: '3시간 전',
+  lastEditedBy: documentOwner(1, '팀원F'),
+  lastEditedAt: '2024-12-15T06:00:00.000Z',
 };
 
 export const createDocumentRow = (overrides?: Partial<DocumentRowData>): DocumentRowData => ({
@@ -193,10 +195,12 @@ export const DOCUMENT_ROW_FIXTURES: readonly DocumentRowData[] = [
   }),
 ];
 
+// 기본 행은 담당자 미지정이다 — 없음 표기가 기본 시각이고 지정 표본은 목록 픽스처가 든다
 const BASE_REVIEW_QUEUE_ITEM: ReviewQueueItemData = {
   id: 'proposal-payment-retry-v3',
   type: 'publish',
   title: '결제 승인 실패 시 재시도 정책 변경안',
+  owners: [],
   waitingLabel: '15시간 전',
   status: 'pending',
   rejectionReason: null,
@@ -218,6 +222,7 @@ export const REVIEW_QUEUE_ITEM_FIXTURES: readonly ReviewQueueItemData[] = [
     id: 'proposal-merge-refund',
     type: 'merge',
     title: '환불 문서 병합 제안',
+    owners: [documentOwner(2, '직원10')],
     waitingLabel: '2일 전',
     canReview: false,
   }),
@@ -225,6 +230,12 @@ export const REVIEW_QUEUE_ITEM_FIXTURES: readonly ReviewQueueItemData[] = [
     id: 'proposal-rejected-example',
     status: 'rejected',
     rejectionReason: '근거 발췌가 현행 정책과 불일치',
+    owners: [
+      documentOwner(3, '이진수'),
+      documentOwner(12, '남궁현'),
+      documentOwner(4, '김하은'),
+      documentOwner(5, '최민우'),
+    ],
     waitingLabel: '4일 전',
   }),
 ];

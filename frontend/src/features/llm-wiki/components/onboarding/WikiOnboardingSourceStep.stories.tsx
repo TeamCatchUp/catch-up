@@ -137,7 +137,7 @@ export const ChannelPickerAddsRow: Story = {
     const canvas = within(canvasElement);
 
     // 아직 고른 채널이 없으니 표 자리에는 안내만 있다
-    await expect(canvas.getByText('아직 선택한 채널이 없습니다')).toBeInTheDocument();
+    await expect(canvas.getByText('선택한 채널톡 채널이 없습니다')).toBeInTheDocument();
 
     await userEvent.click(canvas.getByRole('button', { name: new RegExp(CHANNEL_PICKER_PLACEHOLDER) }));
 

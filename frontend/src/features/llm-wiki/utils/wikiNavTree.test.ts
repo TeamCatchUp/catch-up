@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WikiArtifactListItemDto, WikiChannelListItemDto } from '../api/wikiDto';
-import { buildWikiChannelAdmins, buildWikiFavorites, buildWikiNavTree } from './wikiNavTree';
+import { buildDocumentMetaLines, buildWikiChannelAdmins, buildWikiFavorites, buildWikiNavTree } from './wikiNavTree';
 
 const channel = (overrides?: Partial<WikiChannelListItemDto>): WikiChannelListItemDto => ({
   id: 'ch-1',
@@ -9,7 +9,16 @@ const channel = (overrides?: Partial<WikiChannelListItemDto>): WikiChannelListIt
   workspace_id: 1,
   is_admin: true,
   document_count: 2,
-  folders: [{ id: 'fd-1', name: '환불', channel_id: 'ch-1' }],
+  folders: [
+    {
+      id: 'fd-1',
+      name: '환불',
+      channel_id: 'ch-1',
+      created_at: '2026-07-20T00:00:00Z',
+      created_by: null,
+      last_activity_at: null,
+    },
+  ],
   purpose_presets: [],
   definitions: [],
   ...overrides,
@@ -28,6 +37,8 @@ const artifact = (overrides?: Partial<WikiArtifactListItemDto>): WikiArtifactLis
   latest_revision: null,
   owners: [],
   is_favorite: false,
+  last_edited_by: { user_id: 7, display_name: '팀원F', profile_image_url: null },
+  last_edited_at: '2026-08-19T09:00:00Z',
   ...overrides,
 });
 
@@ -63,6 +74,42 @@ describe('buildWikiNavTree', () => {
   });
 });
 
+describe('buildDocumentMetaLines', () => {
+  const NOW = new Date('2026-08-19T12:00:00.000Z');
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('최종 편집자와 시각을 케밥 메타 2줄로 만든다', () => {
+    expect(buildDocumentMetaLines(artifact())).toEqual(['팀원F 최종 편집', '3시간 전']);
+  });
+
+  it('승인자가 사용자로 이어지지 않으면 시각 줄만 남는다', () => {
+    expect(buildDocumentMetaLines(artifact({ last_edited_by: null }))).toEqual(['3시간 전']);
+  });
+
+  it('발행판이 없으면 줄 자체를 만들지 않는다 — 케밥 구분선까지 함께 빠진다', () => {
+    expect(buildDocumentMetaLines(artifact({ last_edited_by: null, last_edited_at: null }))).toBeUndefined();
+  });
+
+  // 키를 싣지 않는 구서버 응답. undefined를 시각으로 읽으면 "NaN일 전"이 케밥에 나간다
+  it('시각 키가 아예 없는 응답도 줄을 만들지 않는다', () => {
+    expect(buildDocumentMetaLines(artifact({ last_edited_by: null, last_edited_at: undefined }))).toBeUndefined();
+  });
+
+  it('트리 문서 노드가 그 메타를 들고 선다', () => {
+    const [node] = buildWikiNavTree([channel()], new Map([['ch-1', [artifact()]]]));
+
+    expect(node.children?.[1].metaLines).toEqual(['팀원F 최종 편집', '3시간 전']);
+  });
+});
+
 describe('buildWikiChannelAdmins·buildWikiFavorites', () => {
   it('채널별 관리자 판정을 맵으로 편다', () => {
     expect(buildWikiChannelAdmins([channel(), channel({ id: 'ch-2', is_admin: false })])).toEqual({
@@ -71,11 +118,21 @@ describe('buildWikiChannelAdmins·buildWikiFavorites', () => {
     });
   });
 
-  it('즐겨찾기는 문서 경로를 목적지로 갖는다', () => {
+  it('즐겨찾기는 문서 경로를 목적지로 갖고 소속 채널·폴더를 함께 편다', () => {
     const favorites = buildWikiFavorites([
-      { artifact_id: 'ar-1', title: '결제 실패 대응', kind: 'policy', channel_id: 'ch-1', folder_id: null, favorited_at: '2026-08-02T00:00:00Z' },
+      {
+        artifact_id: 'ar-1',
+        title: '결제 실패 대응',
+        kind: 'policy',
+        channel_id: 'ch-1',
+        folder_id: null,
+        favorited_at: '2026-08-02T00:00:00Z',
+      },
     ]);
 
-    expect(favorites).toEqual([{ id: 'ar-1', label: '결제 실패 대응', href: '/llm-wiki/ar-1' }]);
+    // 채널·폴더는 즐겨찾기 케밥(옮기기·현재 위치 판정)이 쓴다
+    expect(favorites).toEqual([
+      { id: 'ar-1', label: '결제 실패 대응', href: '/llm-wiki/ar-1', channelId: 'ch-1', folderId: null },
+    ]);
   });
 });

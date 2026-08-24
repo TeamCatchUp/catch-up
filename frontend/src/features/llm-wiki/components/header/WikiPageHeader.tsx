@@ -20,7 +20,7 @@ interface WikiPageHeaderMainProps extends WikiPageHeaderCommonProps {
 }
 
 interface WikiPageHeaderDetailProps extends WikiPageHeaderCommonProps {
-  /** 세부 페이지형 — 채널·폴더·문서·검토큐가 쓴다. 채널은 마디가 1개뿐인 체인이다. */
+  /** 세부 페이지형 — 폴더·문서·검토큐가 쓴다. 채널은 main형이다. */
   variant: 'detail';
   /** 마지막 마디가 현재 페이지다 — 강조되고 클릭되지 않는다. */
   breadcrumbs: readonly DocumentBreadcrumb[];
@@ -48,7 +48,7 @@ export default function WikiPageHeader(props: WikiPageHeaderProps) {
       {/* 좌측 — 이 헤더에서 폭을 흡수하는 유일한 슬롯 */}
       {variant === 'main' ? (
         <div className="flex min-w-0 items-center gap-2">
-          {props.icon && <span className="text-icon-normal-normal flex shrink-0 [&_svg]:size-6">{props.icon}</span>}
+          {props.icon && <span className="text-icon-normal-normal flex shrink-0 [&_svg]:size-5">{props.icon}</span>}
           <span className="text-heading-medium text-text-normal-normal truncate">{props.title}</span>
         </div>
       ) : (
@@ -62,13 +62,13 @@ export default function WikiPageHeader(props: WikiPageHeaderProps) {
                 {index > 0 && <IconArrowRight2 aria-hidden className="text-icon-normal-neutral size-5 shrink-0" />}
 
                 {/* 공용 Button에 이 마디 규격의 variant가 없어 직접 그린다.
-                      높이는 padding에서 파생되지 않는 고정값이라 h-9로 못박는다. */}
+                      높이는 padding에서 파생되지 않는 고정값이라 h-9로 못박는다.
+                      현재 마디는 아이콘을 달지 않는다 — 이전 마디와 구분되는 표시다. */}
                 {isCurrent ? (
                   <span
                     aria-current="page"
-                    className="text-heading-small text-text-normal-normal flex h-9 min-w-0 items-center gap-1.5 px-2"
+                    className="text-heading-small text-text-normal-normal flex h-9 min-w-0 items-center px-2"
                   >
-                    {CrumbIcon && <CrumbIcon aria-hidden className="size-5 shrink-0" />}
                     <span className="truncate">{crumb.label}</span>
                   </span>
                 ) : (

@@ -106,7 +106,13 @@ describe('buildBlockDiff', () => {
       [change({})],
     );
 
-    expect(entries[0].rejected).toBe(true);
+    expect(entries[0]).toMatchObject({ rejected: true, rejectionReason: '근거 부족' });
+  });
+
+  it('판정이 없거나 승인이면 반려 사유 자리는 비어 있다', () => {
+    const entries = buildBlockDiff([block({})], [block({ body: '바뀐 본문' })], [change({})]);
+
+    expect(entries[0].rejectionReason).toBeNull();
   });
 
   it('modified의 삭제분은 before에서만, 추가분은 after에서만 emphasized', () => {
@@ -135,6 +141,115 @@ describe('buildBlockDiff', () => {
     expect(entry.before).toHaveLength(2);
     expect(entry.after).toHaveLength(2);
     expect(entry.after![1].segments.every((s) => !s.emphasized)).toBe(true);
+  });
+
+  it('레이아웃이 있으면 카드 순서가 그 양식을 따른다', () => {
+    const entries = buildBlockDiff(
+      [block({}), block({ blockIndex: 1, heading: 'block_second', body: 'b' })],
+      [block({ body: 'a2' }), block({ blockIndex: 1, heading: 'block_second', body: 'b2' })],
+      [change({ blockIndex: 0, baseBlockIndex: 0 }), change({ blockIndex: 1, baseBlockIndex: 1 })],
+      [
+        { kind: 'block', heading: '두 번째', blockIndex: 1 },
+        { kind: 'block', heading: '재시도 정책', blockIndex: 0 },
+      ],
+    );
+
+    expect(entries.map((entry) => entry.blockIndex)).toEqual([1, 0]);
+  });
+
+  // 블록 heading은 서버 내부 이름(raw key)일 수 있다 — 사람이 읽을 이름은 양식만 들고 있다.
+  it('카드 제목은 양식이 붙인 이름을 쓴다', () => {
+    const entries = buildBlockDiff(
+      [block({ heading: 'retry_policy' })],
+      [block({ heading: 'retry_policy', body: '바뀐 본문' })],
+      [change({})],
+      [{ kind: 'block', heading: '재시도 정책', blockIndex: 0 }],
+    );
+
+    expect(entries[0].title).toBe('재시도 정책');
+  });
+
+  it('표로 묶인 블록들은 그 표 자리에 함께 서고 제목은 각 행 이름이 된다', () => {
+    const entries = buildBlockDiff(
+      [
+        block({}),
+        block({ blockIndex: 1, heading: 'usage_when', body: 'b' }),
+        block({ blockIndex: 2, heading: 'usage_who', body: 'c' }),
+      ],
+      [
+        block({ body: 'a2' }),
+        block({ blockIndex: 1, heading: 'usage_when', body: 'b2' }),
+        block({ blockIndex: 2, heading: 'usage_who', body: 'c2' }),
+      ],
+      [
+        change({ blockIndex: 0 }),
+        change({ blockIndex: 1, baseBlockIndex: 1 }),
+        change({ blockIndex: 2, baseBlockIndex: 2 }),
+      ],
+      [
+        {
+          kind: 'table',
+          heading: '사용 상황',
+          blockIndexes: [1, 2],
+          rows: [
+            { label: '언제', value: 'b2' },
+            { label: '누가', value: 'c2' },
+          ],
+        },
+        { kind: 'block', heading: '요청 상태', blockIndex: 0 },
+      ],
+    );
+
+    expect(entries.map((entry) => entry.blockIndex)).toEqual([1, 2, 0]);
+    expect(entries.map((entry) => entry.title)).toEqual(['언제', '누가', '요청 상태']);
+  });
+
+  it('양식이 이름을 대지 않은 자리는 블록 heading을 그대로 쓴다', () => {
+    const entries = buildBlockDiff(
+      [block({ heading: 'retry_policy' }), block({ blockIndex: 1, heading: 'usage_when', body: 'b' })],
+      [block({ heading: 'retry_policy', body: 'a2' }), block({ blockIndex: 1, heading: 'usage_when', body: 'b2' })],
+      [change({ blockIndex: 0 }), change({ blockIndex: 1, baseBlockIndex: 1 })],
+      // 표의 행 이름이 블록 수보다 모자란 응답 — 짝이 없는 자리는 블록 이름으로 남는다
+      [{ kind: 'table', heading: '사용 상황', blockIndexes: [0, 1], rows: [{ label: '언제', value: 'a2' }] }],
+    );
+
+    expect(entries.map((entry) => entry.title)).toEqual(['언제', 'usage_when']);
+  });
+
+  it('양식이 이름을 대지 않은 카드는 원래 순서대로 뒤에 남는다 — 빠진 블록이 그렇다', () => {
+    const entries = buildBlockDiff(
+      [block({ heading: '사라진 블록', body: 'gone' }), block({ blockIndex: 1, body: 'b' })],
+      [block({ body: 'a2' })],
+      [change({ kind: 'removed', blockIndex: null, baseBlockIndex: 0 }), change({ blockIndex: 0, baseBlockIndex: 1 })],
+      [{ kind: 'block', heading: '재시도 정책', blockIndex: 0 }],
+    );
+
+    expect(entries.map((entry) => entry.kind)).toEqual(['modified', 'removed']);
+  });
+
+  it('레이아웃이 순서만 바꾼다 — 판정 키는 카드마다 그대로다', () => {
+    const entries = buildBlockDiff(
+      [block({}), block({ blockIndex: 1, body: 'b' })],
+      [block({ body: 'a2' }), block({ blockIndex: 1, body: 'b2', blockContentHash: 'sha256:second' })],
+      [change({ blockIndex: 0 }), change({ blockIndex: 1, baseBlockIndex: 1 })],
+      [
+        { kind: 'block', heading: '두 번째', blockIndex: 1 },
+        { kind: 'block', heading: '재시도 정책', blockIndex: 0 },
+      ],
+    );
+
+    expect(entries[0]).toMatchObject({ blockIndex: 1, blockContentHash: 'sha256:second', id: 'modified-1' });
+    expect(entries[1]).toMatchObject({ blockIndex: 0, blockContentHash: 'sha256:test', id: 'modified-0' });
+  });
+
+  it('레이아웃이 비면 서버 변경 목록 순서 그대로다 — 구서버 응답 경로다', () => {
+    const entries = buildBlockDiff(
+      [block({}), block({ blockIndex: 1, body: 'b' })],
+      [block({ body: 'a2' }), block({ blockIndex: 1, body: 'b2' })],
+      [change({ blockIndex: 1, baseBlockIndex: 1 }), change({ blockIndex: 0, baseBlockIndex: 0 })],
+    );
+
+    expect(entries.map((entry) => entry.blockIndex)).toEqual([1, 0]);
   });
 
   it('added·removed 카드에는 단어 강조가 없다 (패널 색이 전부)', () => {

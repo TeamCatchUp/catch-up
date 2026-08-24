@@ -27,7 +27,16 @@ const channel = (overrides: Partial<WikiChannelListItemDto> = {}): WikiChannelLi
   workspace_id: 3,
   is_admin: true,
   document_count: 12,
-  folders: [{ id: 'fd-1', name: '장애 대응', channel_id: 'ch-1' }],
+  folders: [
+    {
+      id: 'fd-1',
+      name: '장애 대응',
+      channel_id: 'ch-1',
+      created_at: '2026-08-01T00:00:00Z',
+      created_by: owner(),
+      last_activity_at: '2026-08-19T09:00:00Z',
+    },
+  ],
   purpose_presets: ['incident'],
   definitions: [{ definition_id: 'def-1', kind: 'incident_guide', folder_id: 'fd-1', purpose_presets: ['incident'] }],
   ...overrides,
@@ -46,6 +55,8 @@ const artifact = (overrides: Partial<WikiArtifactListItemDto> = {}): WikiArtifac
   latest_revision: { revision_id: 'rv-9', revision_number: 3, published_at: '2026-08-19T09:00:00Z' },
   owners: [owner()],
   is_favorite: false,
+  last_edited_by: owner(),
+  last_edited_at: '2026-08-19T09:00:00Z',
   ...overrides,
 });
 
@@ -94,8 +105,36 @@ describe('mapWikiChannelListItem', () => {
       workspaceId: 3,
       isAdmin: true,
       documentCount: 12,
-      folders: [{ id: 'fd-1', name: '장애 대응', channelId: 'ch-1' }],
+      folders: [
+        {
+          id: 'fd-1',
+          name: '장애 대응',
+          channelId: 'ch-1',
+          createdAt: '2026-08-01T00:00:00Z',
+          createdBy: { userId: 7, displayName: '팀원F', profileImageUrl: 'https://cdn.example.com/7.png' },
+          lastActivityAt: '2026-08-19T09:00:00Z',
+        },
+      ],
     });
+  });
+
+  it('만든 사람이 없는 폴더는 null을 그대로 보존한다 — 컬럼 이전 폴더가 실재한다', () => {
+    const folders = mapWikiChannelListItem(
+      channel({
+        folders: [
+          {
+            id: 'fd-legacy',
+            name: '이전 폴더',
+            channel_id: 'ch-1',
+            created_at: '2026-01-01T00:00:00Z',
+            created_by: null,
+            last_activity_at: null,
+          },
+        ],
+      }),
+    ).folders;
+
+    expect(folders[0]).toMatchObject({ createdBy: null, lastActivityAt: null });
   });
 });
 
@@ -104,13 +143,13 @@ describe('resolveDocumentBreadcrumbs', () => {
 
   it('채널·폴더 id를 이름 경로로 푼다', () => {
     expect(resolveDocumentBreadcrumbs(index, 'ch-1', 'fd-1')).toEqual([
-      { kind: 'channel', label: '결제' },
-      { kind: 'folder', label: '장애 대응' },
+      { kind: 'channel', label: '결제', id: 'ch-1' },
+      { kind: 'folder', label: '장애 대응', id: 'fd-1' },
     ]);
   });
 
   it('채널 루트 문서는 채널 마디만 만든다', () => {
-    expect(resolveDocumentBreadcrumbs(index, 'ch-2', null)).toEqual([{ kind: 'channel', label: '계정' }]);
+    expect(resolveDocumentBreadcrumbs(index, 'ch-2', null)).toEqual([{ kind: 'channel', label: '계정', id: 'ch-2' }]);
   });
 
   it('미분류 문서는 경로가 비어 있다', () => {
@@ -143,6 +182,30 @@ describe('mapWikiArtifactRow', () => {
     expect(mapWikiArtifactRow(artifact({ owners: [] })).owners).toEqual([]);
   });
 
+  it('최종 편집자를 담당자와 같은 모양으로 옮긴다', () => {
+    const row = mapWikiArtifactRow(artifact());
+
+    expect(row.lastEditedBy).toEqual({
+      userId: 7,
+      displayName: '팀원F',
+      profileImageUrl: 'https://cdn.example.com/7.png',
+    });
+    expect(row.lastEditedAt).toBe('2026-08-19T09:00:00Z');
+  });
+
+  it('발행판이 없으면 최종 편집자와 시각이 둘 다 없다', () => {
+    const row = mapWikiArtifactRow(artifact({ last_edited_by: null, last_edited_at: null }));
+
+    expect([row.lastEditedBy, row.lastEditedAt]).toEqual([null, null]);
+  });
+
+  it('승인자가 사용자로 이어지지 않으면 사람만 빠지고 시각은 남는다', () => {
+    const row = mapWikiArtifactRow(artifact({ last_edited_by: null }));
+
+    expect(row.lastEditedBy).toBeNull();
+    expect(row.lastEditedAt).toBe('2026-08-19T09:00:00Z');
+  });
+
   it('경로는 밖에서 받은 것을 그대로 싣는다', () => {
     const breadcrumbs = [{ kind: 'channel', label: '결제' }] as const;
 
@@ -155,8 +218,8 @@ describe('mapWikiArtifactRows', () => {
     const rows = mapWikiArtifactRows([artifact()], createWikiLocationIndex([channel()]));
 
     expect(rows[0].breadcrumbs).toEqual([
-      { kind: 'channel', label: '결제' },
-      { kind: 'folder', label: '장애 대응' },
+      { kind: 'channel', label: '결제', id: 'ch-1' },
+      { kind: 'folder', label: '장애 대응', id: 'fd-1' },
     ]);
   });
 
@@ -179,16 +242,23 @@ describe('mapWikiMembers', () => {
 });
 
 describe('WikiArtifactListParams', () => {
-  it('담당자 조건을 하나씩 쓰는 것은 통과한다', () => {
-    const byOwner: WikiArtifactListParams = { owner_user_id: 7, sort: 'created_at', order: 'asc', q: '결제' };
+  it('담당자 조건을 하나씩 쓰는 것은 통과하고, owner_user_id는 여러 명을 받는다', () => {
+    const byOwner: WikiArtifactListParams = { owner_user_id: [7, 9], sort: 'created_at', order: 'asc', q: '결제' };
     const byUnassigned: WikiArtifactListParams = { unassigned: true };
 
-    expect([byOwner.owner_user_id, byUnassigned.unassigned]).toEqual([7, true]);
+    expect([byOwner.owner_user_id, byUnassigned.unassigned]).toEqual([[7, 9], true]);
+  });
+
+  it('owner_user_id에 낱개 숫자는 실리지 않는다 — 서버가 반복 파라미터를 읽는다', () => {
+    // @ts-expect-error 담당자 조건은 배열이다
+    const scalar: WikiArtifactListParams = { owner_user_id: 7 };
+
+    expect(scalar).toBeDefined();
   });
 
   it('owner_user_id와 unassigned 동시 지정은 타입이 막는다(서버는 422)', () => {
     // @ts-expect-error 두 담당자 조건은 함께 실릴 수 없다
-    const conflicting: WikiArtifactListParams = { owner_user_id: 7, unassigned: true };
+    const conflicting: WikiArtifactListParams = { owner_user_id: [7], unassigned: true };
 
     expect(conflicting).toBeDefined();
   });

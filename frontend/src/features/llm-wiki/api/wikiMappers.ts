@@ -37,8 +37,20 @@ export function mapWikiMembers(dto: WikiWorkspaceMemberListDto): DocumentOwner[]
   return mapWikiOwners(dto.items);
 }
 
+/** 담당자와 같은 모양의 선택 필드용 변환. null은 "그 사람이 없다"라 그대로 통과시킨다. */
+export function mapWikiOptionalOwner(dto: WikiOwnerDto | null | undefined): DocumentOwner | null {
+  return dto ? mapWikiOwner(dto) : null;
+}
+
 export function mapWikiFolder(dto: WikiFolderDto): WikiFolder {
-  return { id: dto.id, name: dto.name, channelId: dto.channel_id };
+  return {
+    id: dto.id,
+    name: dto.name,
+    channelId: dto.channel_id,
+    createdAt: dto.created_at,
+    createdBy: mapWikiOptionalOwner(dto.created_by),
+    lastActivityAt: dto.last_activity_at,
+  };
 }
 
 export function mapWikiChannelListItem(dto: WikiChannelListItemDto): WikiChannelListItem {
@@ -94,11 +106,15 @@ export function resolveDocumentBreadcrumbs(
 ): DocumentBreadcrumb[] {
   const breadcrumbs: DocumentBreadcrumb[] = [];
 
-  const channelName = channelId === null ? undefined : index.channelNames.get(channelId);
-  if (channelName !== undefined) breadcrumbs.push({ kind: 'channel', label: channelName });
+  if (channelId !== null) {
+    const channelName = index.channelNames.get(channelId);
+    if (channelName !== undefined) breadcrumbs.push({ kind: 'channel', label: channelName, id: channelId });
+  }
 
-  const folderName = folderId === null ? undefined : index.folderNames.get(folderId);
-  if (folderName !== undefined) breadcrumbs.push({ kind: 'folder', label: folderName });
+  if (folderId !== null) {
+    const folderName = index.folderNames.get(folderId);
+    if (folderName !== undefined) breadcrumbs.push({ kind: 'folder', label: folderName, id: folderId });
+  }
 
   return breadcrumbs;
 }
@@ -117,6 +133,8 @@ export function mapWikiArtifactRow(
     createdAt: dto.created_at,
     lastActivityAt: dto.last_activity_at,
     lastActivityLabel: formatRelativeTime(dto.last_activity_at),
+    lastEditedBy: mapWikiOptionalOwner(dto.last_edited_by),
+    lastEditedAt: dto.last_edited_at,
   };
 }
 

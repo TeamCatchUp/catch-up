@@ -26,6 +26,7 @@ const meta = {
   render: function ReviewQueueStory(args) {
     const [selectedId, setSelectedId] = useState(args.selectedId);
     const [rejectDialogOpen, setRejectDialogOpen] = useState(args.rejectDialogOpen);
+    const [blockRejectOpen, setBlockRejectOpen] = useState(args.blockRejectDialogOpen ?? false);
     // 라우트는 고른 안건의 상세를 다시 받아온다 — 스토리는 픽스처 행에서 같은 값을 꺼낸다
     const selectedRow = args.items.find((item) => item.id === selectedId);
 
@@ -45,6 +46,16 @@ const meta = {
             args.onRejectDialogOpenChange(open);
             setRejectDialogOpen(open);
           }}
+          // 카드 반려는 요청을 곧바로 내지 않고 사유 입력을 연다 — 라우트가 하는 일을 스토리가 대신한다
+          onRejectBlock={(entry) => {
+            args.onRejectBlock?.(entry);
+            setBlockRejectOpen(true);
+          }}
+          blockRejectDialogOpen={blockRejectOpen}
+          onBlockRejectDialogOpenChange={(open) => {
+            args.onBlockRejectDialogOpenChange?.(open);
+            setBlockRejectOpen(open);
+          }}
         />
       </div>
     );
@@ -59,14 +70,21 @@ const meta = {
       { kind: 'folder', label: '승인·실패 처리' },
       { kind: 'document', label: selected.title },
     ],
-    locationBreadcrumbs: [
-      { kind: 'channel', label: '결제' },
-      { kind: 'folder', label: '승인·실패 처리' },
-    ],
     title: selected.title,
     waitingLabel: selected.waitingLabel,
     summary: '재시도 한도가 1회에서 3회로 늘고 PG 점검 시간 예외가 추가되었습니다.',
-    participants: [{ id: '1', name: '팀원F', role: '리뷰어' }],
+    participants: [{ id: '1', userId: 1, name: '팀원F', role: '담당자' }],
+    // 타 담당자가 있는 문서를 채널 관리자가 보는 판 — 배너·추가·해제가 모두 선다
+    ownerNotice: 'other-owner',
+    canAssignOwners: true,
+    canRemoveOwners: true,
+    ownerCandidates: [
+      { id: '2', label: '직원10' },
+      { id: '3', label: '이진수' },
+      { id: '6', label: '팀원G', suffixLabel: '(나)' },
+    ],
+    onAssignOwners: fn(),
+    onRemoveOwner: fn(),
     entries,
     canReview: true,
     publishDisabled: false,
@@ -82,6 +100,9 @@ const meta = {
     rejectDialogOpen: false,
     onRejectDialogOpenChange: fn(),
     onRejectAll: fn(),
+    blockRejectDialogOpen: false,
+    onBlockRejectDialogOpenChange: fn(),
+    onRejectBlockSubmit: fn(),
   },
   parameters: {
     ...catchupParameters({
@@ -104,26 +125,40 @@ const meta = {
         'no-review-permission',
         'no-reject-path',
         'reject-reason',
+        'block-reject-reason',
+        'bulk-approved',
+        'owner-management',
         'empty-queue',
         'empty-by-filter',
         'list-first-load',
         'detail-first-load',
       ],
       reuseNotes: [
-        'ReviewQueueListHeader·ReviewQueueRow·ReviewQueueFilterDropdown·WikiPageHeader(detail)·ChangeSummaryCard·BlockDiffSection·DocumentLocationCard·ReviewParticipantsCard·ReviewPublishBar·RejectReasonDialog를 조립만 한다.',
+        'ReviewQueueListHeader·ReviewQueueRow·ReviewQueueFilterDropdown·WikiPageHeader(detail)·ChangeSummaryCard·BlockDiffSection·DocumentLocationCard·ReviewParticipantsCard(OwnerAddPopover·OwnerDetailPopover 동봉)·ReviewPublishBar·RejectReasonDialog를 조립만 한다.',
       ],
       dataNotes: [
         '화면은 데이터를 props로만 받는다 — 큐·상세 조회와 판정·발행 요청은 라우트가 낸다. 스토리는 MSW 없이 fixture를 주입한다.',
         'diff 카드 짝짓기는 서버 block_changes가 정한다. 프론트는 자리만 따라가고 단어 강조만 만든다 — 같은 안건이 소비자마다 다르게 보이지 않기 위해서다.',
-        '발행 버튼은 항상 열려 있다(사용자 확정). 변경 없는 블록은 판정할 카드가 없어 미판정으로 잠그면 발행이 영영 막혔다. 서버가 미판정을 거부하면 그 메시지를 토스트로 보인다 — 일괄 처리(undecided)는 사람이 보지 않은 블록을 자동 승인하게 되어 쓰지 않는다.',
-        '카드별 반려는 사유 입력 자리가 없어 진입점을 닫아 둔다(NoRejectPath). 변경안 통째 반려만 사유 입력 다이얼로그를 거쳐 나간다.',
-        '전체 승인·반려는 판정이 시작된 뒤에도 잠기지 않는다 — 서버가 409로 거절하고 그 메시지를 토스트로 보인다(발행 버튼과 같은 정책).',
+        '발행 버튼은 판정 경로가 있는 카드가 모두 판정될 때까지 잠긴다 — 세는 대상이 서버가 준 변경 목록뿐이라, 변경 없는 블록(서버가 결정을 면제하는 자리)은 카드가 없어 잠금에 끼어들지 않는다. 그래도 남는 미판정은 서버가 409로 거절하고 그 메시지가 토스트로 뜬다 — 일괄 처리(undecided)는 사람이 보지 않은 블록을 자동 승인하게 되어 쓰지 않는다.',
+        '카드별 반려도 전체 반려와 같은 사유 입력 다이얼로그를 거친다 — 문구만 갈아 끼운다. 빈 사유는 서버가 422로 막는다.',
+        '전체 승인·반려는 판정 경로가 있는 전 카드에 블록 판정을 일괄로 보낸다(반려는 전 블록이 사유를 공유한다) — 이미 판정된 카드도 덮어써서 승인·반려가 뒤집힌다. 다시 읽은 상세의 판정으로 카드가 접히고 발행 바가 열린다(BulkApproved). 발행은 별도 클릭이다.',
+        '발행에 성공하면 그 안건이 큐에서 빠지고 소비처가 다음 안건을 골라 준다 — 남은 안건이 없으면 빈 안내가 선다. 화면은 받은 selectedId를 그릴 뿐이다.',
+        '고른 안건이 목록에서 빠진 순간에도 "다음"은 남은 첫 줄로 간다 — 판정 뒤 검토 흐름이 끊기면 안 된다.',
+        '미리보기는 발행본이 아니라 판정 반영 제안본을 새 탭으로 연다 — 발행된 적 없는 문서도 열린다.',
+        '전체 승인·반려는 판정이 시작된 뒤에도 잠기지 않는다 — 블록 판정은 PUT이라 같은 자리에 다시 보내면 갱신으로 흡수된다.',
         '채널·담당자 축은 서버가 하나씩만 받는다 — 둘 이상 고르면 파라미터로 나가지 않고 받은 쪽에서 좁힌다. 좁히기는 라우트가 맡고 화면은 관여하지 않는다.',
+        '다중 선택 좁히기는 서버가 돌려준 첫 50건 위에서만 이뤄진다 — 그 밖의 일치 안건은 목록·건수에서 조용히 빠질 수 있다(서버가 축당 단일 값만 받는 한계, 서버 협상 대상).',
+        '보낼 블록이 없는 전체 반려는 요청 없이 닫고 안내 토스트를 띄운다 — 문구 "반려할 블록이 없습니다"는 시안 없는 자작이다.',
+        '담당자 지정 확인 모달 본문은 시안 실측 문구를 사용자 확정 문구로 교체했다 — 권한 이전(담당자만 판정·내보내기)을 정확히 서술하기 위해서다.',
         '빈 큐는 시안이 없다(감사 MISSING·높음). 새 시각을 만들지 않고 대시보드 빈 표와 같은 일러스트·타이포를 쓰며, 필터 결과 0건도 같은 안내다 — 문구를 가르는 근거가 없다. 디자이너 확인 대상.',
         '목록이 비면 좌측 머리글과 필터는 남는다 — 필터로 비운 경우 되돌릴 경로가 사라지면 안 된다.',
         '첫 로딩은 좌측 목록과 상세 자리에 각각 골격을 세운다(사용자 확정) — 시안 MISSING이라 행·카드 기하만 근사한 자작분이다. 목록을 기다리는 동안에는 빈 안내 대신 골격이 서서 "없음"으로 오독되지 않는다.',
         '상세 골격은 안건 교체와 같은 모션 상자(stepReplace) 안에서 상태만 갈아 끼운다 — 로딩이 별도 레이어로 튀지 않는다.',
-        '에러 시각은 시안이 없어 만들지 않는다 — 조회 실패는 판정 토스트와 같은 자리(우하단)에 문구만 띄운다.',
+        '에러 시각은 시안이 없어 만들지 않는다 — 조회 실패는 판정 토스트와 같은 전역 기본 자리에 문구만 띄운다.',
+        '담당자 카드(8/24): 배너 분기·+ 버튼·추가 드롭다운·확인 모달·해제 팝오버는 라우트가 권한(can_manage_owners 규칙: 지정=관리자∨담당자 본인, 해제=관리자만)과 데이터를 실어 준다. 후보 직책(B17)·담당자 활동 시각(B18)은 API에 없어 그 구역을 비운다.',
+        '담당자 행 규격은 확정 노드로 닫혔다(기본 18788:55469·호버 18773:89303, 2026-08-24) — 행 패딩 4·radius 8·행 간 2, 호버 채움 rgba(30,33,36,6%) = fill-normal-interaction-hover. 시안은 행 호버 상태만 그리고 팝오버 개폐 방식은 그리지 않아, 해제 동선(클릭 액션)이 끊기지 않게 클릭 트리거를 유지했다. 해제 팝오버는 앵커 좌측(side=left)에 선다(사용자 지시 — 우측 패널이라 아래보다 좌측이 안전).',
+        '+ 버튼 툴팁도 확정 노드로 닫혔다(18788:55263, 2026-08-24) — add_small 아이콘 20 + 제목 "담당자 추가하기", 좌측 배치(사용자 지시). 배경 75% 검정·radius 8·패딩 6·label(rg)/xsmall 흰 글자는 공용 Tooltip sm과 일치해 소비만 한다. 그림자만 공용 shadow-tooltip(알파 12%)이 시안 Shadow/tooltip(10%)과 미세하게 어긋난다 — 공용 토큰이라 기록만.',
+        '문서 위치 카드는 헤더와 같은 breadcrumbs를 그리고 마지막 문서 마디에 현재 위치 점(6px 파랑)을 찍는다 — NavTree는 점을 표현하지 못해 정적 마크업으로 교체했다.',
       ],
       layoutNotes: [
         '좌 300 · 우 350 고정, 중앙이 남는 폭을 흡수한다. 높이는 셸이 준다 — 스토리가 900 슬롯을 흉내낸다.',
@@ -161,6 +196,10 @@ export const Default: Story = {
     // 헤더가 우측 패널 위까지 뻗는지는 눈이 아니라 기하로 본다
     const sidePanel = canvas.getByText('문서 위치').closest('aside')!;
     await expect(header.getBoundingClientRect().right).toBeGreaterThanOrEqual(sidePanel.getBoundingClientRect().right);
+
+    // 우측 담당자 카드 — 배너와 추가 진입점이 권한과 함께 선다
+    await expect(canvas.getByText('담당자가 검토할 문서입니다')).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: '담당자 추가하기' })).toBeInTheDocument();
 
     // 중앙 — 요약과 diff 카드 3장
     await expect(canvas.getByText('변경 내용')).toBeInTheDocument();
@@ -216,8 +255,7 @@ export const DetailSwap: Story = {
 };
 
 /**
- * 발행 버튼이 잠긴 상태. 라우트는 상세가 아직 없을 때만 이 값을 준다 —
- * 미판정 블록은 더 이상 잠금 사유가 아니고 서버 거절을 토스트로 보인다.
+ * 발행 버튼이 잠긴 상태. 상세가 아직 없거나 판정하지 않은 카드가 남았을 때다.
  */
 export const PublishLocked: Story = {
   args: { publishDisabled: true },
@@ -244,6 +282,110 @@ export const NoReviewPermission: Story = {
     // 열람은 그대로다
     await expect(canvas.getByRole('button', { name: /미리보기/ })).toBeInTheDocument();
     await expect(canvas.getByText('재시도 정책')).toBeInTheDocument();
+  },
+};
+
+/** 카드 반려도 곧바로 나가지 않고 사유 입력을 거친다 — 전체 반려와 같은 다이얼로그, 문구만 다르다. */
+export const BlockRejectReason: Story = {
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const portal = within(document.body);
+
+    await userEvent.click(canvas.getAllByRole('button', { name: '반려' })[0]);
+    await expect(args.onRejectBlock).toHaveBeenCalledWith(expect.objectContaining({ blockIndex: 0 }));
+
+    const dialog = within(await portal.findByRole('dialog'));
+    await expect(dialog.getByText('블록 반려')).toBeInTheDocument();
+    await expect(dialog.getByRole('button', { name: '반려' })).toBeDisabled();
+
+    await userEvent.type(dialog.getByRole('textbox', { name: '반려 사유' }), '근거 VOC가 한 건뿐입니다');
+    await userEvent.click(dialog.getByRole('button', { name: '반려' }));
+    await expect(args.onRejectBlockSubmit).toHaveBeenCalledWith('근거 VOC가 한 건뿐입니다');
+  },
+};
+
+/**
+ * 전체 승인이 돌아온 뒤. 카드마다 승인 판정이 서서 전부 접히고 안건은 큐에 남는다 —
+ * 발행은 별도 클릭이라 하단 바가 활성으로 남아야 한다.
+ */
+export const BulkApproved: Story = {
+  args: { entries: entries.map((entry) => ({ ...entry, approved: true })) },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // 판정된 카드는 접힌 채로 남는다 — 결정한 블록을 다시 훑을 이유가 없다
+    await expect(canvas.getByText('재시도 정책')).toBeInTheDocument();
+    await expect(canvas.getAllByRole('button', { name: '펼치기' })).toHaveLength(entries.length);
+    await expect(canvas.queryAllByRole('button', { name: '승인' })).toHaveLength(0);
+
+    // 안건이 큐에 남아 있어 목록·상세가 그대로다
+    await expect(canvas.getByRole('heading', { level: 2, name: selected.title })).toBeInTheDocument();
+    await expect(canvas.queryByText('요청된 변경사항이 없어요.')).toBeNull();
+
+    // 발행은 아직 남은 단계다 — 바가 활성으로 서 있어야 흐름이 이어진다
+    const publish = canvas.getByRole('button', { name: '최종 내보내기' });
+    await expect(publish).toBeEnabled();
+    await userEvent.click(publish);
+    await expect(args.onPublish).toHaveBeenCalled();
+  },
+};
+
+/**
+ * 담당자 지정·해제 조작 — 추가는 후보 선택과 확인 모달을 거치고, 해제는 행 팝오버에서 나간다.
+ * 요청·토스트·권한 판정은 라우트 몫이라 콜백 호출만 본다.
+ */
+export const OwnerManagement: Story = {
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const portal = within(document.body);
+
+    // + 버튼 툴팁 — 아이콘+제목 구성이고, 우측 패널이라 앵커 좌측에 선다.
+    await userEvent.hover(canvas.getByRole('button', { name: '담당자 추가하기' }));
+    const tooltip = (await portal.findByRole('tooltip')).closest('[data-side]') as HTMLElement;
+    await expect(tooltip).toHaveAttribute('data-side', 'left');
+    await expect(tooltip).toHaveTextContent('담당자 추가하기');
+    await expect(tooltip.querySelector('svg')).not.toBeNull();
+    await userEvent.unhover(canvas.getByRole('button', { name: '담당자 추가하기' }));
+
+    // 추가 — 후보를 고르고 [추가하기] → 확인 모달의 [확인]까지 가야 지정이 나간다
+    await userEvent.click(canvas.getByRole('button', { name: '담당자 추가하기' }));
+    // 같은 이름이 좌측 목록 행에도 있어 드롭다운 안으로 좁혀 집는다
+    const search = await portal.findByPlaceholderText('담당자 검색');
+    const dropdown = within(search.closest('[role="dialog"]') as HTMLElement);
+    await userEvent.click(dropdown.getByText('직원10'));
+    const addButton = dropdown.getByRole('button', { name: '추가하기' });
+    await expect(addButton).toBeEnabled();
+    await userEvent.click(addButton);
+
+    await expect(await portal.findByText('담당자를 지정할까요?')).toBeInTheDocument();
+    await expect(
+      portal.getByText(
+        '지정한 담당자가 이 문서의 검토를 맡게 됩니다. 지정 후에는 담당자만 판정하고 내보낼 수 있습니다.',
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(portal.getByRole('button', { name: '확인' }));
+    await expect(args.onAssignOwners).toHaveBeenCalledWith([2]);
+
+    // 모달이 다 내려가야 바깥이 aria-hidden에서 풀린다 — 다음 조작 전에 기다린다
+    await waitFor(async () => {
+      await expect(portal.queryByText('담당자를 지정할까요?')).toBeNull();
+    });
+
+    // 해제 — 담당자 행을 열면 300px 팝오버가 서고, 해제하기가 대상 user_id를 내보낸다
+    const ownerRow = canvas.getByRole('button', { name: /팀원F/ });
+    // 행 호버 셸 — 패딩 4·radius 8·중립 호버 채움(합성 이벤트는 :hover를 못 깨워 클래스로 잰다).
+    await expect(ownerRow.className).toContain('hover:bg-fill-normal-interaction-hover');
+    await expect(ownerRow).toHaveClass('p-1', 'rounded-lg');
+
+    await userEvent.click(ownerRow);
+    const popoverHeader = await portal.findByText('팀원F 님이 이 문서의 검토 담당자입니다');
+    // 팝오버는 앵커 좌측에 선다 — 우측 패널이라 좌측만 화면을 벗어나지 않는다.
+    const popover = popoverHeader.closest('[data-side]') as HTMLElement;
+    await expect(popover).toHaveAttribute('data-side', 'left');
+    await expect(popover.getBoundingClientRect().right).toBeLessThanOrEqual(ownerRow.getBoundingClientRect().left + 1);
+
+    await userEvent.click(portal.getByRole('button', { name: '담당자 해제하기' }));
+    await expect(args.onRemoveOwner).toHaveBeenCalledWith(1);
   },
 };
 
@@ -285,7 +427,7 @@ export const EmptyQueue: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await expect(canvas.getByText('요청된 변경사항이 없어요')).toBeInTheDocument();
+    await expect(canvas.getByText('요청된 변경사항이 없어요.')).toBeInTheDocument();
 
     // 머리글의 건수는 0으로 남는다 — 목록 자리만 비운다.
     await expect(canvas.getByText('요청된 변경사항')).toBeInTheDocument();
@@ -314,7 +456,7 @@ export const EmptyByFilter: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await expect(canvas.getByText('요청된 변경사항이 없어요')).toBeInTheDocument();
+    await expect(canvas.getByText('요청된 변경사항이 없어요.')).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: '필터' })).toBeInTheDocument();
   },
 };
@@ -332,7 +474,7 @@ export const ListFirstLoad: Story = {
     await expect(canvas.getByRole('status', { name: '변경사항 불러오는 중' })).toBeInTheDocument();
 
     // 빈 안내는 서지 않는다 — 로딩과 "없음"이 같은 시각이면 안 된다.
-    await expect(canvas.queryByText('요청된 변경사항이 없어요')).toBeNull();
+    await expect(canvas.queryByText('요청된 변경사항이 없어요.')).toBeNull();
 
     // 좌측 머리글과 필터는 남는다 — 골격이 패널을 통째로 대체하지 않는다.
     await expect(canvas.getByText('요청된 변경사항')).toBeInTheDocument();

@@ -24,14 +24,17 @@ const meta = {
         nodeId: '17849:106767',
       },
       viewport: { width: 300, height: 120 },
-      states: ['default', 'selected', 'merge-second-line(meaning-tbd)'],
+      states: ['default(owner-none)', 'owner-single', 'owner-stack', 'selected', 'merge-second-line(meaning-tbd)'],
       reuseNotes: [
         '검토 큐 좌측 목록(17564:126942, 폭 300)의 행이다. 기본형은 17849:106767. 충돌(모순) 아이콘 행(17564:126946)은 MVP 제외 결정으로 렌더·스토리를 제거했다 — 재도입 시 error.svg(icon/error 389:1866)가 리포에 이미 있다.',
         'add_small.svg(mask0_46_1623 = icon/add_small 46:1623)는 리포에 이미 있는 에셋과 컴포넌트 id가 정확히 일치한다 — 신규 export 없음.',
         '작성자 아바타·이름은 걷어냈다(공용 Avatar 소비 지점 소멸). 시안에는 있으나 GET /knowledge-review/queue 응답에 대응 필드가 없다 — LLM 제안이라 작성자 개념이 부재하고, 시안 정리는 design-request 몫.',
+        '2줄째 담당자는 8/24 시안으로 부활했다 — 시안의 아바타는 작성자가 아니라 담당자(owners)로 확정. 2인 이상 스택은 공용 AvatarGroup(max 3, 겹침 -6px) 재사용.',
       ],
       dataNotes: [
         '작성자·신뢰도는 계약에서 제거됐다 — 실 API 응답에 없다. Default play가 아바타·이름의 부재를 가드한다.',
+        '담당자는 큐 응답 owners[]가 원천이다(18814:133231 정본). 없음 케이스는 노드 간 갈림(대시 유무·스케일)이 있었으나 디자이너 확정 노드 18929:96828로 확정(2026-08-24) — 기본 아바타 + 문구이고 대시는 폐기.',
+        '1인·복수 표기도 확정 노드로 닫혔다(18929:96740·18929:96764, 2026-08-24) — "담당자" 라벨 폐기. 1인은 아바타+이름, 복수는 스택+"OOO님 외 N명" 요약. 스택 규격(겹침 -6·원형·#F7F7F8 링·+N 칩 흰 배경 #6D7882·최대 3)은 공용 AvatarGroup과 이미 일치해 소비만 유지.',
         '충돌(모순) 아이콘 행은 MVP 제외 — hasConflictIcon 필드는 [BE] contains_conflict 대응이라 계약만 보존하고 렌더하지 않는다.',
         '유형 배지도 만들지 않는다 — 백엔드 3종↔명세 6유형 불일치로 체계 미정. 8/6 재확인에서도 행에는 유형 표기가 없었다. 대신 상세 패널 헤더에 "유형 / 상태 태그"(17845:105886) 자리표시 텍스트가 새로 생겼다 — 배지가 붙는다면 행이 아니라 상세다.',
         '빈 큐·로딩·에러·처리 피드백(pending/성공/실패)·stale 거부 스토리는 만들지 않는다(감사 §7 금지 목록).',
@@ -40,12 +43,15 @@ const meta = {
       tokenNotes: [
         '제목 #33363D = text-text-normal-normal, heading(sb)/small = text-heading-small.',
         '대기 기간 #B1B8BE = text-text-normal-assistive, body(md)/xsmall = text-body-xsmall.',
+        '담당자 없음(18929:96828로 확정, 2026-08-24): 기본 프로필 아바타 25 radius 12 보더 #F4F4F5 = border-line-normal-assistive + 문구 #B1B8BE = text-text-normal-assistive, body(md)/xsmall — 1인 아바타와 같은 규격이고 이름만 없다. 이름·"외 N명" 요약 #464C53 = text-normal-neutral + body(md)/xsmall.',
+        '+N 칩 그림자는 코드 shadow-button(0 0 4px 8%)이 시안 Shadow/Button(0 4px 8px 15%)과 어긋난다 — 공용 토큰이라 이 행에서 손대지 않는다(드리프트 기록).',
         '행 하단 구분선 #EAEBEC = Line/Normal/Neutral = border-line-normal-neutral, 1px 하단만.',
         '선택 채움 #F7F7F8 = Fill/Normal/Strong = bg-fill-normal-strong. 비선택 행은 fills=[] — 투명이다.',
         'add_small 칩은 #F7F7F8 배경(bg-fill-normal-strong) + radius/rounded 1000(rounded-full) + 아이콘 #6D7882 = text-icon-normal-neutral.',
       ],
       layoutNotes: [
         '행은 세로 스택(padding 12/16, gap 12)이고 폭은 Figma sizing=fill이라 px를 박지 않았다 — 목록 폭 300은 부모 것이다. FluidWidth 스토리가 400px 슬롯에서 400을 확인한다.',
+        '2줄째는 row gap 12 — 담당자 표시가 좌측 잔여 폭을 흡수하고 상대시각이 우측 끝이다("우측 상대시각", D-i).',
         '높이는 결과값이다 — h-*를 두지 않는다.',
         '폭을 흡수하는 슬롯은 제목 하나다. 제목은 한 줄 말줄임이고 가로 스크롤은 없다.',
         '고정 치수는 아이콘 24 · add_small 22 둘뿐이고 전부 컨트롤 크기다.',
@@ -76,9 +82,11 @@ export const Default: Story = {
     await expect(canvas.getByText('결제 승인 실패 시 재시도 정책 변경안')).toBeInTheDocument();
     await expect(canvas.getByText('15시간 전')).toBeInTheDocument();
 
-    // 작성자는 계약에서 빠졌다 — 아바타 폴백 svg도 남으면 안 된다.
+    // 담당자 미지정 행은 기본 아바타 + 문구가 선다. "담당자" 라벨·이름은 없다.
+    await expect(canvas.getByText('담당자 없음')).toBeInTheDocument();
+    await expect(canvas.queryByText('담당자')).toBeNull();
     await expect(canvas.queryByText('직원10')).toBeNull();
-    await expect(canvasElement.querySelector('svg[viewBox="0 0 40 40"]')).toBeNull();
+    await expect(canvasElement.querySelector('svg[viewBox="0 0 40 40"]')).not.toBeNull();
     // 유형도 마찬가지다. 체계가 미정이라 어떤 형태로도 행에 나오면 안 된다.
     await expect(canvas.queryByText(/publish|발행/)).toBeNull();
 
@@ -102,6 +110,50 @@ export const Selected: Story = {
 
     await expect(row).toHaveAttribute('aria-current', 'true');
     await expect(window.getComputedStyle(row).backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
+  },
+};
+
+/** 담당자 1인 — 아바타(25, radius 12) + 이름. 라벨은 없다. */
+export const OwnerSingle: Story = {
+  args: {
+    item: createReviewQueueItem({
+      owners: [{ userId: 2, displayName: '직원10', profileImageUrl: null }],
+    }),
+  },
+  decorators: [listSlot],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByText('직원10')).toBeInTheDocument();
+    await expect(canvas.queryByText('담당자')).toBeNull();
+    await expect(canvas.queryByText('담당자 없음')).toBeNull();
+    // 이미지 없는 담당자는 기본 프로필로 폴백한다 — 아바타 슬롯 자체는 서야 한다.
+    await expect(canvasElement.querySelector('svg[viewBox="0 0 40 40"]')).not.toBeNull();
+  },
+};
+
+/** 담당자 2인 이상 — AvatarGroup 스택(최대 3) + 초과분 "+N" 칩 + "OOO님 외 N명" 요약. */
+export const OwnerStack: Story = {
+  args: {
+    item: createReviewQueueItem({
+      owners: [
+        { userId: 3, displayName: '이진수', profileImageUrl: null },
+        { userId: 12, displayName: '남궁현', profileImageUrl: null },
+        { userId: 4, displayName: '김하은', profileImageUrl: null },
+        { userId: 5, displayName: '최민우', profileImageUrl: null },
+      ],
+    }),
+  },
+  decorators: [listSlot],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByText('이진수님 외 3명')).toBeInTheDocument();
+    await expect(canvas.getByText('+1')).toBeInTheDocument();
+    // 명단 나열은 하지 않는다 — 첫 담당자만 요약에 서고 전체 명단은 우측 담당자 카드 몫이다.
+    await expect(canvas.queryByText('이진수')).toBeNull();
+    await expect(canvas.queryByText('담당자')).toBeNull();
+    await expect(canvasElement.querySelectorAll('svg[viewBox="0 0 40 40"]')).toHaveLength(3);
   },
 };
 

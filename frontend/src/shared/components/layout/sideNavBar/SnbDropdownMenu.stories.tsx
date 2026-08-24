@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect, fn, within } from 'storybook/test';
 
+import IconDelete from '@/public/icons/icon/delete.svg';
 import IconEditSquare from '@/public/icons/icon/edit_square.svg';
 import IconFile from '@/public/icons/icon/file.svg';
 import IconFolder from '@/public/icons/icon/folder.svg';
@@ -43,6 +44,7 @@ const meta = {
         'add-sub-page',
         'view-options',
         'no-category-label',
+        'destructive-delete',
       ],
       reuseNotes: [
         '시안의 Category label·Dropdown menu 항목·divider·Meta info 4종을 props 조합으로 표현한다. 조합마다 컴포넌트를 나누지 않는다.',
@@ -57,7 +59,8 @@ const meta = {
       dataNotes: [
         'hover는 CSS 상태라 스토리로 고정하지 않는다.',
         '로딩·빈 목록·에러 상태는 시안에 없어 만들지 않는다.',
-        '하단 메타(최종 편집자·시각)에 대응하는 API 필드가 없다(백엔드 협상 B13). optional 슬롯이고 스토리 값은 시안 문구 표본이다.',
+        '하단 메타(최종 편집자·시각)는 optional 슬롯이다. 위키 트리는 문서 목록의 last_edited_by·last_edited_at으로 채우고, 스토리 값은 시안 문구 표본이다.',
+        '폴더 케밥 시안(18697:84374)의 즐겨찾기 항목은 소비처(WikiSideNav)가 넣지 않는다 — 즐겨찾기는 artifact 단위 API라 문서에만 있다. 삭제는 마지막 단독 묶음이다.',
       ],
       interactionNotes: [
         '항목 클릭은 onSelect만 호출한다 — 메뉴를 닫는 책임은 소비처에 있다.',
@@ -69,6 +72,7 @@ const meta = {
         '아이콘은 소비처가 주입한다 — 시안이 조합별 아이콘을 확정하지 않아 스토리 값은 예시다.',
         '즐겨찾기 안 됨은 icon/star + "즐겨찾기에 추가", 즐겨찾기 됨은 icon/star_off + "즐겨찾기 해제"다.',
         '항목 라벨 body(md)/small #33363d, 카테고리 라벨 body(md)/xsmall #6d7882, 메타 body(md)/xsmall #b1b8be. 구현 토큰과 값이 일치한다.',
+        '파괴 항목(폴더 삭제하기, 18697:84374 확정 8/24)은 라벨·아이콘 #FF4242 = status-destructive — 다크는 red-40으로 자동 전환.',
       ],
     }),
   },
@@ -86,6 +90,7 @@ const onFavorite = fn();
 const onUnfavorite = fn();
 const onCopyLink = fn();
 const onRename = fn();
+const onDeleteFolder = fn();
 
 const manageGroup = [
   { id: 'copy-link', label: '링크 복사', Icon: IconLink, onSelect: onCopyLink },
@@ -136,9 +141,7 @@ export const ChannelContextMenu: Story = {
     const favorite = canvas.getByRole('button', { name: '즐겨찾기에 추가' });
     const icon = favorite.querySelector('svg')!;
     const text = favorite.querySelector('span')!;
-    await expect(
-      Math.round(text.getBoundingClientRect().left - icon.getBoundingClientRect().right),
-    ).toBe(10);
+    await expect(Math.round(text.getBoundingClientRect().left - icon.getBoundingClientRect().right)).toBe(10);
     await expect(icon.getBoundingClientRect().width).toBe(20);
 
     // 메타는 13/1.5 두 줄이다. Figma가 h=40으로 올림해 표기해도 실측은 19.5×2다
@@ -221,17 +224,44 @@ export const EmptyGroup: Story = {
   },
 };
 
+/** 폴더 케밥 — 삭제는 마지막 단독 묶음이고 파괴 색이다. */
 export const FolderContextMenu: Story = {
   args: {
     categoryLabel: '폴더',
-    groups: treeRowGroups,
-    metaLines: treeRowMetaLines,
+    groups: [
+      manageGroup,
+      [
+        {
+          id: 'delete-folder',
+          label: '폴더 삭제하기',
+          Icon: IconDelete,
+          tone: 'destructive' as const,
+          onSelect: onDeleteFolder,
+        },
+      ],
+    ],
   },
   render: (args) => (
     <Frame>
       <SnbDropdownMenu {...args} />
     </Frame>
   ),
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+    const remove = canvas.getByRole('button', { name: '폴더 삭제하기' });
+
+    // 파괴 항목은 라벨·아이콘이 Status/Destructive다 — 다른 항목의 중립색과 갈린다.
+    await expect(getComputedStyle(remove.querySelector('span')!).color).toBe('rgb(255, 66, 66)');
+    await expect(getComputedStyle(remove.querySelector('svg')!).color).toBe('rgb(255, 66, 66)');
+    const rename = canvas.getByRole('button', { name: '이름 바꾸기' });
+    await expect(getComputedStyle(rename.querySelector('span')!).color).not.toBe('rgb(255, 66, 66)');
+
+    // 삭제는 마지막 단독 묶음이다 — 관리 묶음과 구분선 하나로 갈린다.
+    await expect(canvas.getAllByTestId('snb-dropdown-menu-divider')).toHaveLength(1);
+
+    await userEvent.click(remove);
+    await expect(onDeleteFolder).toHaveBeenCalled();
+  },
 };
 
 export const FileContextMenu: Story = {

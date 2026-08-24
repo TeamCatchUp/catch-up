@@ -21,28 +21,12 @@ export const createFolderDocumentRow = (overrides?: Partial<FolderDocumentRowIte
   ...overrides,
 });
 
-/** 채널 페이지의 폴더 행 표본. 상태는 시안에 도시된 검토 완료만 쓴다 */
+/** 채널 페이지의 폴더 행 표본. 폴더에는 담당자·상태 대응 필드가 없어 이름·활동 시각만 싣는다 */
 export const CHANNEL_FOLDER_ROW_FIXTURES: readonly FolderDocumentRowItem[] = [
-  createFolderDocumentRow(),
-  createFolderDocumentRow({
-    id: 'folder-refund',
-    name: '환불',
-    owners: [rowOwner(2, '직원10')],
-    lastActivityLabel: '어제',
-  }),
-  createFolderDocumentRow({
-    id: 'folder-settlement',
-    name: '정산',
-    // 담당자 2인 행 — 행은 첫 명만 렌더하지만 복수 계약이 픽스처에 실재해야 한다
-    owners: [rowOwner(3, '이진수'), rowOwner(5, '남궁현')],
-    lastActivityLabel: '2024.12.12',
-  }),
-  createFolderDocumentRow({
-    id: 'folder-pg-integration',
-    name: 'PG 연동',
-    owners: [rowOwner(1, '팀원F')],
-    lastActivityLabel: '5일 전',
-  }),
+  { id: 'folder-approval-failure', name: '승인·실패 처리', lastActivityLabel: '2일 전' },
+  { id: 'folder-refund', name: '환불', lastActivityLabel: '어제' },
+  { id: 'folder-settlement', name: '정산', lastActivityLabel: '2024.12.12' },
+  { id: 'folder-pg-integration', name: 'PG 연동', lastActivityLabel: '5일 전' },
 ];
 
 /** ChannelListItemResponse 정합 mock — folders는 채널 페이지 행 표본과 1:1이다 */
@@ -52,7 +36,14 @@ export const WIKI_CHANNEL_FIXTURE: WikiChannelListItem = {
   workspaceId: 1,
   isAdmin: true,
   documentCount: 23,
-  folders: CHANNEL_FOLDER_ROW_FIXTURES.map(({ id, name }) => ({ id, name, channelId: 'channel-payment' })),
+  folders: CHANNEL_FOLDER_ROW_FIXTURES.map(({ id, name }) => ({
+    id,
+    name,
+    channelId: 'channel-payment',
+    createdAt: '2024-09-02T01:00:00.000Z',
+    createdBy: rowOwner(1, '팀원F'),
+    lastActivityAt: '2024-12-15T06:00:00.000Z',
+  })),
 };
 
 /** 폴더 페이지 대상 폴더 — 채널 mock의 첫 폴더를 그대로 쓴다(channelId 정합) */

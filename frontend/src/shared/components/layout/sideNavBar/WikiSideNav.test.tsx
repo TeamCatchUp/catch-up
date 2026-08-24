@@ -328,6 +328,55 @@ describe('WikiSideNav 펼침', () => {
     expect(onMenuAction).toHaveBeenCalledWith('file-1', 'unfavorite');
   });
 
+  it('옮기기는 문서 케밥에만 뜬다 — 이동 API가 문서 단위다', async () => {
+    const user = userEvent.setup();
+    renderWikiNav();
+
+    await user.click(screen.getAllByRole('button', { name: `${CHANNEL_LABEL} 추가 작업` })[0]);
+    expect(within(screen.getByTestId('snb-dropdown-menu')).queryByRole('button', { name: '옮기기' })).toBeNull();
+    await user.keyboard('{Escape}');
+
+    await expandRow(user, CHANNEL_LABEL);
+    await user.click(screen.getAllByRole('button', { name: `${FOLDER_LABEL} 추가 작업` })[0]);
+    expect(within(screen.getByTestId('snb-dropdown-menu')).queryByRole('button', { name: '옮기기' })).toBeNull();
+    await user.keyboard('{Escape}');
+
+    await expandRow(user, FOLDER_LABEL);
+    await user.click(screen.getByRole('button', { name: '파일명texttexttexttext 추가 작업' }));
+    expect(within(screen.getByTestId('snb-dropdown-menu')).getByRole('button', { name: '옮기기' })).toBeInTheDocument();
+  });
+
+  it('옮기기를 고르면 메뉴가 닫히고 노드와 눌린 앵커가 소비처로 넘어간다', async () => {
+    const user = userEvent.setup();
+    const onMenuAction = vi.fn();
+    const onMoveRequest = vi.fn();
+    renderWikiNav({ onMenuAction, onMoveRequest });
+
+    await expandRow(user, CHANNEL_LABEL);
+    await expandRow(user, FOLDER_LABEL);
+    await user.click(screen.getByRole('button', { name: '파일명texttexttexttext 추가 작업' }));
+    await user.click(screen.getByRole('button', { name: '옮기기' }));
+
+    expect(screen.queryByTestId('snb-dropdown-menu')).toBeNull();
+    expect(onMenuAction).toHaveBeenCalledWith('file-1', 'move');
+    expect(onMoveRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'file-1', kind: 'document' }),
+      expect.any(HTMLElement),
+    );
+  });
+
+  it('소비처가 옮기기 패널을 띄운 행은 액션이 남는다 — 앵커가 0×0이 되면 팝오버가 튄다', async () => {
+    const user = userEvent.setup();
+    renderWikiNav({ moveOpenNodeId: 'file-1' });
+
+    await expandRow(user, CHANNEL_LABEL);
+    await expandRow(user, FOLDER_LABEL);
+
+    const more = screen.getByRole('button', { name: '파일명texttexttexttext 추가 작업' });
+    expect(more.parentElement).toHaveClass('flex');
+    expect(more.parentElement).not.toHaveClass('hidden');
+  });
+
   it('즐겨찾기 안 된 문서는 등록 항목이 뜨고 그 문서 id가 밖으로 나간다', async () => {
     const user = userEvent.setup();
     const onMenuAction = vi.fn();
@@ -340,6 +389,48 @@ describe('WikiSideNav 펼침', () => {
 
     await user.click(menu.getByRole('button', { name: '즐겨찾기에 추가' }));
     expect(onMenuAction).toHaveBeenCalledWith('doc-1', 'favorite');
+  });
+
+  it('즐겨찾기 행의 케밥은 트리에 없는 문서에서도 문서 메뉴를 연다', async () => {
+    const user = userEvent.setup();
+    const onMenuAction = vi.fn();
+    renderWikiNav({
+      treeNodes: [],
+      favorites: [{ id: 'fav-doc-1', label: '즐겨찾기 문서', href: '/llm-wiki/fav-doc-1', channelId: 'channel-1' }],
+      onMenuAction,
+    });
+
+    await user.click(screen.getByRole('button', { name: '즐겨찾기 문서 추가 작업' }));
+
+    const menu = within(screen.getByTestId('snb-dropdown-menu'));
+    expect(menu.getByText('파일')).toBeInTheDocument();
+    expect(menu.getByRole('button', { name: '즐겨찾기 해제' })).toBeInTheDocument();
+    expect(menu.getByRole('button', { name: '링크 복사' })).toBeInTheDocument();
+    expect(menu.getByRole('button', { name: '옮기기' })).toBeInTheDocument();
+    // 시안의 이름 바꾸기는 문서 이름 변경 API가 없어 트리 문서 케밥과 같은 판정으로 뺀다
+    expect(menu.queryByRole('button', { name: '이름 바꾸기' })).toBeNull();
+
+    await user.click(menu.getByRole('button', { name: '즐겨찾기 해제' }));
+    expect(onMenuAction).toHaveBeenCalledWith('fav-doc-1', 'unfavorite');
+    expect(screen.queryByTestId('snb-dropdown-menu')).toBeNull();
+  });
+
+  it('즐겨찾기 케밥의 옮기기는 즐겨찾기 데이터로 지은 문서 노드를 넘긴다', async () => {
+    const user = userEvent.setup();
+    const onMoveRequest = vi.fn();
+    renderWikiNav({
+      treeNodes: [],
+      favorites: [{ id: 'fav-doc-1', label: '즐겨찾기 문서', href: '/llm-wiki/fav-doc-1', channelId: 'channel-1' }],
+      onMoveRequest,
+    });
+
+    await user.click(screen.getByRole('button', { name: '즐겨찾기 문서 추가 작업' }));
+    await user.click(screen.getByRole('button', { name: '옮기기' }));
+
+    expect(onMoveRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'fav-doc-1', kind: 'document', channelId: 'channel-1' }),
+      expect.any(HTMLElement),
+    );
   });
 
   it('관리자가 아닌 채널의 케밥에는 링크 복사만 남고 구분선이 없다', async () => {
@@ -384,6 +475,55 @@ describe('WikiSideNav 펼침', () => {
       '새 채널 이름',
     );
     expect(screen.queryByTestId('snb-rename-popover')).toBeNull();
+  });
+
+  it('폴더 삭제하기는 확인 모달을 거쳐 폴더 노드째 나간다', async () => {
+    const user = userEvent.setup();
+    const onFolderDeleteSubmit = vi.fn();
+    renderWikiNav({ onFolderDeleteSubmit });
+
+    await expandRow(user, CHANNEL_LABEL);
+    await user.click(screen.getAllByRole('button', { name: `${FOLDER_LABEL} 추가 작업` })[0]);
+    await user.click(screen.getByRole('button', { name: '폴더 삭제하기' }));
+
+    // 확인 전에는 아무것도 나가지 않는다 — 문구는 서버 계약(문서는 채널 루트로 이동)을 말한다
+    expect(onFolderDeleteSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText('폴더를 삭제할까요?')).toBeInTheDocument();
+    expect(screen.getByText('폴더만 사라지고, 안에 있던 문서는 채널 바로 아래로 옮겨집니다.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '삭제하기' }));
+    expect(onFolderDeleteSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'folder-1', kind: 'folder', channelId: 'channel-1' }),
+    );
+    expect(screen.queryByText('폴더를 삭제할까요?')).toBeNull();
+  });
+
+  it('삭제 확인을 취소하면 나가지 않는다', async () => {
+    const user = userEvent.setup();
+    const onFolderDeleteSubmit = vi.fn();
+    renderWikiNav({ onFolderDeleteSubmit });
+
+    await expandRow(user, CHANNEL_LABEL);
+    await user.click(screen.getAllByRole('button', { name: `${FOLDER_LABEL} 추가 작업` })[0]);
+    await user.click(screen.getByRole('button', { name: '폴더 삭제하기' }));
+    await user.click(screen.getByRole('button', { name: '취소' }));
+
+    expect(onFolderDeleteSubmit).not.toHaveBeenCalled();
+    expect(screen.queryByText('폴더를 삭제할까요?')).toBeNull();
+  });
+
+  it('폴더 삭제하기는 관리자 채널의 폴더 케밥에만 뜬다', async () => {
+    const user = userEvent.setup();
+    renderWikiNav({ channelAdmins: { 'channel-1': false, 'channel-2': false, 'channel-3': false } });
+
+    // 채널 케밥에는 애초에 없다 — 삭제 API가 폴더뿐이다
+    await user.click(screen.getAllByRole('button', { name: `${CHANNEL_LABEL} 추가 작업` })[0]);
+    expect(within(screen.getByTestId('snb-dropdown-menu')).queryByRole('button', { name: '폴더 삭제하기' })).toBeNull();
+    await user.keyboard('{Escape}');
+
+    await expandRow(user, CHANNEL_LABEL);
+    await user.click(screen.getAllByRole('button', { name: `${FOLDER_LABEL} 추가 작업` })[0]);
+    expect(within(screen.getByTestId('snb-dropdown-menu')).queryByRole('button', { name: '폴더 삭제하기' })).toBeNull();
   });
 
   it('폴더의 이름 바꾸기는 소속 채널을 함께 들고 나간다', async () => {

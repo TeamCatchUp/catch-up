@@ -10,12 +10,15 @@ import WikiSpacePageSkeleton from '@/features/llm-wiki/components/space/states/W
 import WikiChannelPage from '@/features/llm-wiki/components/space/WikiChannelPage';
 import { useQueryErrorToast } from '@/features/llm-wiki/hooks/useQueryErrorToast';
 import { wikiQueries } from '@/features/llm-wiki/queries/wiki.queries';
+import { useRenameWikiChannelMutation } from '@/features/llm-wiki/queries/wikiChannels.mutations';
+import { copyCurrentPageLink } from '@/features/llm-wiki/utils/copyPageLink';
+import { formatRelativeTime } from '@/shared/utils/formatDate';
 
 const DEFAULT_PAGE_SIZE = 20;
 
 /**
  * 채널 화면. 폴더는 채널 목록 응답에 전량 실려 와서 쪽 나눔이 클라이언트 몫이다.
- * 담당자·상태·최근 활동은 폴더에 대응 필드가 없어 비운다.
+ * 폴더 표에는 담당자·상태 열이 없다 — 폴더에 대응 필드가 없어 빈 열이 된다.
  */
 export default function Page() {
   const router = useRouter();
@@ -24,6 +27,7 @@ export default function Page() {
   const [currentPage, setCurrentPage] = useState(1);
   const [appliedPageSize, setAppliedPageSize] = useState(pageSize);
   const { data, isPending, error } = useQuery(wikiQueries.channels());
+  const renameChannel = useRenameWikiChannelMutation();
 
   useQueryErrorToast(error);
 
@@ -33,7 +37,7 @@ export default function Page() {
     setCurrentPage(1);
   }
 
-  if (isPending) return <WikiSpacePageSkeleton />;
+  if (isPending) return <WikiSpacePageSkeleton kind="folder" />;
   // 에러 시안이 없어 화면을 만들지 않는다 — 실패는 토스트로만 알린다
   if (!data) return null;
 
@@ -43,7 +47,12 @@ export default function Page() {
   const totalPages = Math.max(1, Math.ceil(channel.folders.length / pageSize));
   const folderRows: FolderDocumentRowItem[] = channel.folders
     .slice((currentPage - 1) * pageSize, currentPage * pageSize)
-    .map((folder) => ({ id: folder.id, name: folder.name, owners: [], status: '', lastActivityLabel: '' }));
+    .map((folder) => ({
+      id: folder.id,
+      name: folder.name,
+      // 활동 시각이 없거나 키가 아예 없으면 칸을 비운다 — 없는 시각을 읽으면 "NaN일 전"이 나간다
+      lastActivityLabel: folder.lastActivityAt == null ? '' : formatRelativeTime(folder.lastActivityAt),
+    }));
 
   return (
     <WikiChannelPage
@@ -55,6 +64,9 @@ export default function Page() {
       onPageChange={setCurrentPage}
       onPageSizeChange={setPageSize}
       onFolderClick={(folderId) => router.push(`/llm-wiki/folder/${folderId}`)}
+      onCopyLink={() => void copyCurrentPageLink()}
+      // 이름 변경은 채널 관리자만 — 아니면 케밥 항목이 없어 케밥 자체가 서지 않는다
+      onRenameSubmit={channel.isAdmin ? (name) => renameChannel.mutate({ channelId: channel.id, name }) : undefined}
     />
   );
 }

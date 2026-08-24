@@ -7,6 +7,7 @@ import type {
   WikiArtifactDocumentDto,
   WikiArtifactListDto,
   WikiArtifactListParams,
+  WikiArtifactOwnerDto,
   WikiChannelListDto,
   WikiDefinitionPresetsDto,
   WikiFavoriteListDto,
@@ -29,11 +30,19 @@ export async function fetchWikiMembers(signal?: AbortSignal): Promise<WikiWorksp
   return res.data;
 }
 
+/**
+ * owner_user_id는 반복 파라미터로 나가야 서버가 읽는다 —
+ * axios 기본 직렬화는 `owner_user_id[]=`라 FastAPI가 값을 못 찾는다.
+ */
 export async function fetchWikiArtifacts(
   params: WikiArtifactListParams,
   signal?: AbortSignal,
 ): Promise<WikiArtifactListDto> {
-  const res = await api.get<WikiArtifactListDto>(API.wiki.artifacts, { params, signal });
+  const res = await api.get<WikiArtifactListDto>(API.wiki.artifacts, {
+    params,
+    paramsSerializer: { indexes: null },
+    signal,
+  });
   return res.data;
 }
 
@@ -61,6 +70,22 @@ export async function removeWikiFavorite(artifactId: string): Promise<void> {
   await api.delete(API.wiki.favorite(artifactId));
 }
 
+/** 문서 폴더 이동(검수 자격자). folder_id가 null이면 채널 바로 아래로 옮긴다. */
+export async function moveWikiArtifact(artifactId: string, folderId: string | null): Promise<void> {
+  await api.patch(API.wiki.artifact(artifactId), { folder_id: folderId });
+}
+
+/** 담당자 지정(멱등, 채널 관리자 또는 담당자 본인). 응답은 지정 후 명단 전체다. */
+export async function assignWikiArtifactOwner(artifactId: string, userId: number): Promise<WikiArtifactOwnerDto> {
+  const res = await api.put<WikiArtifactOwnerDto>(API.wiki.artifactOwner(artifactId, userId));
+  return res.data;
+}
+
+/** 담당자 해제(멱등, 관리자만 — 담당자 본인도 불가). 없는 담당자를 떼도 204다. */
+export async function removeWikiArtifactOwner(artifactId: string, userId: number): Promise<void> {
+  await api.delete(API.wiki.artifactOwner(artifactId, userId));
+}
+
 /** 채널 이름 변경(채널 관리자). 응답 본문은 쓰지 않는다. */
 export async function renameWikiChannel(channelId: string, name: string): Promise<void> {
   await api.patch(API.wiki.channel(channelId), { name });
@@ -74,4 +99,9 @@ export async function createWikiFolder(channelId: string, name: string): Promise
 /** 폴더 이름 변경(채널 관리자). 폴더 경로가 채널 아래라 소속 채널 id가 함께 필요하다. */
 export async function renameWikiFolder(channelId: string, folderId: string, name: string): Promise<void> {
   await api.patch(API.wiki.folder(channelId, folderId), { name });
+}
+
+/** 폴더 삭제(채널 관리자). 폴더 안 문서·정의는 삭제되지 않고 채널 루트로 옮겨진다. */
+export async function deleteWikiFolder(channelId: string, folderId: string): Promise<void> {
+  await api.delete(API.wiki.folder(channelId, folderId));
 }

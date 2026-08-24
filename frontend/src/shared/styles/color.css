@@ -173,6 +173,32 @@
   --color-light-blue-5: #e5f6fe;
   --color-light-blue-1: #f7fdff;
 
+  /* Surface Red — diff 등 넓은 면용 저채도 램프 */
+  --color-surface-red-90: #251716;
+  --color-surface-red-80: #4c2524;
+  --color-surface-red-70: #7d2f30;
+  --color-surface-red-60: #924d4a;
+  --color-surface-red-50: #a86561;
+  --color-surface-red-40: #c1807c;
+  --color-surface-red-30: #da9c97;
+  --color-surface-red-20: #f3b8b4;
+  --color-surface-red-10: #fed5d5;
+  --color-surface-red-5: #feecec;
+  --color-surface-red-1: #fffafa;
+
+  /* Surface Green — diff 등 넓은 면용 저채도 램프 */
+  --color-surface-green-90: #151f1b;
+  --color-surface-green-80: #093729;
+  --color-surface-green-70: #00563b;
+  --color-surface-green-60: #196d53;
+  --color-surface-green-50: #3c846a;
+  --color-surface-green-40: #5c9d84;
+  --color-surface-green-30: #7cb79f;
+  --color-surface-green-20: #9cd2bb;
+  --color-surface-green-10: #b0efd5;
+  --color-surface-green-5: #d9f7eb;
+  --color-surface-green-1: #e6faf2;
+
   /* High Contrast */
   --color-high-contrast-green-1: #fafefc;
   --color-high-contrast-green-5: #f2fcf7;

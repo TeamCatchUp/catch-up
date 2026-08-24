@@ -61,6 +61,30 @@ describe('useQueryErrorToast', () => {
     expect(toastMock).toHaveBeenCalledTimes(1);
   });
 
+  // 에피소드 시맨틱 — 합산 에러가 다른 쿼리 실패로 갈아타도 걷히기 전에는 같은 에피소드다
+  it('에러가 걷히기 전에는 문구가 갈려도 다시 띄우지 않는다', () => {
+    const { rerender } = renderHook(({ value }) => useQueryErrorToast(value), {
+      initialProps: { value: makeApiError('WIKI_LIST_FAILED', '목록을 읽지 못했습니다.') },
+    });
+
+    rerender({ value: makeApiError('WIKI_CHANNELS_FAILED', '채널을 읽지 못했습니다.') });
+
+    expect(toastMock).toHaveBeenCalledTimes(1);
+    expect(toastMock.mock.calls[0][0]).toBe('목록을 읽지 못했습니다.');
+  });
+
+  it('걷혔다가 다른 실패로 다시 서면 새 에피소드로 새 문구를 띄운다', () => {
+    const { rerender } = renderHook(({ value }: { value: unknown }) => useQueryErrorToast(value), {
+      initialProps: { value: makeApiError('WIKI_LIST_FAILED', '목록을 읽지 못했습니다.') as unknown },
+    });
+
+    rerender({ value: null });
+    rerender({ value: makeApiError('WIKI_CHANNELS_FAILED', '채널을 읽지 못했습니다.') });
+
+    expect(toastMock).toHaveBeenCalledTimes(2);
+    expect(toastMock.mock.calls[1][0]).toBe('채널을 읽지 못했습니다.');
+  });
+
   it('에러가 걷혔다가 다시 서면 그때 다시 띄운다', () => {
     const error = makeApiError('WIKI_LIST_FAILED', '목록을 읽지 못했습니다.');
     const { rerender } = renderHook(({ value }: { value: unknown }) => useQueryErrorToast(value), {
@@ -74,10 +98,12 @@ describe('useQueryErrorToast', () => {
   });
 
   it('토스트 옵션을 그대로 넘기고 id로 같은 문구를 하나로 묶는다', () => {
-    renderHook(() => useQueryErrorToast(makeApiError('WIKI_LIST_FAILED', '목록을 읽지 못했습니다.'), {
-      position: 'bottom-right',
-    }));
+    renderHook(() =>
+      useQueryErrorToast(makeApiError('WIKI_LIST_FAILED', '목록을 읽지 못했습니다.'), {
+        duration: 6000,
+      }),
+    );
 
-    expect(toastMock.mock.calls[0][1]).toMatchObject({ id: '목록을 읽지 못했습니다.', position: 'bottom-right' });
+    expect(toastMock.mock.calls[0][1]).toMatchObject({ id: '목록을 읽지 못했습니다.', duration: 6000 });
   });
 });

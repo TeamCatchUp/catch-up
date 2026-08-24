@@ -5,6 +5,7 @@ import IconArrowDown from '@/public/icons/icon/arrow_down.svg';
 import IconArrowUp from '@/public/icons/icon/arrow_up.svg';
 import IconGrid from '@/public/icons/icon/grid.svg';
 import IconKebabHorizontal from '@/public/icons/icon/kebab_horizontal.svg';
+import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
 import { Button } from '@/shared/components/ui/button';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
@@ -60,7 +61,7 @@ const meta = {
       viewport: { width: 1200, height: 120 },
       states: [
         'main-dashboard',
-        'detail-channel',
+        'main-channel',
         'detail-folder',
         'detail-document',
         'detail-review-queue',
@@ -68,7 +69,7 @@ const meta = {
       ],
       reuseNotes: [
         'Figma `Header` 세트(585:7525)의 두 state를 그대로 옮겼다 — state=Main(17001:78508)이 variant="main", state=세부페이지_2단이상(522:2436)이 variant="detail". 검토큐(17930:57154)만 detach된 FRAME이지만 구조는 detail과 같다.',
-        '채널 화면은 시안(17752:45516)이 아직 main형이지만 detail(채널 1마디)로 구현했다 — 사용자 확정(8/10), 시안 갱신 대기. 구현 직전 시안 재확인 규칙의 예외이고, 갱신되면 이 노트를 지운다. main state 자체는 대시보드가 계속 쓴다. [8/18 재실측] 여전히 main형이고 선두 아이콘만 home→wiki_channel로 갱신됨 — 마디 아이콘 매핑(channel→wiki_channel)과는 일치.',
+        '[8/24 재실측] 채널 화면은 시안(17752:45516)대로 main형으로 되돌렸다 — 아이콘 icon/wiki_channel 20 + 제목, px-16. detail 1마디로 두었던 8/10 잠정 구현은 소멸했다.',
         '리포에 같은 셸의 선례가 둘 있다: AgentStudioHeader(main, px-16)와 RagContentHeader(detail, px-6). 둘 다 h-13 · justify-between · border-b · py-2로 같고 좌우 패딩만 갈린다 — 이 컴포넌트가 그 공통부를 가진다.',
         '우측 버튼은 shared Button 재사용이다. ⋯ = icon-only-gray/md(p-1.5 + rounded-lg → 36px, Figma Icon button 585:5628과 정확히 일치), 미리보기 = box-outline-gray/md(px-2.5 py-1.5 = Figma 10/6, Box Button 636:6333).',
         'breadcrumb 마디만 Button을 쓰지 않는다. Figma는 Text Button(582:3810)의 size=large_{이전,현재}페이지인데 코드 variant text-secondary-mono에는 그 규격이 없다(lg는 17px·rounded-full, md는 Medium 15px). RagContentHeader도 같은 이유로 직접 그렸다.',
@@ -84,7 +85,7 @@ const meta = {
       ],
       tokenNotes: [
         '테두리 #EAEBEC = border-line-normal-neutral, 아래 1px만(strokeWeight "0px 0px 1px").',
-        'main 제목 17px #33363D = text-heading-medium + text-text-normal-normal, 아이콘 24 = size-6 · text-icon-normal-normal(AgentStudioHeader와 같은 값).',
+        'main 제목 17px #33363D = text-heading-medium + text-text-normal-normal, 아이콘 20 = size-5 · text-icon-normal-normal([8/24 재실측] Header state=Main 컴포넌트가 24→20으로 바뀌었다).',
         'detail 마디 15px SemiBold = text-heading-small. 이전 마디 #6D7882 = text-text-normal-alternative, 현재 마디 #33363D = text-text-normal-normal. 아이콘은 색 클래스를 따로 주지 않고 마디 글자색을 상속한다(currentColor).',
         '구분자 arrow_right2 20 = size-5 · text-icon-normal-neutral.',
         '마디 hover/pressed는 fill-normal-interaction-{hover,pressed}다. Figma Text Button 세트에 state 축이 있고, 같은 컴포넌트의 코드 구현인 Button text-secondary-mono가 이미 이 두 토큰을 쓴다.',
@@ -93,7 +94,8 @@ const meta = {
         '높이 52 = py 8×2 + 내용물 36. main(Icon button 36)과 detail(Text Button 36) 둘 다 같은 값이 나온다. 선례 둘도 h-13이라 그대로 못박았다.',
         '좌우 패딩은 state에 묶인 값이다 — main 64(px-16), detail 24(px-6). Figma가 그렇게 갈라 뒀고 리포 선례 둘도 같은 숫자다.',
         '폭 흡수는 좌측 하나뿐(min-w-0). 축소 순서는 현재 마디 truncate가 먼저고, 이전 마디들과 우측 액션은 shrink-0으로 고정이다 — 가로 스크롤은 넣지 않았다.',
-        '[8/18 재실측] 우측 액션 gap 8→4 — 다중 액션의 유일한 근거인 검토큐 우측 클러스터 실측값을 따라 gap-1로 교정.',
+        '[8/18 재실측] 우측 액션 gap 8→4 — 다중 액션의 유일한 근거인 검토큐 우측 클러스터 실측값을 따라 gap-1로 교정. [8/24] 채널·폴더 시안은 같은 슬롯을 6으로 그린다 — 검토큐 4와 갈려 확인 대상이고, 값은 4로 둔다.',
+        '[8/24 재실측] detail 현재 마디에는 아이콘이 없다(Text Button size=large_현재페이지의 Show icon/left=false). 이전 마디만 아이콘 20을 갖는다.',
         'Figma 검토큐 시안에서도 현재 마디만 말줄임 처리돼 있다("Update documentation con…") — 흡수 슬롯 선택의 근거다.',
         '마디 높이 36은 padding(4)+라인박스(22.5)=30.5로는 나오지 않는 Figma 고정값이라 h-9로 못박았다. hover 배경이 이 높이로 그려진다.',
       ],
@@ -125,50 +127,42 @@ export const Dashboard: Story = {
 
     // 아이콘 크기는 소비처가 주지 않고 헤더가 강제한다.
     const icon = header.querySelector('svg') as SVGElement;
-    await expect(icon.getBoundingClientRect().width).toBe(24);
+    await expect(icon.getBoundingClientRect().width).toBe(20);
 
     // main은 breadcrumb가 아니다. nav가 생기면 구조를 잘못 옮긴 것이다.
     await expect(canvas.queryByRole('navigation')).toBeNull();
   },
 };
 
-/**
- * 채널 — 채널 1마디짜리 detail 체인. 그 하나가 곧 현재 페이지다(구분자·클릭 대상 없음).
- * 배지 슬롯은 비운다.
- */
+/** 채널 — main형이다(breadcrumb가 아니라 아이콘 + 제목). */
 export const Channel: Story = {
   args: {
-    variant: 'detail',
-    breadcrumbs: [{ kind: 'channel', label: '채널명' }],
+    variant: 'main',
+    icon: <IconWikiChannel />,
+    title: '채널명',
     actions: <MoreButton />,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const header = getHeader(canvasElement);
 
-    // detail 셸이다 — 좌우 패딩이 main과 갈리는 유일한 기하라 직접 잰다.
-    await expect(getComputedStyle(header).paddingLeft).toBe('24px');
+    await expect(getComputedStyle(header).paddingLeft).toBe('64px');
     await expect(header.getBoundingClientRect().height).toBe(52);
+    await expect(header.querySelector('svg')!.getBoundingClientRect().width).toBe(20);
 
-    // 1마디도 체인이다. nav가 없으면 main으로 되돌아간 것이다.
-    const nav = canvas.getByRole('navigation');
-
-    // 유일한 마디 = 현재 페이지. 버튼이면 "지금 있는 곳으로 이동"이 생긴다.
-    await expect(canvas.queryByRole('button', { name: '채널명' })).toBeNull();
-    await expect(canvas.getByText('채널명').closest('[aria-current]')).not.toBeNull();
-
-    // 구분자는 마디 사이에만 그려진다 — nav 안 svg는 마디 아이콘 하나뿐이어야 한다.
-    await expect(nav.querySelectorAll('svg')).toHaveLength(1);
+    // 채널은 체인이 아니다 — nav가 생기면 detail 1마디로 되돌아간 것이다.
+    await expect(canvas.queryByRole('navigation')).toBeNull();
+    await expect(canvasElement.querySelector('[aria-current="page"]')).toBeNull();
   },
 };
 
-/** 폴더 — 채널명 > 현재페이지 2단 */
+/** 폴더 — 채널명 > 현재페이지 2단. 현재 마디에는 아이콘이 없다. */
 export const Folder: Story = {
   args: {
     variant: 'detail',
     breadcrumbs: [
       { kind: 'channel', label: '채널명' },
-      { kind: 'document', label: '현재페이지' },
+      { kind: 'folder', label: '현재페이지' },
     ],
     onBreadcrumbClick: onFolderCrumbClick,
     actions: <MoreButton />,
@@ -183,7 +177,13 @@ export const Folder: Story = {
     // 이전 마디만 버튼이다. 현재 마디까지 버튼이 되면 "여기로 이동"이 두 번 생긴다.
     const channelCrumb = canvas.getByRole('button', { name: '채널명' });
     await expect(canvas.queryByRole('button', { name: '현재페이지' })).toBeNull();
-    await expect(canvas.getByText('현재페이지').closest('[aria-current]')).not.toBeNull();
+    const currentCrumb = canvas.getByText('현재페이지').closest('[aria-current]')!;
+
+    // 마디 아이콘은 이전 마디에만 있다 — folder 마디가 현재여도 아이콘이 붙지 않는다.
+    await expect(channelCrumb.querySelectorAll('svg')).toHaveLength(1);
+    await expect(currentCrumb.querySelectorAll('svg')).toHaveLength(0);
+    // nav 안 svg는 이전 마디 아이콘 1 + 구분자 1뿐이다.
+    await expect(canvas.getByRole('navigation').querySelectorAll('svg')).toHaveLength(2);
 
     // 마디 높이는 padding에서 파생되지 않는 고정값이라 직접 잰다.
     await expect(channelCrumb.getBoundingClientRect().height).toBe(36);

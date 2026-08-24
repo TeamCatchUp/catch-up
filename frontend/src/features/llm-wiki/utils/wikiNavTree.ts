@@ -4,6 +4,7 @@ import IconFile from '@/public/icons/icon/file.svg';
 import IconFolder from '@/public/icons/icon/folder.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
 import type { WikiSideNavFavorite, WikiTreeNode } from '@/shared/components/layout/sideNavBar/WikiSideNav';
+import { formatRelativeTime } from '@/shared/utils/formatDate';
 
 import type { WikiArtifactListItemDto, WikiChannelListItemDto, WikiFavoriteItemDto } from '../api/wikiDto';
 
@@ -11,7 +12,20 @@ export const wikiChannelHref = (channelId: string) => `/llm-wiki/channel/${chann
 export const wikiFolderHref = (folderId: string) => `/llm-wiki/folder/${folderId}`;
 export const wikiDocumentHref = (artifactId: string) => `/llm-wiki/${artifactId}`;
 
-/** 최종 편집자·시각(케밥 하단 metaLines)에 대응하는 필드가 목록 응답에 없어 채우지 않는다. */
+/**
+ * 케밥 하단 메타 2줄(최종 편집자·시각). 발행판이 없으면 시각이 없어 줄 자체를 만들지 않고,
+ * 승인자가 사용자로 이어지지 않으면 시각 줄만 남는다.
+ */
+export function buildDocumentMetaLines(dto: WikiArtifactListItemDto): readonly string[] | undefined {
+  // 키가 아예 없는 구서버 응답도 여기로 온다 — undefined를 시각으로 읽으면 "NaN일 전"이 나간다
+  if (dto.last_edited_at == null) return undefined;
+
+  const editor = dto.last_edited_by;
+  return editor
+    ? [`${editor.display_name} 최종 편집`, formatRelativeTime(dto.last_edited_at)]
+    : [formatRelativeTime(dto.last_edited_at)];
+}
+
 function documentNode(dto: WikiArtifactListItemDto, channelId: string): WikiTreeNode {
   return {
     id: dto.artifact_id,
@@ -21,6 +35,7 @@ function documentNode(dto: WikiArtifactListItemDto, channelId: string): WikiTree
     label: dto.title,
     Icon: IconFile,
     favorite: dto.is_favorite,
+    metaLines: buildDocumentMetaLines(dto),
   };
 }
 
@@ -36,7 +51,9 @@ export function buildWikiNavTree(
     const documents = documentsByChannel.get(channel.id) ?? [];
 
     const folders: WikiTreeNode[] = channel.folders.map((folder) => {
-      const children = documents.filter((item) => item.folder_id === folder.id).map((item) => documentNode(item, channel.id));
+      const children = documents
+        .filter((item) => item.folder_id === folder.id)
+        .map((item) => documentNode(item, channel.id));
       return {
         id: folder.id,
         kind: 'folder',
@@ -50,7 +67,9 @@ export function buildWikiNavTree(
     });
 
     // 채널 루트 문서만 채널 아래에 둔다 — 폴더 소속 문서는 그 폴더 아래에 이미 붙었다
-    const rootDocuments = documents.filter((item) => item.folder_id === null).map((item) => documentNode(item, channel.id));
+    const rootDocuments = documents
+      .filter((item) => item.folder_id === null)
+      .map((item) => documentNode(item, channel.id));
     const children = [...folders, ...rootDocuments];
 
     return {
@@ -76,5 +95,7 @@ export function buildWikiFavorites(items: readonly WikiFavoriteItemDto[]): WikiS
     id: item.artifact_id,
     label: item.title,
     href: wikiDocumentHref(item.artifact_id),
+    channelId: item.channel_id,
+    folderId: item.folder_id,
   }));
 }

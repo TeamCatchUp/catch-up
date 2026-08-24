@@ -1,60 +1,125 @@
+import IconAssignmentFilled from '@/public/icons/icon/assignment_filled.svg';
+import IconInfoFilled from '@/public/icons/icon/info_filled.svg';
 import { Avatar } from '@/shared/components/ui/avatar';
-import { AvatarGroup, type AvatarGroupItem } from '@/shared/components/ui/avatar-group';
 import { cn } from '@/shared/utils/cn';
+
+import OwnerAddPopover from './OwnerAddPopover';
+import OwnerDetailPopover from './OwnerDetailPopover';
+import type { ReviewQueueFilterOption } from './ReviewQueueFilterSearchPanel';
 
 export interface ReviewParticipant {
   id: string;
+  /** [BE] user_id. 해제 요청 경로에 그대로 실린다 */
+  userId: number;
   name: string;
-  /** 활동 설명(예: "1일 전 수정"). 대응 데이터가 없으면 줄째 빠진다 */
+  /** 활동 설명(예: "1일 전 수정"). 담당자별 활동 시각 API가 없어(B18) 지금은 비워 온다 */
   description?: string;
-  /** 편집 중 표시. 참여 상태 API가 없어 기본은 꺼짐이다 */
-  editing?: boolean;
-  role: '작성자' | '리뷰어';
+  /** 내 계정 여부 — 이름 뒤 "(나)" 표기 */
+  isMe?: boolean;
+  role: '담당자' | '채널 관리자';
   avatarSrc?: string | null;
 }
 
-interface ReviewParticipantsCardProps {
-  participants: readonly ReviewParticipant[];
-  /** 헤더 우측 겹침 스택에 보일 아바타 목록 */
-  stackAvatars: readonly AvatarGroupItem[];
-}
+export type OwnerNotice = 'no-owner' | 'other-owner';
 
-/** 우측 패널의 "담당자" 카드 — 아바타 스택 헤더 + 담당자 행 목록. */
-export default function ReviewParticipantsCard({ participants, stackAvatars }: ReviewParticipantsCardProps) {
+/** 안내 배너 2종 — 실측 문구. 내가 담당자면 배너 자체가 없다 */
+const NOTICE_CONTENT = {
+  'no-owner': { Icon: IconInfoFilled, message: '담당자가 없어 채널 관리자가 검토합니다.' },
+  'other-owner': { Icon: IconAssignmentFilled, message: '담당자가 검토할 문서입니다' },
+} as const;
+
+/** 행 하나 — 아바타 40 + 이름·(나)·역할 태그, 아래줄은 활동 설명. 버튼 안에서도 쓰여 span으로만 짠다. */
+function ParticipantRow({ participant }: { participant: ReviewParticipant }) {
   return (
-    <section className="flex flex-col gap-4 p-4">
-      <div className="flex items-center gap-4">
-        <h3 className="text-body-small text-text-normal-alternative min-w-0 flex-1">담당자</h3>
-        <AvatarGroup avatars={stackAvatars} size="small" />
-      </div>
-      {participants.map((participant) => (
-        <div key={participant.id} className="flex items-center gap-4">
-          <Avatar size="xlarge" src={participant.avatarSrc ?? null} className="rounded-xl" />
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="text-body-small text-text-normal-neutral truncate">{participant.name}</span>
-            {participant.description && (
-              <span
-                className={cn(
-                  'text-body-small truncate',
-                  participant.editing ? 'text-text-primary-normal' : 'text-text-normal-assistive',
-                )}
-              >
-                {participant.description}
-              </span>
-            )}
-          </div>
+    <span className="flex w-full items-center gap-4">
+      <Avatar size="xlarge" src={participant.avatarSrc ?? null} className="border-line-normal-assistive rounded-xl" />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="text-body-small text-text-normal-neutral min-w-0 truncate">{participant.name}</span>
+          {participant.isMe && <span className="text-body-small text-text-normal-assistive shrink-0">(나)</span>}
           <span
             className={cn(
               'rounded-md2 text-body-xsmall flex shrink-0 items-center px-1.5 py-0.5',
-              participant.role === '리뷰어'
+              participant.role === '채널 관리자'
                 ? 'bg-fill-primary-normal-neutral text-text-primary-normal'
                 : 'bg-fill-normal-strong text-text-normal-alternative',
             )}
           >
             {participant.role}
           </span>
+        </span>
+        {participant.description && (
+          <span className="text-body-small text-text-normal-assistive truncate">{participant.description}</span>
+        )}
+      </span>
+    </span>
+  );
+}
+
+interface ReviewParticipantsCardProps {
+  participants: readonly ReviewParticipant[];
+  /** 담당자 유무·내 담당 여부로 갈리는 안내 배너. null이면 배너가 없다 */
+  notice?: OwnerNotice | null;
+  /** 지정 권한 — 채널 관리자 또는 담당자 본인(백엔드 can_manage_owners 규칙) */
+  canAssign?: boolean;
+  /** 해제 권한 — 관리자만. 담당자 본인도 못 한다 */
+  canRemove?: boolean;
+  /** 추가 드롭다운 후보 — 멤버 목록에서 현 담당자를 뺀 나머지 */
+  candidates?: readonly ReviewQueueFilterOption[];
+  onAssign?: (userIds: readonly number[]) => void;
+  onRemove?: (userId: number) => void;
+}
+
+/** 우측 패널의 "담당자" 카드 — + 버튼 헤더, 안내 배너, 담당자 행과 해제 팝오버. */
+export default function ReviewParticipantsCard({
+  participants,
+  notice = null,
+  canAssign = false,
+  canRemove = false,
+  candidates = [],
+  onAssign,
+  onRemove,
+}: ReviewParticipantsCardProps) {
+  const noticeContent = notice === null ? null : NOTICE_CONTENT[notice];
+
+  return (
+    <section className="flex flex-col gap-4 p-4">
+      <div className="flex items-center gap-4">
+        <h3 className="text-body-small text-text-normal-alternative min-w-0 flex-1">담당자</h3>
+        {canAssign && <OwnerAddPopover candidates={candidates} onAssign={(userIds) => onAssign?.(userIds)} />}
+      </div>
+
+      {noticeContent && (
+        <div className="bg-fill-normal-strong flex items-center gap-2 rounded-lg px-2 py-1.5">
+          <noticeContent.Icon aria-hidden className="text-icon-normal-neutral size-4.5 shrink-0" />
+          <span className="text-body-xsmall text-text-normal-neutral min-w-0">{noticeContent.message}</span>
         </div>
-      ))}
+      )}
+
+      {/* 행 목록 — 행마다 패딩 4를 갖고 행 사이는 2가 남는다 */}
+      <div className="flex flex-col gap-0.5">
+        {participants.map((participant) =>
+          canRemove && participant.role === '담당자' ? (
+            <OwnerDetailPopover
+              key={participant.id}
+              name={participant.name}
+              row={<ParticipantRow participant={participant} />}
+              onRemove={() => onRemove?.(participant.userId)}
+            >
+              <button
+                type="button"
+                className="hover:bg-fill-normal-interaction-hover w-full cursor-pointer rounded-lg p-1 text-left transition-colors"
+              >
+                <ParticipantRow participant={participant} />
+              </button>
+            </OwnerDetailPopover>
+          ) : (
+            <div key={participant.id} className="p-1">
+              <ParticipantRow participant={participant} />
+            </div>
+          ),
+        )}
+      </div>
     </section>
   );
 }

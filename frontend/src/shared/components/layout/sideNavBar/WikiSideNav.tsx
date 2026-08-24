@@ -5,17 +5,21 @@ import { AnimatePresence, motion } from 'motion/react';
 import { usePathname, useRouter } from 'next/navigation';
 
 import IconAdd400 from '@/public/icons/icon/add_small_400.svg';
+import IconArrowTurnRight from '@/public/icons/icon/arrow_turn_right.svg';
+import IconDelete from '@/public/icons/icon/delete.svg';
 import IconEditSquare from '@/public/icons/icon/edit_square.svg';
 import IconFile from '@/public/icons/icon/file.svg';
 import IconFolder from '@/public/icons/icon/folder.svg';
 import IconGrid from '@/public/icons/icon/grid.svg';
+import IconMore from '@/public/icons/icon/kebab_horizontal_400.svg';
 import IconLink from '@/public/icons/icon/link.svg';
 import IconStar from '@/public/icons/icon/star.svg';
 import IconStarOff from '@/public/icons/icon/star_off.svg';
 import IconUpdate from '@/public/icons/icon/update.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
 import { UserMenuContent } from '@/shared/components/layout/sideNavBar/modal/UserModal';
-import NavTree, { type NavTreeNode } from '@/shared/components/navigation/NavTree';
+import NavTree, { type NavTreeNode, RowActionButton } from '@/shared/components/navigation/NavTree';
+import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
 import { Popover, PopoverAnchor, PopoverContent } from '@/shared/components/ui/popover';
 import { usePrefersReducedMotion } from '@/shared/hooks/usePrefersReducedMotion';
 import { disclosureExpand, disclosureExpandReduced, MotionState } from '@/shared/motion';
@@ -37,7 +41,15 @@ import SnbSpaceSwitcher from './SnbSpaceSwitcher';
 import SnbTeamspaceCard from './SnbTeamspaceCard';
 
 /** 트리·섹션 메뉴 항목 키. 항목이 늘어도 소비처가 깨지지 않게 열어둔다 */
-export type KnownSnbMenuActionId = 'favorite' | 'unfavorite' | 'copy-link' | 'rename' | 'folder' | 'channel';
+export type KnownSnbMenuActionId =
+  | 'favorite'
+  | 'unfavorite'
+  | 'copy-link'
+  | 'rename'
+  | 'move'
+  | 'folder'
+  | 'channel'
+  | 'delete-folder';
 export type SnbMenuActionId = KnownSnbMenuActionId | (string & {});
 
 /** 트리 행의 종류. 케밥 머리 라벨이 이 값으로 갈린다 */
@@ -62,6 +74,10 @@ export interface WikiSideNavFavorite {
   id: string;
   label: string;
   href?: string;
+  /** 소속 채널. 케밥의 옮기기가 대상 채널을 찾을 때 쓴다 */
+  channelId?: string | null;
+  /** 소속 폴더. 옮기기 패널의 현재 위치 판정에 쓴다 */
+  folderId?: string | null;
 }
 
 // 기본값을 리터럴로 두면 렌더마다 새 참조가 되어 아래 useMemo가 매번 다시 돈다
@@ -75,8 +91,8 @@ const NODE_KIND_LABEL: Record<WikiTreeNodeKind, string> = {
   document: '파일',
 };
 
-// 껍데기는 메뉴·이름 입력이 직접 그린다. overflow-visible이 없으면 그림자가 잘린다
-const POPOVER_SHELL_CLASS = 'overflow-visible border-0 bg-transparent p-0 shadow-none';
+/** 껍데기는 메뉴·이름 입력이 직접 그린다. overflow-visible이 없으면 그림자가 잘린다 */
+export const SNB_POPOVER_SHELL_CLASS = 'overflow-visible border-0 bg-transparent p-0 shadow-none';
 
 /**
  * 섹션 머리글 아래 본문. 접히는 동안 내용이 밖으로 새지 않게 overflow-hidden을 함께 준다.
@@ -129,6 +145,12 @@ export interface WikiSideNavProps {
   onRenameSubmit?: (node: WikiTreeNode, name: string) => void;
   /** 하위 폴더 추가 제출. 첫 인자는 폴더가 생길 채널 노드다 */
   onFolderCreateSubmit?: (channelNode: WikiTreeNode, name: string) => void;
+  /** 폴더 삭제 확정. 확인 모달을 거친 뒤에만 나간다 */
+  onFolderDeleteSubmit?: (folderNode: WikiTreeNode) => void;
+  /** 옮기기 선택 통로. 대상 패널은 features 데이터라 소비처가 이 앵커에 띄운다 */
+  onMoveRequest?: (node: WikiTreeNode, anchor: HTMLElement) => void;
+  /** 소비처가 옮기기 패널을 띄워 둔 노드. 패널이 떠 있는 동안 그 행의 액션을 붙잡아 둔다 */
+  moveOpenNodeId?: string;
 }
 
 /**
@@ -144,6 +166,9 @@ export default function WikiSideNav({
   onMenuAction,
   onRenameSubmit,
   onFolderCreateSubmit,
+  onFolderDeleteSubmit,
+  onMoveRequest,
+  moveOpenNodeId,
 }: WikiSideNavProps = {}) {
   const router = useRouter();
   const pathname = usePathname();
@@ -163,9 +188,9 @@ export default function WikiSideNav({
   const isOnboarding = pathname.startsWith('/llm-wiki/onboarding');
   const profileMenu = <UserMenuContent userName={user?.name} userEmail={user?.email} />;
 
-  // 트리 행·섹션 머리글에서 연 메뉴. 앵커는 눌린 버튼이라 호출부가 넘겨준다
+  // 트리 행·즐겨찾기 행·섹션 머리글에서 연 메뉴. 앵커는 눌린 버튼이라 호출부가 넘겨준다
   const [menu, setMenu] = useState<{
-    kind: 'row-more' | 'row-add' | 'section-add';
+    kind: 'row-more' | 'row-add' | 'section-add' | 'favorite-more';
     nodeId?: string;
     anchor: HTMLElement;
   } | null>(null);
@@ -178,16 +203,38 @@ export default function WikiSideNav({
     anchor: HTMLElement;
   } | null>(null);
 
+  // 폴더 삭제 확인 대기. 파괴적 동작이라 케밥에서 바로 보내지 않는다
+  const [deleteConfirm, setDeleteConfirm] = useState<WikiTreeNode | null>(null);
+
   // 섹션 접기는 로컬 상태다 — 서버에 보존할 계약이 없다
   const [favoritesOpen, setFavoritesOpen] = useState(true);
   const [wikiOpen, setWikiOpen] = useState(true);
 
   // 메뉴·입력이 열린 동안 액션이 사라지면 앵커가 0×0이 되므로 어느 행이 열렸는지 트리에 알린다
-  const openRowMenu = nameInput
-    ? { nodeId: nameInput.node.id, kind: nameInput.mode === 'rename' ? ('more' as const) : ('add' as const) }
-    : menu && menu.nodeId && menu.kind !== 'section-add'
-      ? { nodeId: menu.nodeId, kind: menu.kind === 'row-more' ? ('more' as const) : ('add' as const) }
-      : undefined;
+  const openRowMenu = moveOpenNodeId
+    ? { nodeId: moveOpenNodeId, kind: 'more' as const }
+    : nameInput
+      ? { nodeId: nameInput.node.id, kind: nameInput.mode === 'rename' ? ('more' as const) : ('add' as const) }
+      : menu && menu.nodeId && (menu.kind === 'row-more' || menu.kind === 'row-add')
+        ? { nodeId: menu.nodeId, kind: menu.kind === 'row-more' ? ('more' as const) : ('add' as const) }
+        : undefined;
+
+  // 즐겨찾기 행은 그 채널을 아직 펼치지 않아 트리에 없을 수 있다 — 즐겨찾기 데이터로 문서 노드를 지어 보완한다
+  const resolveMenuNode = (nodeId: string | undefined): WikiTreeNode | undefined => {
+    if (nodeId === undefined) return undefined;
+    const fromTree = findTreeNode(nodes, nodeId);
+    if (fromTree) return fromTree;
+    const favorite = favorites.find((item) => item.id === nodeId);
+    if (!favorite || favorite.href === undefined) return undefined;
+    return {
+      id: favorite.id,
+      kind: 'document',
+      channelId: favorite.channelId ?? '',
+      href: favorite.href,
+      label: favorite.label,
+      favorite: true,
+    };
+  };
 
   const isChannelAdmin = (channelId: string) => channelAdmins[channelId] === true;
   /** 문서는 이름 변경 API가 없고, 채널·폴더는 그 채널 관리자만 바꿀 수 있다 */
@@ -210,22 +257,24 @@ export default function WikiSideNav({
   }, [nodes, channelAdmins]);
 
   const select = (actionId: SnbMenuActionId) => () => {
-    const node = menu?.nodeId ? findTreeNode(nodes, menu.nodeId) : undefined;
+    const node = resolveMenuNode(menu?.nodeId);
     // 이름 바꾸기·폴더 추가는 눌린 자리에 입력 팝오버를 이어 띄운다 — 보낼 수 없는 노드에서는 열지 않는다
     if (actionId === 'rename' && menu && canRename(node)) setNameInput({ mode: 'rename', node, anchor: menu.anchor });
     // 폴더는 채널 바로 아래에만 생긴다
     else if (actionId === 'folder' && menu && node?.kind === 'channel')
       setNameInput({ mode: 'create-folder', node, anchor: menu.anchor });
+    // 옮기기 대상 패널은 소비처가 같은 앵커에 이어 띄운다 — 이동 API가 문서 단위라 문서에서만 넘긴다
+    else if (actionId === 'move' && menu && node?.kind === 'document') onMoveRequest?.(node, menu.anchor);
+    // 폴더 삭제는 파괴적이라 확인 모달을 거친다
+    else if (actionId === 'delete-folder' && node?.kind === 'folder' && isChannelAdmin(node.channelId))
+      setDeleteConfirm(node);
     // 채널 생성 화면은 온보딩뿐이다 — 별도 생성 폼이 없다
     else if (actionId === 'channel') go('/llm-wiki/onboarding')();
     onMenuAction?.(menu?.nodeId, actionId);
     closeMenu();
   };
 
-  /*
-   * 하단 메타는 노드가 값을 들고 있을 때만 그린다 —
-   * 대응 API 필드가 없어 fixture 표본 외에는 비어 있다.
-   */
+  // 하단 메타는 노드가 값을 들고 있을 때만 그린다 — 조립은 소비처 몫이다
   const menuProps = () => {
     // 섹션의 + 는 채널만 만든다. 파일·폴더는 채널 아래에서만 생긴다
     if (menu?.kind === 'section-add') {
@@ -241,7 +290,7 @@ export default function WikiSideNav({
         groups: [[{ id: 'folder', label: '폴더', Icon: IconFolder, onSelect: select('folder') }]],
       };
     }
-    const node = menu?.nodeId ? findTreeNode(nodes, menu.nodeId) : undefined;
+    const node = resolveMenuNode(menu?.nodeId);
     // 즐겨찾기는 artifact 단위 API라 문서 행에만 건다 — 채널·폴더에는 보낼 경로가 없다
     const favoriteItems =
       node?.kind === 'document'
@@ -260,7 +309,23 @@ export default function WikiSideNav({
           ...(canRename(node)
             ? [{ id: 'rename', label: '이름 바꾸기', Icon: IconEditSquare, onSelect: select('rename') }]
             : []),
+          // 이동은 artifact 단위 API라 문서 행에만 건다 — 채널·폴더에는 보낼 경로가 없다
+          ...(node?.kind === 'document'
+            ? [{ id: 'move', label: '옮기기', Icon: IconArrowTurnRight, onSelect: select('move') }]
+            : []),
         ],
+        // 삭제 API는 폴더뿐이고 채널 관리자 한정 — 시안대로 마지막 단독 묶음이다
+        node?.kind === 'folder' && isChannelAdmin(node.channelId)
+          ? [
+              {
+                id: 'delete-folder',
+                label: '폴더 삭제하기',
+                Icon: IconDelete,
+                tone: 'destructive' as const,
+                onSelect: select('delete-folder'),
+              },
+            ]
+          : [],
       ],
       metaLines: node?.metaLines,
     };
@@ -366,16 +431,29 @@ export default function WikiSideNav({
         />
         {/* 행이 하나도 없으면 본문 자체를 열지 않는다 — 빈 상자만큼 머리글이 밀린다 */}
         <SnbSectionBody open={favoritesOpen && favorites.length > 0}>
-          {favorites.map((item) => (
-            <SnbNavRow
-              key={item.id}
-              Icon={IconFile}
-              label={item.label}
-              selected={item.href !== undefined && item.href === pathname}
-              disabled={item.href === undefined}
-              onClick={item.href === undefined ? undefined : go(item.href)}
-            />
-          ))}
+          {favorites.map((item) => {
+            const menuOpen = menu?.kind === 'favorite-more' && menu.nodeId === item.id;
+            return (
+              <SnbNavRow
+                key={item.id}
+                Icon={IconFile}
+                label={item.label}
+                selected={item.href !== undefined && item.href === pathname}
+                disabled={item.href === undefined}
+                onClick={item.href === undefined ? undefined : go(item.href)}
+                actionsOpen={menuOpen || moveOpenNodeId === item.id}
+                actions={
+                  <RowActionButton
+                    label={`${item.label} 추가 작업`}
+                    tooltip="추가 작업"
+                    Icon={IconMore}
+                    active={menuOpen}
+                    onClick={(trigger) => setMenu({ kind: 'favorite-more', nodeId: item.id, anchor: trigger })}
+                  />
+                }
+              />
+            );
+          })}
         </SnbSectionBody>
       </div>
       <div className="flex flex-col">
@@ -418,7 +496,7 @@ export default function WikiSideNav({
           <PopoverContent
             align="start"
             side="right"
-            className={POPOVER_SHELL_CLASS}
+            className={SNB_POPOVER_SHELL_CLASS}
             onCloseAutoFocus={(event) => event.preventDefault()}
           >
             <SnbDropdownMenu {...menuProps()} />
@@ -430,7 +508,7 @@ export default function WikiSideNav({
       {nameInput && (
         <Popover open onOpenChange={(open) => !open && setNameInput(null)}>
           <PopoverAnchor virtualRef={{ current: nameInput.anchor }} />
-          <PopoverContent align="start" side="right" className={POPOVER_SHELL_CLASS}>
+          <PopoverContent align="start" side="right" className={SNB_POPOVER_SHELL_CLASS}>
             <SnbRenamePopover
               kind={nameInput.mode === 'create-folder' ? 'folder' : nameInput.node.kind}
               defaultValue={nameInput.mode === 'create-folder' ? '' : nameInput.node.label}
@@ -445,6 +523,19 @@ export default function WikiSideNav({
           </PopoverContent>
         </Popover>
       )}
+
+      {/* 확인 문구는 서버 계약을 그대로 말한다 — 폴더 안 문서는 삭제되지 않고 채널 루트로 옮겨진다 */}
+      <ConfirmDialog
+        open={deleteConfirm !== null}
+        onOpenChange={(open) => !open && setDeleteConfirm(null)}
+        title="폴더를 삭제할까요?"
+        description="폴더만 사라지고, 안에 있던 문서는 채널 바로 아래로 옮겨집니다."
+        confirmLabel="삭제하기"
+        variant="danger"
+        onConfirm={() => {
+          if (deleteConfirm) onFolderDeleteSubmit?.(deleteConfirm);
+        }}
+      />
     </SideNavShell>
   );
 }
