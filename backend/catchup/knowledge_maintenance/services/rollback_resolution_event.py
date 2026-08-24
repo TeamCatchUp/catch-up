@@ -54,6 +54,10 @@ UNMERGE = "unmerge"
 # 병합이 쓰는 표시와 같은 값을 쓴다.
 ALIAS_SOURCE = "system"
 
+# 원본당 되돌림 행 하나를 지키는 부분 unique 인덱스의 이름이다. 저널 쓰기가
+# 실패했을 때 그것이 중복 되돌림인지 다른 이유인지를 이 이름으로 가른다.
+REVERSAL_UNIQUE_CONSTRAINT = "uq_knowledge_resolution_events_reversal"
+
 
 class RollbackError(Exception):
     """되돌릴 수 없는 요청을 거부할 때 던진다."""
@@ -251,6 +255,10 @@ def rollback_resolution_event(
                 reverses_event_id=event_id,
             )
         except IntegrityError as error:
+            if not _is_duplicate_reversal(error):
+                # 다른 제약을 어긴 것은 되돌림이 두 번 일어난 일이 아니다.
+                # 여기서 함께 삼키면 저널이 왜 안 적혔는지가 사라진다.
+                raise
             # 원본당 되돌림 행 하나라는 제약에 부딪혔다. 앞의 find_reversal
             # 검사는 잠금 없는 읽기라 거의 동시에 되돌리면 양쪽 다 통과하고,
             # 나중에 적는 쪽이 여기서 걸린다.
@@ -432,6 +440,22 @@ def _members(event: StoredResolutionEvent) -> tuple[_Member, ...]:
             )
         )
     return tuple(members)
+
+
+def _is_duplicate_reversal(error: IntegrityError) -> bool:
+    """되돌림 행이 원본당 하나라는 제약을 어긴 것인지 본다.
+
+    psycopg는 위반한 제약 이름을 원본 예외의 진단 정보에 담아 준다. 그
+    값을 먼저 보고, 드라이버가 달라 진단 정보가 없으면 예외 문구에서
+    제약 이름을 찾는다. 문구만 보고 넓게 잡으면 다른 제약을 어긴 실패까지
+    "이미 되돌려졌다"로 읽혀 저널이 왜 안 적혔는지가 사라진다.
+    """
+    original = getattr(error, "orig", None)
+    diagnostic = getattr(original, "diag", None)
+    constraint_name = getattr(diagnostic, "constraint_name", None)
+    if constraint_name is not None:
+        return constraint_name == REVERSAL_UNIQUE_CONSTRAINT
+    return REVERSAL_UNIQUE_CONSTRAINT in str(error)
 
 
 def _live_members(

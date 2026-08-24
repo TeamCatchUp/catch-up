@@ -29,6 +29,9 @@ from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
 from catchup.knowledge_maintenance.ports.resolution_events import StoredResolutionEvent
 from catchup.knowledge_maintenance.services.rollback_resolution_event import (
+    REVERSAL_UNIQUE_CONSTRAINT,
+)
+from catchup.knowledge_maintenance.services.rollback_resolution_event import (
     RollbackError,
 )
 from catchup.knowledge_maintenance.services.rollback_resolution_event import (
@@ -502,12 +505,16 @@ def test_second_rollback_of_same_event_is_rejected() -> None:
         )
 
 
+@dataclass
 class _ConflictingEventRepo(FakeResolutionEventRepo):
-    """되돌림 행을 적을 때 DB의 unique 위반을 흉내 낸다.
+    """되돌림 행을 적을 때 DB의 제약 위반을 흉내 낸다.
 
     두 운영자가 거의 동시에 같은 event를 되돌리면 미리 읽어 보는 검사는
-    양쪽 다 통과하고, 나중에 적는 쪽이 DB 제약에서 부딪힌다.
+    양쪽 다 통과하고, 나중에 적는 쪽이 DB 제약에서 부딪힌다. 어느 제약을
+    어겼는지는 `constraint`로 정한다.
     """
+
+    constraint: str = REVERSAL_UNIQUE_CONSTRAINT
 
     def record(self, **kwargs: Any) -> None:
         if kwargs.get("reverses_event_id") is not None:
@@ -516,7 +523,7 @@ class _ConflictingEventRepo(FakeResolutionEventRepo):
                 {},
                 Exception(
                     "duplicate key value violates unique constraint "
-                    '"uq_knowledge_resolution_events_reversal"'
+                    f'"{self.constraint}"'
                 ),
             )
         super().record(**kwargs)
@@ -543,6 +550,30 @@ def test_conflicting_reversal_is_reported_as_already_rolled_back() -> None:
     assert uow.rolled_back == 1
     for candidate_id in candidate_ids:
         assert state.candidates[candidate_id]["resolved_node_id"] is not None
+
+
+def test_other_constraint_violation_is_not_read_as_a_second_rollback() -> None:
+    """다른 제약을 어긴 저장 실패는 이미 되돌려졌다는 거부로 바꾸지 않는다.
+
+    중복 되돌림이 아닌 실패까지 삼키면 저널이 왜 안 적혔는지가 사라진다.
+    """
+    state = FakeState()
+    event_id, _target, _candidate_ids = _seed_merge_into_node(state)
+    uow = FakeUnitOfWork(state)
+    uow.resolution_events = _ConflictingEventRepo(
+        state,
+        constraint="ck_knowledge_resolution_events_type",
+    )
+
+    with pytest.raises(IntegrityError):
+        rollback_resolution_event(
+            uow,
+            workspace_id=WORKSPACE_ID,
+            event_id=event_id,
+            operator="ops:junsu",
+        )
+
+    assert uow.committed == 0
 
 
 def test_rollback_of_unmerge_event_is_rejected() -> None:
