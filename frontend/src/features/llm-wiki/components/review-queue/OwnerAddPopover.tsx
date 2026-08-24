@@ -17,10 +17,10 @@ interface OwnerAddPopoverProps {
   onAssign: (userIds: readonly number[]) => void;
 }
 
-/** 지정 확인 모달 문구 — 18822:134909 실측. 지정은 검토 권한을 담당자에게 넘긴다 */
+/** 지정 확인 모달 문구. 지정은 검토 권한을 담당자에게 넘긴다 */
 const ASSIGN_CONFIRM = {
   title: '담당자를 지정할까요?',
-  description: '지정하면 이 문서는 담당자가 검토하게 되고, 지금 하시던 검토를 마칠 수 없습니다.',
+  description: '지정한 담당자가 이 문서의 검토를 맡게 됩니다. 지정 후에는 담당자만 판정하고 내보낼 수 있습니다.',
 } as const;
 
 /**

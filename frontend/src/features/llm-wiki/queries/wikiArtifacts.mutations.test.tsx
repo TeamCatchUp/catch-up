@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { knowledgeReviewQueries } from './knowledgeReview.queries';
 import { wikiQueries } from './wiki.queries';
 import { useMoveWikiArtifactMutation } from './wikiArtifacts.mutations';
 
@@ -58,14 +59,20 @@ describe('useMoveWikiArtifactMutation', () => {
     expect(wikiApi.moveWikiArtifact).toHaveBeenCalledWith(ARTIFACT_ID, null);
   });
 
-  it('성공하면 위키 뿌리를 무효화한다 — 채널 트리와 문서 목록이 함께 바뀐다', async () => {
+  // 구성원·definition-presets는 이동으로 바뀌지 않는다 — 위키 뿌리째 무효화하지 않는다
+  it('성공하면 위치를 실은 캐시만 되돌린다 — 채널 트리·문서 목록·즐겨찾기·검토큐', async () => {
     const { wrapper, invalidatedKeys } = createHarness();
     const { result } = renderHook(() => useMoveWikiArtifactMutation(), { wrapper });
 
     result.current.mutate({ artifactId: ARTIFACT_ID, folderId: 'fd-9' });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(invalidatedKeys()).toEqual([wikiQueries.all()]);
+    expect(invalidatedKeys()).toEqual([
+      wikiQueries.channels().queryKey,
+      [...wikiQueries.all(), 'artifacts'],
+      wikiQueries.favorites().queryKey,
+      knowledgeReviewQueries.all(),
+    ]);
   });
 
   it('검수 자격이 없으면 서버 문구만 띄우고 캐시를 건드리지 않는다', async () => {

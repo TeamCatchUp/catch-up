@@ -61,12 +61,24 @@ describe('useQueryErrorToast', () => {
     expect(toastMock).toHaveBeenCalledTimes(1);
   });
 
-  // 합산 에러는 앞 쿼리가 복구되면 다른 쿼리 실패로 갈아탄다 — 새 문구가 묻히면 안 된다
-  it('실패가 다른 문구로 갈아타면 그 문구를 새로 띄운다', () => {
+  // 에피소드 시맨틱 — 합산 에러가 다른 쿼리 실패로 갈아타도 걷히기 전에는 같은 에피소드다
+  it('에러가 걷히기 전에는 문구가 갈려도 다시 띄우지 않는다', () => {
     const { rerender } = renderHook(({ value }) => useQueryErrorToast(value), {
       initialProps: { value: makeApiError('WIKI_LIST_FAILED', '목록을 읽지 못했습니다.') },
     });
 
+    rerender({ value: makeApiError('WIKI_CHANNELS_FAILED', '채널을 읽지 못했습니다.') });
+
+    expect(toastMock).toHaveBeenCalledTimes(1);
+    expect(toastMock.mock.calls[0][0]).toBe('목록을 읽지 못했습니다.');
+  });
+
+  it('걷혔다가 다른 실패로 다시 서면 새 에피소드로 새 문구를 띄운다', () => {
+    const { rerender } = renderHook(({ value }: { value: unknown }) => useQueryErrorToast(value), {
+      initialProps: { value: makeApiError('WIKI_LIST_FAILED', '목록을 읽지 못했습니다.') as unknown },
+    });
+
+    rerender({ value: null });
     rerender({ value: makeApiError('WIKI_CHANNELS_FAILED', '채널을 읽지 못했습니다.') });
 
     expect(toastMock).toHaveBeenCalledTimes(2);

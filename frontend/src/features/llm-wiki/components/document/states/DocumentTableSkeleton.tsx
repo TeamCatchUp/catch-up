@@ -12,6 +12,8 @@ interface DocumentTableSkeletonProps {
   withPath?: boolean;
   /** 목적지 표의 메타 열 구성 — folder는 최근 활동 한 칸뿐이다 */
   kind?: FolderDocumentRowKind;
+  /** 최근 활동 열 정렬 — 우측 정렬인 대시보드 표만 end를 준다 */
+  activityAlign?: 'center' | 'end';
 }
 
 /**
@@ -22,6 +24,7 @@ export default function DocumentTableSkeleton({
   rowCount = DEFAULT_ROW_COUNT,
   withPath = false,
   kind = 'document',
+  activityAlign = 'center',
 }: DocumentTableSkeletonProps) {
   return (
     <div role="status" aria-label="목록 불러오는 중" className="flex flex-col gap-1">
@@ -47,7 +50,7 @@ export default function DocumentTableSkeleton({
               </>
             )}
             <Skeleton
-              className={kind === 'document' ? 'h-5.5 w-14 justify-self-end' : 'h-5.5 w-14 justify-self-center'}
+              className={activityAlign === 'end' ? 'h-5.5 w-14 justify-self-end' : 'h-5.5 w-14 justify-self-center'}
             />
           </span>
         </div>

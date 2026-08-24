@@ -10,7 +10,6 @@ import WikiSideNav, {
   type SnbMenuActionId,
   type WikiTreeNode,
 } from '@/shared/components/layout/sideNavBar/WikiSideNav';
-import { buttonVariants } from '@/shared/components/ui/button';
 import { Popover, PopoverAnchor, PopoverContent } from '@/shared/components/ui/popover';
 import { toast } from '@/shared/components/ui/toast';
 import { authQueries } from '@/shared/queries/auth.queries';
@@ -105,7 +104,6 @@ export default function WikiSideNavContainer() {
           toast(`${node.label}의 옮긴 위치는 ${target.label} 입니다.`, {
             duration: ACTION_TOAST_DURATION,
             action: { label: '이동', onClick: () => router.push(href) },
-            classNames: { actionButton: buttonVariants({ variant: 'box-outline-gray', size: 'sm' }) },
           });
         },
       },

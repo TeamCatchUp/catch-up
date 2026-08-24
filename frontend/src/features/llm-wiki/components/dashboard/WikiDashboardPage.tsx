@@ -159,7 +159,7 @@ export default function WikiDashboardPage({
             <div className="flex flex-col">
               <DashboardDocumentTableHeader />
               {documentsLoading ? (
-                <DocumentTableSkeleton withPath />
+                <DocumentTableSkeleton withPath activityAlign="end" />
               ) : documents.length === 0 ? (
                 <DocumentTableEmptyState />
               ) : (

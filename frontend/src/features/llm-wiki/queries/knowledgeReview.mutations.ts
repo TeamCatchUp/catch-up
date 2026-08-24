@@ -20,6 +20,8 @@ const BLOCK_VERDICT_STALE_CODES = ['STALE_BLOCK', 'ALREADY_DECIDED'];
 const PUBLISH_STALE_CODES = ['STALE_BLOCK', 'ALREADY_DECIDED', 'UNDECIDED_BLOCKS', 'CONFLICT_RACE'];
 
 interface BlockVerdictVariables extends ReviewBlockVerdictRequest {
+  /** 판정 대상 안건. 클릭 시점 값을 실어 비행 중 선택 교체가 경로·무효화를 흔들지 않는다 */
+  proposalId: string;
   /** 경로에 실리는 블록 자리. 화면이 본 블록의 값을 그대로 보낸다 */
   blockIndex: number;
 }
@@ -32,6 +34,8 @@ export interface BlockVerdictTarget {
 
 /** 일괄 판정 요청. 반려는 전 블록이 같은 사유를 공유한다 */
 export interface BulkVerdictVariables {
+  /** 판정 대상 안건. 클릭 시점 값을 실어 비행 중 선택 교체가 경로·무효화를 흔들지 않는다 */
+  proposalId: string;
   targets: readonly BlockVerdictTarget[];
   verdict: 'approved' | 'rejected';
   rejection_reason?: string;
@@ -46,47 +50,53 @@ export interface BulkVerdictResult {
 }
 
 /**
- * 판정이 바꾸는 위키 캐시 — 문서 목록(상태·최근 활동)과 그 문서의 발행판뿐이다.
- * 채널·구성원·preset은 판정으로 바뀌지 않아 뿌리째 무효화하지 않는다.
+ * 발행이 바꾸는 위키 캐시 — 문서 목록(상태·최근 활동), 그 문서의 발행판,
+ * 그리고 폴더 last_activity_at을 실어 오는 채널 목록이다. 구성원·preset은 바뀌지 않는다.
  */
 function invalidateWikiArtifacts(queryClient: QueryClient, artifactId?: string) {
   queryClient.invalidateQueries({ queryKey: [...wikiQueries.all(), 'artifacts'] });
-  // 문서 id를 아직 모르는 화면(상세 도착 전)은 목록만 되돌린다
+  queryClient.invalidateQueries({ queryKey: wikiQueries.channels().queryKey });
+  // 문서 id를 아직 모르는 화면(상세 도착 전)은 목록·채널만 되돌린다
   if (artifactId) queryClient.invalidateQueries({ queryKey: wikiQueries.artifact(artifactId).queryKey });
 }
 
 /**
- * 블록 판정(PUT, 멱등). 성공·실패 모두 상세만 다시 읽는다 —
+ * 블록 판정(PUT, 멱등). 성공·실패 모두 그 안건의 상세만 다시 읽는다 —
  * 큐 줄은 블록 판정으로 바뀌지 않고, 실패 대부분이 낡은 지문이라 재조회가 곧 복구다.
  */
-export const useReviewBlockVerdictMutation = (proposalId: string) => {
+export const useReviewBlockVerdictMutation = () => {
   const queryClient = useQueryClient();
-  const detailKey = knowledgeReviewQueries.queueItem(proposalId).queryKey;
 
   return useMutation({
-    mutationFn: ({ blockIndex, ...body }: BlockVerdictVariables): Promise<ReviewBlockVerdictDto> =>
+    mutationFn: ({ proposalId, blockIndex, ...body }: BlockVerdictVariables): Promise<ReviewBlockVerdictDto> =>
       submitReviewBlockVerdict(proposalId, blockIndex, body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: detailKey });
+    onSuccess: (_data, { proposalId }) => {
+      queryClient.invalidateQueries({ queryKey: knowledgeReviewQueries.queueItem(proposalId).queryKey });
     },
-    onError: (error) => {
+    onError: (error, { proposalId }) => {
       const { code, message } = parseApiError(error);
       toast(message);
-      if (BLOCK_VERDICT_STALE_CODES.includes(code)) queryClient.invalidateQueries({ queryKey: detailKey });
+      if (BLOCK_VERDICT_STALE_CODES.includes(code)) {
+        queryClient.invalidateQueries({ queryKey: knowledgeReviewQueries.queueItem(proposalId).queryKey });
+      }
     },
   });
 };
 
 /**
  * 블록 판정 일괄 전송(승인·반려). 개별 판정과 같은 PUT을 병렬로 보내고 성패를 세어 돌려준다.
- * 일부만 실패해도 상세를 다시 읽는다 — 성공분의 판정이 카드에 서야 한다.
+ * 일부만 실패해도 그 안건의 상세를 다시 읽는다 — 성공분의 판정이 카드에 서야 한다.
  */
-export const useReviewBulkVerdictMutation = (proposalId: string) => {
+export const useReviewBulkVerdictMutation = () => {
   const queryClient = useQueryClient();
-  const detailKey = knowledgeReviewQueries.queueItem(proposalId).queryKey;
 
   return useMutation({
-    mutationFn: async ({ targets, verdict, rejection_reason }: BulkVerdictVariables): Promise<BulkVerdictResult> => {
+    mutationFn: async ({
+      proposalId,
+      targets,
+      verdict,
+      rejection_reason,
+    }: BulkVerdictVariables): Promise<BulkVerdictResult> => {
       const settled = await Promise.allSettled(
         targets.map(({ blockIndex, block_content_hash }) =>
           submitReviewBlockVerdict(proposalId, blockIndex, { verdict, rejection_reason, block_content_hash }),
@@ -100,8 +110,8 @@ export const useReviewBulkVerdictMutation = (proposalId: string) => {
         message: rejected.length > 0 ? parseApiError(rejected[0].reason).message : null,
       };
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: detailKey });
+    onSettled: (_data, _error, { proposalId }) => {
+      queryClient.invalidateQueries({ queryKey: knowledgeReviewQueries.queueItem(proposalId).queryKey });
     },
   });
 };

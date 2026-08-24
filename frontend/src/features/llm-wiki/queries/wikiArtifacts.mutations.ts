@@ -4,6 +4,7 @@ import { parseApiError } from '@/shared/api/errors';
 import { toast } from '@/shared/components/ui/toast';
 
 import { moveWikiArtifact } from '../api/wikiRequests';
+import { knowledgeReviewQueries } from './knowledgeReview.queries';
 import { wikiQueries } from './wiki.queries';
 
 export interface MoveWikiArtifactVariables {
@@ -14,8 +15,8 @@ export interface MoveWikiArtifactVariables {
 }
 
 /**
- * 문서 폴더 이동. 성공 시 위키 뿌리를 무효화한다 —
- * 채널 응답의 폴더 구성과 문서 목록의 folder_id가 함께 바뀐다.
+ * 문서 폴더 이동. 위치를 실은 캐시만 되돌린다 — 채널 트리·문서 목록·즐겨찾기·검토큐.
+ * 구성원·definition-presets는 이동으로 바뀌지 않아 뿌리째 무효화하지 않는다.
  */
 export const useMoveWikiArtifactMutation = () => {
   const queryClient = useQueryClient();
@@ -24,7 +25,10 @@ export const useMoveWikiArtifactMutation = () => {
     mutationFn: ({ artifactId, folderId }: MoveWikiArtifactVariables): Promise<void> =>
       moveWikiArtifact(artifactId, folderId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: wikiQueries.all() });
+      queryClient.invalidateQueries({ queryKey: wikiQueries.channels().queryKey });
+      queryClient.invalidateQueries({ queryKey: [...wikiQueries.all(), 'artifacts'] });
+      queryClient.invalidateQueries({ queryKey: wikiQueries.favorites().queryKey });
+      queryClient.invalidateQueries({ queryKey: knowledgeReviewQueries.all() });
     },
     // 검수 자격이 없으면 403이 온다 — 서버 문구를 그대로 띄운다
     onError: (error) => {

@@ -4,12 +4,15 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { toast } from '@/shared/components/ui/toast';
 import { server } from '@/test/msw/server';
 
 import { useReviewQueueModel } from './useReviewQueueModel';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('@/shared/components/ui/toast', () => ({ toast: vi.fn() }));
+
+const toastMock = vi.mocked(toast);
 
 const FIRST = 'prop-first';
 const SECOND = 'prop-second';
@@ -124,7 +127,7 @@ const detail = (
 function stubReviewEndpoints(items: readonly ReturnType<typeof queueItem>[]) {
   const dropped = new Set<string>();
   const decided = new Map<string, Map<number, SavedVerdict>>();
-  const verdictCalls: { blockIndex: string; verdict: string; reason: string | null }[] = [];
+  const verdictCalls: { proposalId: string; blockIndex: string; verdict: string; reason: string | null }[] = [];
 
   server.use(
     http.get('*/api/v1/knowledge-review/queue', () => {
@@ -140,7 +143,12 @@ function stubReviewEndpoints(items: readonly ReturnType<typeof queueItem>[]) {
       const blockIndex = Number(params.blockIndex);
       const body = (await request.json()) as { verdict: string; rejection_reason?: string | null };
       const saved = { verdict: body.verdict, reason: body.rejection_reason ?? null };
-      verdictCalls.push({ blockIndex: String(params.blockIndex), verdict: saved.verdict, reason: saved.reason });
+      verdictCalls.push({
+        proposalId,
+        blockIndex: String(params.blockIndex),
+        verdict: saved.verdict,
+        reason: saved.reason,
+      });
       decided.set(proposalId, (decided.get(proposalId) ?? new Map()).set(blockIndex, saved));
       return HttpResponse.json(blockVerdict(proposalId, blockIndex, saved.verdict, saved.reason));
     }),
@@ -185,24 +193,45 @@ describe('useReviewQueueModel', () => {
     expect(verdictCalls.map((call) => call.blockIndex).sort()).toEqual(['0', '1']);
     expect(verdictCalls.every((call) => call.verdict === 'approved')).toBe(true);
 
-    // 발행은 별도 클릭이다 — 안건이 큐에 남고 발행 바도 열려 있다
+    // 발행은 별도 클릭이다 — 안건이 큐에 남고, 전 카드가 판정돼 발행 바가 열린다
     expect(result.current.items).toHaveLength(1);
     expect(result.current.selectedId).toBe(FIRST);
-    expect(result.current.publishDisabled).toBe(false);
+    await waitFor(() => expect(result.current.publishDisabled).toBe(false));
   });
 
-  it('보낼 카드가 없으면 전체 승인이 요청을 내지 않는다', async () => {
+  it('전체 반려는 이미 승인된 카드도 반려로 덮는다', async () => {
     const { verdictCalls } = stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
     const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
 
     await waitFor(() => expect(result.current.entries).toHaveLength(3));
 
     act(() => result.current.onApproveAll());
-    // 다시 읽은 상세가 판정을 물고 오면 보낼 대상이 비어야 한다
     await waitFor(() => expect(result.current.entries.filter((entry) => entry.approved)).toHaveLength(2));
 
+    act(() => result.current.onRejectDialogOpenChange(true));
+    act(() => result.current.onRejectAll('근거 문서가 없습니다'));
+
+    // 판정 경로가 있는 두 카드에 다시 나가 승인이 반려로 뒤집힌다
+    await waitFor(() => expect(verdictCalls).toHaveLength(4));
+    expect(verdictCalls.slice(2).every((call) => call.verdict === 'rejected')).toBe(true);
+    await waitFor(() => expect(result.current.entries.filter((entry) => entry.rejected)).toHaveLength(2));
+    expect(result.current.entries.filter((entry) => entry.approved)).toHaveLength(0);
+  });
+
+  it('미판정 카드가 남으면 발행이 잠기고 전 카드를 판정하면 열린다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.entries).toHaveLength(3));
+    expect(result.current.publishDisabled).toBe(true);
+
+    act(() => result.current.onApproveBlock(result.current.entries[0]));
+    // 빠진 블록은 판정 경로가 없어 세지 않는다 — 아직 한 카드가 남았다
+    await waitFor(() => expect(result.current.entries.filter((entry) => entry.approved)).toHaveLength(1));
+    expect(result.current.publishDisabled).toBe(true);
+
     act(() => result.current.onApproveAll());
-    expect(verdictCalls).toHaveLength(2);
+    await waitFor(() => expect(result.current.publishDisabled).toBe(false));
   });
 
   it('발행에 성공하면 다음 안건으로 넘어간다', async () => {
@@ -242,7 +271,7 @@ describe('useReviewQueueModel', () => {
     expect(result.current.selectedId).toBeNull();
   });
 
-  it('전체 반려는 미판정 카드마다 반려 판정을 보내고 화면에 남는다', async () => {
+  it('전체 반려는 판정 경로가 있는 카드마다 반려 판정을 보내고 화면에 남는다', async () => {
     const { verdictCalls } = stubReviewEndpoints([
       queueItem(FIRST, '결제 재시도 정책'),
       queueItem(SECOND, '환불 문서 병합'),
@@ -268,20 +297,140 @@ describe('useReviewQueueModel', () => {
     await waitFor(() => expect(result.current.entries.filter((entry) => entry.rejected)).toHaveLength(2));
   });
 
-  it('보낼 카드가 없으면 전체 반려는 요청 없이 다이얼로그만 닫는다', async () => {
-    const { verdictCalls } = stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+  it('반려 다이얼로그가 열린 동안은 보던 안건이 목록에서 빠져도 선택 폴백이 보류된다', async () => {
+    let hideFirst = false;
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책'), queueItem(SECOND, '환불 문서 병합')]);
+    server.use(
+      http.get('*/api/v1/knowledge-review/queue', () => {
+        const items = hideFirst
+          ? [queueItem(SECOND, '환불 문서 병합')]
+          : [queueItem(FIRST, '결제 재시도 정책'), queueItem(SECOND, '환불 문서 병합')];
+        return HttpResponse.json({ items, total: items.length, limit: 50, offset: 0 });
+      }),
+    );
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.selectedId).toBe(FIRST));
+    act(() => result.current.onRejectDialogOpenChange(true));
+
+    // 열림 중 큐가 다시 와서 보던 행이 빠진다 — 첫 줄로 갈아타면 사유가 다른 안건에 붙는다
+    hideFirst = true;
+    act(() => result.current.onFiltersChange({ ...result.current.filters, waitingId: 'within-7d' }));
+
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    expect(result.current.selectedId).toBe(FIRST);
+
+    // 닫으면 정상 폴백이 재개된다
+    act(() => result.current.onRejectDialogOpenChange(false));
+    await waitFor(() => expect(result.current.selectedId).toBe(SECOND));
+  });
+
+  it('카드 반려 제출은 다이얼로그를 연 시점의 안건으로 나간다', async () => {
+    const { verdictCalls } = stubReviewEndpoints([
+      queueItem(FIRST, '결제 재시도 정책'),
+      queueItem(SECOND, '환불 문서 병합'),
+    ]);
     const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
 
     await waitFor(() => expect(result.current.entries).toHaveLength(3));
+    act(() => result.current.onRejectBlock?.(result.current.entries[0]));
+    expect(result.current.blockRejectDialogOpen).toBe(true);
 
-    act(() => result.current.onRejectAll('근거 문서가 없습니다'));
-    await waitFor(() => expect(result.current.entries.filter((entry) => entry.rejected)).toHaveLength(2));
+    // 열림 중 선택이 다른 안건으로 바뀌어도 제출은 연 시점의 안건으로 나간다
+    act(() => result.current.onSelectItem(SECOND));
+    act(() => result.current.onRejectBlockSubmit?.('근거 VOC가 한 건뿐입니다'));
 
+    await waitFor(() => expect(verdictCalls).toHaveLength(1));
+    expect(verdictCalls[0]).toMatchObject({ proposalId: FIRST, blockIndex: '0', verdict: 'rejected' });
+  });
+
+  it('발행 대기 중 다른 안건으로 옮겼으면 완료가 그 선택을 되덮지 않는다', async () => {
+    const THIRD = 'prop-third';
+    let releasePublish!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releasePublish = resolve;
+    });
+    stubReviewEndpoints([
+      queueItem(FIRST, '결제 재시도 정책'),
+      queueItem(SECOND, '환불 문서 병합'),
+      queueItem(THIRD, '약관 개정 반영'),
+    ]);
+    server.use(
+      http.post('*/api/v1/knowledge-review/queue/:proposalId/publish', async ({ params }) => {
+        await gate;
+        return HttpResponse.json({
+          proposal_id: String(params.proposalId),
+          verdict: 'published',
+          revision_id: 'rev-2',
+          revision_number: 2,
+          blocks_published: 2,
+          blocks_rejected: 0,
+          contradictions_resolved: 0,
+          claims_accepted: 2,
+        });
+      }),
+    );
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.selectedId).toBe(FIRST));
+    act(() => result.current.onPublish());
+    act(() => result.current.onSelectItem(THIRD));
+
+    releasePublish();
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith('내보내기를 완료했습니다', expect.objectContaining({ duration: 6000 })),
+    );
+    expect(result.current.selectedId).toBe(THIRD);
+
+    // 발행 토스트는 전역 액션 버튼 규격만 쓴다 — 토스트별 오버라이드가 되살아나면 안 된다
+    const publishToast = toastMock.mock.calls.find(([message]) => message === '내보내기를 완료했습니다');
+    expect(publishToast?.[1]).not.toHaveProperty('classNames');
+  });
+
+  it('전체 반려가 전량 실패하면 다이얼로그를 닫지 않는다 — 사유가 보존된다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    server.use(
+      http.put('*/api/v1/knowledge-review/queue/:proposalId/blocks/:blockIndex/verdict', () =>
+        HttpResponse.json(
+          { detail: { code: 'STALE_BLOCK', message: '다른 검토자가 먼저 판정했어요.' } },
+          { status: 409 },
+        ),
+      ),
+    );
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.entries).toHaveLength(3));
     act(() => result.current.onRejectDialogOpenChange(true));
-    act(() => result.current.onRejectAll('두 번째 사유'));
+    act(() => result.current.onRejectAll('근거 문서가 없습니다'));
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith('2건을 반려하지 못했습니다. 다른 검토자가 먼저 판정했어요.'),
+    );
+    // 열린 채 남아야 사유가 보존돼 그대로 다시 보낼 수 있다
+    expect(result.current.rejectDialogOpen).toBe(true);
+  });
+
+  it('반려할 블록이 없으면 요청 없이 닫고 안내 토스트를 띄운다', async () => {
+    const { verdictCalls } = stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    server.use(
+      http.get('*/api/v1/knowledge-review/queue/:proposalId', ({ params }) =>
+        HttpResponse.json({
+          ...detail(String(params.proposalId), false),
+          blocks: [],
+          block_changes: [{ change: 'removed', block_index: null, base_block_index: 1 }],
+        }),
+      ),
+    );
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    // 빠진 블록 카드 하나뿐 — 판정 경로가 없어 보낼 대상이 없다
+    await waitFor(() => expect(result.current.entries).toHaveLength(1));
+    act(() => result.current.onRejectDialogOpenChange(true));
+    act(() => result.current.onRejectAll('근거 문서가 없습니다'));
 
     expect(result.current.rejectDialogOpen).toBe(false);
-    expect(verdictCalls).toHaveLength(2);
+    expect(toastMock).toHaveBeenCalledWith('반려할 블록이 없습니다');
+    expect(verdictCalls).toHaveLength(0);
   });
 
   it('거르기를 바꿔도 보던 안건이 새 목록에 있으면 선택이 남는다', async () => {
@@ -334,12 +483,12 @@ describe('useReviewQueueModel', () => {
     expect(result.current.selectedId).toBe(FIRST);
   });
 
-  it('힌트는 목록이 처음 온 순간에만 풀린다 — 뒤늦게 나타난 안건에는 먹지 않는다', async () => {
+  /** 첫 응답에는 힌트 대상이 없고, 둘째 응답부터 목록에 들어오는 큐 */
+  function stubTwoPhaseQueue() {
     let requestCount = 0;
     server.use(
       http.get('*/api/v1/knowledge-review/queue', () => {
         requestCount += 1;
-        // 둘째 요청부터 힌트와 맞는 안건이 목록에 들어온다
         const items =
           requestCount === 1
             ? [queueItem(FIRST, '결제 재시도 정책')]
@@ -361,7 +510,10 @@ describe('useReviewQueueModel', () => {
         }),
       ),
     );
+  }
 
+  it('힌트는 찾을 때까지 재시도한다 — 뒤늦게 목록에 들어온 안건도 골라진다', async () => {
+    stubTwoPhaseQueue();
     const { result } = renderHook(() => useReviewQueueModel({ preselectArtifactId: `art-${SECOND}` }), {
       wrapper: makeWrapper(),
     });
@@ -369,6 +521,21 @@ describe('useReviewQueueModel', () => {
     await waitFor(() => expect(result.current.items).toHaveLength(1));
     expect(result.current.selectedId).toBe(FIRST);
 
+    act(() => result.current.onFiltersChange({ ...result.current.filters, waitingId: 'within-7d' }));
+
+    await waitFor(() => expect(result.current.selectedId).toBe(SECOND));
+  });
+
+  it('힌트를 찾기 전에 사용자가 고르면 즉시 포기한다', async () => {
+    stubTwoPhaseQueue();
+    const { result } = renderHook(() => useReviewQueueModel({ preselectArtifactId: `art-${SECOND}` }), {
+      wrapper: makeWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    act(() => result.current.onSelectItem(FIRST));
+
+    // 나중에 대상이 목록에 들어와도 사용자의 선택을 덮지 않는다
     act(() => result.current.onFiltersChange({ ...result.current.filters, waitingId: 'within-7d' }));
 
     await waitFor(() => expect(result.current.items).toHaveLength(2));
