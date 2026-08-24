@@ -42,33 +42,12 @@ from catchup.db.engine import SessionLocal
 
 _WS = "workspace_id = :ws"
 
-# 추출 스테이징: 후보·근거 링크 → 추출 런 → 온톨로지 스냅샷 → 아웃박스.
-_STAGING = [
-    (
-        "knowledge_candidate_evidence_links",
-        f"DELETE FROM knowledge_candidate_evidence_links WHERE {_WS}",
-    ),
-    (
-        "knowledge_claim_candidates",
-        f"DELETE FROM knowledge_claim_candidates WHERE {_WS}",
-    ),
-    (
-        "knowledge_entity_candidates",
-        f"DELETE FROM knowledge_entity_candidates WHERE {_WS}",
-    ),
-    (
-        "knowledge_relation_assertion_candidates",
-        f"DELETE FROM knowledge_relation_assertion_candidates WHERE {_WS}",
-    ),
-    ("knowledge_extraction_runs", f"DELETE FROM knowledge_extraction_runs WHERE {_WS}"),
-    (
-        "knowledge_ontology_snapshots",
-        f"DELETE FROM knowledge_ontology_snapshots WHERE {_WS}",
-    ),
-    ("knowledge_pipeline_outbox", f"DELETE FROM knowledge_pipeline_outbox WHERE {_WS}"),
-]
-
 # 해소·변이 제안: event 저널 → 오퍼레이션 → 제안 → 별칭 → 이름 임베딩 캐시.
+# 이 묶음이 스테이징보다 먼저 온다. knowledge_mutation_proposals 와
+# knowledge_mutation_operations 는 trigger_entity_candidate_id 처럼 후보 행을
+# 가리키는 FK 를 들고 있어서, 후보를 먼저 지우면 FK 위반으로 트랜잭션 전체가
+# 되돌아간다. knowledge_node_aliases 는 knowledge_nodes 를 가리키지만 노드는
+# 아래 _NODES 에서 지우므로 이 자리에 있어도 된다.
 # knowledge_resolution_events 의 reverses_event_id 는 같은 테이블을 가리키는
 # 자기참조 FK 지만, PostgreSQL 은 FK 검사를 문장이 끝난 뒤에 하므로 한 DELETE
 # 문이 참조하는 행과 참조되는 행을 함께 지운다. 따로 순서를 잡을 필요가 없다.
@@ -89,8 +68,44 @@ _RESOLUTION = [
     ("knowledge_name_embeddings", f"DELETE FROM knowledge_name_embeddings WHERE {_WS}"),
 ]
 
+# 추출 스테이징: 근거 링크 → 주장 후보 → 관계 후보 → 엔티티 후보 →
+# 추출 런 → 온톨로지 스냅샷 → 아웃박스.
+# 주장 후보와 관계 후보는 둘 다 엔티티 후보를 가리키므로 엔티티 후보보다
+# 먼저 지운다. 세 후보 모두 추출 런을 가리키고, 추출 런은 온톨로지 스냅샷을
+# 가리킨다. 아웃박스는 다른 테이블과 FK 로 얽혀 있지 않아 어디에 두어도 되고,
+# 스테이징의 마지막에 둔다.
+_STAGING = [
+    (
+        "knowledge_candidate_evidence_links",
+        f"DELETE FROM knowledge_candidate_evidence_links WHERE {_WS}",
+    ),
+    (
+        "knowledge_claim_candidates",
+        f"DELETE FROM knowledge_claim_candidates WHERE {_WS}",
+    ),
+    (
+        "knowledge_relation_assertion_candidates",
+        f"DELETE FROM knowledge_relation_assertion_candidates WHERE {_WS}",
+    ),
+    (
+        "knowledge_entity_candidates",
+        f"DELETE FROM knowledge_entity_candidates WHERE {_WS}",
+    ),
+    ("knowledge_extraction_runs", f"DELETE FROM knowledge_extraction_runs WHERE {_WS}"),
+    (
+        "knowledge_ontology_snapshots",
+        f"DELETE FROM knowledge_ontology_snapshots WHERE {_WS}",
+    ),
+    ("knowledge_pipeline_outbox", f"DELETE FROM knowledge_pipeline_outbox WHERE {_WS}"),
+]
+
 # 위키 아티팩트: 판정 → 버전 → 즐겨찾기 → 소유자 → 변경 제안 → 아티팩트.
 # artifact_owners에는 workspace_id가 없어서 아티팩트를 거쳐 좁힌다.
+# knowledge_artifact_revisions.source_proposal_id 는 변경 제안을 가리키고
+# knowledge_artifact_change_proposals.base_revision_id 는 거꾸로 버전을
+# 가리켜서 두 테이블이 서로를 참조한다. 어느 쪽을 먼저 지워도 다른 쪽이
+# 걸리므로, 삭제 전에 _CYCLE_BREAKS 로 base_revision_id 를 NULL 로 만들어
+# 고리를 끊고 나서 버전 → 변경 제안 순으로 지운다.
 _ARTIFACTS = [
     ("knowledge_block_verdicts", f"DELETE FROM knowledge_block_verdicts WHERE {_WS}"),
     (
@@ -146,8 +161,19 @@ _SETTINGS = [
 ]
 
 
+# 삭제 직전에 실행해서 테이블끼리 서로를 가리키는 고리를 끊는다.
+# 지울 행의 열을 NULL 로 바꾸기만 하므로 dry-run 에서는 실행하지 않는다.
+_CYCLE_BREAKS = [
+    (
+        "knowledge_artifact_change_proposals.base_revision_id",
+        "UPDATE knowledge_artifact_change_proposals SET base_revision_id = NULL"
+        f" WHERE {_WS} AND base_revision_id IS NOT NULL",
+    ),
+]
+
+
 def _build_plan(args: argparse.Namespace) -> list[tuple[str, str]]:
-    plan = [*_STAGING, *_RESOLUTION, *_ARTIFACTS, *_NODES]
+    plan = [*_RESOLUTION, *_STAGING, *_ARTIFACTS, *_NODES]
     if not args.keep_source_versions:
         plan += _SOURCE_VERSIONS
     if args.include_channels:
@@ -213,6 +239,9 @@ def main() -> int:
         if not args.yes:
             print("\n행 수만 셌다. 실제로 지우려면 --yes 를 붙인다.")
             return 0
+
+        for _label, sql in _CYCLE_BREAKS:
+            db.execute(text(sql), {"ws": args.workspace_id})
 
         for _label, sql in plan:
             db.execute(text(sql), {"ws": args.workspace_id})
