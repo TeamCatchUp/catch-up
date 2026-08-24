@@ -7,10 +7,18 @@ interface DiffTextProps {
   tone: 'removed' | 'added';
 }
 
-// 단어 강조 색만 프론트 결정이고 나머지는 시안 값이다.
+// 단어 단위 강조만 프론트 결정이고 색은 전부 시맨틱 토큰이다 — 다크 전환을 토큰이 맡는다.
 const TONE_STYLES = {
-  removed: { panel: 'bg-red-1 border-red-40', line: 'hover:bg-red-5', emphasized: 'bg-red-10' },
-  added: { panel: 'bg-green-5 border-green-60', line: 'hover:bg-green-10', emphasized: 'bg-green-20' },
+  removed: {
+    panel: 'bg-surface-red-subtle border-accent-red-default',
+    line: 'hover:bg-surface-red-muted',
+    emphasized: 'bg-surface-red-strong',
+  },
+  added: {
+    panel: 'bg-surface-green-subtle border-accent-green-default',
+    line: 'hover:bg-surface-green-muted',
+    emphasized: 'bg-surface-green-strong',
+  },
 } as const;
 
 /**
@@ -25,10 +33,7 @@ export default function DiffText({ lines, tone }: DiffTextProps) {
       {lines.map((line, lineIndex) => (
         <p
           key={lineIndex}
-          className={cn(
-            'text-reading-body-md-small text-text-normal-normal min-h-6.5 px-3 py-2',
-            styles.line,
-          )}
+          className={cn('text-reading-body-md-small text-text-normal-normal min-h-6.5 px-3 py-2', styles.line)}
         >
           {line.segments.map((segment, segmentIndex) => (
             <span key={segmentIndex} className={cn(segment.emphasized && cn('px-0.5', styles.emphasized))}>

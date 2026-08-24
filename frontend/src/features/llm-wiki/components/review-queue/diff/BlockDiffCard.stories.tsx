@@ -75,16 +75,16 @@ const meta = {
         '반려 사유는 서버가 판정과 함께 저장한 검토자 글이다 — 반려된 카드에서만 "수정된 이유"와 같은 패널로 낸다. 레이블 문구는 시안 없이 정한 자작분이다.',
       ],
       tokenNotes: [
-        '패널 색은 8/7 실측 확정(17849:106867·17848:106179) — removed: bg-red-1(#FFFAFA)/좌측 바 2px red-40, added: bg-green-5(#E6FAF2)/좌측 바 2px green-60(#00985A). 패널 자체에는 padding도 radius도 없다.',
+        'diff 색은 8/24 다크 시안(18726:51694)·토큰 시트(18749:52015)로 Surface 시맨틱에 배선 — removed: bg-surface-red-subtle/좌측 바 2px accent-red-default, added: bg-surface-green-subtle/좌측 바 2px accent-green-default. 라이트 값은 8/7 실측(17849:106867·17848:106179)의 red-1/red-40·green-5/green-60과 동일하고, 다크는 Subtle→90·Muted→80·Strong→70으로 뒤집힌다. 패널 자체에는 padding도 radius도 없다.',
         '줄은 padding 8/12 = py-2 px-3, 타이포는 Reading/body(md)/small = text-reading-body-md-small(15px/1.75). 일반 body-small(1.5)이 아니다 — 줄 높이 42가 여기서 나온다.',
-        '초록 강조 #B0EFD5=green-20 + 좌우 2px(px-0.5)는 시안에 실재한다(17849:106894, 호버 행 안의 텍스트 hug 프레임). 다만 단어 단위인지 줄 전체인지는 placeholder라 갈리지 않아 단어 단위는 프론트 결정.',
-        '빨강 강조 red-10(#FED5D5)은 시안 대응물이 없다 — 빨강 행이 전부 빈 프레임이라 초록의 거울상으로 잡았다. design-request 10번 확인 대기. 다만 호버 행 채움(red-5 #FEECEC / green-10 #D9F7EB)은 8/24 시안 18822:135689·135701로 확인됐다.',
-        '삭제 패널은 8/24 시안 18822:135763과 값이 일치해 손대지 않았다 — bg-red-1 + 좌측 2px red-40(#FF6363), 패딩 8/12, 고지줄 gap 6 · 아이콘 20 · red-50(#FF4242) body-xsmall, 본문 Reading/body(md)/small.',
+        '단어 강조는 bg-surface-*-strong(라이트 #B0EFD5/#FED5D5) + 좌우 2px(px-0.5) — 초록은 시안에 실재한다(17849:106894). 단어 단위인지 줄 전체인지는 placeholder라 갈리지 않아 단어 단위는 프론트 결정.',
+        '호버 행 채움은 hover:bg-surface-*-muted(라이트 #FEECEC/#D9F7EB) — 8/24 시안 18822:135689·135701 확인. 빨강 강조는 여전히 시안 대응물이 없어 초록의 거울상이다(design-request 10번 확인 대기).',
+        '삭제 패널은 8/24 시안 18822:135763과 규격 일치 — bg-surface-red-subtle + 좌측 2px accent-red-default, 패딩 8/12, 고지줄 gap 6 · 아이콘 20 · text-status-destructive(라이트 #FF4242) body-xsmall, 본문 Reading/body(md)/small. 고지 색의 다크 값은 시안 미제공이라 status-destructive의 다크(red-40)를 따른다.',
         '박스 버튼은 h-7.5(30)을 명시한다 — outline은 1px 테두리로 30이 되는데 solid는 28이라 나란히 두면 어긋난다. 공용 Button 특성이고 리포 관례(pending/page.tsx의 h-11.5)를 따랐다.',
         '카드 테두리 #EAEBEC=border-line-normal-neutral·radius 12=rounded-xl. 수정된 이유 바(17849:106254, 8/7 개정): 세로 배치 gap 8 — 레이블 #6D7882=text-text-normal-alternative body-xsmall + 본문 #464C53=text-text-normal-neutral body-small, 배경 #F7F7F8=bg-fill-normal-strong.',
       ],
       interactionNotes: [
-        '줄 호버 하이라이트는 패널별 독립이고 클릭 동작이 없다(시안 우측 첫 행 진한 초록 #D9F7EB=green-10 = 호버 상태, 2026-08-07 확인).',
+        '줄 호버 하이라이트는 패널별 독립이고 클릭 동작이 없다(시안 우측 첫 행 진한 초록 #D9F7EB=surface-green-muted 라이트 값 = 호버 상태, 2026-08-07 확인).',
         '접기는 uncontrolled — 셰브런이 본문·수정된 이유를 함께 숨긴다. 아이콘은 접힘 arrow_dropdown_right / 펼침 arrow_dropdown_down(자산 마스크 id가 시안 icon/arrow_drop_down 6413:79613과 일치).',
       ],
     }),
@@ -105,8 +105,8 @@ export const Modified: Story = {
     await expect(canvasElement.textContent).toContain('세 번까지');
     await expect(canvasElement.textContent).not.toContain('3회까지');
     // 좌우 패널에서 바뀐 단어가 강조된다
-    await expect(canvasElement.querySelectorAll('[class*="bg-green-20"]').length).toBeGreaterThan(0);
-    await expect(canvasElement.querySelectorAll('[class*="bg-red-10"]').length).toBeGreaterThan(0);
+    await expect(canvasElement.querySelectorAll('[class*="bg-surface-green-strong"]').length).toBeGreaterThan(0);
+    await expect(canvasElement.querySelectorAll('[class*="bg-surface-red-strong"]').length).toBeGreaterThan(0);
     await expect(canvas.getByText(/수정된 이유/)).toBeInTheDocument();
 
     await userEvent.click(canvas.getByRole('button', { name: '승인' }));
@@ -130,7 +130,7 @@ export const Added: Story = {
     // 산문 없는 블록(옛 데이터)은 body로 폴백한다
     await expect(canvasElement.textContent).toContain('PG사 정기 점검 시간에는 재시도를 수행하지 않는다.');
     // 단일 전폭 패널 — 빨강(before) 패널이 없어야 한다
-    await expect(canvasElement.querySelectorAll('[class*="border-red"]')).toHaveLength(0);
+    await expect(canvasElement.querySelectorAll('[class*="surface-red"]')).toHaveLength(0);
   },
 };
 
@@ -145,16 +145,16 @@ export const Removed: Story = {
     const names = canvas.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent);
     await expect(names).toEqual(['접기']);
     // 초록(after) 패널이 없어야 한다
-    await expect(canvasElement.querySelectorAll('[class*="border-green"]')).toHaveLength(0);
+    await expect(canvasElement.querySelectorAll('[class*="surface-green"]')).toHaveLength(0);
     // 색만으로 삭제를 알리지 않는다 — 고지 문구가 패널 안에 있어야 한다.
     const notice = canvas.getByText('콘텐츠를 삭제함');
     await expect(notice).toBeInTheDocument();
-    await expect(notice.className).toContain('text-red-50');
+    await expect(notice.className).toContain('text-status-destructive');
     // 삭제 전용 시각은 좌측 2px 강조선 + 적색 패널이다 — 일반 diff 패널로 되돌아가면 안 된다.
     const panel = notice.parentElement!;
     await expect(panel.className).toContain('border-l-2');
-    await expect(panel.className).toContain('border-red-40');
-    await expect(panel.className).toContain('bg-red-1');
+    await expect(panel.className).toContain('border-accent-red-default');
+    await expect(panel.className).toContain('bg-surface-red-subtle');
     // 빠진 블록은 변경안에 자리가 없어 사유가 실릴 곳도 판정 경로도 없다.
     await expect(canvas.queryByText(/수정된 이유/)).toBeNull();
     // 판정이 없으므로 배지도 서지 않는다.
