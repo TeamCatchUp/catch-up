@@ -297,6 +297,53 @@ def test_status_reports_every_incomplete_work_signal(
     assert status is expected
 
 
+@pytest.mark.parametrize(
+    ("auto_merge", "expected"),
+    [
+        (None, pipeline.PreReviewPipelineStatus.COMPLETED),
+        (
+            ApplyResult(
+                proposals_applied=1,
+                proposals_failed=0,
+                candidates_resolved=2,
+                candidates_already_resolved=0,
+            ),
+            pipeline.PreReviewPipelineStatus.COMPLETED,
+        ),
+        (
+            ApplyResult(
+                proposals_applied=0,
+                proposals_failed=1,
+                candidates_resolved=0,
+                candidates_already_resolved=0,
+            ),
+            pipeline.PreReviewPipelineStatus.PARTIAL_FAILURE,
+        ),
+    ],
+)
+def test_status_counts_unapplied_auto_merge_as_incomplete_work(
+    auto_merge: ApplyResult | None,
+    expected: pipeline.PreReviewPipelineStatus,
+) -> None:
+    """적용하지 못한 자동 병합 안건이 회차 상태에 드러나는지 확인한다.
+
+    승인은 끝났는데 적용이 실패한 안건은 approved로 남아 다음 회차가 다시
+    집어야 한다. 다 적용했거나 자동 병합을 돌리지 않은 회차는 상태를
+    낮추지 않는다.
+    """
+    status = pipeline._derive_status(
+        skipped_item_count=0,
+        held_back_item_count=0,
+        intake_failure=None,
+        extraction=pipeline.ExtractionStageResult(),
+        resolution=ResolutionResult(),
+        artifacts=ArtifactCompileResult(),
+        auto_merge=auto_merge,
+    )
+
+    assert status is expected
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("auto_merge_enabled", [True, False])
 async def test_auto_merge_flag_drives_resolution_and_apply(
