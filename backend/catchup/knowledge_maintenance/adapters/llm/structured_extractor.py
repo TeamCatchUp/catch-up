@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import time
 from dataclasses import dataclass
+from typing import Any
 
 from langchain_core.language_models import BaseChatModel
 
@@ -16,6 +17,7 @@ from catchup.knowledge_maintenance.contracts.extraction import (
 )
 from catchup.knowledge_maintenance.contracts.extraction import metadata_local_key
 from catchup.knowledge_maintenance.domain.observation import MetadataEntity
+from catchup.knowledge_maintenance.observability.tracing_decorators import trace_extract
 from catchup.knowledge_maintenance.ports.extraction import ExtractionAPIError
 from catchup.knowledge_maintenance.ports.extraction import ExtractionContractError
 from catchup.observability.logging import get_logger
@@ -55,12 +57,21 @@ class StructuredKnowledgeExtractor:
             include_raw=True,
         )
 
+    @trace_extract
     async def extract(
         self,
         request: KnowledgeExtractionRequest,
+        *,
+        invoke_config: dict[str, Any] | None = None,
     ) -> KnowledgeCandidateBatch:
-        """원문 하나에서 지식 후보를 뽑는다."""
-        batch, diagnostics = await self.extract_with_diagnostics(request)
+        """원문 하나에서 지식 후보를 뽑는다.
+
+        `invoke_config`는 Langfuse Callback Handler를 담고 있음.
+        `trace_extract` 데코레이터가 이를 채워 넣고, 원본 메서드는 이를 사용하지 않음.
+        """
+        batch, diagnostics = await self.extract_with_diagnostics(
+            request, invoke_config=invoke_config
+        )
         if batch is None:
             raise ExtractionContractError(
                 diagnostics.parse_error
@@ -72,6 +83,8 @@ class StructuredKnowledgeExtractor:
     async def extract_with_diagnostics(
         self,
         request: KnowledgeExtractionRequest,
+        *,
+        invoke_config: dict[str, Any] | None = None,
     ) -> tuple[KnowledgeCandidateBatch | None, ExtractionDiagnostics]:
         """관찰 단계에서 실패한 출력까지 함께 돌려준다.
 
@@ -116,7 +129,9 @@ class StructuredKnowledgeExtractor:
 
         started = time.perf_counter()
         try:
-            response = await self._structured.ainvoke(rendered)
+            response = await self._structured.ainvoke(
+                rendered, config=invoke_config
+            )
         except Exception as error:
             logger.exception(
                 "knowledge_extraction_failed",

@@ -413,6 +413,9 @@ class KnowledgeExtractionRequest(BaseModel):
             원천 사건 시각이 최선이며, 없으면 절대화 지시가 내려가지 않는다.
         contract_version: 추출 계약의 버전을 나타낸다. 계약 필드가
             추가·변경되면 올린다.
+            
+        workspace_id: Logging/Observability 목적, Extraction Engine은 사용하지 않는다.
+        external_document_id: Logging/Observability 목적, Extraction Engine은 사용하지 않는다.
     """
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
@@ -424,3 +427,5 @@ class KnowledgeExtractionRequest(BaseModel):
     vocabulary: ExtractionVocabulary | None = None
     reference_time: datetime | None = None
     contract_version: str
+    workspace_id: int | None = None
+    external_document_id: str | None = None

@@ -37,6 +37,9 @@ from catchup.knowledge_maintenance.domain.observation import content_hash
 from catchup.knowledge_maintenance.domain.source_version import ChangeKind
 from catchup.knowledge_maintenance.domain.source_version import JsonValue
 from catchup.knowledge_maintenance.domain.source_version import SourceVersion
+from catchup.knowledge_maintenance.observability.tracing_decorators import (
+    trace_normalize,
+)
 
 # SourceVersion.content가 담고 있는 payload의 형식이다. 커넥터가 정규화한
 # user chat detail과 message 목록을 JSON으로 직렬화한 것이며, ChannelTalk API
@@ -70,6 +73,7 @@ class ChannelTalkUserChatNormalizer:
     # 구조가 달라졌으므로 이전 버전의 관찰은 다시 정규화해야 한다.
     normalizer_version = "3"
 
+    @trace_normalize
     def normalize(self, source_version: SourceVersion) -> NormalizedObservation:
         if source_version.change_kind == ChangeKind.DELETED:
             return self._tombstone(source_version)
