@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { knowledgeReviewQueries } from './knowledgeReview.queries';
 import { wikiQueries } from './wiki.queries';
 import {
   useCreateWikiFolderMutation,
@@ -153,7 +154,7 @@ describe('useCreateWikiFolderMutation', () => {
 });
 
 describe('useDeleteWikiFolderMutation', () => {
-  it('폴더 삭제는 소속 채널·폴더 id를 넘기고 성공하면 채널 목록만 다시 읽는다', async () => {
+  it('폴더 삭제는 소속 채널·폴더 id를 넘기고 위치를 실은 캐시를 문서 이동과 같은 범위로 되돌린다', async () => {
     const { wrapper, invalidatedKeys } = createHarness();
     const { result } = renderHook(() => useDeleteWikiFolderMutation(), { wrapper });
 
@@ -161,8 +162,13 @@ describe('useDeleteWikiFolderMutation', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(wikiApi.deleteWikiFolder).toHaveBeenCalledWith('ch-1', 'fo-1');
-    // 폴더 안 문서는 서버가 채널 루트로 옮긴다 — 트리는 채널 응답 무효화만으로 따라온다
-    expect(invalidatedKeys()).toEqual([channelsKey]);
+    // 폴더 안 문서가 채널 루트로 옮겨지는 대량 이동이다 — 문서 목록·즐겨찾기·검토큐 위치까지 되돌린다
+    expect(invalidatedKeys()).toEqual([
+      channelsKey,
+      [...wikiQueries.all(), 'artifacts'],
+      wikiQueries.favorites().queryKey,
+      knowledgeReviewQueries.all(),
+    ]);
   });
 
   it('실패는 서버 문구를 그대로 띄우고 캐시를 건드리지 않는다', async () => {

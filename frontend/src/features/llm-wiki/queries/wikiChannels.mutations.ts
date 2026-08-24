@@ -4,6 +4,7 @@ import { parseApiError } from '@/shared/api/errors';
 import { toast } from '@/shared/components/ui/toast';
 
 import { createWikiFolder, deleteWikiFolder, renameWikiChannel, renameWikiFolder } from '../api/wikiRequests';
+import { knowledgeReviewQueries } from './knowledgeReview.queries';
 import { wikiQueries } from './wiki.queries';
 
 export interface RenameWikiChannelVariables {
@@ -64,7 +65,10 @@ export interface DeleteWikiFolderVariables {
   folderId: string;
 }
 
-/** 폴더 삭제(채널 관리자). 폴더 안 문서는 채널 루트로 옮겨진다 — 무효화·실패 처리는 생성과 같다. */
+/**
+ * 폴더 삭제(채널 관리자). 폴더 안 문서가 채널 루트로 옮겨지는 대량 이동이라
+ * 위치를 실은 캐시를 문서 이동과 같은 범위로 되돌린다.
+ */
 export const useDeleteWikiFolderMutation = () => {
   const queryClient = useQueryClient();
 
@@ -73,6 +77,9 @@ export const useDeleteWikiFolderMutation = () => {
       deleteWikiFolder(channelId, folderId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: wikiQueries.channels().queryKey });
+      queryClient.invalidateQueries({ queryKey: [...wikiQueries.all(), 'artifacts'] });
+      queryClient.invalidateQueries({ queryKey: wikiQueries.favorites().queryKey });
+      queryClient.invalidateQueries({ queryKey: knowledgeReviewQueries.all() });
     },
     onError: (error) => {
       toast(parseApiError(error).message);
