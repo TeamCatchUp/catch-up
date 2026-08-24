@@ -20,13 +20,13 @@ vi.mock('@/shared/components/ui/toast', () => ({ toast: vi.fn() }));
 
 const TOTAL_DOCUMENTS = 60;
 
-const channelResponse = () => ({
+const channelResponse = (isAdmin = true) => ({
   channels: [
     {
       id: 'ch-1',
       name: '결제',
       workspace_id: 1,
-      is_admin: true,
+      is_admin: isAdmin,
       document_count: TOTAL_DOCUMENTS,
       folders: [
         {
@@ -99,6 +99,38 @@ async function selectPageSize(user: ReturnType<typeof userEvent.setup>, current:
   await user.click(screen.getByRole('button', { name: current }));
   await user.click(await screen.findByRole('menuitem', { name: next }));
 }
+
+describe('헤더 액션 배선', () => {
+  it('관리자면 케밥이 서고 이름 바꾸기가 폴더 PATCH로 나간다', async () => {
+    const bodies: unknown[] = [];
+    server.use(
+      http.patch('*/api/v1/wiki/channels/ch-1/folders/fd-1', async ({ request }) => {
+        bodies.push(await request.json());
+        return HttpResponse.json({});
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: '작업 더보기' }));
+    await user.click(await screen.findByRole('button', { name: '이름 바꾸기' }));
+
+    const field = await screen.findByRole('textbox', { name: '이름 바꾸기' });
+    expect(field).toHaveValue('승인·실패 처리');
+    await user.clear(field);
+    await user.type(field, '승인 처리{Enter}');
+
+    await waitFor(() => expect(bodies).toEqual([{ name: '승인 처리' }]));
+  });
+
+  it('관리자가 아니면 링크 복사만 남고 케밥이 서지 않는다', async () => {
+    server.use(http.get('*/api/v1/wiki/channels', () => HttpResponse.json(channelResponse(false))));
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: '링크 복사' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '작업 더보기' })).toBeNull();
+  });
+});
 
 describe('폴더 화면 쪽 크기 배선', () => {
   it('기본 20으로 첫 쪽을 부르고 쪽을 넘기면 offset이 따라간다', async () => {

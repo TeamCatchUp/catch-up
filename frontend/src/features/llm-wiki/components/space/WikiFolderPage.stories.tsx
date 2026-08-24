@@ -25,6 +25,8 @@ const meta = {
     onPageSizeChange: fn(),
     onDocumentClick: fn(),
     onBreadcrumbClick: fn(),
+    onCopyLink: fn(),
+    onRenameSubmit: fn(),
   },
   parameters: {
     ...catchupParameters({
@@ -40,10 +42,11 @@ const meta = {
         nodeId: '17762:104787',
       },
       viewport: { width: 1200, height: 1440 },
-      states: ['default', 'empty', 'first-load-skeleton', 'page-size-dropdown'],
+      states: ['default', 'empty', 'first-load-skeleton', 'page-size-dropdown', 'header-menu', 'non-admin'],
       reuseNotes: [
-        '채널 페이지와 같은 조립이다 — WikiSpaceTitleBlock·WikiSpaceTableFooter·FolderDocumentRow(kind=document)·DashboardDocumentTableHeader 공유.',
-        'breadcrumb는 채널>폴더 2마디로 끝난다(폴더 depth 1 백엔드 계약) — 채널 마디만 클릭 가능.',
+        '채널 페이지와 같은 조립이다 — WikiSpaceTitleBlock·WikiSpaceTableFooter·FolderDocumentRow(kind=document)·FolderDocumentTableHeader(kind=document) 공유.',
+        'breadcrumb는 채널>폴더 2마디로 끝난다(폴더 depth 1 백엔드 계약) — 채널 마디만 클릭 가능. [8/24 시안 17762:104786] 현재 마디(폴더)에서 아이콘이 빠졌다.',
+        '헤더 우측 액션은 채널 페이지와 같은 WikiHeaderActions이고 detail 규격(28px·radius full)으로만 갈린다.',
         '빈 표는 대시보드가 쓰는 DocumentTableEmptyState를 문구까지 그대로 재사용한다 — 대상이 같은 문서다.',
       ],
       dataNotes: [
@@ -71,8 +74,17 @@ export const Default: Story = {
     // breadcrumb 2마디: 채널 마디는 버튼, 폴더 마디가 현재 페이지다.
     const currentCrumb = canvasElement.querySelector('[aria-current="page"]')!;
     await expect(currentCrumb).toHaveTextContent('승인·실패 처리');
+    // 현재 마디에는 아이콘이 없다 — 이전 마디만 갖는다(8/24 시안).
+    await expect(currentCrumb.querySelectorAll('svg')).toHaveLength(0);
     await userEvent.click(canvas.getByRole('button', { name: '결제' }));
     await expect(args.onBreadcrumbClick).toHaveBeenCalledWith({ kind: 'channel', label: '결제' }, 0);
+
+    // 헤더 우측 액션 — detail 규격 28px 두 개.
+    const copyLink = canvas.getByRole('button', { name: '링크 복사' });
+    await expect(copyLink.getBoundingClientRect().width).toBe(28);
+    await expect(canvas.getByRole('button', { name: '작업 더보기' })).toBeInTheDocument();
+    await userEvent.click(copyLink);
+    await expect(args.onCopyLink).toHaveBeenCalled();
 
     await expect(canvas.getByRole('heading', { level: 1, name: '승인·실패 처리' })).toBeInTheDocument();
     await expect(canvas.getByText('작성자')).toBeInTheDocument();
@@ -108,6 +120,38 @@ export const FirstLoadSkeleton: Story = {
     await expect(canvas.getByRole('heading', { level: 1, name: '승인·실패 처리' })).toBeInTheDocument();
     await expect(canvas.getByText('최근 활동')).toBeInTheDocument();
     await expect(canvas.getByText('씩 나열')).toBeInTheDocument();
+  },
+};
+
+/** 헤더 케밥 — 채널 페이지와 같은 메뉴이고 대상만 폴더다. */
+export const HeaderMenu: Story = {
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    await userEvent.click(canvas.getByRole('button', { name: '작업 더보기' }));
+
+    await expect(await body.findByText('작업 더보기', { selector: 'span' })).toBeInTheDocument();
+    await expect(body.queryByTestId('snb-dropdown-menu-meta')).toBeNull();
+
+    await userEvent.click(body.getByRole('button', { name: '이름 바꾸기' }));
+    const field = await body.findByRole('textbox', { name: '이름 바꾸기' });
+    await expect(field).toHaveValue('승인·실패 처리');
+
+    await userEvent.clear(field);
+    await userEvent.type(field, '승인 처리{Enter}');
+    await expect(args.onRenameSubmit).toHaveBeenCalledWith('승인 처리');
+  },
+};
+
+/** 관리자가 아닌 채널의 폴더 — 케밥이 서지 않고 링크 복사만 남는다. */
+export const NonAdmin: Story = {
+  args: { onRenameSubmit: undefined },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByRole('button', { name: '링크 복사' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: '작업 더보기' })).toBeNull();
   },
 };
 

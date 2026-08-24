@@ -1,13 +1,18 @@
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
-import { DashboardDocumentTableHeader } from '../../document/DashboardDocumentRow';
+import { type FolderDocumentRowKind, FolderDocumentTableHeader } from '../../document/FolderDocumentRow';
 import DocumentTableSkeleton from '../../document/states/DocumentTableSkeleton';
+
+interface WikiSpacePageSkeletonProps {
+  /** 목적지 표의 열 구성 — 채널 화면은 folder, 폴더 화면은 document다 */
+  kind?: FolderDocumentRowKind;
+}
 
 /**
  * 채널·폴더 화면의 첫 로딩 골격. 이름을 아직 몰라 헤더·제목까지 골격이고,
  * 커버·패딩·표 열은 실제 화면과 같은 값이라 로드 후 표가 제자리에 선다.
  */
-export default function WikiSpacePageSkeleton() {
+export default function WikiSpacePageSkeleton({ kind = 'document' }: WikiSpacePageSkeletonProps) {
   return (
     <div className="flex flex-col">
       {/* breadcrumb 헤더 자리 — 경로 이름이 오기 전이라 셸만 남긴다 */}
@@ -21,8 +26,8 @@ export default function WikiSpacePageSkeleton() {
         </div>
 
         <div className="flex flex-col">
-          <DashboardDocumentTableHeader />
-          <DocumentTableSkeleton />
+          <FolderDocumentTableHeader kind={kind} />
+          <DocumentTableSkeleton kind={kind} />
         </div>
       </div>
     </div>

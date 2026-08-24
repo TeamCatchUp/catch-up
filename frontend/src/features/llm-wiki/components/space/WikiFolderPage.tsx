@@ -1,10 +1,13 @@
 import IconFolderFilled from '@/public/icons/icon/folder_filled.svg';
 
 import type { DocumentBreadcrumb, WikiChannel, WikiFolder } from '../../types/llmWikiModel';
-import { DashboardDocumentTableHeader } from '../document/DashboardDocumentRow';
-import FolderDocumentRow, { type FolderDocumentRowItem } from '../document/FolderDocumentRow';
+import FolderDocumentRow, {
+  type FolderDocumentRowItem,
+  FolderDocumentTableHeader,
+} from '../document/FolderDocumentRow';
 import DocumentTableEmptyState from '../document/states/DocumentTableEmptyState';
 import DocumentTableSkeleton from '../document/states/DocumentTableSkeleton';
+import WikiHeaderActions from '../header/WikiHeaderActions';
 import WikiPageHeader from '../header/WikiPageHeader';
 import WikiSpaceTableFooter from './WikiSpaceTableFooter';
 import WikiSpaceTitleBlock from './WikiSpaceTitleBlock';
@@ -26,6 +29,9 @@ interface WikiFolderPageProps {
   onPageSizeChange?: (pageSize: number) => void;
   onDocumentClick?: (documentId: string) => void;
   onBreadcrumbClick?: (crumb: DocumentBreadcrumb, index: number) => void;
+  onCopyLink?: () => void;
+  /** 채널 관리자만 넘어온다 — 없으면 헤더 케밥이 서지 않는다 */
+  onRenameSubmit?: (name: string) => void;
 }
 
 /** 폴더 메인 페이지 — breadcrumb는 채널>폴더 2마디로 끝난다(폴더 depth 1 계약). */
@@ -43,6 +49,8 @@ export default function WikiFolderPage({
   onPageSizeChange,
   onDocumentClick,
   onBreadcrumbClick,
+  onCopyLink,
+  onRenameSubmit,
 }: WikiFolderPageProps) {
   return (
     <div className="flex flex-col">
@@ -53,6 +61,17 @@ export default function WikiFolderPage({
           { kind: 'folder', label: folder.name },
         ]}
         onBreadcrumbClick={onBreadcrumbClick}
+        actions={
+          onCopyLink && (
+            <WikiHeaderActions
+              variant="detail"
+              kind="folder"
+              name={folder.name}
+              onCopyLink={onCopyLink}
+              onRenameSubmit={onRenameSubmit}
+            />
+          )
+        }
       />
 
       {/* 상단 커버 — 바탕만 시안값이고 콘텐츠는 미정이라 비워 둔다 */}
@@ -68,7 +87,7 @@ export default function WikiFolderPage({
 
         <div className="flex flex-col gap-8">
           <div className="flex flex-col">
-            <DashboardDocumentTableHeader />
+            <FolderDocumentTableHeader kind="document" />
             {documentsLoading ? (
               <DocumentTableSkeleton />
             ) : documentRows.length === 0 ? (

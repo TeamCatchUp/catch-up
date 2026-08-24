@@ -10,6 +10,8 @@ import WikiSpacePageSkeleton from '@/features/llm-wiki/components/space/states/W
 import WikiFolderPage from '@/features/llm-wiki/components/space/WikiFolderPage';
 import { useQueryErrorToast } from '@/features/llm-wiki/hooks/useQueryErrorToast';
 import { wikiQueries } from '@/features/llm-wiki/queries/wiki.queries';
+import { useRenameWikiFolderMutation } from '@/features/llm-wiki/queries/wikiChannels.mutations';
+import { copyCurrentPageLink } from '@/features/llm-wiki/utils/copyPageLink';
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -31,6 +33,8 @@ export default function Page() {
     placeholderData: keepPreviousData,
   });
 
+  const renameFolder = useRenameWikiFolderMutation();
+
   useQueryErrorToast(channelsQuery.error ?? documentsQuery.error);
 
   // 쪽 크기가 바뀌면 offset 기준이 달라진다 — 어긋난 쪽으로 요청이 나가기 전에 1쪽으로 되돌린다.
@@ -39,7 +43,7 @@ export default function Page() {
     setCurrentPage(1);
   }
 
-  if (channelsQuery.isPending) return <WikiSpacePageSkeleton />;
+  if (channelsQuery.isPending) return <WikiSpacePageSkeleton kind="document" />;
   // 에러 시안이 없어 화면을 만들지 않는다 — 실패는 토스트로만 알린다
   if (!channelsQuery.data) return null;
 
@@ -75,6 +79,13 @@ export default function Page() {
       onBreadcrumbClick={(_, index) => {
         if (index === 0) router.push(`/llm-wiki/channel/${channel.id}`);
       }}
+      onCopyLink={() => void copyCurrentPageLink()}
+      // 이름 변경은 채널 관리자만 — 아니면 케밥 항목이 없어 케밥 자체가 서지 않는다
+      onRenameSubmit={
+        channel.isAdmin
+          ? (name) => renameFolder.mutate({ channelId: channel.id, folderId: folder.id, name })
+          : undefined
+      }
     />
   );
 }
