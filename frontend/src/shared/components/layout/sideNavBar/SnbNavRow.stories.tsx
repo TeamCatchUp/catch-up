@@ -159,6 +159,9 @@ export const WithActions: Story = {
     await expect(label.contains(action)).toBe(false);
     await expect(action).toBeVisible();
 
+    // 액션 아이콘 색은 래퍼가 정한다 — NavTree 행 액션과 같은 neutral 상속(#6D7882)
+    await expect(getComputedStyle(action).color).toBe('rgb(109, 120, 130)');
+
     // 액션 클릭은 행 이동을 유발하지 않는다.
     await userEvent.click(action);
     await expect(args.onClick).not.toHaveBeenCalled();

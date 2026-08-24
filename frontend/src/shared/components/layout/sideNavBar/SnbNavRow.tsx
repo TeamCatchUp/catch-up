@@ -115,6 +115,8 @@ export default function SnbNavRow({
         <span
           className={cn(
             'shrink-0 items-center gap-0.5',
+            // 액션 아이콘 색은 NavTree 행 액션과 같은 규칙이다 — 래퍼가 정하고 아이콘은 상속만 한다
+            selected ? 'text-icon-primary-normal' : 'text-icon-normal-neutral',
             actionsOpen ? 'flex' : 'hidden group-hover:flex group-has-[:focus-visible]:flex',
           )}
         >
