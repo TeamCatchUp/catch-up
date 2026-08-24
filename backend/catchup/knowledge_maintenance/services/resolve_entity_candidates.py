@@ -26,6 +26,9 @@ import uuid
 from collections.abc import Mapping
 from collections.abc import Sequence
 from dataclasses import dataclass
+from dataclasses import replace
+from datetime import UTC
+from datetime import datetime
 from types import TracebackType
 from typing import Protocol
 from typing import Self
@@ -90,6 +93,18 @@ BLOCK_DETECTOR_VERSION = "1"
 # 판정 결과를 받아 다시 풀 때 어느 쪽인지 앞머리로 가른다.
 CANDIDATE_MEMBER_PREFIX = "candidate:"
 NODE_MEMBER_PREFIX = "node:"
+
+# 노드 맥락에서 빼는 값 종류다. 판정 프롬프트는 속성 값이 어긋나는 것을
+# 다른 대상의 증거로 삼지 말라고 지시하므로, 수치·시점·참거짓처럼 시간에
+# 따라 흔들리는 값은 애초에 판정대에 올리지 않는다. 남는 것은 text와
+# enum이다.
+CONTEXT_EXCLUDED_VALUE_TYPES = frozenset({"number", "date", "boolean"})
+
+# 노드 맥락에 싣는 claim 수의 상한이다.
+CONTEXT_CLAIM_LIMIT = 3
+
+# 맥락 한 줄의 길이 상한이다. 긴 값 하나가 프롬프트를 밀어내지 않게 한다.
+CONTEXT_LINE_LIMIT = 120
 
 
 def group_idempotency_key(normalized_name: str) -> str:
@@ -786,6 +801,9 @@ def _judge_name_blocks(
     formed = 0
     # 판정을 받은 후보만 그 결과대로 처리하고, 남은 후보는 승격한다.
     settled: set[uuid.UUID] = set()
+    # 노드 맥락은 노드마다 한 번만 만든다. 한 노드가 이름을 여럿 가지면
+    # 그 이름마다 멤버가 하나씩이고, 블록도 여럿에 걸칠 수 있다.
+    node_contexts: dict[uuid.UUID, str | None] = {}
     for block in blocks:
         block_candidates = [
             candidate_by_id[member.member_id]
@@ -795,6 +813,13 @@ def _judge_name_blocks(
         if len(block.members) < 2 or not block_candidates:
             continue
         formed += 1
+        block = _with_node_context(
+            block,
+            workspace_id=workspace_id,
+            node_by_id=node_by_id,
+            cache=node_contexts,
+            uow=uow,
+        )
 
         try:
             partition = judge.partition(block)
@@ -851,6 +876,94 @@ def _judge_name_blocks(
         blocks_judged=judged,
         blocks_failed=failed,
     )
+
+
+def _with_node_context(
+    block: EntityBlock,
+    *,
+    workspace_id: int,
+    node_by_id: dict[str, _NodeMember],
+    cache: dict[uuid.UUID, str | None],
+    uow: ResolutionUnitOfWork,
+) -> EntityBlock:
+    """블록의 노드 멤버에 그 노드가 지금 들고 있는 사실을 붙인다.
+
+    후보 멤버는 원문 발췌를 맥락으로 들고 판정대에 오르는데 기존 노드
+    멤버는 이름뿐이라, 판정이 한쪽 재료만 보고 답하게 된다. 노드가
+    accepted claim으로 들고 있는 사실을 같은 자리에 실어 그 차이를
+    없앤다.
+
+    맥락이 붙지 않는 노드 멤버는 그대로 둔다. 사실이 없으면 이름만으로
+    판정하는 지금까지의 동작과 같다.
+    """
+    at = datetime.now(UTC)
+    members = []
+    changed = False
+    for member in block.members:
+        node = node_by_id.get(member.member_id)
+        if node is None:
+            members.append(member)
+            continue
+        if node.node_id not in cache:
+            cache[node.node_id] = _node_context(
+                uow,
+                workspace_id=workspace_id,
+                node_id=node.node_id,
+                at=at,
+            )
+        context = cache[node.node_id]
+        if context is None:
+            members.append(member)
+            continue
+        members.append(replace(member, excerpt=context))
+        changed = True
+    if not changed:
+        return block
+    return EntityBlock(entity_type=block.entity_type, members=tuple(members))
+
+
+def _node_context(
+    uow: ResolutionUnitOfWork,
+    *,
+    workspace_id: int,
+    node_id: uuid.UUID,
+    at: datetime,
+) -> str | None:
+    """노드가 at 시점에 들고 있는 사실을 판정용 맥락 문자열로 만든다.
+
+    수치·시점·참거짓 계열의 값은 뺀다. 그런 값은 같은 대상이라도 시간과
+    출처에 따라 어긋나는데, 판정 프롬프트는 값의 불일치를 다른 대상의
+    증거로 쓰지 말라고 지시한다. 넣지 않으면 어길 기회도 없다.
+
+    조회가 실패하면 None을 준다. 맥락은 판정을 돕는 재료일 뿐이라, 없다고
+    해서 판정을 멈출 이유가 없다.
+    """
+    try:
+        claims = uow.knowledge_candidates.find_accepted_claims_as_of(
+            workspace_id=workspace_id,
+            subject_node_id=node_id,
+            at=at,
+        )
+    except Exception as error:
+        logger.warning(
+            "node_context_failed",
+            workspace_id=workspace_id,
+            node_id=str(node_id),
+            error=f"{type(error).__name__}: {error}",
+        )
+        return None
+
+    lines = []
+    for claim in claims:
+        if claim.value_type in CONTEXT_EXCLUDED_VALUE_TYPES:
+            continue
+        line = f"{claim.predicate}: {claim.value}"
+        lines.append(line[:CONTEXT_LINE_LIMIT])
+        if len(lines) == CONTEXT_CLAIM_LIMIT:
+            break
+    if not lines:
+        return None
+    return " / ".join(lines)
 
 
 def _apply_identity_group(

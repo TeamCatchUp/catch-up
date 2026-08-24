@@ -28,6 +28,7 @@ from catchup.knowledge_maintenance.domain.knowledge_candidate import (
 from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
+from catchup.knowledge_maintenance.ports.knowledge_candidates import AsOfClaim
 from catchup.knowledge_maintenance.ports.knowledge_nodes import ActiveEntityAlias
 from catchup.knowledge_maintenance.ports.mutation_proposals import (
     MergeProposalAlreadyDecided,
@@ -75,9 +76,20 @@ def _candidate(
 
 
 class FakeCandidateRepository:
+    """후보 저장소와 노드 claim 조회를 흉내 낸다.
+
+    `claims_by_node`에 노드별 claim을 넣어 두면 as-of 조회가 그것을
+    돌려준다. `failing_nodes`에 넣은 노드는 조회가 예외를 낸다.
+    `claim_queries`에 물어본 노드 id를 순서대로 남겨, 노드당 한 번만
+    조회하는지 테스트가 확인한다.
+    """
+
     def __init__(self, candidates: list[StoredEntityCandidate]) -> None:
         self.candidates = list(candidates)
         self.resolved: dict[uuid.UUID, tuple[EntityResolutionStatus, uuid.UUID]] = {}
+        self.claims_by_node: dict[uuid.UUID, tuple[AsOfClaim, ...]] = {}
+        self.failing_nodes: set[uuid.UUID] = set()
+        self.claim_queries: list[uuid.UUID] = []
 
     def find_pending_entity_candidates(self, *, workspace_id: int):
         del workspace_id
@@ -89,6 +101,15 @@ class FakeCandidateRepository:
 
     def mark_entity_resolved(self, *, candidate_id, status, resolved_node_id):
         self.resolved[candidate_id] = (status, resolved_node_id)
+
+    def find_accepted_claims_as_of(
+        self, *, workspace_id, subject_node_id, at, predicate=None
+    ):
+        del workspace_id, at, predicate
+        self.claim_queries.append(subject_node_id)
+        if subject_node_id in self.failing_nodes:
+            raise RuntimeError("claim 조회가 실패했다")
+        return self.claims_by_node.get(subject_node_id, ())
 
 
 class FakeNodeRepository:
@@ -1592,3 +1613,116 @@ def test_group_with_two_aliases_of_one_node_still_merges() -> None:
     assert result.proposals_created == 1
     (stored,) = uow.mutation_proposals.proposals.values()
     assert stored["kwargs"]["merge_into_node_id"] == existing.id
+
+
+def _as_of_claim(*, predicate: str, value_type: str, value: str) -> AsOfClaim:
+    return AsOfClaim(
+        claim_id=uuid.uuid4(),
+        predicate=predicate,
+        value_type=value_type,
+        value=value,
+        statement=f"{predicate} {value}",
+        valid_from=None,
+        valid_to=None,
+    )
+
+
+def _node_context_setup() -> tuple[FakeUnitOfWork, KnowledgeNode]:
+    """후보 하나와 별칭 둘을 가진 기존 노드를 한 블록에 올린다."""
+    candidate = _candidate(
+        name="Google Workspace 연동 지원",
+        entity_type="feature_request",
+        method=ExtractionMethod.LLM,
+    )
+    uow = FakeUnitOfWork([candidate])
+    existing = _promoted_node(
+        uow, name="Google Workspace 연동", entity_type="feature_request"
+    )
+    uow.knowledge_nodes.add_alias(
+        workspace_id=WORKSPACE,
+        node_id=existing.id,
+        alias="Google Workspace 커넥터",
+        normalized_alias=normalize_name("Google Workspace 커넥터"),
+        source="system",
+    )
+    return uow, existing
+
+
+def _node_member_excerpts(judge: FakePartitionJudge) -> list[str | None]:
+    (block,) = judge.blocks
+    return [
+        member.excerpt
+        for member in block.members
+        if member.member_id.startswith("node:")
+    ]
+
+
+def test_node_context_carries_text_claims_and_drops_numeric_ones() -> None:
+    """노드 맥락은 서술형 claim만 싣고 수치 계열은 뺀다."""
+    judge = FakePartitionJudge()
+    uow, existing = _node_context_setup()
+    uow.knowledge_candidates.claims_by_node[existing.id] = (
+        _as_of_claim(
+            predicate="담당_팀", value_type="text", value="플랫폼 팀"
+        ),
+        _as_of_claim(
+            predicate="상태", value_type="enum", value="개발 중"
+        ),
+        _as_of_claim(predicate="요청_건수", value_type="number", value="12"),
+        _as_of_claim(predicate="출시일", value_type="date", value="2026-09-01"),
+        _as_of_claim(predicate="유료_여부", value_type="boolean", value="true"),
+    )
+
+    resolve_entity_candidates(
+        workspace_id=WORKSPACE,
+        judge=judge,
+        uow=uow,
+        name_embedder=_google_embedder(),
+    )
+
+    excerpts = _node_member_excerpts(judge)
+    assert len(excerpts) == 2
+    for excerpt in excerpts:
+        assert excerpt is not None
+        assert "담당_팀: 플랫폼 팀" in excerpt
+        assert "상태: 개발 중" in excerpt
+        assert "요청_건수" not in excerpt
+        assert "출시일" not in excerpt
+        assert "유료_여부" not in excerpt
+    # 같은 노드의 별칭이 둘이어도 조회는 노드당 한 번이다.
+    assert uow.knowledge_candidates.claim_queries == [existing.id]
+
+
+def test_node_context_is_none_without_claims() -> None:
+    """맥락으로 실을 claim이 없으면 노드 멤버는 이름만 올라간다."""
+    judge = FakePartitionJudge()
+    uow, _existing = _node_context_setup()
+
+    resolve_entity_candidates(
+        workspace_id=WORKSPACE,
+        judge=judge,
+        uow=uow,
+        name_embedder=_google_embedder(),
+    )
+
+    assert _node_member_excerpts(judge) == [None, None]
+
+
+def test_node_context_failure_keeps_judging() -> None:
+    """맥락 조회가 실패해도 판정은 이름만으로 그대로 간다."""
+    judge = FakePartitionJudge()
+    uow, existing = _node_context_setup()
+    uow.knowledge_candidates.failing_nodes.add(existing.id)
+
+    with capture_logs() as logs:
+        result = resolve_entity_candidates(
+            workspace_id=WORKSPACE,
+            judge=judge,
+            uow=uow,
+            name_embedder=_google_embedder(),
+        )
+
+    assert result.blocks_judged == 1
+    assert result.proposals_created == 1
+    assert _node_member_excerpts(judge) == [None, None]
+    assert any(log["event"] == "node_context_failed" for log in logs)
