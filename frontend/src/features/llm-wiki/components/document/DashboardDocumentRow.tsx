@@ -49,7 +49,12 @@ export default function DashboardDocumentRow({ document, onClick, onBreadcrumbCl
       )}
     >
       {/* 행 전체 클릭 — 마디 버튼과의 중첩을 피해 오버레이로 분리한다 */}
-      <button type="button" aria-label={title} onClick={() => onClick?.(id)} className="absolute inset-0 rounded-lg" />
+      <button
+        type="button"
+        aria-label={title}
+        onClick={() => onClick?.(id)}
+        className="absolute inset-0 cursor-pointer rounded-lg"
+      />
 
       {/* 문서 열 — 이 행에서 폭을 흡수하는 유일한 슬롯 */}
       <span className="flex min-w-55 flex-1 items-center gap-4">
