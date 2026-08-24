@@ -140,19 +140,21 @@ const meta = {
         '화면은 데이터를 props로만 받는다 — 큐·상세 조회와 판정·발행 요청은 라우트가 낸다. 스토리는 MSW 없이 fixture를 주입한다.',
         'diff 카드 짝짓기는 서버 block_changes가 정한다. 프론트는 자리만 따라가고 단어 강조만 만든다 — 같은 안건이 소비자마다 다르게 보이지 않기 위해서다.',
         '발행 버튼은 항상 열려 있다(사용자 확정). 변경 없는 블록은 판정할 카드가 없어 미판정으로 잠그면 발행이 영영 막혔다. 서버가 미판정을 거부하면 그 메시지를 토스트로 보인다 — 일괄 처리(undecided)는 사람이 보지 않은 블록을 자동 승인하게 되어 쓰지 않는다.',
-        '카드별 반려도 전체 반려와 같은 사유 입력 다이얼로그를 거친다 — 문구만 갈아 끼운다. 빈 사유는 서버가 막는다(변경안 400·블록 422).',
-        '전체 승인은 미판정 카드에 블록 판정을 일괄로 보낼 뿐이다 — 다시 읽은 상세의 판정으로 카드가 접히고 발행 바는 활성으로 남는다(BulkApproved). 발행은 별도 클릭이다.',
-        '전체 반려·발행에 성공하면 그 안건이 큐에서 빠지고 소비처가 다음 안건을 골라 준다 — 남은 안건이 없으면 빈 안내가 선다. 화면은 받은 selectedId를 그릴 뿐이다.',
+        '카드별 반려도 전체 반려와 같은 사유 입력 다이얼로그를 거친다 — 문구만 갈아 끼운다. 빈 사유는 서버가 422로 막는다.',
+        '전체 승인·반려는 미판정 카드에 블록 판정을 일괄로 보낼 뿐이다(반려는 전 블록이 사유를 공유한다) — 다시 읽은 상세의 판정으로 카드가 접히고 발행 바는 활성으로 남는다(BulkApproved). 발행은 별도 클릭이다.',
+        '발행에 성공하면 그 안건이 큐에서 빠지고 소비처가 다음 안건을 골라 준다 — 남은 안건이 없으면 빈 안내가 선다. 화면은 받은 selectedId를 그릴 뿐이다.',
         '고른 안건이 목록에서 빠진 순간에도 "다음"은 남은 첫 줄로 간다 — 판정 뒤 검토 흐름이 끊기면 안 된다.',
         '미리보기는 발행본이 아니라 판정 반영 제안본을 새 탭으로 연다 — 발행된 적 없는 문서도 열린다.',
-        '전체 반려는 판정이 시작된 뒤에도 잠기지 않는다 — 서버가 409로 거절하고 그 메시지를 토스트로 보인다(발행 버튼과 같은 정책).',
+        '전체 승인·반려는 판정이 시작된 뒤에도 잠기지 않는다 — 기판정 카드는 클라이언트가 건너뛰고 미판정 카드에만 보낸다.',
         '채널·담당자 축은 서버가 하나씩만 받는다 — 둘 이상 고르면 파라미터로 나가지 않고 받은 쪽에서 좁힌다. 좁히기는 라우트가 맡고 화면은 관여하지 않는다.',
         '빈 큐는 시안이 없다(감사 MISSING·높음). 새 시각을 만들지 않고 대시보드 빈 표와 같은 일러스트·타이포를 쓰며, 필터 결과 0건도 같은 안내다 — 문구를 가르는 근거가 없다. 디자이너 확인 대상.',
         '목록이 비면 좌측 머리글과 필터는 남는다 — 필터로 비운 경우 되돌릴 경로가 사라지면 안 된다.',
         '첫 로딩은 좌측 목록과 상세 자리에 각각 골격을 세운다(사용자 확정) — 시안 MISSING이라 행·카드 기하만 근사한 자작분이다. 목록을 기다리는 동안에는 빈 안내 대신 골격이 서서 "없음"으로 오독되지 않는다.',
         '상세 골격은 안건 교체와 같은 모션 상자(stepReplace) 안에서 상태만 갈아 끼운다 — 로딩이 별도 레이어로 튀지 않는다.',
-        '에러 시각은 시안이 없어 만들지 않는다 — 조회 실패는 판정 토스트와 같은 자리(우하단)에 문구만 띄운다.',
+        '에러 시각은 시안이 없어 만들지 않는다 — 조회 실패는 판정 토스트와 같은 전역 기본 자리에 문구만 띄운다.',
         '담당자 카드(8/24): 배너 분기·+ 버튼·추가 드롭다운·확인 모달·해제 팝오버는 라우트가 권한(can_manage_owners 규칙: 지정=관리자∨담당자 본인, 해제=관리자만)과 데이터를 실어 준다. 후보 직책(B17)·담당자 활동 시각(B18)은 API에 없어 그 구역을 비운다.',
+        '담당자 행 규격은 확정 노드로 닫혔다(기본 18788:55469·호버 18773:89303, 2026-08-24) — 행 패딩 4·radius 8·행 간 2, 호버 채움 rgba(30,33,36,6%) = fill-normal-interaction-hover. 시안은 행 호버 상태만 그리고 팝오버 개폐 방식은 그리지 않아, 해제 동선(클릭 액션)이 끊기지 않게 클릭 트리거를 유지했다. 해제 팝오버는 앵커 좌측(side=left)에 선다(사용자 지시 — 우측 패널이라 아래보다 좌측이 안전).',
+        '+ 버튼 툴팁도 확정 노드로 닫혔다(18788:55263, 2026-08-24) — add_small 아이콘 20 + 제목 "담당자 추가하기", 좌측 배치(사용자 지시). 배경 75% 검정·radius 8·패딩 6·label(rg)/xsmall 흰 글자는 공용 Tooltip sm과 일치해 소비만 한다. 그림자만 공용 shadow-tooltip(알파 12%)이 시안 Shadow/tooltip(10%)과 미세하게 어긋난다 — 공용 토큰이라 기록만.',
         '문서 위치 카드는 헤더와 같은 breadcrumbs를 그리고 마지막 문서 마디에 현재 위치 점(6px 파랑)을 찍는다 — NavTree는 점을 표현하지 못해 정적 마크업으로 교체했다.',
       ],
       layoutNotes: [
@@ -335,6 +337,14 @@ export const OwnerManagement: Story = {
     const canvas = within(canvasElement);
     const portal = within(document.body);
 
+    // + 버튼 툴팁 — 아이콘+제목 구성이고, 우측 패널이라 앵커 좌측에 선다.
+    await userEvent.hover(canvas.getByRole('button', { name: '담당자 추가하기' }));
+    const tooltip = (await portal.findByRole('tooltip')).closest('[data-side]') as HTMLElement;
+    await expect(tooltip).toHaveAttribute('data-side', 'left');
+    await expect(tooltip).toHaveTextContent('담당자 추가하기');
+    await expect(tooltip.querySelector('svg')).not.toBeNull();
+    await userEvent.unhover(canvas.getByRole('button', { name: '담당자 추가하기' }));
+
     // 추가 — 후보를 고르고 [추가하기] → 확인 모달의 [확인]까지 가야 지정이 나간다
     await userEvent.click(canvas.getByRole('button', { name: '담당자 추가하기' }));
     // 같은 이름이 좌측 목록 행에도 있어 드롭다운 안으로 좁혀 집는다
@@ -358,8 +368,18 @@ export const OwnerManagement: Story = {
     });
 
     // 해제 — 담당자 행을 열면 300px 팝오버가 서고, 해제하기가 대상 user_id를 내보낸다
-    await userEvent.click(canvas.getByRole('button', { name: /팀원F/ }));
-    await expect(await portal.findByText('팀원F 님이 이 문서의 검토 담당자입니다')).toBeInTheDocument();
+    const ownerRow = canvas.getByRole('button', { name: /팀원F/ });
+    // 행 호버 셸 — 패딩 4·radius 8·중립 호버 채움(합성 이벤트는 :hover를 못 깨워 클래스로 잰다).
+    await expect(ownerRow.className).toContain('hover:bg-fill-normal-interaction-hover');
+    await expect(ownerRow).toHaveClass('p-1', 'rounded-lg');
+
+    await userEvent.click(ownerRow);
+    const popoverHeader = await portal.findByText('팀원F 님이 이 문서의 검토 담당자입니다');
+    // 팝오버는 앵커 좌측에 선다 — 우측 패널이라 좌측만 화면을 벗어나지 않는다.
+    const popover = popoverHeader.closest('[data-side]') as HTMLElement;
+    await expect(popover).toHaveAttribute('data-side', 'left');
+    await expect(popover.getBoundingClientRect().right).toBeLessThanOrEqual(ownerRow.getBoundingClientRect().left + 1);
+
     await userEvent.click(portal.getByRole('button', { name: '담당자 해제하기' }));
     await expect(args.onRemoveOwner).toHaveBeenCalledWith(1);
   },
