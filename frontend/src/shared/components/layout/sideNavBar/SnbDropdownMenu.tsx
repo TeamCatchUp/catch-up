@@ -8,6 +8,8 @@ export interface SnbDropdownMenuItem {
   label: string;
   /** 좌측 아이콘. 생략하면 아이콘 자리를 만들지 않는다 */
   Icon?: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  /** 파괴적 항목(삭제 등)은 라벨·아이콘이 빨강으로 선다 */
+  tone?: 'default' | 'destructive';
   onSelect?: () => void;
 }
 
@@ -40,7 +42,9 @@ export default function SnbDropdownMenu({ categoryLabel, groups, metaLines, clas
       )}
     >
       {categoryLabel && (
-        <span className="text-body-xsmall text-text-normal-alternative flex h-5 items-center px-2">{categoryLabel}</span>
+        <span className="text-body-xsmall text-text-normal-alternative flex h-5 items-center px-2">
+          {categoryLabel}
+        </span>
       )}
       {/* 블록 사이는 모두 8, 그룹 안 항목만 4로 붙는다 */}
       <div className={cn('flex flex-col', categoryLabel && 'mt-2')}>
@@ -55,8 +59,21 @@ export default function SnbDropdownMenu({ categoryLabel, groups, metaLines, clas
                   onClick={item.onSelect}
                   className="hover:bg-fill-normal-interaction-hover flex h-[31px] w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 transition-colors"
                 >
-                  {item.Icon && <item.Icon aria-hidden className="text-icon-normal-normal size-5 shrink-0" />}
-                  <span className="text-body-small text-text-normal-normal min-w-0 truncate text-left">
+                  {item.Icon && (
+                    <item.Icon
+                      aria-hidden
+                      className={cn(
+                        'size-5 shrink-0',
+                        item.tone === 'destructive' ? 'text-status-destructive' : 'text-icon-normal-normal',
+                      )}
+                    />
+                  )}
+                  <span
+                    className={cn(
+                      'text-body-small min-w-0 truncate text-left',
+                      item.tone === 'destructive' ? 'text-status-destructive' : 'text-text-normal-normal',
+                    )}
+                  >
                     {item.label}
                   </span>
                 </button>

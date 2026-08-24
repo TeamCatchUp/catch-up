@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 
 import IconAdd400 from '@/public/icons/icon/add_small_400.svg';
 import IconArrowTurnRight from '@/public/icons/icon/arrow_turn_right.svg';
+import IconDelete from '@/public/icons/icon/delete.svg';
 import IconEditSquare from '@/public/icons/icon/edit_square.svg';
 import IconFile from '@/public/icons/icon/file.svg';
 import IconFolder from '@/public/icons/icon/folder.svg';
@@ -18,6 +19,7 @@ import IconUpdate from '@/public/icons/icon/update.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
 import { UserMenuContent } from '@/shared/components/layout/sideNavBar/modal/UserModal';
 import NavTree, { type NavTreeNode, RowActionButton } from '@/shared/components/navigation/NavTree';
+import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
 import { Popover, PopoverAnchor, PopoverContent } from '@/shared/components/ui/popover';
 import { usePrefersReducedMotion } from '@/shared/hooks/usePrefersReducedMotion';
 import { disclosureExpand, disclosureExpandReduced, MotionState } from '@/shared/motion';
@@ -39,7 +41,15 @@ import SnbSpaceSwitcher from './SnbSpaceSwitcher';
 import SnbTeamspaceCard from './SnbTeamspaceCard';
 
 /** 트리·섹션 메뉴 항목 키. 항목이 늘어도 소비처가 깨지지 않게 열어둔다 */
-export type KnownSnbMenuActionId = 'favorite' | 'unfavorite' | 'copy-link' | 'rename' | 'move' | 'folder' | 'channel';
+export type KnownSnbMenuActionId =
+  | 'favorite'
+  | 'unfavorite'
+  | 'copy-link'
+  | 'rename'
+  | 'move'
+  | 'folder'
+  | 'channel'
+  | 'delete-folder';
 export type SnbMenuActionId = KnownSnbMenuActionId | (string & {});
 
 /** 트리 행의 종류. 케밥 머리 라벨이 이 값으로 갈린다 */
@@ -135,6 +145,8 @@ export interface WikiSideNavProps {
   onRenameSubmit?: (node: WikiTreeNode, name: string) => void;
   /** 하위 폴더 추가 제출. 첫 인자는 폴더가 생길 채널 노드다 */
   onFolderCreateSubmit?: (channelNode: WikiTreeNode, name: string) => void;
+  /** 폴더 삭제 확정. 확인 모달을 거친 뒤에만 나간다 */
+  onFolderDeleteSubmit?: (folderNode: WikiTreeNode) => void;
   /** 옮기기 선택 통로. 대상 패널은 features 데이터라 소비처가 이 앵커에 띄운다 */
   onMoveRequest?: (node: WikiTreeNode, anchor: HTMLElement) => void;
   /** 소비처가 옮기기 패널을 띄워 둔 노드. 패널이 떠 있는 동안 그 행의 액션을 붙잡아 둔다 */
@@ -154,6 +166,7 @@ export default function WikiSideNav({
   onMenuAction,
   onRenameSubmit,
   onFolderCreateSubmit,
+  onFolderDeleteSubmit,
   onMoveRequest,
   moveOpenNodeId,
 }: WikiSideNavProps = {}) {
@@ -189,6 +202,9 @@ export default function WikiSideNav({
     node: WikiTreeNode;
     anchor: HTMLElement;
   } | null>(null);
+
+  // 폴더 삭제 확인 대기. 파괴적 동작이라 케밥에서 바로 보내지 않는다
+  const [deleteConfirm, setDeleteConfirm] = useState<WikiTreeNode | null>(null);
 
   // 섹션 접기는 로컬 상태다 — 서버에 보존할 계약이 없다
   const [favoritesOpen, setFavoritesOpen] = useState(true);
@@ -249,6 +265,9 @@ export default function WikiSideNav({
       setNameInput({ mode: 'create-folder', node, anchor: menu.anchor });
     // 옮기기 대상 패널은 소비처가 같은 앵커에 이어 띄운다 — 이동 API가 문서 단위라 문서에서만 넘긴다
     else if (actionId === 'move' && menu && node?.kind === 'document') onMoveRequest?.(node, menu.anchor);
+    // 폴더 삭제는 파괴적이라 확인 모달을 거친다
+    else if (actionId === 'delete-folder' && node?.kind === 'folder' && isChannelAdmin(node.channelId))
+      setDeleteConfirm(node);
     // 채널 생성 화면은 온보딩뿐이다 — 별도 생성 폼이 없다
     else if (actionId === 'channel') go('/llm-wiki/onboarding')();
     onMenuAction?.(menu?.nodeId, actionId);
@@ -295,6 +314,18 @@ export default function WikiSideNav({
             ? [{ id: 'move', label: '옮기기', Icon: IconArrowTurnRight, onSelect: select('move') }]
             : []),
         ],
+        // 삭제 API는 폴더뿐이고 채널 관리자 한정 — 시안대로 마지막 단독 묶음이다
+        node?.kind === 'folder' && isChannelAdmin(node.channelId)
+          ? [
+              {
+                id: 'delete-folder',
+                label: '폴더 삭제하기',
+                Icon: IconDelete,
+                tone: 'destructive' as const,
+                onSelect: select('delete-folder'),
+              },
+            ]
+          : [],
       ],
       metaLines: node?.metaLines,
     };
@@ -492,6 +523,19 @@ export default function WikiSideNav({
           </PopoverContent>
         </Popover>
       )}
+
+      {/* 확인 문구는 서버 계약을 그대로 말한다 — 폴더 안 문서는 삭제되지 않고 채널 루트로 옮겨진다 */}
+      <ConfirmDialog
+        open={deleteConfirm !== null}
+        onOpenChange={(open) => !open && setDeleteConfirm(null)}
+        title="폴더를 삭제할까요?"
+        description="폴더만 사라지고, 안에 있던 문서는 채널 바로 아래로 옮겨집니다."
+        confirmLabel="삭제하기"
+        variant="danger"
+        onConfirm={() => {
+          if (deleteConfirm) onFolderDeleteSubmit?.(deleteConfirm);
+        }}
+      />
     </SideNavShell>
   );
 }

@@ -100,3 +100,8 @@ export async function createWikiFolder(channelId: string, name: string): Promise
 export async function renameWikiFolder(channelId: string, folderId: string, name: string): Promise<void> {
   await api.patch(API.wiki.folder(channelId, folderId), { name });
 }
+
+/** 폴더 삭제(채널 관리자). 폴더 안 문서·정의는 삭제되지 않고 채널 루트로 옮겨진다. */
+export async function deleteWikiFolder(channelId: string, folderId: string): Promise<void> {
+  await api.delete(API.wiki.folder(channelId, folderId));
+}

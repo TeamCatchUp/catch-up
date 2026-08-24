@@ -477,6 +477,55 @@ describe('WikiSideNav 펼침', () => {
     expect(screen.queryByTestId('snb-rename-popover')).toBeNull();
   });
 
+  it('폴더 삭제하기는 확인 모달을 거쳐 폴더 노드째 나간다', async () => {
+    const user = userEvent.setup();
+    const onFolderDeleteSubmit = vi.fn();
+    renderWikiNav({ onFolderDeleteSubmit });
+
+    await expandRow(user, CHANNEL_LABEL);
+    await user.click(screen.getAllByRole('button', { name: `${FOLDER_LABEL} 추가 작업` })[0]);
+    await user.click(screen.getByRole('button', { name: '폴더 삭제하기' }));
+
+    // 확인 전에는 아무것도 나가지 않는다 — 문구는 서버 계약(문서는 채널 루트로 이동)을 말한다
+    expect(onFolderDeleteSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText('폴더를 삭제할까요?')).toBeInTheDocument();
+    expect(screen.getByText('폴더만 사라지고, 안에 있던 문서는 채널 바로 아래로 옮겨집니다.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '삭제하기' }));
+    expect(onFolderDeleteSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'folder-1', kind: 'folder', channelId: 'channel-1' }),
+    );
+    expect(screen.queryByText('폴더를 삭제할까요?')).toBeNull();
+  });
+
+  it('삭제 확인을 취소하면 나가지 않는다', async () => {
+    const user = userEvent.setup();
+    const onFolderDeleteSubmit = vi.fn();
+    renderWikiNav({ onFolderDeleteSubmit });
+
+    await expandRow(user, CHANNEL_LABEL);
+    await user.click(screen.getAllByRole('button', { name: `${FOLDER_LABEL} 추가 작업` })[0]);
+    await user.click(screen.getByRole('button', { name: '폴더 삭제하기' }));
+    await user.click(screen.getByRole('button', { name: '취소' }));
+
+    expect(onFolderDeleteSubmit).not.toHaveBeenCalled();
+    expect(screen.queryByText('폴더를 삭제할까요?')).toBeNull();
+  });
+
+  it('폴더 삭제하기는 관리자 채널의 폴더 케밥에만 뜬다', async () => {
+    const user = userEvent.setup();
+    renderWikiNav({ channelAdmins: { 'channel-1': false, 'channel-2': false, 'channel-3': false } });
+
+    // 채널 케밥에는 애초에 없다 — 삭제 API가 폴더뿐이다
+    await user.click(screen.getAllByRole('button', { name: `${CHANNEL_LABEL} 추가 작업` })[0]);
+    expect(within(screen.getByTestId('snb-dropdown-menu')).queryByRole('button', { name: '폴더 삭제하기' })).toBeNull();
+    await user.keyboard('{Escape}');
+
+    await expandRow(user, CHANNEL_LABEL);
+    await user.click(screen.getAllByRole('button', { name: `${FOLDER_LABEL} 추가 작업` })[0]);
+    expect(within(screen.getByTestId('snb-dropdown-menu')).queryByRole('button', { name: '폴더 삭제하기' })).toBeNull();
+  });
+
   it('폴더의 이름 바꾸기는 소속 채널을 함께 들고 나간다', async () => {
     const user = userEvent.setup();
     const onRenameSubmit = vi.fn();

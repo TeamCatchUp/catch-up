@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 
 import WikiSideNav, {
@@ -15,10 +15,10 @@ import { toast } from '@/shared/components/ui/toast';
 import { authQueries } from '@/shared/queries/auth.queries';
 
 import { useWikiSideNav } from '../../hooks/useWikiSideNav';
-import { wikiQueries } from '../../queries/wiki.queries';
 import { useMoveWikiArtifactMutation } from '../../queries/wikiArtifacts.mutations';
 import {
   useCreateWikiFolderMutation,
+  useDeleteWikiFolderMutation,
   useRenameWikiChannelMutation,
   useRenameWikiFolderMutation,
 } from '../../queries/wikiChannels.mutations';
@@ -32,13 +32,13 @@ const ACTION_TOAST_DURATION = 6000;
 /** 위키 SNB에 실 데이터를 물리는 자리. shared 층은 features를 import할 수 없어 여기서 잇는다. */
 export default function WikiSideNavContainer() {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const { treeNodes, favorites, channelAdmins, onNodeToggle } = useWikiSideNav();
   const { data: me } = useQuery(authQueries.me());
   const favoriteToggle = useWikiFavoriteToggleMutation();
   const renameChannel = useRenameWikiChannelMutation();
   const renameFolder = useRenameWikiFolderMutation();
   const createFolder = useCreateWikiFolderMutation();
+  const deleteFolder = useDeleteWikiFolderMutation();
   const moveArtifact = useMoveWikiArtifactMutation();
 
   // 옮기기 대상 패널. 케밥이 섰던 앵커에 이어 뜨고, 본문이 features 데이터라 팝오버째 여기서 소유한다
@@ -110,21 +110,10 @@ export default function WikiSideNavContainer() {
     );
   };
 
-  // 패널에서 새 폴더를 만들면 목록을 다시 읽어 그 폴더로 곧장 옮긴다(이름 중복은 서버가 409로 막는다)
-  const handleCreateFolderAndMove = async (name: string) => {
-    if (!movePicker || !moveTarget) return;
-    const node = movePicker.node;
-    const channelId = moveTarget.channel.id;
-    try {
-      await createFolder.mutateAsync({ channelId, name });
-    } catch {
-      return; // 실패 토스트는 뮤테이션 훅이 띄운다
-    }
-    const channels = await queryClient.fetchQuery(wikiQueries.channels());
-    const folder = channels.channels.find((item) => item.id === channelId)?.folders.find((item) => item.name === name);
-    if (!folder) return;
-    setMovePicker(null);
-    handleMoveSelect(node, { channelId, folderId: folder.id, label: folder.name });
+  // 패널에서 새 폴더 만들기 — 생성만 한다. 무효화로 목록에 새 폴더가 서고 이동은 사용자가 직접 고른다
+  const handlePickerFolderCreate = (name: string) => {
+    if (!moveTarget) return;
+    createFolder.mutate({ channelId: moveTarget.channel.id, name });
   };
 
   return (
@@ -138,6 +127,7 @@ export default function WikiSideNavContainer() {
         onMenuAction={handleMenuAction}
         onRenameSubmit={handleRenameSubmit}
         onFolderCreateSubmit={handleFolderCreateSubmit}
+        onFolderDeleteSubmit={(node) => deleteFolder.mutate({ channelId: node.channelId, folderId: node.id })}
         onMoveRequest={(node, anchor) => setMovePicker({ node, anchor })}
         moveOpenNodeId={movePicker?.node.id}
       />
@@ -155,9 +145,7 @@ export default function WikiSideNavContainer() {
                 handleMoveSelect(movePicker.node, target);
               }}
               onCreateFolder={
-                moveTarget && channelAdmins[moveTarget.channel.id] === true
-                  ? (name) => void handleCreateFolderAndMove(name)
-                  : undefined
+                moveTarget && channelAdmins[moveTarget.channel.id] === true ? handlePickerFolderCreate : undefined
               }
             />
           </PopoverContent>

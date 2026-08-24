@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { parseApiError } from '@/shared/api/errors';
 import { toast } from '@/shared/components/ui/toast';
 
-import { createWikiFolder, renameWikiChannel, renameWikiFolder } from '../api/wikiRequests';
+import { createWikiFolder, deleteWikiFolder, renameWikiChannel, renameWikiFolder } from '../api/wikiRequests';
 import { wikiQueries } from './wiki.queries';
 
 export interface RenameWikiChannelVariables {
@@ -32,8 +32,7 @@ export const useRenameWikiChannelMutation = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ channelId, name }: RenameWikiChannelVariables): Promise<void> =>
-      renameWikiChannel(channelId, name),
+    mutationFn: ({ channelId, name }: RenameWikiChannelVariables): Promise<void> => renameWikiChannel(channelId, name),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: wikiQueries.channels().queryKey });
     },
@@ -50,6 +49,28 @@ export const useCreateWikiFolderMutation = () => {
 
   return useMutation({
     mutationFn: ({ channelId, name }: CreateWikiFolderVariables): Promise<void> => createWikiFolder(channelId, name),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: wikiQueries.channels().queryKey });
+    },
+    onError: (error) => {
+      toast(parseApiError(error).message);
+    },
+  });
+};
+
+export interface DeleteWikiFolderVariables {
+  /** 폴더 경로가 채널 아래에 있어 소속 채널 id가 함께 필요하다 */
+  channelId: string;
+  folderId: string;
+}
+
+/** 폴더 삭제(채널 관리자). 폴더 안 문서는 채널 루트로 옮겨진다 — 무효화·실패 처리는 생성과 같다. */
+export const useDeleteWikiFolderMutation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ channelId, folderId }: DeleteWikiFolderVariables): Promise<void> =>
+      deleteWikiFolder(channelId, folderId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: wikiQueries.channels().queryKey });
     },

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { wikiQueries } from './wiki.queries';
 import {
   useCreateWikiFolderMutation,
+  useDeleteWikiFolderMutation,
   useRenameWikiChannelMutation,
   useRenameWikiFolderMutation,
 } from './wikiChannels.mutations';
@@ -14,6 +15,7 @@ const wikiApi = vi.hoisted(() => ({
   renameWikiChannel: vi.fn(),
   renameWikiFolder: vi.fn(),
   createWikiFolder: vi.fn(),
+  deleteWikiFolder: vi.fn(),
 }));
 const toastMock = vi.hoisted(() => vi.fn());
 
@@ -45,6 +47,7 @@ beforeEach(() => {
   wikiApi.renameWikiChannel.mockResolvedValue(undefined);
   wikiApi.renameWikiFolder.mockResolvedValue(undefined);
   wikiApi.createWikiFolder.mockResolvedValue(undefined);
+  wikiApi.deleteWikiFolder.mockResolvedValue(undefined);
 });
 
 describe('useRenameWikiChannelMutation', () => {
@@ -145,6 +148,32 @@ describe('useCreateWikiFolderMutation', () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(toastMock).toHaveBeenCalledWith('같은 이름의 폴더가 있어요.');
+    expect(invalidatedKeys()).toEqual([]);
+  });
+});
+
+describe('useDeleteWikiFolderMutation', () => {
+  it('폴더 삭제는 소속 채널·폴더 id를 넘기고 성공하면 채널 목록만 다시 읽는다', async () => {
+    const { wrapper, invalidatedKeys } = createHarness();
+    const { result } = renderHook(() => useDeleteWikiFolderMutation(), { wrapper });
+
+    result.current.mutate({ channelId: 'ch-1', folderId: 'fo-1' });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(wikiApi.deleteWikiFolder).toHaveBeenCalledWith('ch-1', 'fo-1');
+    // 폴더 안 문서는 서버가 채널 루트로 옮긴다 — 트리는 채널 응답 무효화만으로 따라온다
+    expect(invalidatedKeys()).toEqual([channelsKey]);
+  });
+
+  it('실패는 서버 문구를 그대로 띄우고 캐시를 건드리지 않는다', async () => {
+    wikiApi.deleteWikiFolder.mockRejectedValue(apiError('FORBIDDEN', '채널 관리자만 지울 수 있어요.'));
+    const { wrapper, invalidatedKeys } = createHarness();
+    const { result } = renderHook(() => useDeleteWikiFolderMutation(), { wrapper });
+
+    result.current.mutate({ channelId: 'ch-1', folderId: 'fo-1' });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(toastMock).toHaveBeenCalledWith('채널 관리자만 지울 수 있어요.');
     expect(invalidatedKeys()).toEqual([]);
   });
 });
