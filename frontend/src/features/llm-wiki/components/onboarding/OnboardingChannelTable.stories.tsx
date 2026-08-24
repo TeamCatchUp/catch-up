@@ -28,7 +28,8 @@ const meta = {
         '행 카피(채널명)는 시안 필러라 카피 미정(TBD) — 스토리명에 반영.',
         '표의 채널은 위키 채널이 아니라 채널톡 채널이다 — mock은 GET /automations/credentials 응답(credential_id·external_id·is_configured) 모양을 지키고 행 key도 credentialId다.',
         '**"최근 수정일" 열은 제거됐다(사용자 확정).** 대응 API 필드가 없어 늘 빈 값이었고, 정의 협의(감사 B9)가 서지 않아 열 자체를 걷어냈다 — 표는 채널명 1열이다.',
-        '⚠️ 로딩·빈·에러는 Figma 근거가 없다 — 2026-08-13 사용자 승인으로 구현했다(로딩은 스켈레톤 지정, 빈·에러는 구현 재량 위임). 디자이너 승인본이 아니므로 시안이 도착하면 교체 대상이다.',
+        '빈 상태는 시안(`18593:50642`)을 따른다 — 일러스트 258×69.9 + 문구, 머리글은 남는다. 시안의 "최근 수정일" 열은 제거 결정(위)을 유지해 반영하지 않았다.',
+        '⚠️ 로딩·에러는 여전히 Figma 근거가 없다 — 2026-08-13 사용자 승인으로 구현했다(로딩은 스켈레톤 지정, 에러는 구현 재량 위임). 시안이 도착하면 교체 대상이다.',
         '선택 표시는 여전히 미구현 — 시안 UNKNOWN(감사 §7).',
       ],
       interactionNotes: [
@@ -89,13 +90,27 @@ export const Loading: Story = {
   },
 };
 
-/** 아직 고른 채널이 없는 상태. 8/14에 표가 "선택 결과"임이 확정돼 문구가 바뀌었다 */
+/** 아직 고른 채널이 없는 상태. 표 셸과 머리글은 남고 몸통만 안내로 바뀐다 */
 export const Empty: Story = {
   args: { headers: CHANNEL_TABLE_HEADERS, rows: [], status: 'ready' },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText('아직 선택한 채널이 없습니다')).toBeInTheDocument();
-    await expect(canvas.queryByRole('table')).not.toBeInTheDocument();
+    await expect(canvas.getByText('선택한 채널톡 채널이 없습니다')).toBeInTheDocument();
+
+    // 머리글이 살아 있는지 — 표를 통째로 대체하면 여기서 갈린다
+    await expect(canvas.getByRole('table')).toBeInTheDocument();
+    const headers = canvas.getAllByRole('columnheader');
+    await expect(headers).toHaveLength(1);
+    await expect(headers[0]).toHaveTextContent(CHANNEL_TABLE_HEADERS.name);
+
+    // 데이터 행은 없다 — 머리글 줄 하나와 안내 줄 하나뿐이다
+    await expect(canvas.getAllByRole('row')).toHaveLength(2);
+
+    // 일러스트는 시안 실측 그대로다 — 임의값 클래스가 빠지면 크기가 무너진다
+    const illustration = canvas.getByRole('table').querySelector('svg')!;
+    const box = illustration.getBoundingClientRect();
+    await expect(box.width).toBeCloseTo(258, 0);
+    await expect(box.height).toBeCloseTo(69.9, 0);
 
     // 연동·생성 유도 문구는 넣지 않았다 — 그 동선은 아직 제품 결정이 아니다
     await expect(canvas.queryByRole('button')).not.toBeInTheDocument();
