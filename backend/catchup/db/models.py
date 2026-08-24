@@ -5714,3 +5714,86 @@ class KnowledgeNameEmbedding(Base):
             name="uq_knowledge_name_embeddings_name",
         ),
     )
+
+
+class KnowledgeResolutionEvent(Base):
+    """entity 병합과 되돌림 확정 한 건을 불변 저널로 남긴다.
+
+    병합이 자동으로 적용되면 왜, 무슨 근거로, 어떤 멤버 구성으로 붙였는지가
+    이 행에만 남는다. 판정 당시의 멤버 구성과 근거는 그 순간에만 존재하므로
+    사후에 다시 만들어 낼 수 없다. 그래서 판정 시점의 구성을
+    member_snapshot에, 판단 근거를 basis에 그대로 담아 둔다.
+
+    이 표는 덧붙이기만 하는 표다. 갱신하거나 지우는 경로를 만들지 않는다.
+    병합을 되돌릴 때도 원본 행을 고치지 않고, reverses_event_id로 원본을
+    가리키는 unmerge 행을 새로 쓴다.
+    """
+
+    __tablename__ = "knowledge_resolution_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    decider: Mapped[str] = mapped_column(String(16), nullable=False)
+    decider_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # node_id에는 외래 키를 걸지 않는다. 되돌림으로 노드가 물러나도 저널 행은
+    # 그 노드를 계속 가리켜야 하고, 저널은 그래프의 현재 상태에 딸린 자료가
+    # 아니라 그와 무관하게 남는 기록이기 때문이다.
+    node_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    member_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    member_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    basis: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    reverses_event_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["reverses_event_id"],
+            ["knowledge_resolution_events.id"],
+            name="fk_knowledge_resolution_events_reverses",
+        ),
+        CheckConstraint(
+            "event_type IN ('merge_create_node', 'merge_into_node', 'unmerge')",
+            name="ck_knowledge_resolution_events_type",
+        ),
+        CheckConstraint(
+            "decider IN ('system', 'human')",
+            name="ck_knowledge_resolution_events_decider",
+        ),
+        # 되돌림 행은 무엇을 되돌리는지가 반드시 있어야 저널이 짝을 이룬다.
+        CheckConstraint(
+            "event_type != 'unmerge' OR reverses_event_id IS NOT NULL",
+            name="ck_knowledge_resolution_events_unmerge_reversal",
+        ),
+        Index(
+            "ix_knowledge_resolution_events_member_hash",
+            "workspace_id",
+            "member_hash",
+        ),
+    )
