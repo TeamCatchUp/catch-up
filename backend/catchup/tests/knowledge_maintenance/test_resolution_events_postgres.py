@@ -26,7 +26,7 @@ from catchup.configs.config import settings
 from catchup.db.models import KnowledgeResolutionEvent
 from catchup.db.models import Workspace
 from catchup.knowledge_maintenance.adapters.postgres.resolution_events import (
-    PostgresResolutionEventRepository,
+    SqlAlchemyResolutionEventRepository,
 )
 
 MEMBER_HASH = "test-resolution-event-member-hash"
@@ -90,12 +90,12 @@ def session(engine: Engine, workspace_id: int) -> Iterator[Session]:
 
 
 @pytest.fixture
-def repository(session: Session) -> PostgresResolutionEventRepository:
-    return PostgresResolutionEventRepository(session)
+def repository(session: Session) -> SqlAlchemyResolutionEventRepository:
+    return SqlAlchemyResolutionEventRepository(session)
 
 
 def test_recorded_event_comes_back(
-    repository: PostgresResolutionEventRepository,
+    repository: SqlAlchemyResolutionEventRepository,
     session: Session,
     workspace_id: int,
 ) -> None:
@@ -133,7 +133,7 @@ def test_recorded_event_comes_back(
 
 
 def test_missing_event_reads_as_none(
-    repository: PostgresResolutionEventRepository, workspace_id: int
+    repository: SqlAlchemyResolutionEventRepository, workspace_id: int
 ) -> None:
     """적힌 적 없는 식별자는 None으로 읽힌다."""
     assert (
@@ -142,7 +142,7 @@ def test_missing_event_reads_as_none(
 
 
 def test_other_workspace_does_not_see_the_event(
-    repository: PostgresResolutionEventRepository,
+    repository: SqlAlchemyResolutionEventRepository,
     session: Session,
     workspace_id: int,
 ) -> None:
@@ -168,7 +168,7 @@ def test_other_workspace_does_not_see_the_event(
 
 
 def test_reversal_is_found_by_the_event_it_reverses(
-    repository: PostgresResolutionEventRepository,
+    repository: SqlAlchemyResolutionEventRepository,
     session: Session,
     workspace_id: int,
 ) -> None:
@@ -213,7 +213,7 @@ def test_reversal_is_found_by_the_event_it_reverses(
 
 
 def test_event_without_a_reversal_reads_as_none(
-    repository: PostgresResolutionEventRepository,
+    repository: SqlAlchemyResolutionEventRepository,
     session: Session,
     workspace_id: int,
 ) -> None:
@@ -239,7 +239,7 @@ def test_event_without_a_reversal_reads_as_none(
 
 
 def test_human_unmerge_is_seen_for_the_same_members(
-    repository: PostgresResolutionEventRepository,
+    repository: SqlAlchemyResolutionEventRepository,
     session: Session,
     workspace_id: int,
 ) -> None:
@@ -280,7 +280,7 @@ def test_human_unmerge_is_seen_for_the_same_members(
 
 
 def test_system_unmerge_is_not_a_human_unmerge(
-    repository: PostgresResolutionEventRepository,
+    repository: SqlAlchemyResolutionEventRepository,
     session: Session,
     workspace_id: int,
 ) -> None:
@@ -318,7 +318,7 @@ def test_system_unmerge_is_not_a_human_unmerge(
 
 
 def test_unmerge_without_an_original_is_rejected(
-    repository: PostgresResolutionEventRepository,
+    repository: SqlAlchemyResolutionEventRepository,
     session: Session,
     workspace_id: int,
 ) -> None:

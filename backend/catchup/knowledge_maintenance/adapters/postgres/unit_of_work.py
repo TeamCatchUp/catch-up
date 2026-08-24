@@ -40,7 +40,7 @@ from catchup.knowledge_maintenance.adapters.postgres.repositories import (
     SqlAlchemySourceVersionRepository,
 )
 from catchup.knowledge_maintenance.adapters.postgres.resolution_events import (
-    PostgresResolutionEventRepository,
+    SqlAlchemyResolutionEventRepository,
 )
 
 
@@ -64,7 +64,7 @@ class KnowledgeMaintenanceUnitOfWork:
     artifact_definitions: SqlAlchemyArtifactDefinitionRepository
     block_verdicts: SqlAlchemyBlockVerdictRepository
     relations: SqlAlchemyRelationRepository
-    resolution_events: PostgresResolutionEventRepository
+    resolution_events: SqlAlchemyResolutionEventRepository
 
     def __init__(
         self,
@@ -113,7 +113,7 @@ class KnowledgeMaintenanceUnitOfWork:
         self.relations = SqlAlchemyRelationRepository(
             session, self._workspace_id
         )
-        self.resolution_events = PostgresResolutionEventRepository(session)
+        self.resolution_events = SqlAlchemyResolutionEventRepository(session)
         return self
 
     def __exit__(

@@ -18,7 +18,7 @@ from catchup.knowledge_maintenance.domain.source_version import JsonValue
 from catchup.knowledge_maintenance.ports.resolution_events import StoredResolutionEvent
 
 
-class PostgresResolutionEventRepository:
+class SqlAlchemyResolutionEventRepository:
     """해소 event를 덧붙이고 되짚는다.
 
     쓰기는 삽입뿐이다. 갱신도 삭제도 하지 않으므로 한 번 적힌 행은 그대로
