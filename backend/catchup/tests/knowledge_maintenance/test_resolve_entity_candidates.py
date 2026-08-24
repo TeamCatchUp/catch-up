@@ -230,8 +230,20 @@ class FakeProposalRepository:
             if record["id"] == proposal_id:
                 record["status"] = "abandoned"
 
+    # 결정이 내려진 상태들이다. 이 상태의 행은 되살리지 않는다.
+    DECIDED_STATUSES = ("approved", "applied", "rejected")
+
     def add_duplicate_proposal(self, **kwargs):
-        proposal_id = uuid.uuid4()
+        """실 저장소처럼 같은 key의 행을 되살리거나 그대로 둔다.
+
+        이미 결정된 행이면 내용을 갈지 않고 그 id를 그대로 돌려준다.
+        계류·접힘 행은 같은 자리에서 내용을 갈아끼우고 결정 흔적을
+        지운 뒤 되살린다.
+        """
+        existing = self.proposals.get(kwargs["idempotency_key"])
+        if existing is not None and existing["status"] in self.DECIDED_STATUSES:
+            return existing["id"]
+        proposal_id = uuid.uuid4() if existing is None else existing["id"]
         self.proposals[kwargs["idempotency_key"]] = {
             "id": proposal_id,
             "status": "pending",
@@ -611,7 +623,6 @@ def test_auto_merge_approves_proposal_as_system() -> None:
     stored = uow.mutation_proposals.proposals[group_idempotency_key("slack")]
     assert stored["status"] == "approved"
     assert stored["reviewer"] == "system:auto_merge"
-    assert SYSTEM_REVIEWER == "system:auto_merge"
 
 
 def test_auto_merge_off_leaves_proposal_pending() -> None:
@@ -626,6 +637,40 @@ def test_auto_merge_off_leaves_proposal_pending() -> None:
     assert stored["status"] == "pending"
     assert stored["reviewer"] is None
     assert uow.resolution_events.queried == []
+
+
+def test_auto_merge_leaves_already_decided_proposal_alone() -> None:
+    """이미 결정된 안건은 자동 확정이 다시 건드리지 않는다."""
+    members = _slack_group()
+    first_uow = FakeUnitOfWork(members)
+    resolve_entity_candidates(
+        workspace_id=WORKSPACE,
+        judge=_same_verdict_judge(),
+        uow=first_uow,
+        auto_merge_enabled=True,
+    )
+    key = group_idempotency_key("slack")
+    decided = first_uow.mutation_proposals.proposals[key]
+    decided_id = decided["id"]
+    # 사람이 그 뒤에 반려로 뒤집은 상태를 만든다.
+    decided["status"] = "rejected"
+    decided["reviewer"] = "human:reviewer"
+
+    second_uow = FakeUnitOfWork(members)
+    second_uow.mutation_proposals = first_uow.mutation_proposals
+    resolve_entity_candidates(
+        workspace_id=WORKSPACE,
+        judge=_same_verdict_judge(),
+        uow=second_uow,
+        auto_merge_enabled=True,
+    )
+
+    stored = second_uow.mutation_proposals.proposals[key]
+    assert stored["id"] == decided_id
+    assert stored["status"] == "rejected"
+    assert stored["reviewer"] == "human:reviewer"
+    # 억제 조회조차 하지 않는다 — 자동 승인 자체에 닿지 않았다는 뜻이다.
+    assert second_uow.resolution_events.queried == []
 
 
 def test_auto_merge_suppressed_when_human_unmerged_same_members() -> None:
