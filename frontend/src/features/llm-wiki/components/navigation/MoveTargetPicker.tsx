@@ -163,7 +163,7 @@ export default function MoveTargetPicker({
   className,
 }: MoveTargetPickerProps) {
   const [keyword, setKeyword] = useState('');
-  // 채널이 하나뿐이라 처음부터 펼쳐 폴더가 바로 보이게 둔다
+  // 열릴 때는 항상 전체 펼침 — 폴더가 바로 보여야 한다(사용자 확정)
   const [collapsed, setCollapsed] = useState(false);
 
   const searching = keyword.trim().length > 0;
@@ -186,7 +186,7 @@ export default function MoveTargetPicker({
     <div
       data-testid="move-target-picker"
       className={cn(
-        'bg-background-elevated-normal border-line-normal-normal shadow-modal flex h-95 w-75 flex-col gap-3 rounded-xl border pt-2.5',
+        'bg-background-elevated-normal border-line-normal-normal shadow-modal flex max-h-95 w-75 flex-col gap-3 rounded-xl border pt-2.5',
         className,
       )}
     >

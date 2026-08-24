@@ -22,23 +22,31 @@ const meta = {
         nodeId: '18957:54370',
       },
       viewport: { width: 360, height: 440 },
-      states: ['expanded', 'collapsed', 'searching', 'current-location', 'no-folders', 'create-folder'],
+      states: [
+        'expanded',
+        'collapsed',
+        'searching',
+        'current-location',
+        'no-folders',
+        'create-folder',
+        'max-height-scroll',
+      ],
       reuseNotes: [
         '트리 행이 NavTree와 닮았지만 캐럿이 늘 보이고 행 액션·선택 상태가 없어 재사용하지 않는다.',
         '팝오버 배치·열고 닫기는 소비처(WikiSideNav) 몫이다. 이 컴포넌트는 패널 본문만 낸다.',
         '새 폴더 입력을 SnbRenamePopover로 띄우지 않는 이유: 패널 자체가 팝오버 안이라 중첩 팝오버는 바깥이 outside-interaction으로 닫힌다. 키 관례(Enter 제출·Escape 취소·조합 가드)만 가져왔다.',
       ],
       layoutNotes: [
-        '확정 노드 18957:54370 실측(8/24): 패널 300×380, padding 10/0/0, gap 12, radius 12, Shadow/Modal.',
+        '확정 노드 18957:54370 실측(8/24): 패널 폭 300, padding 10/0/0, gap 12, radius 12, Shadow/Modal. 높이는 시안 380을 max-height로만 쓴다 — 고정 높이는 사용자 지시(8/24)로 제거, 내용이 적으면 줄고 넘치면 목록만 스크롤.',
         '검색 구역 padding 0/10, 입력 h36 padding 6/10 gap 8 radius 8. 트리 구역 padding 0/6, 행 간격 2.',
         '채널·폴더 행 모두 h36 padding 6/10 gap 12 — 폴더 들여쓰기는 패딩이 아니라 앞 점 슬롯(22)이 만든다. 구 노드(18849:138185)의 좌측 20 들여쓰기는 폐기.',
         '하단 새 폴더 행: padding 10, gap 12, 상단 보더 #EAEBEC, add 아이콘 20(슬롯 22) + 문구 #6D7882.',
       ],
       dataNotes: [
         '시안은 전 채널 트리였으나 이동 API(PATCH /wiki/artifacts)가 같은 채널 안만 받아 대상을 채널 하나로 좁혔다.',
-        '채널이 하나뿐이라 처음부터 펼쳐 폴더가 바로 보인다. 빈 목록·검색 결과 없음 문구는 시안에 없어 만들지 않는다.',
+        '열릴 때는 트리 전체가 펼쳐져 있다(사용자 확정, 8/24). 빈 목록·검색 결과 없음 문구는 시안에 없어 만들지 않는다.',
         '새 폴더 진입점은 확정 노드의 하단 행이다. 이름 입력 UX(같은 자리 인라인 전환·Enter 제출·Escape 취소·빈 값 무시)는 시안에 없어 자작이고, 필드 규격은 위 검색 입력과 같은 토큰이다.',
-        '새 폴더는 onCreateFolder가 있어야(=폴더 생성 권한) 선다 — 생성 요청·트리 갱신·새 폴더로의 이동 연결은 소비처(WikiSideNavContainer) 몫이다.',
+        '새 폴더는 onCreateFolder가 있어야(=폴더 생성 권한) 선다 — 생성 요청·트리 갱신은 소비처(WikiSideNavContainer) 몫이고, 생성 후 자동 이동은 하지 않는다(사용자 지시 8/24) — 이동은 사용자가 목록에서 직접 고른다.',
       ],
       interactionNotes: [
         '행을 고르면 그 자리를 알리기만 한다 — 이동 요청·토스트는 소비처가 보낸다.',
@@ -80,11 +88,12 @@ export const Expanded: Story = {
     const canvas = within(canvasElement);
     const panel = canvas.getByTestId('move-target-picker');
 
-    // 패널 규격은 어서션이 든 값이 정본이다
+    // 고정 높이는 없다 — max-height 계약만 있고 내용이 적으면 패널이 줄어든다(사용자 확정).
     await expect(panel.getBoundingClientRect().width).toBe(300);
-    await expect(panel.getBoundingClientRect().height).toBe(380);
+    await expect(getComputedStyle(panel).maxHeight).toBe('380px');
+    await expect(panel.getBoundingClientRect().height).toBeLessThan(380);
 
-    // 채널 하나가 처음부터 펼쳐져 채널 1행 + 폴더 2행이 선다
+    // 열릴 때 트리가 전부 펼쳐져 있다 — 채널 1행 + 폴더 2행(사용자 확정).
     const rows = canvas.getAllByTestId('move-target-row');
     await expect(rows).toHaveLength(3);
     await expect(rows[0].getBoundingClientRect().height).toBe(36);
@@ -142,6 +151,29 @@ export const CreateFolder: Story = {
     await userEvent.keyboard('{Escape}');
     await expect(canvas.queryByRole('textbox', { name: '폴더 이름' })).toBeNull();
     await expect(args.onCreateFolder).toHaveBeenCalledTimes(1);
+  },
+};
+
+/** 폴더가 많으면 max-height에서 멈추고 목록만 스크롤한다. */
+export const MaxHeightScroll: Story = {
+  args: {
+    channel: {
+      id: 'channel-1',
+      label: '폴더 많은 채널',
+      folders: Array.from({ length: 20 }, (_, index) => ({ id: `folder-${index}`, label: `폴더 ${index + 1}` })),
+    },
+    onSelect,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const panel = canvas.getByTestId('move-target-picker');
+
+    await expect(panel.getBoundingClientRect().height).toBe(380);
+
+    // 넘친 만큼은 패널이 아니라 목록이 스크롤로 삼킨다.
+    const list = panel.querySelector('ul') as HTMLElement;
+    await expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
+    await expect(panel.scrollHeight).toBe(panel.clientHeight);
   },
 };
 
