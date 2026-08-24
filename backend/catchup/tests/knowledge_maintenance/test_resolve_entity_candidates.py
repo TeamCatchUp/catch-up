@@ -205,10 +205,12 @@ class FakeNodeRepository:
         self, *, workspace_id, node_id, alias, normalized_alias, source
     ):
         del workspace_id
-        if (node_id, normalized_alias) not in self.aliases:
-            self.aliases.append((node_id, normalized_alias))
-            self.alias_sources.append((node_id, normalized_alias, source))
-            self.alias_rows.append((node_id, alias, normalized_alias))
+        if (node_id, normalized_alias) in self.aliases:
+            return False
+        self.aliases.append((node_id, normalized_alias))
+        self.alias_sources.append((node_id, normalized_alias, source))
+        self.alias_rows.append((node_id, alias, normalized_alias))
+        return True
 
     def list_active_entity_aliases(self, *, workspace_id):
         del workspace_id
@@ -616,6 +618,52 @@ def test_same_verdict_writes_one_proposal_per_group() -> None:
     assert len(kwargs["merge_candidate_ids"]) == 1
     # 후보는 pending 유지 — 적용은 승인 트랜잭션의 일이다.
     assert uow.knowledge_candidates.resolved == {}
+
+
+def test_name_group_proposal_records_model_and_prompt_version() -> None:
+    """이름 그룹 판정이 낸 안건의 판정 근거에 모델과 프롬프트 판본이 남는다.
+
+    적용이 resolver_metadata를 그대로 event basis에 합치므로, 여기 실리면
+    확정 기록까지 따라간다.
+    """
+    judge = FakeJudge(
+        IdentityVerdict(
+            same=True,
+            reason="같은 제품이다",
+            proposed_type="integration",
+            proposed_name="Slack",
+            model_id="fake-judge-model",
+            prompt_version="judge_entity_identity.j2@fake",
+        )
+    )
+    uow = FakeUnitOfWork(_slack_group())
+
+    resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=judge, uow=uow
+    )
+
+    stored = uow.mutation_proposals.proposals[group_idempotency_key("slack")]
+    metadata = stored["kwargs"]["resolver_metadata"]
+    assert metadata["model_id"] == "fake-judge-model"
+    assert metadata["prompt_version"] == "judge_entity_identity.j2@fake"
+
+
+def test_judge_without_model_info_omits_those_keys() -> None:
+    """판정이 모델과 판본을 주지 않으면 그 키를 아예 넣지 않는다.
+
+    빈 값을 남기면 "모르는 값"과 "그런 모델로 판정했다"가 저널에서
+    구분되지 않는다.
+    """
+    uow = FakeUnitOfWork(_slack_group())
+
+    resolve_entity_candidates(
+        workspace_id=WORKSPACE, judge=_same_verdict_judge(), uow=uow
+    )
+
+    stored = uow.mutation_proposals.proposals[group_idempotency_key("slack")]
+    metadata = stored["kwargs"]["resolver_metadata"]
+    assert "model_id" not in metadata
+    assert "prompt_version" not in metadata
 
 
 def _same_verdict_judge() -> FakeJudge:
@@ -1275,8 +1323,15 @@ class FailingNameEmbedder:
         raise NameEmbeddingError("임베딩 호출이 실패했다")
 
 
+PARTITION_MODEL_ID = "fake-partition-model"
+PARTITION_PROMPT_VERSION = "partition_entity_block.j2@fake"
+
+
 class FakePartitionJudge:
-    """이름 앞 두 낱말이 같으면 한 정체라고 답한다."""
+    """이름 앞 두 낱말이 같으면 한 정체라고 답한다.
+
+    실 어댑터처럼 판정에 쓴 모델과 프롬프트 판본을 결과에 실어 돌려준다.
+    """
 
     def __init__(self, *, failing_types: tuple[str, ...] = ()) -> None:
         self.blocks: list = []
@@ -1305,7 +1360,9 @@ class FakePartitionJudge:
                     reason="표기만 다른 같은 대상이다",
                 )
                 for _, members in sorted(grouped.items())
-            )
+            ),
+            model_id=PARTITION_MODEL_ID,
+            prompt_version=PARTITION_PROMPT_VERSION,
         )
 
 
@@ -1369,6 +1426,28 @@ def test_similar_names_land_in_one_block_and_one_proposal() -> None:
     # 모델이 지은 이름은 제안 값으로만 남고 검토 문장에는 안 실린다.
     assert kwargs["proposed_name"] == "정규 이름 제안"
     assert "정규 이름 제안" not in kwargs["summary"]
+
+
+def test_block_proposal_records_model_and_prompt_version() -> None:
+    """블록 분할이 낸 안건의 판정 근거에도 모델과 프롬프트 판본이 남는다."""
+    members = _google_candidates()
+    uow = FakeUnitOfWork(members)
+
+    resolve_entity_candidates(
+        workspace_id=WORKSPACE,
+        judge=FakePartitionJudge(),
+        uow=uow,
+        name_embedder=_google_embedder(),
+    )
+
+    key = block_idempotency_key(
+        [f"candidate:{member.id}" for member in members]
+    )
+    metadata = uow.mutation_proposals.proposals[key]["kwargs"][
+        "resolver_metadata"
+    ]
+    assert metadata["model_id"] == PARTITION_MODEL_ID
+    assert metadata["prompt_version"] == PARTITION_PROMPT_VERSION
 
 
 def test_auto_merge_approves_block_proposal_as_system() -> None:

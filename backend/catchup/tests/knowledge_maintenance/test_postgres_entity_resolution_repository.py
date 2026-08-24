@@ -210,7 +210,11 @@ def test_add_alias_ignores_duplicates(
     session_factory: Callable[[], Session],
     uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
 ) -> None:
-    """같은 정규화 alias를 다시 넣어도 조용히 넘어간다."""
+    """같은 정규화 alias를 다시 넣어도 조용히 넘어간다.
+
+    두 번째 호출은 거짓을 준다. 부르는 쪽이 "이 이름은 내가 붙였다"를
+    저널에 적을지 이 값으로 가른다.
+    """
     with uow_factory() as uow:
         node = uow.knowledge_nodes.create_entity_node(
             workspace_id=workspace_id,
@@ -218,14 +222,14 @@ def test_add_alias_ignores_duplicates(
             canonical_key=f"{SOURCE_TYPE}:channel_talk_manager:m-1",
             display_name="캐치업 팀",
         )
-        uow.knowledge_nodes.add_alias(
+        first = uow.knowledge_nodes.add_alias(
             workspace_id=workspace_id,
             node_id=node.id,
             alias="캐치업 팀",
             normalized_alias="캐치업 팀",
             source="source",
         )
-        uow.knowledge_nodes.add_alias(
+        second = uow.knowledge_nodes.add_alias(
             workspace_id=workspace_id,
             node_id=node.id,
             alias="캐치업 팀",
@@ -233,6 +237,9 @@ def test_add_alias_ignores_duplicates(
             source="source",
         )
         uow.commit()
+
+    assert first is True
+    assert second is False
 
     with session_factory() as session:
         count = len(

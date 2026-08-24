@@ -781,8 +781,13 @@ class SqlAlchemyKnowledgeNodeRepository:
         alias: str,
         normalized_alias: str,
         source: str,
-    ) -> None:
-        """노드에 이름 단서를 남긴다. 같은 정규화 alias면 넘어간다."""
+    ) -> bool:
+        """노드에 이름 단서를 남긴다. 같은 정규화 alias면 넘어간다.
+
+        Returns:
+            이번 호출이 행을 새로 넣었으면 참, 이미 있어 넘어갔으면 거짓을
+            준다.
+        """
         exists = self._session.scalar(
             select(KnowledgeNodeAliasRow.id).where(
                 KnowledgeNodeAliasRow.workspace_id == workspace_id,
@@ -791,7 +796,7 @@ class SqlAlchemyKnowledgeNodeRepository:
             )
         )
         if exists is not None:
-            return
+            return False
         self._session.add(
             KnowledgeNodeAliasRow(
                 id=uuid.uuid4(),
@@ -803,6 +808,7 @@ class SqlAlchemyKnowledgeNodeRepository:
             )
         )
         self._session.flush()
+        return True
 
     def remove_alias(
         self,

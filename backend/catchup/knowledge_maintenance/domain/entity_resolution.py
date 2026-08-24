@@ -5,6 +5,15 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+# 시스템이 스스로 승인했을 때 결정 저널에 남기는 검토자 이름의 앞머리다.
+# 사람 검토자 이름과 이 앞머리가 겹치지 않아야 "누가 정했나"를 값 하나로
+# 가를 수 있다. 계약은 앞머리이므로 읽는 쪽은 특정 이름이 아니라 이 값으로
+# 판별하고, 쓰는 쪽은 이 값에서 제 이름을 만든다.
+SYSTEM_REVIEWER_PREFIX = "system:"
+
+# 자동 병합이 스스로 승인할 때 쓰는 검토자 이름이다.
+SYSTEM_AUTO_MERGE_REVIEWER = f"{SYSTEM_REVIEWER_PREFIX}auto_merge"
+
 
 @dataclass(frozen=True, slots=True)
 class MergeGroup:
@@ -26,12 +35,27 @@ class IdentityVerdict:
 
     same이면 canonical entity_type과 display_name 제안이 함께 있어야
     한다. 제안 없이 합치라는 판정은 적용할 수 없다.
+
+    model_id와 prompt_version은 이 판정을 누가 어떤 문장으로 냈는지를
+    적는 자리다. 판정 결과를 되짚을 때 모델과 프롬프트가 그 사이에 바뀌었는지
+    알아야 하므로, 판정을 낸 어댑터가 채워서 넘긴다. 판정기가 LLM이 아니면
+    비어 있을 수 있다.
+
+    Attributes:
+        same: 그룹이 같은 대상인지 나타낸다.
+        reason: 판정의 근거 한 문장을 담는다.
+        proposed_type: same일 때 제안하는 entity 종류를 담는다.
+        proposed_name: same일 때 제안하는 표시 이름을 담는다.
+        model_id: 판정을 낸 모델 식별자를 담는다.
+        prompt_version: 판정에 쓴 프롬프트 판본을 담는다.
     """
 
     same: bool
     reason: str
     proposed_type: str | None = None
     proposed_name: str | None = None
+    model_id: str | None = None
+    prompt_version: str | None = None
 
     def __post_init__(self) -> None:
         if not self.reason.strip():
@@ -88,9 +112,21 @@ class IdentityPartition:
     쌍 단위 판정과 달리 블록 전체를 한 번에 가른다. 쌍으로 물으면 호출
     수가 짝의 수만큼 늘고, A와 B는 같고 B와 C도 같은데 A와 C는 다르다는
     답이 와도 조정할 자리가 없기 때문이다.
+
+    model_id와 prompt_version은 이 분할을 누가 어떤 문장으로 냈는지를
+    적는 자리다. 판정을 낸 어댑터가 채워서 넘기고, 병합 제안이 그 값을
+    판정 근거에 실어 event 저널까지 옮긴다. 판정기가 LLM이 아니면 비어
+    있을 수 있다.
+
+    Attributes:
+        groups: 블록을 가른 정체들을 담는다.
+        model_id: 분할을 낸 모델 식별자를 담는다.
+        prompt_version: 분할에 쓴 프롬프트 판본을 담는다.
     """
 
     groups: tuple[IdentityGroup, ...]
+    model_id: str | None = None
+    prompt_version: str | None = None
 
     def __post_init__(self) -> None:
         if not self.groups:

@@ -114,7 +114,7 @@ def main() -> int:
             pending = read_uow.mutation_proposals.list_pending_duplicates(
                 workspace_id=args.workspace_id,
             )
-        print(f"=== 계류 중인 병합 안건 {len(pending)}건 ===")
+        print(f"=== pending 병합 안건 {len(pending)}건 ===")
         for proposal in pending:
             print()
             print(render_merge_card(proposal))

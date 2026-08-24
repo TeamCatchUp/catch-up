@@ -192,8 +192,16 @@ class KnowledgeNodeRepository(Protocol):
         alias: str,
         normalized_alias: str,
         source: str,
-    ) -> None:
-        """노드에 이름 단서를 남긴다. 같은 정규화 alias면 넘어간다."""
+    ) -> bool:
+        """노드에 이름 단서를 남긴다. 같은 정규화 alias면 넘어간다.
+
+        Returns:
+            이번 호출이 행을 새로 넣었으면 참, 같은 정규화 alias가 이미
+            있어 넘어갔으면 거짓을 준다. 부르는 쪽이 "이 이름은 내가
+            붙였다"를 저널에 적을 때 이 값으로 가른다. 시도만 보고 적으면
+            같은 이름의 두 번째 병합이 앞 병합의 alias를 자기 것으로
+            적고, 그 되돌림이 남의 이름을 지운다.
+        """
         ...
 
     def remove_alias(

@@ -20,6 +20,9 @@ from types import TracebackType
 from typing import Protocol
 from typing import Self
 
+from catchup.knowledge_maintenance.domain.entity_resolution import (
+    SYSTEM_REVIEWER_PREFIX,
+)
 from catchup.knowledge_maintenance.domain.entity_resolution import normalize_name
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     AssertionResolutionStatus,
@@ -47,10 +50,6 @@ logger = get_logger(__name__)
 SUPPORTED_OPERATIONS = ("create_entity", "merge_entity", "supersede_claim")
 
 DUPLICATE_KIND = "duplicate"
-
-# 자동 승인 reviewer는 이 접두로 시작한다. 접두 규칙이 계약이므로 특정
-# 자동 승인 이름을 가져다 쓰지 않는다.
-SYSTEM_REVIEWER_PREFIX = "system:"
 
 
 class ApplyOperationError(Exception):
@@ -452,15 +451,17 @@ def _apply_create(
         display_name=proposed_name,
     )
     # add_alias는 같은 정규화 alias를 만나면 그냥 넘어가므로 적용을
-    # 다시 돌려도 행이 불어나지 않는다.
-    uow.knowledge_nodes.add_alias(
+    # 다시 돌려도 행이 불어나지 않는다. 저널에는 실제로 넣은 이름만
+    # 적는다. 넣지 못한 이름까지 적으면 되돌림이 남이 붙인 이름을 지운다.
+    inserted = uow.knowledge_nodes.add_alias(
         workspace_id=workspace_id,
         node_id=node.id,
         alias=proposed_name,
         normalized_alias=normalize_name(proposed_name),
         source="system",
     )
-    tally.aliases_added.append(proposed_name)
+    if inserted:
+        tally.aliases_added.append(proposed_name)
     uow.knowledge_candidates.mark_entity_resolved(
         candidate_id=candidate_id,
         status=EntityResolutionStatus.ACCEPTED,
@@ -507,14 +508,18 @@ def _merge_into_existing_node(
             f"병합 대상 노드가 살아 있지 않다: {node_id}"
         )
 
-    uow.knowledge_nodes.add_alias(
+    # 저널에는 이번 병합이 실제로 넣은 이름만 적는다. 같은 이름이 이미
+    # 붙어 있던 노드라면 이 병합이 붙인 이름이 아니므로, 적어 두면 되돌림이
+    # 앞선 병합의 이름을 지운다.
+    inserted = uow.knowledge_nodes.add_alias(
         workspace_id=workspace_id,
         node_id=node_id,
         alias=proposed_name,
         normalized_alias=normalize_name(proposed_name),
         source="system",
     )
-    tally.aliases_added.append(proposed_name)
+    if inserted:
+        tally.aliases_added.append(proposed_name)
     uow.knowledge_candidates.mark_entity_resolved(
         candidate_id=candidate_id,
         status=EntityResolutionStatus.MERGED,

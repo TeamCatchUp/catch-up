@@ -44,7 +44,11 @@ from catchup.knowledge_maintenance.domain.entity_blocking import BlockingMember
 from catchup.knowledge_maintenance.domain.entity_blocking import BlockingOrigin
 from catchup.knowledge_maintenance.domain.entity_blocking import EntityBlock
 from catchup.knowledge_maintenance.domain.entity_blocking import build_entity_blocks
+from catchup.knowledge_maintenance.domain.entity_resolution import (
+    SYSTEM_AUTO_MERGE_REVIEWER,
+)
 from catchup.knowledge_maintenance.domain.entity_resolution import IdentityGroup
+from catchup.knowledge_maintenance.domain.entity_resolution import IdentityPartition
 from catchup.knowledge_maintenance.domain.entity_resolution import (
     deterministic_canonical_key,
 )
@@ -80,9 +84,9 @@ from catchup.observability.logging import get_logger
 logger = get_logger(__name__)
 
 # 시스템이 자동으로 승인했을 때 결정 저널에 남기는 검토자 이름이다.
-# 사람 검토자와 값이 겹치지 않아야 나중에 "누가 정했나"를 이 값 하나로
-# 가를 수 있다.
-SYSTEM_REVIEWER = "system:auto_merge"
+# 도메인이 정한 앞머리에서 유도한다. 적용 쪽은 그 앞머리로 시스템 결정을
+# 가르므로, 여기서 이름을 따로 적으면 두 리터럴이 말없이 갈라진다.
+SYSTEM_REVIEWER = SYSTEM_AUTO_MERGE_REVIEWER
 
 JUDGE_DETECTOR = "catchup.name_group_judge"
 JUDGE_DETECTOR_VERSION = "1"
@@ -682,6 +686,10 @@ def _judge_name_groups(
                 "member_ids": [str(member.id) for member in members],
                 "member_hash": member_hash,
                 "reason": verdict.reason,
+                **_judge_basis(
+                    model_id=verdict.model_id,
+                    prompt_version=verdict.prompt_version,
+                ),
             },
             proposed_type=verdict.proposed_type or "",
             proposed_name=verdict.proposed_name or "",
@@ -847,6 +855,7 @@ def _judge_name_blocks(
             outcome = _apply_identity_group(
                 workspace_id=workspace_id,
                 block=block,
+                partition=partition,
                 group=group,
                 candidate_by_id=candidate_by_id,
                 node_by_id=node_by_id,
@@ -970,6 +979,7 @@ def _apply_identity_group(
     *,
     workspace_id: int,
     block: EntityBlock,
+    partition: IdentityPartition,
     group: IdentityGroup,
     candidate_by_id: dict[str, StoredEntityCandidate],
     node_by_id: dict[str, _NodeMember],
@@ -1054,6 +1064,10 @@ def _apply_identity_group(
             "proposed_name": group.canonical_name,
             "merge_into_node_id": (
                 None if target is None else str(target.node_id)
+            ),
+            **_judge_basis(
+                model_id=partition.model_id,
+                prompt_version=partition.prompt_version,
             ),
         },
         proposed_type=group.canonical_type,
@@ -1334,6 +1348,30 @@ def _promote_singleton(
         node_id=str(node.id),
         normalized_name=normalized_name,
     )
+
+
+def _judge_basis(
+    *,
+    model_id: str | None,
+    prompt_version: str | None,
+) -> dict[str, JsonValue]:
+    """판정을 낸 모델과 프롬프트 판본을 판정 근거 항목으로 만든다.
+
+    적용이 resolver_metadata를 그대로 event 저널의 basis에 합치므로, 여기
+    넣은 값이 확정 기록까지 따라간다. 값이 없으면 키를 아예 넣지 않는다.
+    빈 문자열이나 null을 남기면 "모르는 값"과 "그런 모델로 판정했다"가
+    저널에서 구분되지 않는다.
+
+    임베딩 임계값은 넣지 않는다. 그 값은 코드에 박힌 도메인 상수라 판본만
+    알면 되짚을 수 있지만, 모델과 프롬프트는 바깥에서 바뀌므로 기록해야
+    한다.
+    """
+    basis: dict[str, JsonValue] = {}
+    if model_id:
+        basis["model_id"] = model_id
+    if prompt_version:
+        basis["prompt_version"] = prompt_version
+    return basis
 
 
 def _member_hash(member_ids: Sequence[str]) -> str:

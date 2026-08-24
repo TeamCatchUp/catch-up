@@ -37,7 +37,10 @@ from catchup.knowledge_maintenance.services.rollback_resolution_event import (
 WORKSPACE_ID = 1
 MEMBER_HASH = "hash-1"
 PROPOSED_NAME = "결제 기능"
-MEMBER_NAMES = [PROPOSED_NAME, "결제", "페이먼트"]
+# 대표가 병합 전에 쓰던 이름이다. 병합이 지은 PROPOSED_NAME과 다른 값으로
+# 둔다. 두 값이 같으면 분리가 대표에게 어느 이름을 주는지 가릴 수 없다.
+REPRESENTATIVE_NAME = "결제 시스템"
+MEMBER_NAMES = [REPRESENTATIVE_NAME, "결제", "페이먼트"]
 
 
 @dataclass
@@ -158,14 +161,14 @@ class FakeNodeRepo:
         alias: str,
         normalized_alias: str,
         source: str,
-    ) -> None:
+    ) -> bool:
         for row in self.state.aliases:
             if (
                 row["workspace_id"] == workspace_id
                 and row["node_id"] == node_id
                 and row["normalized_alias"] == normalized_alias
             ):
-                return
+                return False
         self.state.aliases.append(
             {
                 "workspace_id": workspace_id,
@@ -175,6 +178,7 @@ class FakeNodeRepo:
                 "source": source,
             }
         )
+        return True
 
     def remove_alias(
         self,
@@ -512,7 +516,11 @@ def test_merge_create_node_rollback_splits_candidates_and_retires_node() -> None
     resolved = [state.candidates[cid]["resolved_node_id"] for cid in candidate_ids]
     assert len(set(resolved)) == len(candidate_ids)
     names = [state.node_by_id(node_id).display_name for node_id in resolved]
+    # 대표도 병합 전 제 이름으로 선다. 병합이 지은 이름을 그대로 주면
+    # 갈라 놓은 노드가 병합의 작명을 계속 들고 다닌다.
     assert names == MEMBER_NAMES
+    assert names[0] == REPRESENTATIVE_NAME
+    assert names[0] != PROPOSED_NAME
 
     assert state.node_by_id(created.id).lifecycle_state is NodeLifecycleState.RETIRED
     # 후보가 떠난 노드는 통째로 물러나므로 별칭을 따로 지우지 않는다.

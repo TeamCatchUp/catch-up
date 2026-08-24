@@ -12,6 +12,9 @@ unmerge 행을 새로 적어 "이 병합은 사람이 갈라 놓았다"를 남�
 (merge_create_node)에서는 병합 자체가 event가 만든 것이므로 되돌림이
 곧 분리다. 후보 전부를 새 노드 하나로 옮기면 같은 병합을 이름만 바꿔
 다시 만드는 셈이라, 후보마다 제 이름의 노드를 따로 세운다.
+
+되돌림은 노드와 후보 층까지만 손댄다. retire된 노드로 편찬된 위키 문서는
+그대로 남고 재편찬 대상에서만 빠진다. 문서 정리는 별도 처리다.
 """
 
 from __future__ import annotations
@@ -155,7 +158,11 @@ def rollback_resolution_event(
                 workspace_id=workspace_id,
                 members=members,
                 proposed_type=proposed_type,
-                proposed_name=members[0].name,
+                # 이 경로는 후보들이 서로 같다는 판정을 그대로 두고 새 노드
+                # 하나로 옮기므로, 그 노드의 이름은 병합이 지은
+                # proposed_name이다. 대표의 병합 전 이름으로 되돌리는 것은
+                # 분리 경로의 일이다.
+                proposed_name=_text(event.member_snapshot.get("proposed_name")),
             )
             removed = _remove_added_aliases(
                 uow,
@@ -334,11 +341,18 @@ def _remove_added_aliases(
 def _members(event: StoredResolutionEvent) -> tuple[_Member, ...]:
     """event snapshot에서 되돌릴 후보와 그 이름을 꺼낸다.
 
-    첫 번째가 대표다. 대표의 이름은 병합이 지은 proposed_name이고, 나머지
-    후보의 이름은 판정 당시 기록해 둔 member_names에서 순서대로 가져온다.
-    후보 행은 그동안 다른 상태로 바뀌었을 수 있어 이름을 다시 읽지 않고
-    저널에 적힌 것을 쓴다. 이름이 모자라면 대표 이름으로 채운다 — 이름을
-    못 찾았다고 되돌림 자체를 멈추면 잘못 붙은 병합이 그대로 남는다.
+    첫 번째가 대표다. 후보의 이름은 판정 당시 기록해 둔 member_names에서
+    순서대로 가져온다. 후보 행은 그동안 다른 상태로 바뀌었을 수 있어 이름을
+    다시 읽지 않고 저널에 적힌 것을 쓴다.
+
+    대표의 이름도 member_names의 첫 칸에서 가져온다. 그 칸에 적힌 것이
+    대표가 병합 전에 쓰던 이름이기 때문이다. proposed_name은 병합이 지은
+    새 이름이라, 분리 경로에서 그것을 쓰면 갈라 놓은 대표가 병합이 지은
+    이름을 그대로 들고 다시 선다. member_names가 비어 있을 때만
+    proposed_name으로 물러난다.
+
+    이름이 모자라면 proposed_name으로 채운다. 이름을 못 찾았다고 되돌림
+    자체를 멈추면 잘못 붙은 병합이 그대로 남는다.
 
     Raises:
         RollbackError: 대표 후보나 이름이 snapshot에 없을 때 던진다.
@@ -352,10 +366,11 @@ def _members(event: StoredResolutionEvent) -> tuple[_Member, ...]:
         raise RollbackError(f"event에 병합 이름이 없다: {event.id}")
 
     names = _texts(snapshot.get("member_names"))
+    representative_name = names[0] if names and names[0] else proposed_name
     members = [
         _Member(
             candidate_id=_candidate_id(representative_raw, event_id=event.id),
-            name=proposed_name,
+            name=representative_name,
         )
     ]
     for position, raw in enumerate(_texts(snapshot.get("member_candidate_ids"))):

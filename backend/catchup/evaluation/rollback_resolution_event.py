@@ -141,6 +141,10 @@ def main() -> None:
         print(f"  제거한 별칭 {len(result.removed_aliases)}건")
         for alias in result.removed_aliases:
             print(f"    - {alias}")
+        print(
+            "  안내: retire된 노드로 편찬된 문서는 남는다. "
+            "문서 정리는 별도 처리다."
+        )
     finally:
         engine.dispose()
 

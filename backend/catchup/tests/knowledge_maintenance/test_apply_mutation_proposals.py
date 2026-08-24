@@ -287,16 +287,16 @@ class FakeNodeRepo:
         alias: str,
         normalized_alias: str,
         source: str,
-    ) -> None:
+    ) -> bool:
         # 실 DB의 (workspace_id, node_id, normalized_alias) UNIQUE를
-        # 흉내 낸다. 중복이면 조용히 넘어가는 것이 실 어댑터 계약이다.
+        # 흉내 낸다. 중복이면 넣지 않고 거짓을 주는 것이 실 어댑터 계약이다.
         for row in self.state.aliases:
             if (
                 row["workspace_id"] == workspace_id
                 and row["node_id"] == node_id
                 and row["normalized_alias"] == normalized_alias
             ):
-                return
+                return False
         self.state.aliases.append(
             {
                 "workspace_id": workspace_id,
@@ -306,6 +306,7 @@ class FakeNodeRepo:
                 "source": source,
             }
         )
+        return True
 
 
 @dataclass
@@ -930,6 +931,59 @@ def test_merge_into_node_records_human_resolution_event() -> None:
     assert event["basis"]["detector"] == "catchup.entity_duplicate"
     assert event["basis"]["detector_version"] == "1"
     assert event["basis"]["reason"] == "같은 대상이다"
+
+
+def test_merge_into_node_with_existing_alias_records_no_alias() -> None:
+    """이미 같은 이름이 붙어 있던 노드로의 병합은 별칭을 제 것으로 적지 않는다.
+
+    시도만 적으면 같은 이름의 두 번째 병합이 앞 병합의 별칭을 자기 것으로
+    적고, 그 되돌림이 앞 병합이 붙인 이름을 지운다.
+    """
+    state = FakeState()
+    existing = state.add_node()
+    FakeNodeRepo(state).add_alias(
+        workspace_id=WORKSPACE_ID,
+        node_id=existing.id,
+        alias="결제 기능",
+        normalized_alias=normalize_name("결제 기능"),
+        source="system",
+    )
+    representative = state.add_candidate()
+    member = state.add_candidate()
+    state.add_approved_merge(
+        representative=representative,
+        members=(member,),
+        merge_into_node_id=existing.id,
+        resolver_metadata={"member_hash": "hash-merge"},
+    )
+
+    result, _ = _run(state)
+
+    assert result.proposals_applied == 1
+    assert len(state.aliases) == 1
+    assert state.events[0]["member_snapshot"]["aliases_added"] == []
+
+
+def test_resolution_event_basis_carries_model_and_prompt_version() -> None:
+    """판정 근거에 실린 모델과 프롬프트 판본이 event basis까지 간다."""
+    state = FakeState()
+    representative = state.add_candidate()
+    member = state.add_candidate()
+    state.add_approved_merge(
+        representative=representative,
+        members=(member,),
+        resolver_metadata={
+            "member_hash": "hash-merge",
+            "model_id": "fake-judge-model",
+            "prompt_version": "partition_entity_block.j2@fake",
+        },
+    )
+
+    _run(state)
+
+    basis = state.events[0]["basis"]
+    assert basis["model_id"] == "fake-judge-model"
+    assert basis["prompt_version"] == "partition_entity_block.j2@fake"
 
 
 def test_new_node_merge_records_system_resolution_event() -> None:

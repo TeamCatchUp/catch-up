@@ -25,9 +25,24 @@ from catchup.prompts.loader import prompt_loader
 
 TEMPLATE_PATH = "knowledge_maintenance/judge_entity_identity.j2"
 PARTITION_TEMPLATE_PATH = "knowledge_maintenance/partition_entity_block.j2"
+JUDGE_PROMPT_VERSION = versioned_prompt(TEMPLATE_PATH)
 PARTITION_PROMPT_VERSION = versioned_prompt(PARTITION_TEMPLATE_PATH)
 
 logger = get_logger(__name__)
+
+
+def _read_model_id(llm: object) -> str | None:
+    """판정에 쓰는 모델의 식별자를 찾는다.
+
+    제공자마다 식별자를 들고 있는 속성 이름이 달라 `model_id`와 `model`을
+    차례로 본다. 어느 쪽에도 쓸 만한 값이 없으면 None을 준다. 식별자를
+    못 찾았다고 판정을 멈출 이유는 없고, 판정 근거에서 그 키만 빠진다.
+    """
+    for attribute in ("model_id", "model"):
+        value = getattr(llm, attribute, None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
 
 
 class IdentityJudgeOutput(BaseModel):
@@ -84,6 +99,10 @@ class BedrockIdentityJudge:
     port는 sync다. 서비스와 러너가 이벤트 루프를 몰라도 되도록 비동기
     호출을 여기서 감싼다.
 
+    판정 결과에는 쓴 모델 식별자와 프롬프트 판본을 함께 싣는다. 두 값이
+    있어야 나중에 판정을 되짚을 때 그 사이에 모델이나 프롬프트가 바뀌었는지
+    가릴 수 있다. 로그에만 남기면 event 저널에서는 알 수 없다.
+
     entity 종류 사전은 생성 시점에 주입한다. anchored 종류는 소속 없이
     이름만으로 지시 대상이 정해지지 않으므로 판정 규칙이 달라진다. 사전이
     비면 프롬프트에서 그 규칙이 통째로 빠진다.
@@ -95,6 +114,7 @@ class BedrockIdentityJudge:
         entity_types: tuple[EntityTypeEntry, ...] = (),
     ) -> None:
         self._entity_types = entity_types
+        self._model_id = _read_model_id(llm)
         self._structured = llm.with_structured_output(
             IdentityJudgeOutput,
             method="function_calling",
@@ -149,6 +169,8 @@ class BedrockIdentityJudge:
             reason=parsed.reason,
             proposed_type=parsed.canonical_type,
             proposed_name=parsed.canonical_name,
+            model_id=self._model_id,
+            prompt_version=JUDGE_PROMPT_VERSION,
         )
 
     def partition(self, block: EntityBlock) -> IdentityPartition:
@@ -196,7 +218,9 @@ class BedrockIdentityJudge:
                         reason=group.reason,
                     )
                     for group in parsed.groups
-                )
+                ),
+                model_id=self._model_id,
+                prompt_version=PARTITION_PROMPT_VERSION,
             )
         except ValueError as error:
             logger.warning(
