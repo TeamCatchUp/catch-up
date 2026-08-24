@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { usePathname, useRouter } from 'next/navigation';
 
 import IconAdd400 from '@/public/icons/icon/add_small_400.svg';
+import IconArrowTurnRight from '@/public/icons/icon/arrow_turn_right.svg';
 import IconEditSquare from '@/public/icons/icon/edit_square.svg';
 import IconFile from '@/public/icons/icon/file.svg';
 import IconFolder from '@/public/icons/icon/folder.svg';
@@ -37,7 +38,7 @@ import SnbSpaceSwitcher from './SnbSpaceSwitcher';
 import SnbTeamspaceCard from './SnbTeamspaceCard';
 
 /** 트리·섹션 메뉴 항목 키. 항목이 늘어도 소비처가 깨지지 않게 열어둔다 */
-export type KnownSnbMenuActionId = 'favorite' | 'unfavorite' | 'copy-link' | 'rename' | 'folder' | 'channel';
+export type KnownSnbMenuActionId = 'favorite' | 'unfavorite' | 'copy-link' | 'rename' | 'move' | 'folder' | 'channel';
 export type SnbMenuActionId = KnownSnbMenuActionId | (string & {});
 
 /** 트리 행의 종류. 케밥 머리 라벨이 이 값으로 갈린다 */
@@ -75,8 +76,8 @@ const NODE_KIND_LABEL: Record<WikiTreeNodeKind, string> = {
   document: '파일',
 };
 
-// 껍데기는 메뉴·이름 입력이 직접 그린다. overflow-visible이 없으면 그림자가 잘린다
-const POPOVER_SHELL_CLASS = 'overflow-visible border-0 bg-transparent p-0 shadow-none';
+/** 껍데기는 메뉴·이름 입력이 직접 그린다. overflow-visible이 없으면 그림자가 잘린다 */
+export const SNB_POPOVER_SHELL_CLASS = 'overflow-visible border-0 bg-transparent p-0 shadow-none';
 
 /**
  * 섹션 머리글 아래 본문. 접히는 동안 내용이 밖으로 새지 않게 overflow-hidden을 함께 준다.
@@ -129,6 +130,10 @@ export interface WikiSideNavProps {
   onRenameSubmit?: (node: WikiTreeNode, name: string) => void;
   /** 하위 폴더 추가 제출. 첫 인자는 폴더가 생길 채널 노드다 */
   onFolderCreateSubmit?: (channelNode: WikiTreeNode, name: string) => void;
+  /** 옮기기 선택 통로. 대상 패널은 features 데이터라 소비처가 이 앵커에 띄운다 */
+  onMoveRequest?: (node: WikiTreeNode, anchor: HTMLElement) => void;
+  /** 소비처가 옮기기 패널을 띄워 둔 노드. 패널이 떠 있는 동안 그 행의 액션을 붙잡아 둔다 */
+  moveOpenNodeId?: string;
 }
 
 /**
@@ -144,6 +149,8 @@ export default function WikiSideNav({
   onMenuAction,
   onRenameSubmit,
   onFolderCreateSubmit,
+  onMoveRequest,
+  moveOpenNodeId,
 }: WikiSideNavProps = {}) {
   const router = useRouter();
   const pathname = usePathname();
@@ -183,11 +190,13 @@ export default function WikiSideNav({
   const [wikiOpen, setWikiOpen] = useState(true);
 
   // 메뉴·입력이 열린 동안 액션이 사라지면 앵커가 0×0이 되므로 어느 행이 열렸는지 트리에 알린다
-  const openRowMenu = nameInput
-    ? { nodeId: nameInput.node.id, kind: nameInput.mode === 'rename' ? ('more' as const) : ('add' as const) }
-    : menu && menu.nodeId && menu.kind !== 'section-add'
-      ? { nodeId: menu.nodeId, kind: menu.kind === 'row-more' ? ('more' as const) : ('add' as const) }
-      : undefined;
+  const openRowMenu = moveOpenNodeId
+    ? { nodeId: moveOpenNodeId, kind: 'more' as const }
+    : nameInput
+      ? { nodeId: nameInput.node.id, kind: nameInput.mode === 'rename' ? ('more' as const) : ('add' as const) }
+      : menu && menu.nodeId && menu.kind !== 'section-add'
+        ? { nodeId: menu.nodeId, kind: menu.kind === 'row-more' ? ('more' as const) : ('add' as const) }
+        : undefined;
 
   const isChannelAdmin = (channelId: string) => channelAdmins[channelId] === true;
   /** 문서는 이름 변경 API가 없고, 채널·폴더는 그 채널 관리자만 바꿀 수 있다 */
@@ -216,6 +225,8 @@ export default function WikiSideNav({
     // 폴더는 채널 바로 아래에만 생긴다
     else if (actionId === 'folder' && menu && node?.kind === 'channel')
       setNameInput({ mode: 'create-folder', node, anchor: menu.anchor });
+    // 옮기기 대상 패널은 소비처가 같은 앵커에 이어 띄운다 — 이동 API가 문서 단위라 문서에서만 넘긴다
+    else if (actionId === 'move' && menu && node?.kind === 'document') onMoveRequest?.(node, menu.anchor);
     // 채널 생성 화면은 온보딩뿐이다 — 별도 생성 폼이 없다
     else if (actionId === 'channel') go('/llm-wiki/onboarding')();
     onMenuAction?.(menu?.nodeId, actionId);
@@ -256,6 +267,10 @@ export default function WikiSideNav({
           { id: 'copy-link', label: '링크 복사', Icon: IconLink, onSelect: select('copy-link') },
           ...(canRename(node)
             ? [{ id: 'rename', label: '이름 바꾸기', Icon: IconEditSquare, onSelect: select('rename') }]
+            : []),
+          // 이동은 artifact 단위 API라 문서 행에만 건다 — 채널·폴더에는 보낼 경로가 없다
+          ...(node?.kind === 'document'
+            ? [{ id: 'move', label: '옮기기', Icon: IconArrowTurnRight, onSelect: select('move') }]
             : []),
         ],
       ],
@@ -415,7 +430,7 @@ export default function WikiSideNav({
           <PopoverContent
             align="start"
             side="right"
-            className={POPOVER_SHELL_CLASS}
+            className={SNB_POPOVER_SHELL_CLASS}
             onCloseAutoFocus={(event) => event.preventDefault()}
           >
             <SnbDropdownMenu {...menuProps()} />
@@ -427,7 +442,7 @@ export default function WikiSideNav({
       {nameInput && (
         <Popover open onOpenChange={(open) => !open && setNameInput(null)}>
           <PopoverAnchor virtualRef={{ current: nameInput.anchor }} />
-          <PopoverContent align="start" side="right" className={POPOVER_SHELL_CLASS}>
+          <PopoverContent align="start" side="right" className={SNB_POPOVER_SHELL_CLASS}>
             <SnbRenamePopover
               kind={nameInput.mode === 'create-folder' ? 'folder' : nameInput.node.kind}
               defaultValue={nameInput.mode === 'create-folder' ? '' : nameInput.node.label}

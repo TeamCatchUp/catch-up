@@ -328,6 +328,55 @@ describe('WikiSideNav 펼침', () => {
     expect(onMenuAction).toHaveBeenCalledWith('file-1', 'unfavorite');
   });
 
+  it('옮기기는 문서 케밥에만 뜬다 — 이동 API가 문서 단위다', async () => {
+    const user = userEvent.setup();
+    renderWikiNav();
+
+    await user.click(screen.getAllByRole('button', { name: `${CHANNEL_LABEL} 추가 작업` })[0]);
+    expect(within(screen.getByTestId('snb-dropdown-menu')).queryByRole('button', { name: '옮기기' })).toBeNull();
+    await user.keyboard('{Escape}');
+
+    await expandRow(user, CHANNEL_LABEL);
+    await user.click(screen.getAllByRole('button', { name: `${FOLDER_LABEL} 추가 작업` })[0]);
+    expect(within(screen.getByTestId('snb-dropdown-menu')).queryByRole('button', { name: '옮기기' })).toBeNull();
+    await user.keyboard('{Escape}');
+
+    await expandRow(user, FOLDER_LABEL);
+    await user.click(screen.getByRole('button', { name: '파일명texttexttexttext 추가 작업' }));
+    expect(within(screen.getByTestId('snb-dropdown-menu')).getByRole('button', { name: '옮기기' })).toBeInTheDocument();
+  });
+
+  it('옮기기를 고르면 메뉴가 닫히고 노드와 눌린 앵커가 소비처로 넘어간다', async () => {
+    const user = userEvent.setup();
+    const onMenuAction = vi.fn();
+    const onMoveRequest = vi.fn();
+    renderWikiNav({ onMenuAction, onMoveRequest });
+
+    await expandRow(user, CHANNEL_LABEL);
+    await expandRow(user, FOLDER_LABEL);
+    await user.click(screen.getByRole('button', { name: '파일명texttexttexttext 추가 작업' }));
+    await user.click(screen.getByRole('button', { name: '옮기기' }));
+
+    expect(screen.queryByTestId('snb-dropdown-menu')).toBeNull();
+    expect(onMenuAction).toHaveBeenCalledWith('file-1', 'move');
+    expect(onMoveRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'file-1', kind: 'document' }),
+      expect.any(HTMLElement),
+    );
+  });
+
+  it('소비처가 옮기기 패널을 띄운 행은 액션이 남는다 — 앵커가 0×0이 되면 팝오버가 튄다', async () => {
+    const user = userEvent.setup();
+    renderWikiNav({ moveOpenNodeId: 'file-1' });
+
+    await expandRow(user, CHANNEL_LABEL);
+    await expandRow(user, FOLDER_LABEL);
+
+    const more = screen.getByRole('button', { name: '파일명texttexttexttext 추가 작업' });
+    expect(more.parentElement).toHaveClass('flex');
+    expect(more.parentElement).not.toHaveClass('hidden');
+  });
+
   it('즐겨찾기 안 된 문서는 등록 항목이 뜨고 그 문서 id가 밖으로 나간다', async () => {
     const user = userEvent.setup();
     const onMenuAction = vi.fn();

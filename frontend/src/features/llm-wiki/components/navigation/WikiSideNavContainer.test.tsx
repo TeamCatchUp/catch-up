@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -151,6 +151,10 @@ beforeEach(() => {
       writes.push(await recordWrite(request));
       return HttpResponse.json({ id: 'fd-2', name: '장애 대응', channel_id: 'ch-1' }, { status: 201 });
     }),
+    http.patch('/api/v1/wiki/artifacts/:artifactId', async ({ request }) => {
+      writes.push(await recordWrite(request));
+      return HttpResponse.json({ artifact_id: 'art-1', folder_id: 'fd-1' });
+    }),
   );
 });
 
@@ -292,6 +296,82 @@ describe('WikiSideNavContainer 쓰기 배선', () => {
     await user.click(screen.getByRole('button', { name: '채널' }));
 
     expect(mockPush).toHaveBeenCalledWith('/llm-wiki/onboarding');
+  });
+
+  /** 옮기기 → 대상 패널의 폴더 행까지 여는 공통 경로 */
+  const openMovePicker = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(await expandChannel(user));
+    await user.click(screen.getByRole('button', { name: '옮기기' }));
+    return within(screen.getByTestId('move-target-picker'));
+  };
+
+  it('옮기기의 폴더 선택이 그 문서 경로로 folder_id PATCH를 보낸다', async () => {
+    const user = userEvent.setup();
+    renderContainer();
+
+    const picker = await openMovePicker(user);
+    await user.click(picker.getByRole('button', { name: `${CHANNEL_LABEL} 펼치기` }));
+    await user.click(picker.getByRole('button', { name: FOLDER_LABEL }));
+
+    // 고른 즉시 패널이 닫힌다 — 응답을 기다리지 않는다
+    expect(screen.queryByTestId('move-target-picker')).toBeNull();
+    await waitFor(() =>
+      expect(writes).toEqual([{ method: 'PATCH', path: '/api/v1/wiki/artifacts/art-1', body: { folder_id: 'fd-1' } }]),
+    );
+    // 채널 트리와 문서 목록이 함께 바뀌어 위키 뿌리를 다시 읽는다
+    await waitFor(() => expect(channelListCallCount).toBeGreaterThan(1));
+    // 완료 토스트는 파일명과 옮긴 위치를 함께 말한다
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        `${DOCUMENT_LABEL}의 옮긴 위치는 ${FOLDER_LABEL} 입니다.`,
+        expect.objectContaining({ action: expect.objectContaining({ label: '이동' }) }),
+      ),
+    );
+  });
+
+  it('채널 행을 고르면 folder_id가 null로 나간다 — 채널 바로 아래다', async () => {
+    const user = userEvent.setup();
+    renderContainer();
+
+    const picker = await openMovePicker(user);
+    await user.click(picker.getByRole('button', { name: CHANNEL_LABEL }));
+
+    await waitFor(() =>
+      expect(writes).toEqual([{ method: 'PATCH', path: '/api/v1/wiki/artifacts/art-1', body: { folder_id: null } }]),
+    );
+  });
+
+  it('토스트의 이동 버튼은 옮긴 자리로 보낸다', async () => {
+    const user = userEvent.setup();
+    renderContainer();
+
+    const picker = await openMovePicker(user);
+    await user.click(picker.getByRole('button', { name: `${CHANNEL_LABEL} 펼치기` }));
+    await user.click(picker.getByRole('button', { name: FOLDER_LABEL }));
+
+    await waitFor(() => expect(toast).toHaveBeenCalled());
+    const options = vi.mocked(toast).mock.calls.at(-1)?.[1] as unknown as { action: { onClick: () => void } };
+    options.action.onClick();
+
+    expect(mockPush).toHaveBeenCalledWith('/llm-wiki/folder/fd-1');
+  });
+
+  it('검수 자격이 없으면 서버 거절 문구를 띄운다 — 항목을 숨기지 않는다', async () => {
+    server.use(
+      http.patch('/api/v1/wiki/artifacts/:artifactId', () =>
+        HttpResponse.json(
+          { detail: { code: 'NOT_DOCUMENT_REVIEWER', message: '이 문서를 옮길 권한이 없습니다.' } },
+          { status: 403 },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    renderContainer();
+
+    const picker = await openMovePicker(user);
+    await user.click(picker.getByRole('button', { name: CHANNEL_LABEL }));
+
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('이 문서를 옮길 권한이 없습니다.'));
   });
 
   it('이름 중복 409는 서버 문구를 토스트로 띄운다', async () => {

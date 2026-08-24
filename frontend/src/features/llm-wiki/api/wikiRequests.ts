@@ -69,6 +69,11 @@ export async function removeWikiFavorite(artifactId: string): Promise<void> {
   await api.delete(API.wiki.favorite(artifactId));
 }
 
+/** 문서 폴더 이동(검수 자격자). folder_id가 null이면 채널 바로 아래로 옮긴다. */
+export async function moveWikiArtifact(artifactId: string, folderId: string | null): Promise<void> {
+  await api.patch(API.wiki.artifact(artifactId), { folder_id: folderId });
+}
+
 /** 채널 이름 변경(채널 관리자). 응답 본문은 쓰지 않는다. */
 export async function renameWikiChannel(channelId: string, name: string): Promise<void> {
   await api.patch(API.wiki.channel(channelId), { name });
