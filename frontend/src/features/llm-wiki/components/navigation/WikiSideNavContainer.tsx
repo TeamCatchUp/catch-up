@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 
 import WikiSideNav, {
@@ -16,6 +16,7 @@ import { toast } from '@/shared/components/ui/toast';
 import { authQueries } from '@/shared/queries/auth.queries';
 
 import { useWikiSideNav } from '../../hooks/useWikiSideNav';
+import { wikiQueries } from '../../queries/wiki.queries';
 import { useMoveWikiArtifactMutation } from '../../queries/wikiArtifacts.mutations';
 import {
   useCreateWikiFolderMutation,
@@ -32,6 +33,7 @@ const ACTION_TOAST_DURATION = 6000;
 /** 위키 SNB에 실 데이터를 물리는 자리. shared 층은 features를 import할 수 없어 여기서 잇는다. */
 export default function WikiSideNavContainer() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { treeNodes, favorites, channelAdmins, onNodeToggle } = useWikiSideNav();
   const { data: me } = useQuery(authQueries.me());
   const favoriteToggle = useWikiFavoriteToggleMutation();
@@ -49,22 +51,25 @@ export default function WikiSideNavContainer() {
     if (!movePicker || !channel) return undefined;
     const folders = (channel.children ?? []).filter((child) => child.kind === 'folder');
     const parentFolder = folders.find((folder) => (folder.children ?? []).some((doc) => doc.id === movePicker.node.id));
+    // 즐겨찾기에서 온 문서는 채널을 펼치기 전이라 트리에 없을 수 있다 — 즐겨찾기 데이터의 폴더로 보완한다
+    const favoriteFolderId = favorites.find((item) => item.id === movePicker.node.id)?.folderId ?? null;
     return {
       channel: {
         id: channel.id,
         label: channel.label,
         folders: folders.map((folder) => ({ id: folder.id, label: folder.label })),
       },
-      currentFolderId: parentFolder?.id ?? null,
+      currentFolderId: parentFolder?.id ?? favoriteFolderId,
     };
-  }, [treeNodes, movePicker]);
+  }, [treeNodes, favorites, movePicker]);
 
   // 노드가 들고 있는 경로에 현재 오리진을 붙인다 — 공유 링크 규격이 따로 없다
   const copyNodeLink = async (nodeId: string) => {
-    const node = findTreeNode(treeNodes, nodeId);
-    if (!node) return;
+    // 즐겨찾기 행의 문서는 채널을 펼치기 전이라 트리에 없을 수 있다
+    const href = findTreeNode(treeNodes, nodeId)?.href ?? favorites.find((item) => item.id === nodeId)?.href;
+    if (href === undefined) return;
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}${node.href}`);
+      await navigator.clipboard.writeText(`${window.location.origin}${href}`);
       toast('링크가 복사되었습니다.');
     } catch {
       toast('복사에 실패했습니다.');
@@ -107,6 +112,23 @@ export default function WikiSideNavContainer() {
     );
   };
 
+  // 패널에서 새 폴더를 만들면 목록을 다시 읽어 그 폴더로 곧장 옮긴다(이름 중복은 서버가 409로 막는다)
+  const handleCreateFolderAndMove = async (name: string) => {
+    if (!movePicker || !moveTarget) return;
+    const node = movePicker.node;
+    const channelId = moveTarget.channel.id;
+    try {
+      await createFolder.mutateAsync({ channelId, name });
+    } catch {
+      return; // 실패 토스트는 뮤테이션 훅이 띄운다
+    }
+    const channels = await queryClient.fetchQuery(wikiQueries.channels());
+    const folder = channels.channels.find((item) => item.id === channelId)?.folders.find((item) => item.name === name);
+    if (!folder) return;
+    setMovePicker(null);
+    handleMoveSelect(node, { channelId, folderId: folder.id, label: folder.name });
+  };
+
   return (
     <>
       <WikiSideNav
@@ -134,6 +156,11 @@ export default function WikiSideNavContainer() {
                 setMovePicker(null);
                 handleMoveSelect(movePicker.node, target);
               }}
+              onCreateFolder={
+                moveTarget && channelAdmins[moveTarget.channel.id] === true
+                  ? (name) => void handleCreateFolderAndMove(name)
+                  : undefined
+              }
             />
           </PopoverContent>
         </Popover>
