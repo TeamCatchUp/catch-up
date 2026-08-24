@@ -143,6 +143,7 @@ from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
 from catchup.knowledge_maintenance.ports.block_verdicts import StoredBlockVerdict
 from catchup.knowledge_maintenance.ports.knowledge_candidates import AsOfClaim
 from catchup.knowledge_maintenance.ports.knowledge_nodes import ActiveEntityAlias
+from catchup.knowledge_maintenance.ports.mutation_proposals import ApprovedProposal
 from catchup.knowledge_maintenance.ports.mutation_proposals import (
     MergeProposalAlreadyDecided,
 )
@@ -2043,18 +2044,19 @@ class SqlAlchemyMutationProposalRepository:
         self,
         *,
         workspace_id: int,
-    ) -> list[tuple[uuid.UUID, tuple[StoredOperation, ...]]]:
+    ) -> list[ApprovedProposal]:
         """승인됐지만 아직 적용되지 않은 안건을 명령과 함께 모은다."""
-        proposal_ids = self._session.scalars(
-            select(KnowledgeMutationProposalRow.id)
+        proposal_rows = self._session.scalars(
+            select(KnowledgeMutationProposalRow)
             .where(
                 KnowledgeMutationProposalRow.workspace_id == workspace_id,
                 KnowledgeMutationProposalRow.status == "approved",
             )
             .order_by(KnowledgeMutationProposalRow.created_at)
         ).all()
-        if not proposal_ids:
+        if not proposal_rows:
             return []
+        proposal_ids = [row.id for row in proposal_rows]
         operation_rows = self._session.scalars(
             select(KnowledgeMutationOperationRow)
             .where(
@@ -2078,8 +2080,18 @@ class SqlAlchemyMutationProposalRepository:
                 )
             )
         return [
-            (proposal_id, tuple(grouped.get(proposal_id, ())))
-            for proposal_id in proposal_ids
+            ApprovedProposal(
+                proposal_id=row.id,
+                proposal_kind=row.proposal_kind,
+                # 승인 행에는 reviewer가 반드시 있지만 컬럼은 계류 행을
+                # 위해 nullable이라 빈 문자열로 받아 둔다.
+                reviewer=row.reviewer or "",
+                detector=row.detector,
+                detector_version=row.detector_version,
+                resolver_metadata=dict(row.resolver_metadata or {}),
+                operations=tuple(grouped.get(row.id, ())),
+            )
+            for row in proposal_rows
         ]
 
     def mark_applied(

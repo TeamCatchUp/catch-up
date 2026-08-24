@@ -31,15 +31,25 @@ from catchup.knowledge_maintenance.ports.knowledge_candidates import (
     KnowledgeCandidateRepository,
 )
 from catchup.knowledge_maintenance.ports.knowledge_nodes import KnowledgeNodeRepository
+from catchup.knowledge_maintenance.ports.mutation_proposals import ApprovedProposal
 from catchup.knowledge_maintenance.ports.mutation_proposals import (
     MutationProposalRepository,
 )
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredOperation
+from catchup.knowledge_maintenance.ports.resolution_events import (
+    ResolutionEventRepository,
+)
 from catchup.observability.logging import get_logger
 
 logger = get_logger(__name__)
 
 SUPPORTED_OPERATIONS = ("create_entity", "merge_entity", "supersede_claim")
+
+DUPLICATE_KIND = "duplicate"
+
+# 자동 승인 reviewer는 이 접두로 시작한다. 접두 규칙이 계약이므로 특정
+# 자동 승인 이름을 가져다 쓰지 않는다.
+SYSTEM_REVIEWER_PREFIX = "system:"
 
 
 class ApplyOperationError(Exception):
@@ -52,6 +62,7 @@ class ApplyUnitOfWork(Protocol):
     mutation_proposals: MutationProposalRepository
     knowledge_candidates: KnowledgeCandidateRepository
     knowledge_nodes: KnowledgeNodeRepository
+    resolution_events: ResolutionEventRepository
 
     def __enter__(self) -> Self: ...
 
@@ -130,7 +141,9 @@ def apply_mutation_proposals(
             workspace_id=workspace_id,
         )
     if proposal_id is not None:
-        approved = [item for item in approved if item[0] == proposal_id]
+        approved = [
+            item for item in approved if item.proposal_id == proposal_id
+        ]
 
     applied = 0
     failed = 0
@@ -143,13 +156,13 @@ def apply_mutation_proposals(
     # 루프 변수를 파라미터와 다른 이름으로 둔다. 같은 이름을 쓰면
     # 루프가 파라미터를 덮어써서, 뒤에 나오는 감사 로그의
     # `scoped_proposal_id`가 "전체 적용"인지 "한 건 적용"인지를 잃는다.
-    for approved_id, operations in approved:
+    for item in approved:
+        approved_id = item.proposal_id
         try:
             tally = _apply_one(
                 uow_factory,
                 workspace_id=workspace_id,
-                proposal_id=approved_id,
-                operations=operations,
+                proposal=item,
             )
         except ApplyOperationError as error:
             failed += 1
@@ -206,10 +219,16 @@ def _apply_one(
     uow_factory: Callable[[], ApplyUnitOfWork],
     *,
     workspace_id: int,
-    proposal_id: uuid.UUID,
-    operations: tuple[StoredOperation, ...],
+    proposal: ApprovedProposal,
 ) -> _Tally:
-    """안건 하나를 자기 트랜잭션 안에서 적용한다."""
+    """안건 하나를 자기 트랜잭션 안에서 적용한다.
+
+    병합 안건은 명령이 전부 성공한 뒤 적용 완료 표시 직전에 해소 event를
+    같은 트랜잭션으로 남긴다. 판정 당시의 멤버 구성과 근거는 그 순간에만
+    있으므로, 적용만 살아남고 저널이 빠지는 경우를 만들지 않는다.
+    """
+    proposal_id = proposal.proposal_id
+    operations = proposal.operations
     unsupported = [
         operation.operation_type
         for operation in operations
@@ -242,12 +261,113 @@ def _apply_one(
                 )
             else:
                 _apply_supersede(uow, operation=operation, tally=tally)
+        _record_resolution_event(
+            uow,
+            workspace_id=workspace_id,
+            proposal=proposal,
+            nodes_by_sequence=nodes_by_sequence,
+        )
         uow.mutation_proposals.mark_applied(
             workspace_id=workspace_id,
             proposal_id=proposal_id,
         )
         uow.commit()
     return tally
+
+
+def _record_resolution_event(
+    uow: ApplyUnitOfWork,
+    *,
+    workspace_id: int,
+    proposal: ApprovedProposal,
+    nodes_by_sequence: dict[int, uuid.UUID],
+) -> None:
+    """병합 확정 한 건을 해소 event 저널에 남긴다.
+
+    병합 안건에만 쓴다. 모순 안건은 노드를 세우지도 붙이지도 않아 저널에
+    남길 확정이 없다.
+
+    대표가 재추출로 은퇴해 노드가 서지 않았으면 남기지 않는다. 합쳐진
+    것이 없으므로 되돌릴 것도 없다.
+
+    Raises:
+        ApplyOperationError: 병합 안건인데 판정 근거에 member_hash가
+            없을 때 던진다. member_hash가 없으면 되돌림이 같은 구성을
+            다시 찾을 수 없어, 저널 없는 병합을 적용하는 대신 안건을
+            실패로 남긴다.
+    """
+    if proposal.proposal_kind != DUPLICATE_KIND:
+        return
+    create_operations = [
+        operation
+        for operation in proposal.operations
+        if operation.operation_type == "create_entity"
+    ]
+    if not create_operations:
+        return
+    create = min(create_operations, key=lambda item: item.sequence)
+    node_id = nodes_by_sequence.get(create.sequence)
+    if node_id is None:
+        return
+
+    metadata = dict(proposal.resolver_metadata)
+    member_hash = metadata.get("member_hash")
+    if not isinstance(member_hash, str) or not member_hash:
+        raise ApplyOperationError(
+            f"병합 안건에 member_hash가 없다: {proposal.proposal_id}"
+        )
+
+    merge_into_raw = create.operation_data.get("merge_into_node_id")
+    merge_into = None if merge_into_raw is None else str(merge_into_raw)
+    event_type = "merge_create_node" if merge_into is None else "merge_into_node"
+
+    reviewer = proposal.reviewer
+    if reviewer.startswith(SYSTEM_REVIEWER_PREFIX):
+        decider = "system"
+        decider_id = None
+    else:
+        decider = "human"
+        decider_id = reviewer
+
+    member_names = metadata.get("member_names")
+    proposed_name = str(create.operation_data.get("proposed_name", ""))
+    member_ids = [
+        str(operation.entity_candidate_id)
+        for operation in sorted(
+            proposal.operations, key=lambda item: item.sequence
+        )
+        if operation.operation_type == "merge_entity"
+        and operation.entity_candidate_id is not None
+    ]
+    member_snapshot = {
+        "representative_candidate_id": (
+            None
+            if create.entity_candidate_id is None
+            else str(create.entity_candidate_id)
+        ),
+        "member_candidate_ids": member_ids,
+        "member_names": list(member_names) if isinstance(member_names, list) else [],
+        "proposed_name": proposed_name,
+        "proposed_type": str(create.operation_data.get("proposed_type", "")),
+        "merge_into_node_id": merge_into,
+        "aliases_added": [proposed_name],
+    }
+    basis = {
+        "detector": proposal.detector,
+        "detector_version": proposal.detector_version,
+        **metadata,
+    }
+    uow.resolution_events.record(
+        workspace_id=workspace_id,
+        event_id=uuid.uuid4(),
+        event_type=event_type,
+        decider=decider,
+        decider_id=decider_id,
+        node_id=node_id,
+        member_hash=member_hash,
+        member_snapshot=member_snapshot,
+        basis=basis,
+    )
 
 
 def _apply_create(

@@ -1103,6 +1103,13 @@ def _write_merge_proposal(
         자동 승인이 다시 건드리지 않게 하려는 것이다.
     """
     representative = members[0]
+    # 멤버의 이름을 판정 근거에 함께 남긴다. 되돌림이 후보를 다시 갈라
+    # 놓을 때 각 후보가 어떤 이름으로 묶였는지 알아야 하는데, 후보 행은
+    # 그때 이미 다른 상태로 바뀌어 있을 수 있다.
+    enriched_metadata = {
+        **resolver_metadata,
+        "member_names": [member.proposed_name for member in members],
+    }
     proposal_id = uow.mutation_proposals.add_duplicate_proposal(
         workspace_id=workspace_id,
         idempotency_key=key,
@@ -1110,7 +1117,7 @@ def _write_merge_proposal(
         detector=detector,
         detector_version=detector_version,
         summary=summary,
-        resolver_metadata=resolver_metadata,
+        resolver_metadata=enriched_metadata,
         representative_candidate_id=representative.id,
         merge_candidate_ids=tuple(member.id for member in members[1:]),
         proposed_type=proposed_type,

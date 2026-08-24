@@ -23,6 +23,7 @@ from catchup.knowledge_maintenance.domain.knowledge_candidate import (
 from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
+from catchup.knowledge_maintenance.ports.mutation_proposals import ApprovedProposal
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredOperation
 from catchup.knowledge_maintenance.services.apply_mutation_proposals import (
     apply_mutation_proposals,
@@ -40,6 +41,7 @@ class FakeState:
     claim_rows: dict[uuid.UUID, dict[str, Any]] = field(default_factory=dict)
     nodes: list[KnowledgeNode] = field(default_factory=list)
     aliases: list[dict[str, Any]] = field(default_factory=list)
+    events: list[dict[str, Any]] = field(default_factory=list)
 
     def add_claim(
         self,
@@ -99,6 +101,8 @@ class FakeState:
         members: tuple[uuid.UUID, ...],
         extra_operation: StoredOperation | None = None,
         merge_into_node_id: uuid.UUID | None = None,
+        reviewer: str = "cli",
+        resolver_metadata: Mapping[str, Any] | None = None,
     ) -> uuid.UUID:
         proposal_id = uuid.uuid4()
         operation_data: dict[str, Any] = {
@@ -130,6 +134,19 @@ class FakeState:
             operations.append(extra_operation)
         self.proposals[proposal_id] = {
             "status": "approved",
+            "proposal_kind": "duplicate",
+            "reviewer": reviewer,
+            "detector": "catchup.entity_duplicate",
+            "detector_version": "1",
+            "resolver_metadata": dict(
+                {
+                    "member_hash": "hash-1",
+                    "member_names": ["결제", "결제 기능"],
+                    "reason": "같은 대상이다",
+                }
+                if resolver_metadata is None
+                else resolver_metadata
+            ),
             "operations": tuple(operations),
             "applied_at": None,
         }
@@ -142,9 +159,17 @@ class FakeMutationRepo:
 
     def find_approved_proposals_with_operations(
         self, *, workspace_id: int
-    ) -> list[tuple[uuid.UUID, tuple[StoredOperation, ...]]]:
+    ) -> list[ApprovedProposal]:
         return [
-            (proposal_id, row["operations"])
+            ApprovedProposal(
+                proposal_id=proposal_id,
+                proposal_kind=row.get("proposal_kind", "duplicate"),
+                reviewer=row.get("reviewer", "cli"),
+                detector=row.get("detector", "catchup.entity_duplicate"),
+                detector_version=row.get("detector_version", "1"),
+                resolver_metadata=row.get("resolver_metadata", {}),
+                operations=row["operations"],
+            )
             for proposal_id, row in self.state.proposals.items()
             if row["status"] == "approved"
         ]
@@ -284,6 +309,42 @@ class FakeNodeRepo:
 
 
 @dataclass
+class FakeResolutionEventRepo:
+    """저널에 덧붙인 event를 공유 상태에 쌓아 둔다."""
+
+    state: FakeState
+
+    def record(
+        self,
+        *,
+        workspace_id: int,
+        event_id: uuid.UUID,
+        event_type: str,
+        decider: str,
+        decider_id: str | None,
+        node_id: uuid.UUID,
+        member_hash: str,
+        member_snapshot: Mapping[str, Any],
+        basis: Mapping[str, Any],
+        reverses_event_id: uuid.UUID | None = None,
+    ) -> None:
+        self.state.events.append(
+            {
+                "workspace_id": workspace_id,
+                "event_id": event_id,
+                "event_type": event_type,
+                "decider": decider,
+                "decider_id": decider_id,
+                "node_id": node_id,
+                "member_hash": member_hash,
+                "member_snapshot": dict(member_snapshot),
+                "basis": dict(basis),
+                "reverses_event_id": reverses_event_id,
+            }
+        )
+
+
+@dataclass
 class FakeUnitOfWork:
     state: FakeState
     committed: int = 0
@@ -294,6 +355,7 @@ class FakeUnitOfWork:
         self.mutation_proposals = FakeMutationRepo(self.state)
         self.knowledge_candidates = FakeCandidateRepo(self.state)
         self.knowledge_nodes = FakeNodeRepo(self.state)
+        self.resolution_events = FakeResolutionEventRepo(self.state)
 
     def __enter__(self) -> Self:
         import copy
@@ -304,6 +366,7 @@ class FakeUnitOfWork:
             "claim_rows": copy.deepcopy(self.state.claim_rows),
             "nodes": list(self.state.nodes),
             "aliases": copy.deepcopy(self.state.aliases),
+            "events": list(self.state.events),
         }
         return self
 
@@ -323,6 +386,7 @@ class FakeUnitOfWork:
             self.state.claim_rows.update(self._snapshot["claim_rows"])
             self.state.nodes[:] = self._snapshot["nodes"]
             self.state.aliases[:] = self._snapshot["aliases"]
+            self.state.events[:] = self._snapshot["events"]
             self.rolled_back += 1
 
     def commit(self) -> None:
@@ -627,6 +691,11 @@ def _supersede_proposal(
     proposal_id = uuid.uuid4()
     state.proposals[proposal_id] = {
         "status": "approved",
+        "proposal_kind": "contradiction",
+        "reviewer": "cli",
+        "detector": "catchup.claim_conflict",
+        "detector_version": "1",
+        "resolver_metadata": {},
         "operations": tuple(
             StoredOperation(
                 sequence=index,
@@ -819,6 +888,106 @@ def test_merge_into_existing_node_reuses_that_node() -> None:
             "source": "system",
         }
     ]
+
+
+def test_merge_into_node_records_human_resolution_event() -> None:
+    """사람이 승인한 병합은 붙인 노드로 event 한 건을 남긴다."""
+    state = FakeState()
+    existing = state.add_node()
+    representative = state.add_candidate()
+    member = state.add_candidate()
+    state.add_approved_merge(
+        representative=representative,
+        members=(member,),
+        merge_into_node_id=existing.id,
+        reviewer="cli",
+        resolver_metadata={
+            "member_hash": "hash-merge",
+            "member_names": ["결제", "결제 기능"],
+            "reason": "같은 대상이다",
+        },
+    )
+
+    result, _ = _run(state)
+
+    assert result.proposals_applied == 1
+    assert len(state.events) == 1
+    event = state.events[0]
+    assert event["event_type"] == "merge_into_node"
+    assert event["decider"] == "human"
+    assert event["decider_id"] == "cli"
+    assert event["node_id"] == existing.id
+    assert event["member_hash"] == "hash-merge"
+    assert event["reverses_event_id"] is None
+    snapshot = event["member_snapshot"]
+    assert snapshot["representative_candidate_id"] == str(representative)
+    assert snapshot["member_candidate_ids"] == [str(member)]
+    assert snapshot["member_names"] == ["결제", "결제 기능"]
+    assert snapshot["proposed_name"] == "결제 기능"
+    assert snapshot["proposed_type"] == "feature"
+    assert snapshot["merge_into_node_id"] == str(existing.id)
+    assert snapshot["aliases_added"] == ["결제 기능"]
+    assert event["basis"]["detector"] == "catchup.entity_duplicate"
+    assert event["basis"]["detector_version"] == "1"
+    assert event["basis"]["reason"] == "같은 대상이다"
+
+
+def test_new_node_merge_records_system_resolution_event() -> None:
+    """자동 승인은 사람 없이 정해진 확정으로 남는다."""
+    state = FakeState()
+    representative = state.add_candidate()
+    member = state.add_candidate()
+    state.add_approved_merge(
+        representative=representative,
+        members=(member,),
+        reviewer="system:auto_merge",
+    )
+
+    result, _ = _run(state)
+
+    assert result.proposals_applied == 1
+    assert len(state.events) == 1
+    event = state.events[0]
+    assert event["event_type"] == "merge_create_node"
+    assert event["decider"] == "system"
+    assert event["decider_id"] is None
+    assert event["node_id"] == state.nodes[0].id
+    assert event["member_snapshot"]["merge_into_node_id"] is None
+
+
+def test_merge_without_member_hash_fails_that_proposal() -> None:
+    """member_hash가 없는 병합은 저널 없이 적용되지 않는다."""
+    state = FakeState()
+    representative = state.add_candidate()
+    member = state.add_candidate()
+    proposal_id = state.add_approved_merge(
+        representative=representative,
+        members=(member,),
+        resolver_metadata={"reason": "같은 대상이다"},
+    )
+
+    result, _ = _run(state)
+
+    assert result.proposals_applied == 0
+    assert result.proposals_failed == 1
+    assert state.events == []
+    assert state.proposals[proposal_id]["status"] == "approved"
+    assert state.candidates[representative]["resolved_node_id"] is None
+    assert state.candidates[member]["resolved_node_id"] is None
+    assert state.nodes == []
+
+
+def test_contradiction_apply_records_no_resolution_event() -> None:
+    """모순 판정의 적용은 해소 저널을 건드리지 않는다."""
+    state = FakeState()
+    winner = state.add_claim(status="accepted")
+    loser = state.add_claim(status="accepted")
+    _supersede_proposal(state, winner=winner, losers=(loser,))
+
+    result, _ = _run(state)
+
+    assert result.proposals_applied == 1
+    assert state.events == []
 
 
 def test_merge_into_merged_node_fails_that_proposal() -> None:
