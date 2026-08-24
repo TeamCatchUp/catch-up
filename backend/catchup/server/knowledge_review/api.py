@@ -19,10 +19,13 @@ debug 라우터와 달리 인증과 검토자 권한을 요구하고, 결정 저
 자격 하나로는 부족하고, 그렇다고 판정을 서비스로 내리면 CLI·debug 표면까지
 같은 인가를 지게 된다.
 
-첫 겹은 경로에 따라 갈린다. 큐 목록과 상세는 workspace 구성원이면 열리고,
-판정 경로(블록 결정·발행·승인·반려)만 위키 역할을 요구한다. 역할이 없는
-구성원에게는 목록이 그대로 나가되 can_review가 false로 실린다. 두 번째 겹은
-결정 경로에만 선다.
+첫 겹은 열람이든 판정이든 workspace 소속 하나다. 두 번째 겹만 문서마다
+갈린다. 담당자가 있으면 담당자 본인이고, 없으면 구성원 누구나다. 목록에는
+줄마다 그 판정이 can_review로 실린다.
+
+담당자가 없던 문서를 승인·발행으로 확정하면 확정한 사람을 그 문서의
+담당자로 등록한다. 이 부여는 라우터에만 둔다. 서비스로 내리면 CLI 러너와
+debug 표면의 결정에도 담당자가 생기는데, 그쪽 판정자는 사람이 아니다.
 
 불변식은 전부 서비스가 지킨다. 이 라우터는 컨텍스트를 확정하고 서비스를
 부르고 예외를 상태 코드로 옮기는 껍데기이며, 결정 규칙을 스스로 갖지
@@ -65,10 +68,16 @@ from catchup.knowledge_maintenance.ports.mutation_proposals import (
 from catchup.knowledge_maintenance.services.list_review_queue import ReviewQueueItem
 from catchup.knowledge_maintenance.services.list_review_queue import list_review_queue
 from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
+    CODE_NOT_DOCUMENT_OWNER as PUBLISH_CODE_NOT_DOCUMENT_OWNER,
+)
+from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
     PublishError,
 )
 from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
     publish_artifact_proposal,
+)
+from catchup.knowledge_maintenance.services.review_artifact_proposal import (
+    CODE_NOT_DOCUMENT_OWNER as REVIEW_CODE_NOT_DOCUMENT_OWNER,
 )
 from catchup.knowledge_maintenance.services.review_artifact_proposal import (
     PROPOSAL_STATUS_PENDING,
@@ -84,6 +93,9 @@ from catchup.knowledge_maintenance.services.review_artifact_proposal import (
 )
 from catchup.knowledge_maintenance.services.review_artifact_proposal import (
     review_artifact_proposal,
+)
+from catchup.knowledge_maintenance.services.review_block_verdict import (
+    CODE_NOT_DOCUMENT_OWNER as BLOCK_CODE_NOT_DOCUMENT_OWNER,
 )
 from catchup.knowledge_maintenance.services.review_block_verdict import (
     BlockVerdictError,
@@ -175,7 +187,7 @@ def _require_decidable_proposal(
     context: ReviewerContext,
     proposal_id: uuid.UUID,
 ) -> StoredArtifactProposal:
-    """변경안을 읽고 담당자·폴백 판정을 통과시킨다.
+    """변경안을 읽고 이 문서를 결정할 수 있는지 판정한다.
 
     담당자·채널 조회는 UnitOfWork가 아니라 라우터의 db 세션으로 나간다.
     UoW의 내부 세션을 꺼내 쓰면 저장소 경계가 무너지고, 인가 조회가
@@ -218,14 +230,48 @@ def _require_decidable_proposal(
     return proposal
 
 
+def _document_permission_error() -> HTTPException:
+    """서비스가 담당자 규칙으로 막은 결정을 권한 응답으로 옮긴다.
+
+    사전 검사가 내는 것과 같은 403 NOT_DOCUMENT_REVIEWER다. 사전 검사를
+    지난 뒤에 담당자가 지정된 경우만 이 자리로 오는데, 소비자가 할 일은 두
+    경우가 같으므로 코드를 나누지 않는다.
+    """
+    return review_error(
+        403,
+        code="NOT_DOCUMENT_REVIEWER",
+        message="이 문서의 검수 권한이 없습니다.",
+    )
+
+
+def _owners_after_decision(
+    db: Session, artifact_id: uuid.UUID
+) -> list[OwnerResponse]:
+    """확정이 끝난 시점의 담당자 명단을 응답 모양으로 읽는다.
+
+    결정 서비스가 자기 transaction을 커밋한 뒤에 부른다. 담당자 부여도 그
+    transaction 안에서 일어나므로, 커밋 뒤에 읽어야 새로 세워진 담당자가
+    명단에 들어온다.
+
+    조립은 큐 목록·상세와 같은 `owners_by_artifact`를 쓴다. 결정 응답만
+    따로 만들면 같은 사람이 화면 두 곳에서 다르게 보인다.
+
+    서비스가 아니라 여기서 읽는 이유는 명단이 사람 표시(이름·사진)를
+    담기 때문이다. 그 재료는 users 테이블에 있고, knowledge_maintenance는
+    그 쪽을 알지 않는다. 서비스 반환값에 담으려면 표시 전용 포트를 새로
+    내야 하는데, CLI 러너와 debug 표면은 그 값을 쓰지 않는다.
+    """
+    return owners_by_artifact(db, [artifact_id])[artifact_id]
+
+
 def _load_proposal_for_view(
     uow_factory: ReviewUowFactory,
     proposal_id: uuid.UUID,
 ) -> StoredArtifactProposal:
     """열람용으로 변경안을 읽는다. 담당자 게이트를 두지 않는다.
 
-    검수 표면에 설 자격은 의존성이 이미 봤다. 그 위에 문서별 담당자
-    게이트를 또 두면 남의 채널 문서는 내용조차 볼 수 없게 되는데, 검토는
+    workspace 소속은 의존성이 이미 봤다. 그 위에 문서별 담당자 게이트를 또
+    두면 남이 담당하는 문서는 내용조차 볼 수 없게 되는데, 검토는
     보는 일과 정하는 일이 다르다. 그래서 여기서는 워크스페이스 경계만
     지키고, 정할 수 있는지는 응답의 can_review로 따로 알린다.
 
@@ -315,8 +361,8 @@ def list_queue(
 ) -> QueuePageResponse:
     """검토 큐 한 페이지를 문서 위치·담당자·결정 가능 여부와 함께 돌려준다.
 
-    목록은 workspace 구성원이면 누구나 연다. 역할이 없는 사람에게도 같은
-    페이지가 나가고, 줄마다 can_review가 false로 실린다.
+    목록은 workspace 구성원이면 누구나 연다. 줄마다 그 문서를 결정할 수
+    있는지가 can_review로 실린다.
 
     위치와 담당자 조회는 페이지에 실린 문서 id로 한 번씩만 나간다. 줄마다
     조회하면 한 쪽에 문서 수만큼 질의가 붙는다.
@@ -344,8 +390,8 @@ def list_queue(
     owners = owners_by_artifact(db, artifact_ids)
     items = []
     for item in page.items:
-        # 저장소에 없는 문서는 미분류로 읽는다. 판정이 전역 관리자 폴백으로
-        # 가고, 채널 관리자에게 열리지 않는다.
+        # 저장소에 없는 문서는 미분류로 읽는다. 담당자 지정 판정이 전역
+        # 관리자 폴백으로 가고, 채널 관리자에게 열리지 않는다.
         artifact_channel_id, folder_id = locations.get(
             item.artifact_id, (None, None)
         )
@@ -397,7 +443,7 @@ def get_queue_item(
     켜졌는데 목록이 비는 것은 그 안건이 이미 결정돼 계류 목록에서 빠진
     경우이며, 그때도 표시는 본문에 다툼 블록이 있다는 사실 그대로다.
 
-    상세는 workspace 구성원이면 역할이 없어도 열린다. 결정 가능 여부는
+    상세는 workspace 구성원이면 열린다. 결정 가능 여부는
     can_review로 실어 보내고, 결정 경로는 저마다 같은 판정을 다시 한다.
 
     발행판은 문서마다 한 번만 읽는다. base_blocks와 block_changes가 같은
@@ -472,7 +518,8 @@ def get_queue_item(
     description=(
         "문서 변경안 전체를 승인해 새 revision을 발행한다. "
         "블록 판정이 시작된 변경안에는 쓸 수 없다. "
-        "문서 담당자만 할 수 있다."
+        "문서 담당자만 할 수 있고, 담당자가 없는 문서는 워크스페이스 "
+        "구성원 누구나 할 수 있다."
     ),
 )
 @audit_log(
@@ -492,18 +539,25 @@ def approve_artifact(
     고를 자리가 없고, 적힌 블록 결정은 통짜 승인이 읽지 않아 반려된
     블록까지 판에 실리기 때문이다.
 
+    담당자 규칙의 강제와 담당자 부여는 서비스가 자기 transaction 안에서
+    한다. 여기 사전 검사는 서비스에 닿기 전에 빠르게 돌려보내는 자리일
+    뿐이고, 확정을 가르는 것은 서비스의 재확인이다.
+
     Raises:
         HTTPException: 변경안이 없으면 404, 이 문서의 검수 권한이 없으면
             403, 다툼 블록이 있거나 블록 결정이 시작됐거나 결정을 받아들일
             수 없으면 409를 던진다.
     """
-    _require_decidable_proposal(uow_factory, db, context, proposal_id)
+    proposal = _require_decidable_proposal(
+        uow_factory, db, context, proposal_id
+    )
     try:
         result = review_artifact_proposal(
             uow_factory(),
             proposal_id=proposal_id,
             verdict=VERDICT_APPROVED,
             reviewer=context.reviewer,
+            decider_user_id=context.user.id,
         )
     except ProposalReviewError as error:
         raise _artifact_review_error(
@@ -517,6 +571,7 @@ def approve_artifact(
         ),
         revision_number=result.revision_number,
         claims_accepted=result.claims_accepted,
+        owners=_owners_after_decision(db, proposal.artifact_id),
     )
 
 
@@ -525,7 +580,8 @@ def approve_artifact(
     response_model=DecisionResponse,
     description=(
         "문서 변경안 전체를 사유와 함께 반려한다. "
-        "문서 담당자만 할 수 있다."
+        "문서 담당자만 할 수 있고, 담당자가 없는 문서는 워크스페이스 "
+        "구성원 누구나 할 수 있다."
     ),
 )
 @audit_log(
@@ -559,7 +615,9 @@ def reject_artifact(
             code="REASON_REQUIRED",
             message="반려는 사유가 있어야 합니다.",
         )
-    _require_decidable_proposal(uow_factory, db, context, proposal_id)
+    proposal = _require_decidable_proposal(
+        uow_factory, db, context, proposal_id
+    )
     try:
         result = review_artifact_proposal(
             uow_factory(),
@@ -567,6 +625,7 @@ def reject_artifact(
             verdict=VERDICT_REJECTED,
             reviewer=context.reviewer,
             reason=payload.reason,
+            decider_user_id=context.user.id,
         )
     except ProposalReviewError as error:
         raise _artifact_review_error(
@@ -575,6 +634,7 @@ def reject_artifact(
     return DecisionResponse(
         proposal_id=str(result.proposal_id),
         verdict=result.verdict,
+        owners=_owners_after_decision(db, proposal.artifact_id),
     )
 
 
@@ -583,7 +643,8 @@ def reject_artifact(
     response_model=BlockVerdictResponse,
     description=(
         "변경안의 블록 하나에 승인 또는 반려를 기록한다. "
-        "문서 담당자만 할 수 있다."
+        "문서 담당자만 할 수 있고, 담당자가 없는 문서는 워크스페이스 "
+        "구성원 누구나 할 수 있다."
     ),
 )
 @audit_log(
@@ -606,6 +667,10 @@ def put_block_verdict(
     PUT인 이유가 그것이다. 블록당 결정은 하나뿐이라 같은 요청을 몇 번
     보내도 결과가 같다.
 
+    담당자 규칙은 서비스가 자기 transaction 안에서 다시 본다. 판정은
+    발행이 읽어 확정하는 재료라, 여기만 사전 검사에 맡기면 담당자가
+    지정된 뒤에도 남이 적어 둔 판정이 발행을 타고 문서에 실린다.
+
     Raises:
         HTTPException: 변경안이 없으면 404, 이 문서의 검수 권한이 없으면
             403, 이미 결정됐거나 본문이 바뀌었으면 409, 보낸 값 자체가
@@ -622,8 +687,13 @@ def put_block_verdict(
             rejection_reason=payload.rejection_reason,
             chosen_winner_claim_id=payload.chosen_winner_claim_id,
             reviewer=context.reviewer,
+            decider_user_id=context.user.id,
         )
     except BlockVerdictError as error:
+        if error.code == BLOCK_CODE_NOT_DOCUMENT_OWNER:
+            # 사전 검사를 지난 뒤 담당자가 지정된 경우다. 상태가 아니라
+            # 권한 문제이므로 409 묶음에 섞지 않는다.
+            raise _document_permission_error() from error
         status_code, message = _BLOCK_VERDICT_ERRORS.get(
             error.code, _UNMAPPED_ERROR
         )
@@ -640,7 +710,8 @@ def put_block_verdict(
         "블록 판정을 마감한다. 승인 블록으로 새 revision을 발행하고, "
         "전부 반려면 변경안을 반려로 끝낸다. "
         "undecided로 미판정 블록을 일괄 승인 또는 반려할 수 있다. "
-        "문서 담당자만 할 수 있다."
+        "문서 담당자만 할 수 있고, 담당자가 없는 문서는 워크스페이스 "
+        "구성원 누구나 할 수 있다."
     ),
 )
 @audit_log(
@@ -664,6 +735,10 @@ def publish_proposal(
     단건 반려와 같은 상황이므로 같은 400 REASON_REQUIRED로 답해야 소비자가
     입력만 고치면 되는 상황임을 알 수 있다.
 
+    발행이 새 버전을 내면 담당자가 없던 문서에 발행한 사람을 담당자로
+    세운다. 전 블록 반려로 끝난 발행은 문서의 내용을 확정한 것이 아니므로
+    담당자를 만들지 않는다.
+
     Raises:
         HTTPException: 일괄 반려에 사유가 없으면 400, 변경안이 없으면 404,
             이 문서의 검수 권한이 없으면 403, 미결정·낡음·경합이면 409,
@@ -677,7 +752,9 @@ def publish_proposal(
             code="REASON_REQUIRED",
             message="반려는 사유가 있어야 합니다.",
         )
-    _require_decidable_proposal(uow_factory, db, context, proposal_id)
+    proposal = _require_decidable_proposal(
+        uow_factory, db, context, proposal_id
+    )
     try:
         result = publish_artifact_proposal(
             uow_factory(),
@@ -687,8 +764,13 @@ def publish_proposal(
             reviewer=context.reviewer,
             undecided=payload.undecided,
             rejection_reason=payload.rejection_reason,
+            decider_user_id=context.user.id,
         )
     except PublishError as error:
+        if error.code == PUBLISH_CODE_NOT_DOCUMENT_OWNER:
+            # 사전 검사를 지난 뒤 담당자가 지정된 경우다. 상태가 아니라
+            # 권한 문제이므로 409 묶음에 섞지 않는다.
+            raise _document_permission_error() from error
         status_code, message = _PUBLISH_ERRORS.get(
             error.code, _UNMAPPED_ERROR
         )
@@ -711,6 +793,7 @@ def publish_proposal(
         blocks_rejected=result.blocks_rejected,
         contradictions_resolved=result.contradictions_resolved,
         claims_accepted=result.claims_accepted,
+        owners=_owners_after_decision(db, proposal.artifact_id),
     )
 
 
@@ -730,6 +813,10 @@ def _artifact_review_error(
     규칙을 다시 판정하지 않는다 — 소비자가 무엇을 고쳐야 하는지 알려 주는
     진단일 뿐이다.
     """
+    if code == REVIEW_CODE_NOT_DOCUMENT_OWNER:
+        # 사전 검사를 지난 뒤 담당자가 지정된 경우다. 상태가 아니라 권한
+        # 문제이므로 409 묶음에 섞지 않는다.
+        return _document_permission_error()
     if code is not None:
         status_code, message = _ARTIFACT_REVIEW_ERRORS.get(
             code, _UNMAPPED_ERROR

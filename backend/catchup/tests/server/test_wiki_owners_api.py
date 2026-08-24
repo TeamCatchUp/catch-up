@@ -524,3 +524,39 @@ def test_owners_require_authentication(client: TestClient) -> None:
 
     assert response.status_code == 401
     assert response.json()["detail"]["code"] == "UNAUTHENTICATED"
+
+
+def test_owner_change_locks_the_artifact_row(
+    client: TestClient,
+    as_user: Callable[[User], None],
+    db: Session,
+    admin_user: User,
+    artifact_id: uuid.UUID,
+    member_b: User,
+) -> None:
+    """지정과 해제는 명단을 건드리기 전에 문서 행을 잠근다.
+
+    검토 확정도 자기 transaction에서 같은 행을 잡고 담당자 명단을 다시
+    읽는다. 이쪽이 잠그지 않으면 확정이 명단을 읽은 뒤 커밋하기까지 사이에
+    새 담당자가 끼어들어, 담당자가 생긴 문서에 남의 결정이 실린다. 두
+    경로가 같은 행을 잡는지가 그 규칙의 유일한 근거다.
+    """
+    as_user(admin_user)
+
+    with patch(
+        "catchup.db.wiki.lock_artifact_row"
+    ) as lock:
+        assigned = client.put(_owner_path(artifact_id, member_b))
+
+    assert assigned.status_code == 201
+    assert lock.call_count == 1
+    assert lock.call_args.kwargs["artifact_id"] == artifact_id
+
+    with patch(
+        "catchup.db.wiki.lock_artifact_row"
+    ) as lock:
+        removed = client.delete(_owner_path(artifact_id, member_b))
+
+    assert removed.status_code == 204
+    assert lock.call_count == 1
+    assert lock.call_args.kwargs["artifact_id"] == artifact_id

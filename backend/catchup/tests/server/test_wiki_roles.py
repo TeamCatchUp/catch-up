@@ -57,9 +57,32 @@ def test_global_admin_fallback_for_unassigned_artifact() -> None:
         owner_user_ids=frozenset(),
         user_id=7,
     )
-    # 채널이 있으면 전역 ADMIN이라도 그 채널 관리자가 아니면 불가.
+    # 담당자가 생기면 전역 ADMIN이라도 못 만진다.
     assert not can_decide_artifact(
         roles,
+        artifact_channel_id=None,
+        artifact_id=uuid.uuid4(),
+        owner_user_ids=frozenset({99}),
+        user_id=7,
+    )
+
+
+def test_member_without_roles_decides_artifact_without_owner() -> None:
+    """역할이 없는 구성원도 담당자 없는 문서는 결정한다.
+
+    채널에 놓인 문서든 미분류 문서든 같다. 담당자가 아무도 없으면 결정할
+    사람이 한 명도 없어 문서가 멈추기 때문에, 구성원 폴백이 마지막 단계로
+    선다.
+    """
+    assert can_decide_artifact(
+        _roles(),
+        artifact_channel_id=None,
+        artifact_id=uuid.uuid4(),
+        owner_user_ids=frozenset(),
+        user_id=7,
+    )
+    assert can_decide_artifact(
+        _roles(),
         artifact_channel_id=uuid.uuid4(),
         artifact_id=uuid.uuid4(),
         owner_user_ids=frozenset(),
@@ -67,13 +90,13 @@ def test_global_admin_fallback_for_unassigned_artifact() -> None:
     )
 
 
-def test_member_without_roles_cannot_decide() -> None:
-    """역할이 없는 구성원은 아무 문서도 결정하지 못한다."""
+def test_member_without_roles_cannot_decide_owned_artifact() -> None:
+    """담당자가 있는 문서에는 구성원 폴백이 서지 않는다."""
     assert not can_decide_artifact(
         _roles(),
         artifact_channel_id=None,
         artifact_id=uuid.uuid4(),
-        owner_user_ids=frozenset(),
+        owner_user_ids=frozenset({99}),
         user_id=7,
     )
 

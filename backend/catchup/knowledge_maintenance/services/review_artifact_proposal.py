@@ -13,6 +13,11 @@
 호출자는 자기 결정이 반영된 줄 알지만 실제로는 아무 일도 없었던 것이 된다.
 사람의 결정을 다루는 자리라 침묵이 가장 위험하다.
 
+담당자 규칙도 이 transaction 안에서 본다. 호출 표면이 미리 확인한 명단은
+결정이 확정되기까지 사이에 바뀔 수 있어, 그 확인만 믿으면 담당자가 지정된
+직후에 도착한 남의 결정이 그대로 실린다. 담당자가 없던 문서에 확정자를
+담당자로 세우는 일도 같은 transaction에서 한다.
+
 통짜 승인이 닿지 못하는 두 자리를 여기서 막는다. 다툼 블록이 있으면
 승자를 고르는 자리가 통짜 승인에 없고, 블록 결정이 하나라도 적혀 있으면
 그 결정을 읽지 않는 통짜 승인이 반려된 블록까지 판에 싣는다. 두 검사를
@@ -55,6 +60,11 @@ PROPOSAL_STATUS_PENDING = "pending"
 # 순간 소비자 계약이 조용히 깨진다.
 CODE_CONTESTED_REQUIRES_BLOCK_REVIEW = "CONTESTED_REQUIRES_BLOCK_REVIEW"
 CODE_BLOCK_REVIEW_IN_PROGRESS = "BLOCK_REVIEW_IN_PROGRESS"
+
+# 담당자가 정해진 문서를 담당자가 아닌 사람이 결정하려 한 경우다. 다른
+# 거절과 성격이 달라 코드를 따로 세운다 — 호출자는 이것만 권한 응답으로
+# 옮기고 나머지는 상태 응답으로 옮긴다.
+CODE_NOT_DOCUMENT_OWNER = "NOT_DOCUMENT_OWNER"
 
 
 class ProposalReviewError(Exception):
@@ -139,14 +149,27 @@ def review_artifact_proposal(
     verdict: str,
     reviewer: str,
     reason: str | None = None,
+    decider_user_id: int | None = None,
 ) -> ReviewResult:
     """변경안 하나에 사람의 결정을 확정하고 결과를 돌려준다.
 
     승인이면 내용을 새 판으로 쌓고 그 판의 식별자와 번호를 돌려준다.
     반려면 사유를 남기고 판은 만들지 않는다.
 
+    `decider_user_id`를 주면 담당자 규칙을 이 transaction 안에서 강제한다.
+    문서에 담당자가 있고 결정자가 그중에 없으면 거절하고, 담당자가 하나도
+    없는 문서를 승인으로 끝맺으면 결정자를 담당자로 등록한다. 규칙 확인과
+    부여와 결정이 한 transaction이어야, 확인을 지난 뒤 담당자가 지정된
+    문서에 결정이 실리거나 결정만 확정된 채 담당자가 비는 상태가 남지
+    않는다.
+
+    주지 않으면 둘 다 하지 않는다. CLI 러너와 debug 표면이 이 경로다.
+    그쪽 판정자는 사람이 아니어서 사용자 식별자로 옮길 수 없고, 운영
+    도구가 담당자를 만들어서도 안 된다.
+
     Raises:
-        ProposalReviewError: 결정을 받아들일 수 없을 때 던진다.
+        ProposalReviewError: 결정을 받아들일 수 없을 때 던진다. 결정자가
+            담당자가 아니면 code가 NOT_DOCUMENT_OWNER다.
     """
     if verdict not in _VERDICTS:
         raise ProposalReviewError(f"알 수 없는 verdict {verdict!r}")
@@ -162,6 +185,19 @@ def review_artifact_proposal(
             raise ProposalReviewError(
                 f"변경안 {proposal_id}는 이미 {proposal.status} 상태다"
             )
+
+        owner_user_ids: frozenset[int] = frozenset()
+        if decider_user_id is not None:
+            owner_user_ids = uow.artifacts.lock_owner_user_ids(
+                artifact_id=proposal.artifact_id
+            )
+            if owner_user_ids and decider_user_id not in owner_user_ids:
+                # 반려에도 같은 규칙을 건다. 승인만 막으면 남이 담당하는
+                # 문서를 반려로 밀어 버릴 자리가 남는다.
+                raise ProposalReviewError(
+                    f"변경안 {proposal_id}의 문서는 담당자만 결정할 수 있다",
+                    code=CODE_NOT_DOCUMENT_OWNER,
+                )
 
         if verdict == VERDICT_REJECTED:
             if reason is None or not reason.strip():
@@ -242,6 +278,14 @@ def review_artifact_proposal(
             if claim_ids:
                 claims_accepted = uow.knowledge_candidates.accept_claims(
                     claim_ids=claim_ids,
+                )
+            if decider_user_id is not None and not owner_user_ids:
+                # 담당자가 없던 문서의 책임자를 이 승인으로 정한다. 같은
+                # transaction이라 부여가 실패하면 승인과 판도 함께 되감긴다.
+                uow.artifacts.add_owner_if_absent(
+                    artifact_id=proposal.artifact_id,
+                    user_id=decider_user_id,
+                    granted_by=decider_user_id,
                 )
             uow.commit()
         except ProposalAlreadyDecided as error:

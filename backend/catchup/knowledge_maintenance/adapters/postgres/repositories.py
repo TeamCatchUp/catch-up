@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import aliased
 
 from catchup.db.models import ArtifactDefinition as ArtifactDefinitionRow
+from catchup.db.models import ArtifactOwner as ArtifactOwnerRow
 from catchup.db.models import Channel as ChannelRow
 from catchup.db.models import ChannelPurpose as ChannelPurposeRow
 from catchup.db.models import KnowledgeArtifact as KnowledgeArtifactRow
@@ -3132,6 +3133,49 @@ class SqlAlchemyArtifactRepository:
                 f" 없다. 바꾼 행 {result.rowcount}개."
             )
         self._session.flush()
+
+    def lock_owner_user_ids(
+        self, *, artifact_id: uuid.UUID
+    ) -> frozenset[int]:
+        """문서 행을 잠그고 그 문서의 담당자 사용자 id를 읽는다.
+
+        담당자를 지정·해제하는 경로도 같은 문서 행을 잠근다. 그래서 명단을
+        바꾸는 일과 결정을 확정하는 일이 이 행 하나를 두고 줄을 선다.
+        잠금은 transaction이 끝날 때 풀린다.
+
+        명단을 workspace로 좁히지 않는다. 문서 행 잠금이 이미 이 저장소의
+        workspace를 통과한 문서만 잡으므로, 담당자 행은 그 문서에 달린
+        것으로 충분하다.
+        """
+        self._lock_artifact(artifact_id)
+        return frozenset(
+            self._session.scalars(
+                select(ArtifactOwnerRow.user_id).where(
+                    ArtifactOwnerRow.artifact_id == artifact_id
+                )
+            ).all()
+        )
+
+    def add_owner_if_absent(
+        self, *, artifact_id: uuid.UUID, user_id: int, granted_by: int
+    ) -> bool:
+        """담당자 행을 넣되 이미 있으면 그대로 둔다. 넣었으면 참이다.
+
+        ON CONFLICT DO NOTHING을 (문서, 사용자) 키에 한정해 건다. 예외를
+        잡아 거르면 어떤 제약이 막았는지 문자열로 가려내야 하고, 외래 키가
+        막은 잘못된 부여까지 함께 삼킬 수 있다.
+        """
+        result = self._session.execute(
+            pg_insert(ArtifactOwnerRow)
+            .values(
+                artifact_id=artifact_id,
+                user_id=user_id,
+                granted_by=granted_by,
+            )
+            .on_conflict_do_nothing(index_elements=["artifact_id", "user_id"])
+        )
+        self._session.flush()
+        return result.rowcount > 0
 
     def add_revision(
         self,

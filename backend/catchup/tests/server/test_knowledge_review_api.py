@@ -7,12 +7,11 @@ dependency_overrides로 우회한다 — 쿠키 JWT를 만드는 일은 이 라�
 대상이 아니다.
 
 인가는 두 겹이라 확인도 두 겹이다. 의존성이 보는 "이 표면에 설 자격"은
-NOT_REVIEWER로, 핸들러가 보는 "이 문서를 결정할 자격"은
-NOT_DOCUMENT_REVIEWER로 갈린다. 다만 첫 겹은 경로에 따라 다르다. 큐 목록과
-상세는 workspace 구성원이면 열리므로 역할 없는 사람에게 NOT_MEMBER만 걸리고,
-판정 경로에서만 NOT_REVIEWER가 걸린다. 대부분의 응답 계약 테스트는 전역 ADMIN을
-검토자로 세운다 — 대역 변경안이 가리키는 문서는 DB에 없어 미분류로 읽히고,
-미분류의 폴백이 전역 ADMIN이기 때문이다.
+소속 하나뿐이라 NOT_MEMBER로, 핸들러가 보는 "이 문서를 결정할 자격"은
+NOT_DOCUMENT_REVIEWER로 갈린다. 열람이든 판정이든 첫 겹은 같다. 대부분의
+응답 계약 테스트는 전역 ADMIN을 검토자로 세운다. 대역 변경안이 가리키는
+문서는 DB에 없어 담당자도 없는 것으로 읽히므로 구성원이기만 해도 지나가지만,
+기존 케이스는 그대로 둔다.
 
 반면 결정 서비스는 대역으로 바꾼다. 불변식은 서비스 쪽 테스트가 이미
 지키고, 여기서 볼 것은 라우터가 무엇을 넘기고 예외를 어떤 코드로 옮기는지
@@ -89,15 +88,27 @@ from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPending
 from catchup.knowledge_maintenance.services.list_review_queue import ReviewQueueItem
 from catchup.knowledge_maintenance.services.list_review_queue import ReviewQueuePage
 from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
+    CODE_NOT_DOCUMENT_OWNER as PUBLISH_CODE_NOT_DOCUMENT_OWNER,
+)
+from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
     PublishError,
 )
 from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
     PublishResult,
 )
 from catchup.knowledge_maintenance.services.review_artifact_proposal import (
+    CODE_NOT_DOCUMENT_OWNER,
+)
+from catchup.knowledge_maintenance.services.review_artifact_proposal import (
     ProposalReviewError,
 )
 from catchup.knowledge_maintenance.services.review_artifact_proposal import ReviewResult
+from catchup.knowledge_maintenance.services.review_block_verdict import (
+    CODE_NOT_DOCUMENT_OWNER as BLOCK_CODE_NOT_DOCUMENT_OWNER,
+)
+from catchup.knowledge_maintenance.services.review_block_verdict import (
+    BlockVerdictError,
+)
 from catchup.server.knowledge_review.api import _to_base_block
 from catchup.server.knowledge_review.api import _to_block
 from catchup.server.knowledge_review.api import router
@@ -305,9 +316,12 @@ class _FakeArtifacts:
         *,
         proposal: StoredArtifactProposal | None = None,
         latest: tuple[uuid.UUID, int] | None = None,
+        owner_user_ids: frozenset[int] = frozenset(),
     ) -> None:
         self._proposal = proposal
         self._latest = latest
+        self._owner_user_ids = owner_user_ids
+        self.granted: list[tuple[uuid.UUID, int, int]] = []
 
     def get_proposal(
         self, *, proposal_id: uuid.UUID, for_update: bool = False
@@ -320,6 +334,19 @@ class _FakeArtifacts:
         self, *, artifact_id: uuid.UUID
     ) -> tuple[uuid.UUID, int] | None:
         return self._latest
+
+    def lock_owner_user_ids(
+        self, *, artifact_id: uuid.UUID
+    ) -> frozenset[int]:
+        """확정 transaction 안의 담당자 재확인을 흉내낸다."""
+        return self._owner_user_ids
+
+    def add_owner_if_absent(
+        self, *, artifact_id: uuid.UUID, user_id: int, granted_by: int
+    ) -> bool:
+        """부여 호출을 기록만 한다. 실제 쓰기는 저장소 테스트가 본다."""
+        self.granted.append((artifact_id, user_id, granted_by))
+        return True
 
 
 class _FakeMutations:
@@ -640,21 +667,25 @@ def test_multi_workspace_user_requires_explicit_param(
     assert excinfo.value.detail["code"] == "WORKSPACE_REQUIRED"
 
 
-def test_member_without_roles_is_403(
+def test_member_without_roles_stands_on_the_surface(
     db: Session, workspace_ids: tuple[int, int]
 ) -> None:
-    """소속만 있고 아무 역할도 없으면 막는다."""
+    """소속만 있고 아무 역할도 없어도 판정 경로의 문을 지난다.
+
+    역할 게이트가 여기서 사라졌기 때문이다. 담당자 없는 문서는 구성원
+    누구나 결정하므로, 표면 앞에서 미리 끊으면 그 폴백에 닿을 수 없다.
+    무엇을 결정할 수 있는지는 문서마다 핸들러가 다시 본다.
+    """
     workspace_id, _ = workspace_ids
     user = _make_user(db, email="member@example.com")
     _join(db, user=user, workspace_id=workspace_id)
 
-    with pytest.raises(HTTPException) as excinfo:
-        resolve_reviewer_workspace(
-            workspace_id=workspace_id, current_user=user, db=db
-        )
+    context = resolve_reviewer_workspace(
+        workspace_id=workspace_id, current_user=user, db=db
+    )
 
-    assert excinfo.value.status_code == 403
-    assert excinfo.value.detail["code"] == "NOT_REVIEWER"
+    assert context.workspace_id == workspace_id
+    assert context.roles.has_any_role is False
 
 
 def test_channel_admin_role_opens_the_surface(
@@ -680,10 +711,10 @@ def test_channel_admin_role_opens_the_surface(
 def test_other_workspace_channel_admin_does_not_count(
     db: Session, workspace_ids: tuple[int, int]
 ) -> None:
-    """다른 workspace 채널의 관리자 자격은 이 문에서 세지 않는다.
+    """다른 workspace 채널의 관리자 자격은 이 스냅샷에 담기지 않는다.
 
-    역할 적재가 채널을 workspace로 좁히지 않으면, 남의 workspace 관리자가
-    이 workspace의 검수 표면에 그대로 선다.
+    역할 적재가 채널을 workspace로 좁히지 않으면, 남의 workspace 관리자
+    자격이 이 workspace의 문서 판정에 그대로 실린다.
     """
     first, second = workspace_ids
     user = _make_user(db, email="cross-ws-admin@example.com")
@@ -692,24 +723,28 @@ def test_other_workspace_channel_admin_does_not_count(
     channel_id = _make_channel(db, workspace_id=second, created_by=user.id)
     _make_channel_admin(db, channel_id=channel_id, user=user)
 
-    with pytest.raises(HTTPException) as excinfo:
-        resolve_reviewer_workspace(
-            workspace_id=first, current_user=user, db=db
-        )
+    context = resolve_reviewer_workspace(
+        workspace_id=first, current_user=user, db=db
+    )
 
-    assert excinfo.value.status_code == 403
-    assert excinfo.value.detail["code"] == "NOT_REVIEWER"
+    assert context.roles.admin_channel_ids == frozenset()
+
+    # 대조군: 채널이 있는 쪽에서는 같은 사람의 스냅샷에 그 채널이 담긴다.
+    allowed = resolve_reviewer_workspace(
+        workspace_id=second, current_user=user, db=db
+    )
+    assert allowed.roles.admin_channel_ids == frozenset({channel_id})
 
 
 def test_other_workspace_owner_does_not_count(
     db: Session, workspace_ids: tuple[int, int]
 ) -> None:
-    """다른 workspace 문서의 담당자 자격은 이 문에서 세지 않는다.
+    """다른 workspace 문서의 담당자 자격은 이 스냅샷에 담기지 않는다.
 
     대상 판정은 문서 id 일치를 다시 보므로 남의 문서를 결정할 자리는 애초에
-    없다. 그래도 적재를 좁혀야 하는 이유는 표면 게이트가 집합이 비었는지만
-    보기 때문이다 — 좁히지 않으면 역할 하나 없는 workspace의 계류 목록이
-    그 사람에게 그대로 열린다.
+    없다. 그래도 적재를 좁혀야 하는 이유는 스냅샷이 "이 workspace에서
+    무엇인가"를 말해야 하기 때문이다. 좁히지 않으면 남의 workspace 담당
+    문서가 이쪽 판정 재료로 섞여 든다.
     """
     first, second = workspace_ids
     user = _make_user(db, email="cross-ws-owner@example.com")
@@ -718,16 +753,13 @@ def test_other_workspace_owner_does_not_count(
     artifact_id = _make_artifact(db, workspace_id=second)
     _make_owner(db, artifact_id=artifact_id, user=user)
 
-    with pytest.raises(HTTPException) as excinfo:
-        resolve_reviewer_workspace(
-            workspace_id=first, current_user=user, db=db
-        )
+    context = resolve_reviewer_workspace(
+        workspace_id=first, current_user=user, db=db
+    )
 
-    assert excinfo.value.status_code == 403
-    assert excinfo.value.detail["code"] == "NOT_REVIEWER"
+    assert context.roles.owned_artifact_ids == frozenset()
 
-    # 대조군: 문서가 있는 쪽에서는 같은 사람이 그대로 통과한다. 403이
-    # "경계가 막았다"는 뜻이지 "담당 행이 없다"는 뜻이 아님을 가른다.
+    # 대조군: 문서가 있는 쪽에서는 같은 사람의 스냅샷에 그 문서가 담긴다.
     allowed = resolve_reviewer_workspace(
         workspace_id=second, current_user=user, db=db
     )
@@ -778,16 +810,16 @@ def test_authorization_denial_is_audited(
     `audit_log` 데코레이터는 핸들러 밖에서 난 예외를 보지 못한다. 거부가
     여기서 기록되지 않으면 감사 스트림은 통과한 결정만 담는다.
     """
-    workspace_id, _ = workspace_ids
+    first, second = workspace_ids
     user = _make_user(db, email="audit-deny@example.com")
-    _join(db, user=user, workspace_id=workspace_id)
+    _join(db, user=user, workspace_id=first)
 
     with patch(
         "catchup.server.wiki.dependencies.emit_audit_event"
     ) as emit:
         with pytest.raises(HTTPException):
             resolve_reviewer_workspace(
-                workspace_id=workspace_id, current_user=user, db=db
+                workspace_id=second, current_user=user, db=db
             )
 
     assert emit.call_count == 1
@@ -796,9 +828,9 @@ def test_authorization_denial_is_audited(
     assert recorded["status"] == AuditStatus.FAILURE
     assert recorded["level"] == AuditLevel.WARNING
     metadata = recorded["metadata"]
-    assert metadata.context == "NOT_REVIEWER"
+    assert metadata.context == "NOT_MEMBER"
     assert metadata.user_id == user.id
-    assert metadata.workspace_id == workspace_id
+    assert metadata.workspace_id == second
 
 
 def test_reviewer_identifier_is_never_blank(
@@ -884,7 +916,11 @@ def test_queue_is_readable_by_member_without_any_role(
     workspace_ids: tuple[int, int],
     as_user: Callable[[User], None],
 ) -> None:
-    """역할이 하나도 없는 구성원도 목록을 볼 수 있고, can_review는 false다."""
+    """역할 없는 구성원도 목록을 보고, 담당자 없는 문서는 can_review가 true다.
+
+    목록의 can_review는 결정 경로와 같은 판정 함수에서 나온다. 담당자가
+    없으면 구성원 폴백이 서므로 표시도 함께 true가 된다.
+    """
     workspace_id, _ = workspace_ids
     user = _make_user(db, email="queue-member@example.com")
     _join(db, user=user, workspace_id=workspace_id)
@@ -908,7 +944,7 @@ def test_queue_is_readable_by_member_without_any_role(
         response = client.get("/api/v1/knowledge-review/queue")
 
     assert response.status_code == 200
-    assert response.json()["items"][0]["can_review"] is False
+    assert response.json()["items"][0]["can_review"] is True
 
 
 def test_queue_detail_is_readable_by_member_without_any_role(
@@ -918,14 +954,25 @@ def test_queue_detail_is_readable_by_member_without_any_role(
     workspace_ids: tuple[int, int],
     as_user: Callable[[User], None],
 ) -> None:
-    """상세도 역할 없는 구성원에게 열리고, can_review는 false다."""
+    """상세는 역할 없는 구성원에게 열리되, 남의 문서면 can_review가 false다.
+
+    열람과 결정이 갈리는 자리다. 담당자가 정해진 문서도 내용은 보이고,
+    결정할 수 없다는 사실만 can_review로 실린다.
+    """
     workspace_id, _ = workspace_ids
     user = _make_user(db, email="detail-member@example.com")
+    owner = _make_user(db, email="detail-doc-owner@example.com")
     _join(db, user=user, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    _make_owner(db, artifact_id=artifact_id, user=owner)
     as_user(user)
     proposal_id = uuid.uuid4()
     app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        artifacts=_FakeArtifacts(proposal=_proposal(proposal_id=proposal_id))
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
     )
 
     response = client.get(f"/api/v1/knowledge-review/queue/{proposal_id}")
@@ -950,26 +997,43 @@ def test_queue_denies_non_member(
     assert response.json()["detail"]["code"] == "NOT_MEMBER"
 
 
-def test_verdict_still_requires_reviewer_role(
+def test_verdict_by_member_is_judged_per_document(
     app: FastAPI,
     client: TestClient,
     db: Session,
     workspace_ids: tuple[int, int],
     as_user: Callable[[User], None],
 ) -> None:
-    """열람이 열려도 판정 경로는 역할 게이트를 그대로 지킨다."""
+    """판정 경로의 거부는 표면 자격이 아니라 문서 자격에서 나온다.
+
+    역할 없는 구성원도 문을 지나므로, 남이 담당하는 문서에서 막힌 것은
+    NOT_DOCUMENT_REVIEWER다. 이 구분이 사라지면 소비자는 "지금은 이 문서만
+    안 된다"와 "이 표면에 설 수 없다"를 가릴 수 없다.
+    """
     workspace_id, _ = workspace_ids
     user = _make_user(db, email="verdict-member@example.com")
+    owner = _make_user(db, email="verdict-owner@example.com")
     _join(db, user=user, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    _make_owner(db, artifact_id=artifact_id, user=owner)
     as_user(user)
 
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+
     response = client.put(
-        _verdict_path(uuid.uuid4(), 1),
+        _verdict_path(proposal_id, 1),
         json={"verdict": "approved", "block_content_hash": "sha256:x"},
     )
 
     assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "NOT_REVIEWER"
+    assert response.json()["detail"]["code"] == "NOT_DOCUMENT_REVIEWER"
 
 
 @pytest.fixture
@@ -2117,11 +2181,12 @@ def test_global_admin_decides_unassigned_artifact(
 ) -> None:
     """채널에 놓이지 않은 문서의 폴백은 전역 ADMIN이다.
 
-    같은 전역 ADMIN이 채널에 놓인 문서에서는 막히는 것까지 함께 본다 —
-    전역 역할이 채널 관리자 자리를 대신하지 않는다.
+    같은 전역 ADMIN이 담당자가 있는 문서에서는 막히는 것까지 함께 본다.
+    전역 역할은 담당자 위에 서는 상위 권한이 아니다.
     """
     workspace_id, _ = workspace_ids
     admin = _make_user(db, email="global-admin@example.com")
+    other_owner = _make_user(db, email="global-admin-other@example.com")
     _join(db, user=admin, workspace_id=workspace_id)
     admin.role = UserRole.ADMIN
     db.flush()
@@ -2132,6 +2197,7 @@ def test_global_admin_decides_unassigned_artifact(
     in_channel_id = _make_artifact(
         db, workspace_id=workspace_id, channel_id=channel_id
     )
+    _make_owner(db, artifact_id=in_channel_id, user=other_owner)
     as_user(admin)
 
     unassigned_proposal = uuid.uuid4()
@@ -2183,22 +2249,258 @@ def test_global_admin_decides_unassigned_artifact(
     service.assert_not_called()
 
 
-def test_member_without_roles_gets_403_not_reviewer(
+# ============ 담당자 없는 문서의 구성원 폴백과 담당자 자동 부여 ============
+#
+# 파이프라인이 만든 문서는 담당자 0명으로 시작한다. 관리자가 없으면
+# 담당자를 만들 사람도 없어 문서가 영영 결정되지 않으므로, 담당자 없는
+# 문서에 한해 구성원 폴백을 두고 승인 계열 확정에서 확정한 사람을 담당자로
+# 등록한다. 둘이 맞물려 첫 확정 뒤로는 담당자 우선 규칙이 다시 선다.
+
+
+def _owner_ids(db: Session, artifact_id: uuid.UUID) -> set[int]:
+    """문서의 담당자 사용자 id를 실 DB에서 읽는다."""
+    return set(
+        db.scalars(
+            select(ArtifactOwner.user_id).where(
+                ArtifactOwner.artifact_id == artifact_id
+            )
+        ).all()
+    )
+
+
+def test_member_approves_artifact_without_owner(
     app: FastAPI,
     client: TestClient,
     db: Session,
     workspace_ids: tuple[int, int],
     as_user: Callable[[User], None],
 ) -> None:
-    """역할이 하나도 없으면 대상 판정에 닿기 전에 막힌다.
+    """역할 없는 구성원이 담당자 없는 문서의 승인 경로를 지난다.
 
-    두 겹의 인가가 각자 다른 코드로 갈리는지 본다 — 표면 자격은
-    NOT_REVIEWER, 문서 자격은 NOT_DOCUMENT_REVIEWER다.
+    담당자 규칙을 다시 보고 담당자를 세우는 일은 서비스가 자기 transaction
+    안에서 한다. 라우터가 볼 것은 결정자를 실어 보내는지 하나다. 부여를
+    라우터가 별도 세션으로 하면 결정만 확정되고 담당자는 없는 상태가
+    남는다.
     """
     workspace_id, _ = workspace_ids
     member = _make_user(db, email="plain-member@example.com")
     _join(db, user=member, workspace_id=workspace_id)
     artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    as_user(member)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+    result = ReviewResult(
+        proposal_id=proposal_id,
+        verdict="approved",
+        revision_id=uuid.uuid4(),
+        revision_number=1,
+        claims_accepted=1,
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.review_artifact_proposal",
+        return_value=result,
+    ) as service:
+        response = _approve(client, proposal_id)
+
+    assert response.status_code == 200
+    assert service.call_args.kwargs["reviewer"] == f"user:{member.id}"
+    assert service.call_args.kwargs["decider_user_id"] == member.id
+
+
+def test_reject_passes_decider_to_service(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """반려도 결정자를 실어 보낸다.
+
+    담당자 규칙은 반려에도 걸린다. 반려만 결정자를 빼면 남이 담당하는
+    문서를 반려로 밀어 버릴 자리가 열린다. 부여는 서비스가 승인 계열에만
+    하므로 반려로 담당자가 생기지는 않는다.
+    """
+    workspace_id, _ = workspace_ids
+    member = _make_user(db, email="reject-member@example.com")
+    _join(db, user=member, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    as_user(member)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+    result = ReviewResult(
+        proposal_id=proposal_id,
+        verdict="rejected",
+        revision_id=None,
+        revision_number=None,
+        claims_accepted=0,
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.review_artifact_proposal",
+        return_value=result,
+    ) as service:
+        response = client.post(
+            f"/api/v1/knowledge-review/artifacts/{proposal_id}/reject",
+            json={"reason": "근거가 부족하다"},
+        )
+
+    assert response.status_code == 200
+    assert service.call_args.kwargs["decider_user_id"] == member.id
+    assert _owner_ids(db, artifact_id) == set()
+
+
+def test_member_publishes_artifact_without_owner(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """발행 경로도 결정자를 실어 보낸다."""
+    workspace_id, _ = workspace_ids
+    member = _make_user(db, email="publish-first@example.com")
+    _join(db, user=member, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    as_user(member)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+    result = PublishResult(
+        proposal_id=proposal_id,
+        verdict="approved",
+        revision_id=uuid.uuid4(),
+        revision_number=1,
+        blocks_published=1,
+        blocks_rejected=0,
+        contradictions_resolved=0,
+        claims_accepted=1,
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.publish_artifact_proposal",
+        return_value=result,
+    ) as service:
+        response = client.post(
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+            json={"base_revision_id": None},
+        )
+
+    assert response.status_code == 200
+    assert service.call_args.kwargs["decider_user_id"] == member.id
+
+
+def test_service_owner_refusal_becomes_document_reviewer_403(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """서비스가 담당자 규칙으로 거부하면 403 NOT_DOCUMENT_REVIEWER다.
+
+    라우터의 사전 검사를 지난 뒤 담당자가 지정되면 서비스만 그것을 본다.
+    그 거부가 409로 나가면 소비자는 권한 문제를 상태 문제로 읽는다.
+    """
+    workspace_id, _ = workspace_ids
+    member = _make_user(db, email="race-member@example.com")
+    _join(db, user=member, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    as_user(member)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.review_artifact_proposal",
+        side_effect=ProposalReviewError(
+            "담당자가 아니다", code=CODE_NOT_DOCUMENT_OWNER
+        ),
+    ):
+        response = _approve(client, proposal_id)
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "NOT_DOCUMENT_REVIEWER"
+
+
+def test_publish_owner_refusal_becomes_document_reviewer_403(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """발행도 서비스의 담당자 거부를 403으로 옮긴다."""
+    workspace_id, _ = workspace_ids
+    member = _make_user(db, email="race-publish@example.com")
+    _join(db, user=member, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    as_user(member)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.publish_artifact_proposal",
+        side_effect=PublishError(
+            PUBLISH_CODE_NOT_DOCUMENT_OWNER, "담당자가 아니다"
+        ),
+    ):
+        response = client.post(
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+            json={"base_revision_id": None},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "NOT_DOCUMENT_REVIEWER"
+
+
+def test_member_cannot_approve_artifact_with_owner(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """담당자가 정해진 문서에는 구성원 폴백이 서지 않는다."""
+    workspace_id, _ = workspace_ids
+    member = _make_user(db, email="late-member@example.com")
+    owner = _make_user(db, email="first-owner@example.com")
+    _join(db, user=member, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    _make_owner(db, artifact_id=artifact_id, user=owner)
     as_user(member)
 
     proposal_id = uuid.uuid4()
@@ -2216,8 +2518,253 @@ def test_member_without_roles_gets_403_not_reviewer(
         response = _approve(client, proposal_id)
 
     assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "NOT_REVIEWER"
+    assert response.json()["detail"]["code"] == "NOT_DOCUMENT_REVIEWER"
     service.assert_not_called()
+    assert _owner_ids(db, artifact_id) == {owner.id}
+
+
+def test_non_member_cannot_approve(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """구성원이 아니면 폴백에 닿기 전에 막힌다.
+
+    폴백의 범위가 workspace 구성원임을 못박는다. 여기가 열리면 담당자 없는
+    문서가 바깥 사람에게까지 열린다.
+    """
+    first, second = workspace_ids
+    outsider = _make_user(db, email="approve-outsider@example.com")
+    _join(db, user=outsider, workspace_id=first)
+    artifact_id = _make_artifact(db, workspace_id=second)
+    as_user(outsider)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.review_artifact_proposal"
+    ) as service:
+        response = client.post(
+            f"/api/v1/knowledge-review/artifacts/{proposal_id}/approve",
+            params={"workspace_id": second},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "NOT_MEMBER"
+    service.assert_not_called()
+    assert _owner_ids(db, artifact_id) == set()
+
+# ======================= 결정 응답의 담당자 명단 =======================
+#
+# 승인이 담당자를 세우는데 응답이 그 사실을 담지 않으면, 화면은 결정
+# 직후의 담당자 표시를 고치려고 문서를 다시 읽어야 한다. 확정 뒤 시점의
+# 명단을 결정 응답에 함께 실어 그 왕복을 없앤다.
+#
+# 부여는 서비스가 자기 transaction에서 하므로, 여기서는 대역 서비스가
+# 호출되는 순간에 담당자 행을 넣어 그 순서를 흉내낸다. 라우터가 서비스보다
+# 먼저 명단을 읽으면 이 테스트가 빈 목록을 받는다.
+
+
+def _grants_owner(db: Session, artifact_id: uuid.UUID, user: User, result):
+    """서비스가 확정과 함께 담당자를 세우는 일을 흉내내는 side effect를 만든다."""
+
+    def _run(*args, **kwargs):
+        db.add(ArtifactOwner(artifact_id=artifact_id, user_id=user.id))
+        db.flush()
+        return result
+
+    return _run
+
+
+def _response_owner_ids(body: dict) -> list[int]:
+    """응답에 실린 담당자 사용자 id를 읽는다."""
+    return [owner["user_id"] for owner in body["owners"]]
+
+
+def test_approve_response_carries_owners_after_grant(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """승인 응답은 확정으로 세워진 담당자까지 담은 명단을 싣는다."""
+    workspace_id, _ = workspace_ids
+    member = _make_user(db, email="owners-approve@example.com")
+    _join(db, user=member, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    as_user(member)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+    result = ReviewResult(
+        proposal_id=proposal_id,
+        verdict="approved",
+        revision_id=uuid.uuid4(),
+        revision_number=1,
+        claims_accepted=1,
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.review_artifact_proposal",
+        side_effect=_grants_owner(db, artifact_id, member, result),
+    ):
+        response = _approve(client, proposal_id)
+
+    assert response.status_code == 200
+    assert _response_owner_ids(response.json()) == [member.id]
+
+
+def test_reject_response_carries_unchanged_owners(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """반려 응답의 명단은 그대로다. 반려는 담당자를 만들지 않는다."""
+    workspace_id, _ = workspace_ids
+    member = _make_user(db, email="owners-reject@example.com")
+    _join(db, user=member, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    as_user(member)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+    result = ReviewResult(
+        proposal_id=proposal_id,
+        verdict="rejected",
+        revision_id=None,
+        revision_number=None,
+        claims_accepted=0,
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.review_artifact_proposal",
+        return_value=result,
+    ):
+        response = client.post(
+            f"/api/v1/knowledge-review/artifacts/{proposal_id}/reject",
+            json={"reason": "근거가 부족하다"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["owners"] == []
+
+
+def test_publish_response_carries_owners_after_grant(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """발행 응답도 확정으로 세워진 담당자를 담은 명단을 싣는다."""
+    workspace_id, _ = workspace_ids
+    member = _make_user(db, email="owners-publish@example.com")
+    _join(db, user=member, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    as_user(member)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+    result = PublishResult(
+        proposal_id=proposal_id,
+        verdict="approved",
+        revision_id=uuid.uuid4(),
+        revision_number=1,
+        blocks_published=1,
+        blocks_rejected=0,
+        contradictions_resolved=0,
+        claims_accepted=1,
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.publish_artifact_proposal",
+        side_effect=_grants_owner(db, artifact_id, member, result),
+    ):
+        response = client.post(
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+            json={"base_revision_id": None},
+        )
+
+    assert response.status_code == 200
+    assert _response_owner_ids(response.json()) == [member.id]
+
+
+def test_approve_response_keeps_existing_owners(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """담당자가 있던 문서의 승인 응답은 그 명단을 그대로 싣는다.
+
+    부여는 담당자가 없던 문서에만 도므로 명단이 늘지 않는다. 사람 표시는
+    큐 목록·상세와 같은 조립을 거치므로 이름도 함께 실린다.
+    """
+    workspace_id, _ = workspace_ids
+    owner = _make_user(db, email="owners-existing@example.com")
+    _join(db, user=owner, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    _make_owner(db, artifact_id=artifact_id, user=owner)
+    as_user(owner)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+    result = ReviewResult(
+        proposal_id=proposal_id,
+        verdict="approved",
+        revision_id=uuid.uuid4(),
+        revision_number=1,
+        claims_accepted=1,
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.review_artifact_proposal",
+        return_value=result,
+    ):
+        response = _approve(client, proposal_id)
+
+    assert response.status_code == 200
+    owners = response.json()["owners"]
+    assert [item["user_id"] for item in owners] == [owner.id]
+    assert owners[0]["display_name"] == owner.name
+
 
 
 # ======================= 표면에 없는 운영 경로 =======================
@@ -2301,6 +2848,9 @@ def test_approve_records_current_user_as_reviewer(
         "revision_id": str(revision_id),
         "revision_number": 3,
         "claims_accepted": 2,
+        # 대역 서비스는 담당자를 세우지 않으므로 명단은 비어 있다. 필드
+        # 자체가 늘 실린다는 것을 이 자리에서 함께 고정한다.
+        "owners": [],
     }
     assert service.call_args.kwargs["reviewer"] == f"user:{reviewer.id}"
     assert service.call_args.kwargs["verdict"] == "approved"
@@ -3095,6 +3645,7 @@ def test_publish_audit_records_proposal_id(
         "blocks_rejected": 1,
         "contradictions_resolved": 1,
         "claims_accepted": 4,
+        "owners": [],
     }
     assert service.call_args.kwargs["workspace_id"] == workspace_id
     assert service.call_args.kwargs["reviewer"] == f"user:{reviewer.id}"
@@ -3372,25 +3923,35 @@ def test_publish_stale_block_returns_409(
     assert response.json()["detail"]["code"] == "STALE_BLOCK"
 
 
-def test_block_verdict_requires_reviewer(
+def test_block_verdict_requires_document_permission(
     app: FastAPI,
     client: TestClient,
     db: Session,
     workspace_ids: tuple[int, int],
     as_user: Callable[[User], None],
 ) -> None:
-    """블록 결정도 검토자만 할 수 있다."""
+    """블록 결정도 남이 담당하는 문서에서는 막힌다."""
     workspace_id, _ = workspace_ids
-    user = _make_user(db, email="verdict-member@example.com")
+    user = _make_user(db, email="verdict-blocked@example.com")
+    owner = _make_user(db, email="verdict-doc-owner@example.com")
     _join(db, user=user, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    _make_owner(db, artifact_id=artifact_id, user=owner)
     as_user(user)
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
 
     with patch(
         "catchup.server.knowledge_review.api.upsert_block_verdict"
     ) as service:
         response = client.put(
-            _verdict_path(uuid.uuid4(), 0),
+            _verdict_path(proposal_id, 0),
             json={
                 "verdict": "approved",
                 "block_content_hash": "a" * 64,
@@ -3398,35 +3959,138 @@ def test_block_verdict_requires_reviewer(
         )
 
     assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "NOT_REVIEWER"
+    assert response.json()["detail"]["code"] == "NOT_DOCUMENT_REVIEWER"
     service.assert_not_called()
 
 
-def test_publish_requires_reviewer(
+def test_publish_requires_document_permission(
     app: FastAPI,
     client: TestClient,
     db: Session,
     workspace_ids: tuple[int, int],
     as_user: Callable[[User], None],
 ) -> None:
-    """발행도 검토자만 할 수 있다."""
+    """발행도 남이 담당하는 문서에서는 막힌다."""
     workspace_id, _ = workspace_ids
-    user = _make_user(db, email="publish-member@example.com")
+    user = _make_user(db, email="publish-blocked@example.com")
+    owner = _make_user(db, email="publish-doc-owner@example.com")
     _join(db, user=user, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    _make_owner(db, artifact_id=artifact_id, user=owner)
     as_user(user)
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
 
     with patch(
         "catchup.server.knowledge_review.api.publish_artifact_proposal"
     ) as service:
         response = client.post(
-            f"/api/v1/knowledge-review/queue/{uuid.uuid4()}/publish",
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
             json={"base_revision_id": None},
         )
 
     assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "NOT_REVIEWER"
+    assert response.json()["detail"]["code"] == "NOT_DOCUMENT_REVIEWER"
     service.assert_not_called()
+
+
+def test_block_verdict_passes_decider_to_service(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """블록 결정도 결정자를 실어 보낸다.
+
+    담당자 규칙을 다시 보는 일은 서비스가 자기 transaction 안에서 한다.
+    결정자를 빼면 판정 저널만 규칙 밖에 남아, 남이 적어 둔 판정을 담당자의
+    발행이 그대로 읽어 확정하게 된다.
+    """
+    workspace_id, _ = workspace_ids
+    member = _make_user(db, email="bv-decider@example.com")
+    _join(db, user=member, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    as_user(member)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+    stored = StoredBlockVerdict(
+        proposal_id=proposal_id,
+        block_index=0,
+        block_content_hash="a" * 64,
+        verdict="approved",
+        rejection_reason=None,
+        chosen_winner_claim_id=None,
+        reviewer=f"user:{member.id}",
+        reviewed_at=AT,
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.upsert_block_verdict",
+        return_value=stored,
+    ) as service:
+        response = client.put(
+            _verdict_path(proposal_id, 0),
+            json={"verdict": "approved", "block_content_hash": "a" * 64},
+        )
+
+    assert response.status_code == 200
+    assert service.call_args.kwargs["decider_user_id"] == member.id
+
+
+def test_block_verdict_owner_refusal_becomes_document_reviewer_403(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """서비스가 담당자 규칙으로 막은 블록 결정도 403으로 나간다.
+
+    409로 나가면 소비자는 권한 문제를 변경안 상태 문제로 읽고, 다시 읽어
+    보면 계류 그대로라 무엇을 고쳐야 하는지 알 수 없다.
+    """
+    workspace_id, _ = workspace_ids
+    member = _make_user(db, email="bv-race@example.com")
+    _join(db, user=member, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    as_user(member)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.upsert_block_verdict",
+        side_effect=BlockVerdictError(
+            BLOCK_CODE_NOT_DOCUMENT_OWNER, "담당자가 아니다"
+        ),
+    ):
+        response = client.put(
+            _verdict_path(proposal_id, 0),
+            json={"verdict": "approved", "block_content_hash": "a" * 64},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "NOT_DOCUMENT_REVIEWER"
 
 
 def test_block_verdict_hides_other_workspace_proposal(
