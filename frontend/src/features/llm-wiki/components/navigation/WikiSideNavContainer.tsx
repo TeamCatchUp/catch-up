@@ -43,18 +43,21 @@ export default function WikiSideNavContainer() {
   // 옮기기 대상 패널. 케밥이 섰던 앵커에 이어 뜨고, 본문이 features 데이터라 팝오버째 여기서 소유한다
   const [movePicker, setMovePicker] = useState<{ node: WikiTreeNode; anchor: HTMLElement } | null>(null);
 
-  // 옮길 곳 목록은 트리가 이미 들고 있다 — 채널 응답이 폴더를 동봉해 추가 왕복이 없다
-  const moveTargetChannels = useMemo<readonly MoveTargetChannel[]>(
-    () =>
-      treeNodes.map((channel) => ({
+  // 이동 API가 같은 채널 안만 받아 대상을 그 문서의 채널 하나로 좁히고, 현재 자리는 트리의 부모로 찾는다
+  const moveTarget = useMemo<{ channel: MoveTargetChannel; currentFolderId: string | null } | undefined>(() => {
+    const channel = movePicker ? treeNodes.find((node) => node.id === movePicker.node.channelId) : undefined;
+    if (!movePicker || !channel) return undefined;
+    const folders = (channel.children ?? []).filter((child) => child.kind === 'folder');
+    const parentFolder = folders.find((folder) => (folder.children ?? []).some((doc) => doc.id === movePicker.node.id));
+    return {
+      channel: {
         id: channel.id,
         label: channel.label,
-        folders: (channel.children ?? [])
-          .filter((child) => child.kind === 'folder')
-          .map((folder) => ({ id: folder.id, label: folder.label })),
-      })),
-    [treeNodes],
-  );
+        folders: folders.map((folder) => ({ id: folder.id, label: folder.label })),
+      },
+      currentFolderId: parentFolder?.id ?? null,
+    };
+  }, [treeNodes, movePicker]);
 
   // 노드가 들고 있는 경로에 현재 오리진을 붙인다 — 공유 링크 규격이 따로 없다
   const copyNodeLink = async (nodeId: string) => {
@@ -125,7 +128,8 @@ export default function WikiSideNavContainer() {
           <PopoverAnchor virtualRef={{ current: movePicker.anchor }} />
           <PopoverContent align="start" side="right" className={SNB_POPOVER_SHELL_CLASS}>
             <MoveTargetPicker
-              channels={moveTargetChannels}
+              channel={moveTarget?.channel}
+              currentFolderId={moveTarget?.currentFolderId}
               onSelect={(target) => {
                 setMovePicker(null);
                 handleMoveSelect(movePicker.node, target);

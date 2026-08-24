@@ -28,75 +28,85 @@ export interface MoveTarget {
 }
 
 export interface MoveTargetPickerProps {
-  channels?: readonly MoveTargetChannel[];
+  /** 대상 채널 하나. 이동 API가 같은 채널 안만 받아 목록을 채널 단위로 좁힌다 */
+  channel?: MoveTargetChannel;
+  /** 문서가 지금 있는 자리. null이면 채널 행을, 폴더 id면 그 폴더 행을 비활성한다 */
+  currentFolderId?: string | null;
   onSelect?: (target: MoveTarget) => void;
   className?: string;
 }
 
 const SEARCH_PLACEHOLDER = '파일 옮길 곳 선택';
 
-const NO_CHANNELS: readonly MoveTargetChannel[] = [];
-
 const matches = (label: string, keyword: string) => label.toLowerCase().includes(keyword.toLowerCase());
 
-/** 행 하나의 공통 뼈대. 채널·폴더가 들여쓰기와 앞 슬롯만 다르다 */
+/** 행 하나의 공통 뼈대. 채널·폴더가 들여쓰기와 앞 슬롯만 다르고, 현재 위치는 잠긴다 */
 function TargetRow({
   label,
   depth,
   leading,
+  disabled = false,
   onSelect,
 }: {
   label: string;
   depth: 0 | 1;
   leading: React.ReactNode;
+  disabled?: boolean;
   onSelect: () => void;
 }) {
   return (
     <div
       data-testid="move-target-row"
       className={cn(
-        'hover:bg-fill-normal-interaction-hover flex h-9 items-center gap-3 rounded-lg py-1.5 pr-2.5 transition-colors',
+        'flex h-9 items-center gap-3 rounded-lg py-1.5 pr-2.5 transition-colors',
         depth === 0 ? 'pl-2.5' : 'pl-5',
+        !disabled && 'hover:bg-fill-normal-interaction-hover',
       )}
     >
       {leading}
-      <button type="button" onClick={onSelect} className="flex min-w-0 flex-1 cursor-pointer">
-        <span className="text-body-small text-text-normal-normal min-w-0 truncate text-left">{label}</span>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onSelect}
+        className={cn('flex min-w-0 flex-1', disabled ? 'cursor-default' : 'cursor-pointer')}
+      >
+        <span
+          className={cn(
+            'text-body-small min-w-0 truncate text-left',
+            disabled ? 'text-text-normal-assistive' : 'text-text-normal-normal',
+          )}
+        >
+          {label}
+        </span>
       </button>
     </div>
   );
 }
 
 /**
- * 문서를 옮길 채널·폴더를 고르는 패널. 대상 목록은 소비처가 넘기고,
- * 이 컴포넌트는 검색·접기와 고른 자리를 알리는 일만 한다.
+ * 문서를 옮길 자리를 고르는 패널. 대상은 그 문서의 채널 하나이고,
+ * 채널 행을 고르면 채널 루트(folderId null)로 꺼낸다.
  */
-export default function MoveTargetPicker({ channels = NO_CHANNELS, onSelect, className }: MoveTargetPickerProps) {
+export default function MoveTargetPicker({ channel, currentFolderId, onSelect, className }: MoveTargetPickerProps) {
   const [keyword, setKeyword] = useState('');
-  const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(() => new Set());
+  // 채널이 하나뿐이라 처음부터 펼쳐 폴더가 바로 보이게 둔다
+  const [collapsed, setCollapsed] = useState(false);
 
   const searching = keyword.trim().length > 0;
 
-  // 채널명이 걸리면 그 채널의 폴더를 모두 남기고, 폴더만 걸리면 걸린 폴더만 남긴다
+  // 채널명이 걸리면 폴더를 모두 남기고, 폴더만 걸리면 걸린 폴더만 남긴다
   const visible = useMemo(() => {
-    if (!searching) return channels;
+    if (!channel || !searching) return channel;
     const term = keyword.trim();
-    return channels
-      .map((channel) => ({
-        ...channel,
-        folders: matches(channel.label, term)
-          ? channel.folders
-          : channel.folders.filter((folder) => matches(folder.label, term)),
-      }))
-      .filter((channel) => matches(channel.label, term) || channel.folders.length > 0);
-  }, [channels, keyword, searching]);
+    const folders = matches(channel.label, term)
+      ? channel.folders
+      : channel.folders.filter((folder) => matches(folder.label, term));
+    if (!matches(channel.label, term) && folders.length === 0) return undefined;
+    return { ...channel, folders };
+  }, [channel, keyword, searching]);
 
-  const toggle = (channelId: string) =>
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (!next.delete(channelId)) next.add(channelId);
-      return next;
-    });
+  // 검색 중에는 걸린 폴더가 보여야 하므로 접혀 있어도 펼친다
+  const expanded = searching || !collapsed;
 
   return (
     <div
@@ -123,67 +133,64 @@ export default function MoveTargetPicker({ channels = NO_CHANNELS, onSelect, cla
 
       {/* 빈 목록·검색 결과 없음 문구는 시안이 없어 만들지 않는다 */}
       <ul className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-1.5">
-        {visible.map((channel) => {
-          // 검색 중에는 걸린 폴더가 보여야 하므로 접힌 채널도 펼친다
-          const expanded = searching || expandedIds.has(channel.id);
+        {visible && (
+          <li className="flex flex-col gap-0.5">
+            <TargetRow
+              label={visible.label}
+              depth={0}
+              disabled={currentFolderId === null}
+              onSelect={() => onSelect?.({ channelId: visible.id, folderId: null, label: visible.label })}
+              leading={
+                <>
+                  <span className="flex size-5.5 shrink-0 items-center justify-center">
+                    {visible.folders.length > 0 && (
+                      <button
+                        type="button"
+                        aria-label={`${visible.label} ${expanded ? '접기' : '펼치기'}`}
+                        aria-expanded={expanded}
+                        onClick={() => setCollapsed((prev) => !prev)}
+                        className="hover:bg-fill-normal-interaction-pressed text-icon-normal-neutral flex size-5.5 cursor-pointer items-center justify-center rounded-full"
+                      >
+                        {expanded ? (
+                          <IconCaretDown aria-hidden className="size-4.5" />
+                        ) : (
+                          <IconCaretRight aria-hidden className="size-4.5" />
+                        )}
+                      </button>
+                    )}
+                  </span>
+                  <span className="flex size-5.5 shrink-0 items-center justify-center">
+                    <IconWikiChannel aria-hidden className="text-icon-normal-neutral size-5" />
+                  </span>
+                </>
+              }
+            />
 
-          return (
-            <li key={channel.id} className="flex flex-col gap-0.5">
-              <TargetRow
-                label={channel.label}
-                depth={0}
-                onSelect={() => onSelect?.({ channelId: channel.id, folderId: null, label: channel.label })}
-                leading={
-                  <>
-                    <span className="flex size-5.5 shrink-0 items-center justify-center">
-                      {channel.folders.length > 0 && (
-                        <button
-                          type="button"
-                          aria-label={`${channel.label} ${expanded ? '접기' : '펼치기'}`}
-                          aria-expanded={expanded}
-                          onClick={() => toggle(channel.id)}
-                          className="hover:bg-fill-normal-interaction-pressed text-icon-normal-neutral flex size-5.5 cursor-pointer items-center justify-center rounded-full"
-                        >
-                          {expanded ? (
-                            <IconCaretDown aria-hidden className="size-4.5" />
-                          ) : (
-                            <IconCaretRight aria-hidden className="size-4.5" />
-                          )}
-                        </button>
-                      )}
-                    </span>
-                    <span className="flex size-5.5 shrink-0 items-center justify-center">
-                      <IconWikiChannel aria-hidden className="text-icon-normal-neutral size-5" />
-                    </span>
-                  </>
-                }
-              />
-
-              {expanded &&
-                channel.folders.map((folder) => (
-                  <TargetRow
-                    key={folder.id}
-                    label={folder.label}
-                    depth={1}
-                    onSelect={() => onSelect?.({ channelId: channel.id, folderId: folder.id, label: folder.label })}
-                    leading={
-                      <>
-                        <span className="flex size-5.5 shrink-0 items-center justify-center">
-                          <span
-                            aria-hidden
-                            className="border-icon-normal-assistive size-1.5 rounded-full border-[1.5px]"
-                          />
-                        </span>
-                        <span className="flex size-5.5 shrink-0 items-center justify-center">
-                          <IconFolder aria-hidden className="text-icon-normal-neutral size-5" />
-                        </span>
-                      </>
-                    }
-                  />
-                ))}
-            </li>
-          );
-        })}
+            {expanded &&
+              visible.folders.map((folder) => (
+                <TargetRow
+                  key={folder.id}
+                  label={folder.label}
+                  depth={1}
+                  disabled={folder.id === currentFolderId}
+                  onSelect={() => onSelect?.({ channelId: visible.id, folderId: folder.id, label: folder.label })}
+                  leading={
+                    <>
+                      <span className="flex size-5.5 shrink-0 items-center justify-center">
+                        <span
+                          aria-hidden
+                          className="border-icon-normal-assistive size-1.5 rounded-full border-[1.5px]"
+                        />
+                      </span>
+                      <span className="flex size-5.5 shrink-0 items-center justify-center">
+                        <IconFolder aria-hidden className="text-icon-normal-neutral size-5" />
+                      </span>
+                    </>
+                  }
+                />
+              ))}
+          </li>
+        )}
       </ul>
     </div>
   );

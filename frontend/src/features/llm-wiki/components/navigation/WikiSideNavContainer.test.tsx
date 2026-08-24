@@ -42,7 +42,19 @@ vi.mock('@/shared/components/ui/toast', () => ({ toast: vi.fn() }));
 const CHANNEL_LABEL = '채널 하나';
 const FOLDER_LABEL = '폴더 하나';
 const DOCUMENT_LABEL = '문서 하나';
+const OTHER_CHANNEL_LABEL = '다른 채널';
+const OTHER_FOLDER_LABEL = '남의 폴더';
 
+const folderDto = (id: string, name: string, channelId: string) => ({
+  id,
+  name,
+  channel_id: channelId,
+  created_at: '2026-08-19T00:00:00Z',
+  created_by: { user_id: 7, display_name: '팀원F', profile_image_url: null },
+  last_activity_at: '2026-08-19T00:00:00Z',
+});
+
+// 두 번째 채널은 옮기기 대상이 문서의 채널로 한정되는지 보는 대조군이다
 const channelResponse = () => ({
   channels: [
     {
@@ -51,16 +63,17 @@ const channelResponse = () => ({
       workspace_id: 1,
       is_admin: true,
       document_count: 1,
-      folders: [
-        {
-          id: 'fd-1',
-          name: FOLDER_LABEL,
-          channel_id: 'ch-1',
-          created_at: '2026-08-19T00:00:00Z',
-          created_by: { user_id: 7, display_name: '팀원F', profile_image_url: null },
-          last_activity_at: '2026-08-19T00:00:00Z',
-        },
-      ],
+      folders: [folderDto('fd-1', FOLDER_LABEL, 'ch-1')],
+      purpose_presets: [],
+      definitions: [],
+    },
+    {
+      id: 'ch-2',
+      name: OTHER_CHANNEL_LABEL,
+      workspace_id: 1,
+      is_admin: false,
+      document_count: 0,
+      folders: [folderDto('fd-9', OTHER_FOLDER_LABEL, 'ch-2')],
       purpose_presets: [],
       definitions: [],
     },
@@ -298,7 +311,7 @@ describe('WikiSideNavContainer 쓰기 배선', () => {
     expect(mockPush).toHaveBeenCalledWith('/llm-wiki/onboarding');
   });
 
-  /** 옮기기 → 대상 패널의 폴더 행까지 여는 공통 경로 */
+  /** 옮기기 → 대상 패널까지 여는 공통 경로. 패널은 문서의 채널이 펼쳐진 채 선다 */
   const openMovePicker = async (user: ReturnType<typeof userEvent.setup>) => {
     await user.click(await expandChannel(user));
     await user.click(screen.getByRole('button', { name: '옮기기' }));
@@ -310,7 +323,6 @@ describe('WikiSideNavContainer 쓰기 배선', () => {
     renderContainer();
 
     const picker = await openMovePicker(user);
-    await user.click(picker.getByRole('button', { name: `${CHANNEL_LABEL} 펼치기` }));
     await user.click(picker.getByRole('button', { name: FOLDER_LABEL }));
 
     // 고른 즉시 패널이 닫힌다 — 응답을 기다리지 않는다
@@ -329,11 +341,24 @@ describe('WikiSideNavContainer 쓰기 배선', () => {
     );
   });
 
-  it('채널 행을 고르면 folder_id가 null로 나간다 — 채널 바로 아래다', async () => {
+  it('폴더 속 문서에서 채널 행을 고르면 folder_id가 null로 나간다 — 채널 루트로 꺼낸다', async () => {
+    server.use(
+      http.get('/api/v1/wiki/artifacts', () =>
+        HttpResponse.json({ ...artifactResponse(), items: [{ ...artifactResponse().items[0], folder_id: 'fd-1' }] }),
+      ),
+    );
     const user = userEvent.setup();
     renderContainer();
 
-    const picker = await openMovePicker(user);
+    // 폴더 속 문서라 트리에서 폴더까지 펼쳐야 케밥이 보인다
+    await user.click(await screen.findByRole('button', { name: `${CHANNEL_LABEL} 펼치기` }));
+    await user.click(await screen.findByRole('button', { name: `${FOLDER_LABEL} 펼치기` }));
+    await user.click(await screen.findByRole('button', { name: `${DOCUMENT_LABEL} 추가 작업` }));
+    await user.click(screen.getByRole('button', { name: '옮기기' }));
+    const picker = within(screen.getByTestId('move-target-picker'));
+
+    // 현재 폴더 행은 잠기고 채널 행이 열려 있다
+    expect(picker.getByRole('button', { name: FOLDER_LABEL })).toBeDisabled();
     await user.click(picker.getByRole('button', { name: CHANNEL_LABEL }));
 
     await waitFor(() =>
@@ -341,12 +366,32 @@ describe('WikiSideNavContainer 쓰기 배선', () => {
     );
   });
 
+  it('대상 목록은 그 문서의 채널 하나로 한정된다 — 서버가 같은 채널 안 이동만 받는다', async () => {
+    const user = userEvent.setup();
+    renderContainer();
+
+    const picker = await openMovePicker(user);
+
+    expect(picker.getByRole('button', { name: FOLDER_LABEL })).toBeInTheDocument();
+    expect(picker.queryByRole('button', { name: OTHER_CHANNEL_LABEL })).toBeNull();
+    expect(picker.queryByRole('button', { name: OTHER_FOLDER_LABEL })).toBeNull();
+  });
+
+  it('채널 루트의 문서는 채널 행이 잠긴다 — 제자리 이동을 만들지 않는다', async () => {
+    const user = userEvent.setup();
+    renderContainer();
+
+    const picker = await openMovePicker(user);
+
+    expect(picker.getByRole('button', { name: CHANNEL_LABEL })).toBeDisabled();
+    expect(picker.getByRole('button', { name: FOLDER_LABEL })).toBeEnabled();
+  });
+
   it('토스트의 이동 버튼은 옮긴 자리로 보낸다', async () => {
     const user = userEvent.setup();
     renderContainer();
 
     const picker = await openMovePicker(user);
-    await user.click(picker.getByRole('button', { name: `${CHANNEL_LABEL} 펼치기` }));
     await user.click(picker.getByRole('button', { name: FOLDER_LABEL }));
 
     await waitFor(() => expect(toast).toHaveBeenCalled());
@@ -369,7 +414,7 @@ describe('WikiSideNavContainer 쓰기 배선', () => {
     renderContainer();
 
     const picker = await openMovePicker(user);
-    await user.click(picker.getByRole('button', { name: CHANNEL_LABEL }));
+    await user.click(picker.getByRole('button', { name: FOLDER_LABEL }));
 
     await waitFor(() => expect(toast).toHaveBeenCalledWith('이 문서를 옮길 권한이 없습니다.'));
   });
