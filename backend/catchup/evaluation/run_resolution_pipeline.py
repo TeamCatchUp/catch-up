@@ -6,6 +6,10 @@
 (proposal)으로 해소한다. 행 2 Resolution의 첫 슬라이스를 손으로 돌려
 보는 것이다.
 
+`KNOWLEDGE_AUTO_MERGE_ENABLED`가 켜져 있으면 해소가 병합 proposal을
+시스템 이름으로 승인하고, 이 스크립트가 곧바로 적용까지 이어서 돌린다.
+꺼져 있으면 승인도 적용도 하지 않고 proposal을 계류로 남긴다.
+
 여러 번 돌려도 안전하다. 해소된 후보는 스캔에서 빠지고, proposal은
 그룹당 pending 하나만 유지된다.
 
@@ -46,6 +50,9 @@ from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
 from catchup.knowledge_maintenance.contracts.extraction import EntityTypeEntry
+from catchup.knowledge_maintenance.services.apply_mutation_proposals import (
+    apply_mutation_proposals,
+)
 from catchup.knowledge_maintenance.services.converge_vocabulary import (
     resolve_latest_published_version,
 )
@@ -173,11 +180,15 @@ def main() -> None:
             workspace_id=args.workspace_id,
         )
 
+    # kill switch를 읽는 자리는 이 러너 한 곳이다. 해소 서비스와 적용
+    # 서비스는 설정을 직접 읽지 않고 넘겨받은 값만 본다.
+    auto_merge_enabled = settings.KNOWLEDGE_AUTO_MERGE_ENABLED
     result = resolve_entity_candidates(
         workspace_id=args.workspace_id,
         judge=judge,
         uow=uow,
         name_embedder=name_embedder,
+        auto_merge_enabled=auto_merge_enabled,
     )
 
     print("=== Resolution 결과 ===")
@@ -199,6 +210,29 @@ def main() -> None:
         f" (실패 {result.blocks_failed})"
         f"  | 병합 계류 {result.groups_abstained}"
     )
+
+    if auto_merge_enabled:
+        # 승인과 적용은 트랜잭션이 다르므로 안건마다 새 경계가 필요하다.
+        def apply_uow() -> KnowledgeMaintenanceUnitOfWork:
+            return KnowledgeMaintenanceUnitOfWork(
+                session_factory,
+                workspace_id=args.workspace_id,
+            )
+
+        applied = apply_mutation_proposals(
+            apply_uow,
+            workspace_id=args.workspace_id,
+        )
+        print("=== 자동 병합 적용 결과 ===")
+        print(f"  적용된 안건 {applied.proposals_applied}")
+        print(f"  실패한 안건 {applied.proposals_failed}")
+        print(f"  새로 해소된 후보 {applied.candidates_resolved}")
+        print(f"  기해소 스킵 {applied.candidates_already_resolved}")
+    else:
+        print(
+            "자동 병합이 꺼져 있다(KNOWLEDGE_AUTO_MERGE_ENABLED=false). "
+            "병합 안건은 계류로 남는다."
+        )
 
     engine.dispose()
 

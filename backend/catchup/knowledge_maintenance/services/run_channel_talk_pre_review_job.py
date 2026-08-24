@@ -157,6 +157,9 @@ async def run_channel_talk_pre_review_job(
         # 다른 같은 대상이 각자 노드로 굳는다. 한 번 굳으면 이 단계가 다시
         # 합쳐 주지 않으므로 만들지 못하면 그대로 실패시킨다.
         name_embedder=_name_embedder(workspace_id),
+        # kill switch를 읽는 자리는 이 진입부 한 곳이다. 파이프라인과 해소
+        # 서비스는 설정을 직접 읽지 않고 넘겨받은 값만 본다.
+        auto_merge_enabled=settings.KNOWLEDGE_AUTO_MERGE_ENABLED,
     )
     if result.status is PreReviewPipelineStatus.PARTIAL_FAILURE:
         logger.warning(

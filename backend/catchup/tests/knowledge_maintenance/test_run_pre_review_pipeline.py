@@ -11,6 +11,7 @@ from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabul
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunSpec
 from catchup.knowledge_maintenance.ports.source_poller import SourcePollResult
 from catchup.knowledge_maintenance.services import run_pre_review_pipeline as pipeline
+from catchup.knowledge_maintenance.services.apply_mutation_proposals import ApplyResult
 from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
     ArtifactCompileResult,
 )
@@ -294,3 +295,121 @@ def test_status_reports_every_incomplete_work_signal(
     )
 
     assert status is expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("auto_merge_enabled", [True, False])
+async def test_auto_merge_flag_drives_resolution_and_apply(
+    monkeypatch: pytest.MonkeyPatch,
+    auto_merge_enabled: bool,
+) -> None:
+    resolve_kwargs: list[dict] = []
+    apply_calls: list[tuple[object, dict]] = []
+
+    async def run_extraction(**_: object) -> pipeline.ExtractionStageResult:
+        return pipeline.ExtractionStageResult()
+
+    def resolve_candidates(**kwargs: object) -> ResolutionResult:
+        resolve_kwargs.append(dict(kwargs))
+        return ResolutionResult(proposals_created=1)
+
+    def apply_proposals(uow_factory: object, **kwargs: object) -> ApplyResult:
+        apply_calls.append((uow_factory, dict(kwargs)))
+        return ApplyResult(
+            proposals_applied=1,
+            proposals_failed=0,
+            candidates_resolved=2,
+            candidates_already_resolved=0,
+        )
+
+    monkeypatch.setattr(pipeline, "_run_extraction", run_extraction)
+    monkeypatch.setattr(pipeline, "resolve_entity_candidates", resolve_candidates)
+    monkeypatch.setattr(pipeline, "apply_mutation_proposals", apply_proposals)
+    monkeypatch.setattr(
+        pipeline,
+        "resolve_claim_conflicts",
+        lambda **_: ClaimConflictResult(),
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "compile_definition_artifacts",
+        lambda *_args, **_kwargs: ArtifactCompileResult(),
+    )
+
+    result = await pipeline.run_pre_review_pipeline(
+        SourcePollResult(),
+        workspace_id=1,
+        normalizer=object(),  # type: ignore[arg-type]
+        extractor=object(),  # type: ignore[arg-type]
+        extraction_spec=ExtractionRunSpec(
+            provider="test",
+            extractor_version="1",
+            ontology_id="wiki",
+            vocabulary=ExtractionVocabulary(snapshot_id="v1"),
+        ),
+        extraction_contract_version="1",
+        judge=None,
+        uow_factory=_WorkspaceBoundUow,  # type: ignore[arg-type]
+        auto_merge_enabled=auto_merge_enabled,
+    )
+
+    assert resolve_kwargs[0]["auto_merge_enabled"] is auto_merge_enabled
+    if auto_merge_enabled:
+        assert len(apply_calls) == 1
+        assert apply_calls[0][0] is _WorkspaceBoundUow
+        assert apply_calls[0][1] == {"workspace_id": 1}
+        assert result.auto_merge is not None
+        assert result.auto_merge.candidates_resolved == 2
+    else:
+        assert apply_calls == []
+        assert result.auto_merge is None
+
+
+@pytest.mark.asyncio
+async def test_auto_merge_stays_off_when_caller_omits_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    resolve_kwargs: list[dict] = []
+
+    async def run_extraction(**_: object) -> pipeline.ExtractionStageResult:
+        return pipeline.ExtractionStageResult()
+
+    def resolve_candidates(**kwargs: object) -> ResolutionResult:
+        resolve_kwargs.append(dict(kwargs))
+        return ResolutionResult()
+
+    def unexpected_apply(*_args: object, **_kwargs: object) -> ApplyResult:
+        raise AssertionError("apply must not run while auto merge is off")
+
+    monkeypatch.setattr(pipeline, "_run_extraction", run_extraction)
+    monkeypatch.setattr(pipeline, "resolve_entity_candidates", resolve_candidates)
+    monkeypatch.setattr(pipeline, "apply_mutation_proposals", unexpected_apply)
+    monkeypatch.setattr(
+        pipeline,
+        "resolve_claim_conflicts",
+        lambda **_: ClaimConflictResult(),
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "compile_definition_artifacts",
+        lambda *_args, **_kwargs: ArtifactCompileResult(),
+    )
+
+    result = await pipeline.run_pre_review_pipeline(
+        SourcePollResult(),
+        workspace_id=1,
+        normalizer=object(),  # type: ignore[arg-type]
+        extractor=object(),  # type: ignore[arg-type]
+        extraction_spec=ExtractionRunSpec(
+            provider="test",
+            extractor_version="1",
+            ontology_id="wiki",
+            vocabulary=ExtractionVocabulary(snapshot_id="v1"),
+        ),
+        extraction_contract_version="1",
+        judge=None,
+        uow_factory=_WorkspaceBoundUow,  # type: ignore[arg-type]
+    )
+
+    assert resolve_kwargs[0]["auto_merge_enabled"] is False
+    assert result.auto_merge is None
