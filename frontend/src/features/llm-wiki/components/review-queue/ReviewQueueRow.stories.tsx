@@ -33,7 +33,7 @@ const meta = {
       ],
       dataNotes: [
         '작성자·신뢰도는 계약에서 제거됐다 — 실 API 응답에 없다. Default play가 아바타·이름의 부재를 가드한다.',
-        '담당자는 큐 응답 owners[]가 원천이다(18814:133231 정본). 없음 케이스의 대시+문구는 2026-08-24 추가 노드(18157:78646·17595:148922) 실측 — 정본 프레임(18920:96195)에는 대시가 없어 노드 간 갈림이 있고, 사용자 지시에 따라 추가 노드를 따른다.',
+        '담당자는 큐 응답 owners[]가 원천이다(18814:133231 정본). 없음 케이스는 노드 간 갈림(대시 유무·스케일)이 있었으나 디자이너 확정 노드 18929:96828로 확정(2026-08-24) — 기본 아바타 + 문구이고 대시는 폐기.',
         '충돌(모순) 아이콘 행은 MVP 제외 — hasConflictIcon 필드는 [BE] contains_conflict 대응이라 계약만 보존하고 렌더하지 않는다.',
         '유형 배지도 만들지 않는다 — 백엔드 3종↔명세 6유형 불일치로 체계 미정. 8/6 재확인에서도 행에는 유형 표기가 없었다. 대신 상세 패널 헤더에 "유형 / 상태 태그"(17845:105886) 자리표시 텍스트가 새로 생겼다 — 배지가 붙는다면 행이 아니라 상세다.',
         '빈 큐·로딩·에러·처리 피드백(pending/성공/실패)·stale 거부 스토리는 만들지 않는다(감사 §7 금지 목록).',
@@ -42,7 +42,7 @@ const meta = {
       tokenNotes: [
         '제목 #33363D = text-text-normal-normal, heading(sb)/small = text-heading-small.',
         '대기 기간 #B1B8BE = text-text-normal-assistive, body(md)/xsmall = text-body-xsmall.',
-        '담당자 없음 대시 16×2 #EAEBEC = bg-line-normal-neutral. 라벨 "담당자" #6D7882 = text-normal-alternative, 이름 #464C53 = text-normal-neutral. 1인 아바타 25 radius 12 보더 #F4F4F5 = border-line-normal-assistive. 추가 노드의 없음 문구는 body(md)/small(15)이나 대시보드 행(15px 스케일)의 실측이라, 이 행의 2줄째 스케일(body-xsmall, 정본 18920:96195과 일치)을 따른다.',
+        '담당자 없음(18929:96828로 확정, 2026-08-24): 기본 프로필 아바타 25 radius 12 보더 #F4F4F5 = border-line-normal-assistive + 문구 #B1B8BE = text-text-normal-assistive, body(md)/xsmall — 1인 아바타와 같은 규격이고 라벨·이름만 없다. 라벨 "담당자" #6D7882 = text-normal-alternative, 이름 #464C53 = text-normal-neutral.',
         '행 하단 구분선 #EAEBEC = Line/Normal/Neutral = border-line-normal-neutral, 1px 하단만.',
         '선택 채움 #F7F7F8 = Fill/Normal/Strong = bg-fill-normal-strong. 비선택 행은 fills=[] — 투명이다.',
         'add_small 칩은 #F7F7F8 배경(bg-fill-normal-strong) + radius/rounded 1000(rounded-full) + 아이콘 #6D7882 = text-icon-normal-neutral.',
@@ -80,10 +80,11 @@ export const Default: Story = {
     await expect(canvas.getByText('결제 승인 실패 시 재시도 정책 변경안')).toBeInTheDocument();
     await expect(canvas.getByText('15시간 전')).toBeInTheDocument();
 
-    // 담당자 미지정 행은 대시 + 문구만 선다. 아바타 폴백 svg가 남으면 안 된다.
+    // 담당자 미지정 행은 기본 아바타 + 문구가 선다. "담당자" 라벨·이름은 없다.
     await expect(canvas.getByText('담당자 없음')).toBeInTheDocument();
+    await expect(canvas.queryByText('담당자')).toBeNull();
     await expect(canvas.queryByText('직원10')).toBeNull();
-    await expect(canvasElement.querySelector('svg[viewBox="0 0 40 40"]')).toBeNull();
+    await expect(canvasElement.querySelector('svg[viewBox="0 0 40 40"]')).not.toBeNull();
     // 유형도 마찬가지다. 체계가 미정이라 어떤 형태로도 행에 나오면 안 된다.
     await expect(canvas.queryByText(/publish|발행/)).toBeNull();
 

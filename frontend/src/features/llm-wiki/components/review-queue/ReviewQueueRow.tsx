@@ -18,12 +18,12 @@ interface ReviewQueueRowProps {
   secondaryTitle?: string;
 }
 
-/** 담당자 표기 3갈래 — 없음(대시+문구) / 1인(아바타+이름) / 2인 이상(스택+라벨). */
+/** 담당자 표기 3갈래 — 없음(기본 아바타+문구) / 1인(아바타+이름) / 2인 이상(스택+라벨). */
 function OwnerDisplay({ owners }: { owners: readonly DocumentOwner[] }) {
   if (owners.length === 0) {
     return (
       <>
-        <span aria-hidden className="bg-line-normal-neutral h-0.5 w-4 shrink-0" />
+        <Avatar size="small" className="border-line-normal-assistive rounded-xl" />
         <span className="text-body-xsmall text-text-normal-assistive truncate">담당자 없음</span>
       </>
     );
