@@ -127,7 +127,12 @@ export default function WikiSideNavContainer() {
         onMenuAction={handleMenuAction}
         onRenameSubmit={handleRenameSubmit}
         onFolderCreateSubmit={handleFolderCreateSubmit}
-        onFolderDeleteSubmit={(node) => deleteFolder.mutate({ channelId: node.channelId, folderId: node.id })}
+        onFolderDeleteSubmit={(node) =>
+          deleteFolder.mutate(
+            { channelId: node.channelId, folderId: node.id },
+            { onSuccess: () => toast('폴더를 삭제했습니다. 문서는 채널 바로 아래로 옮겨졌습니다.') },
+          )
+        }
         onMoveRequest={(node, anchor) => setMovePicker({ node, anchor })}
         moveOpenNodeId={movePicker?.node.id}
       />
