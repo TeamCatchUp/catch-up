@@ -5,6 +5,7 @@ from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
 
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -55,6 +56,7 @@ from catchup.knowledge_maintenance.services.run_pre_review_pipeline import (
 from catchup.knowledge_maintenance.services.run_pre_review_pipeline import (
     run_pre_review_pipeline,
 )
+from catchup.observability.langfuse.configs import get_langfuse_client
 from catchup.observability.logging import get_logger
 
 logger = get_logger(__name__)
@@ -146,6 +148,15 @@ async def run_channel_talk_pre_review_job(
             setting_id=setting_id,
             workspace_id=workspace_id,
         )
+    client = get_langfuse_client()
+    if client is not None:
+        try:
+            await run_in_threadpool(client.flush)
+        except Exception as error:
+            logger.warning(
+                "knowledge_maintenance.channel_talk_job.langfuse_flush_failed",
+                error=str(error),
+            )
     return result
 
 

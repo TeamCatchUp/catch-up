@@ -25,7 +25,9 @@ class _StubStructuredRunnable:
         self._response = response
         self.rendered_prompt: str | None = None
 
-    async def ainvoke(self, prompt: str) -> dict[str, Any]:
+    async def ainvoke(
+        self, prompt: str, config: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         self.rendered_prompt = prompt
         if isinstance(self._response, Exception):
             raise self._response

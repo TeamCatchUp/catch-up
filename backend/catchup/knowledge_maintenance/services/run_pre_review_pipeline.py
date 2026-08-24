@@ -31,6 +31,7 @@ from catchup.knowledge_maintenance.domain.pipeline_event import FailureKind
 from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEvent
 from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEventStatus
 from catchup.knowledge_maintenance.domain.pipeline_event import PipelineEventType
+from catchup.knowledge_maintenance.domain.source_version import SourceIdentity
 from catchup.knowledge_maintenance.domain.temporal import resolve_reference_time
 from catchup.knowledge_maintenance.ports.extraction import ExtractionAPIError
 from catchup.knowledge_maintenance.ports.extraction import ExtractionContractError
@@ -110,6 +111,7 @@ class _PendingObservation:
     source_type: str | None
     source_updated_at: datetime | None
     observed_at: datetime | None
+    source_identity: SourceIdentity | None = None
     load_error: str | None = None
 
 
@@ -481,17 +483,22 @@ async def _run_extraction(
             )
             continue
 
+        request = KnowledgeExtractionRequest(
+            content=content,
+            source_type=item.source_type,
+            metadata_entities=observation.observation.metadata_entities,
+            vocabulary=spec.vocabulary,
+            reference_time=reference_time,
+            contract_version=contract_version,
+            workspace_id=workspace_id,
+            external_document_id=(
+                item.source_identity.external_document_id
+                if item.source_identity is not None
+                else None
+            ),
+        )
         try:
-            batch = await extractor.extract(
-                KnowledgeExtractionRequest(
-                    content=content,
-                    source_type=item.source_type,
-                    metadata_entities=observation.observation.metadata_entities,
-                    vocabulary=spec.vocabulary,
-                    reference_time=reference_time,
-                    contract_version=contract_version,
-                )
-            )
+            batch = await extractor.extract(request)
         except (ExtractionContractError, ExtractionAPIError) as error:
             # 실패 기록까지 잃으면 재시도 대상은 남아도 운영자가 원인을
             # 추적할 수 없다. 감사 기록 저장 실패는 부분 실패가 아니라
@@ -623,6 +630,7 @@ def _load_pending_observations(
                     source_type=version.source_type,
                     source_updated_at=version.source_updated_at,
                     observed_at=version.observed_at,
+                    source_identity=version.source_identity,
                 )
             )
     return tuple(pending)
