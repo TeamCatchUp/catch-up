@@ -22,7 +22,8 @@ export default function OwnerDetailPopover({ name, row, onRemove, children }: Ow
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
-      <PopoverContent align="start" className="shadow-tooltip w-75 rounded-xl p-0">
+      {/* 우측 패널의 행에서 열리므로 화면 밖으로 밀리지 않게 앵커 좌측에 세운다 */}
+      <PopoverContent side="left" align="start" className="shadow-tooltip w-75 rounded-xl p-0">
         <div className="bg-fill-normal-strong border-line-normal-assistive border-b px-4 py-2">
           <span className="text-body-xsmall text-text-normal-alternative">{name} 님이 이 문서의 검토 담당자입니다</span>
         </div>

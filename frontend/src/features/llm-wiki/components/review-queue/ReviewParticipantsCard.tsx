@@ -96,27 +96,30 @@ export default function ReviewParticipantsCard({
         </div>
       )}
 
-      {participants.map((participant) =>
-        canRemove && participant.role === '담당자' ? (
-          <OwnerDetailPopover
-            key={participant.id}
-            name={participant.name}
-            row={<ParticipantRow participant={participant} />}
-            onRemove={() => onRemove?.(participant.userId)}
-          >
-            <button
-              type="button"
-              className="hover:bg-fill-normal-interaction-hover w-full cursor-pointer rounded-xl text-left transition-colors"
+      {/* 행 목록 — 행마다 패딩 4를 갖고 행 사이는 2가 남는다 */}
+      <div className="flex flex-col gap-0.5">
+        {participants.map((participant) =>
+          canRemove && participant.role === '담당자' ? (
+            <OwnerDetailPopover
+              key={participant.id}
+              name={participant.name}
+              row={<ParticipantRow participant={participant} />}
+              onRemove={() => onRemove?.(participant.userId)}
             >
+              <button
+                type="button"
+                className="hover:bg-fill-normal-interaction-hover w-full cursor-pointer rounded-lg p-1 text-left transition-colors"
+              >
+                <ParticipantRow participant={participant} />
+              </button>
+            </OwnerDetailPopover>
+          ) : (
+            <div key={participant.id} className="p-1">
               <ParticipantRow participant={participant} />
-            </button>
-          </OwnerDetailPopover>
-        ) : (
-          <div key={participant.id}>
-            <ParticipantRow participant={participant} />
-          </div>
-        ),
-      )}
+            </div>
+          ),
+        )}
+      </div>
     </section>
   );
 }
