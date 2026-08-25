@@ -109,6 +109,9 @@ class LlmBlockNarrator:
         로그는 오래 남기 때문이다. 위반 사유는 검사기가 만든 요약 문장이라
         산문 본문이 실리지 않는다.
 
+        묻지 않은 블록 번호로 온 산문은 버리고 로그로만 알린다. 결과에
+        담기지 않는 값이라 문서 전체를 접을 이유가 없다.
+
         Raises:
             NarrationError: 프롬프트를 만들지 못했거나 호출이 터졌거나
                 계약이 깨졌거나, 다시 물어도 위반이 남았을 때 던진다.
@@ -140,6 +143,12 @@ class LlmBlockNarrator:
         )
         violations += document_narration_violations(
             request, narratives=narratives, summary=summary
+        )
+        narratives, violations = _drop_unknown_blocks(
+            narratives,
+            violations,
+            allowed_ids={block.block_id for block in request.blocks},
+            call_context=call_context,
         )
 
         retried = False
@@ -257,6 +266,12 @@ class LlmBlockNarrator:
 
         retry_narratives, retry_summary, remaining = _split_response(
             parsed, want_summary=summary_failed
+        )
+        retry_narratives, remaining = _drop_unknown_blocks(
+            retry_narratives,
+            remaining,
+            allowed_ids=failed_ids,
+            call_context=retry_context,
         )
         remaining += document_narration_violations(
             retry_request, narratives=retry_narratives, summary=retry_summary
@@ -414,6 +429,61 @@ def _split_response(
             summary = SummaryNarrative(**values)
 
     return narratives, summary, tuple(violations)
+
+
+def _drop_unknown_blocks(
+    narratives: dict[int, str],
+    violations: tuple[NarrationViolation, ...],
+    *,
+    allowed_ids: set[int],
+    call_context: dict[str, Any],
+) -> tuple[dict[int, str], tuple[NarrationViolation, ...]]:
+    """묻지 않은 블록 번호로 온 산문과 그 위반을 버린다.
+
+    없는 번호를 지어내는 것은 구조화 출력에서 흔한 실패다. 그 산문은
+    어차피 결과에 담기지 않으므로, 위반으로 세어 문서 전체를 접을 이유가
+    없다. 묻지 않은 것이 딸려 온 사실은 로그로만 남긴다.
+
+    다시 물을 때도 같은 규칙을 쓴다. 이미 통과한 블록의 산문이 재시도
+    응답에 섞여 와도 버리고 다시 검사하지 않는다. 통과한 문장은 1차 응답의
+    것을 그대로 쓴다.
+
+    Args:
+        narratives: 블록 번호별 산문을 받는다.
+        violations: 지금까지 찾은 위반을 받는다.
+        allowed_ids: 이번에 답을 받기로 한 블록 번호를 받는다.
+        call_context: 로그에 함께 남길 항목을 받는다.
+
+    Returns:
+        허용된 번호만 남긴 산문과 위반을 돌려준다.
+    """
+    unknown_ids = {
+        block_id for block_id in narratives if block_id not in allowed_ids
+    }
+    unknown_ids |= {
+        violation.block_id
+        for violation in violations
+        if violation.block_id is not None and violation.block_id not in allowed_ids
+    }
+    if not unknown_ids:
+        return narratives, violations
+
+    logger.warning(
+        "document_narration_unknown_blocks",
+        unknown_block_ids=sorted(unknown_ids),
+        **call_context,
+    )
+    kept_narratives = {
+        block_id: text
+        for block_id, text in narratives.items()
+        if block_id in allowed_ids
+    }
+    kept_violations = tuple(
+        violation
+        for violation in violations
+        if violation.block_id is None or violation.block_id in allowed_ids
+    )
+    return kept_narratives, kept_violations
 
 
 def _invoke_contract(

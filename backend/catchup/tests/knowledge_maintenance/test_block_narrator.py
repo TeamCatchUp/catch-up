@@ -317,6 +317,65 @@ def test_violating_block_is_retried_with_feedback() -> None:
     }
 
 
+def test_unknown_block_id_is_dropped_without_retry() -> None:
+    """묻지 않은 번호가 딸려 와도 다시 묻지 않고 그 산문만 버린다."""
+    llm = _FakeLlm(
+        [
+            _doc(
+                (
+                    (0, "이 요구는 아직 검토 중이다."),
+                    (7, "묻지 않은 블록의 문장이다."),
+                )
+            )
+        ]
+    )
+
+    with capture_logs() as logs:
+        result = LlmBlockNarrator(llm).narrate_document(_request((_block(0),)))
+
+    assert len(llm.document_structured.prompts) == 1
+    assert result.narratives == {0: "이 요구는 아직 검토 중이다."}
+    dropped = next(
+        entry
+        for entry in logs
+        if entry["event"] == "document_narration_unknown_blocks"
+    )
+    assert dropped["unknown_block_ids"] == [7]
+
+
+def test_retry_response_may_repeat_accepted_blocks() -> None:
+    """재시도 응답에 통과한 블록이 섞여 와도 1차 산문을 지킨다."""
+    llm = _FakeLlm(
+        [
+            _doc(
+                (
+                    (0, "이 요구는 아직 검토 중이다."),
+                    (1, "담당자 3명이 붙었다."),
+                )
+            ),
+            _doc(
+                (
+                    (0, "다시 써서 보낸 문장이다."),
+                    (1, "담당은 아직 정해지지 않았다."),
+                )
+            ),
+        ]
+    )
+    request = _request(
+        (
+            _block(0),
+            _block(1, heading="owner", statements=("담당이 정해지지 않았다",)),
+        )
+    )
+
+    result = LlmBlockNarrator(llm).narrate_document(request)
+
+    assert result.narratives == {
+        0: "이 요구는 아직 검토 중이다.",
+        1: "담당은 아직 정해지지 않았다.",
+    }
+
+
 def test_retry_failure_raises_narration_error() -> None:
     """다시 물어도 위반이 남으면 실패로 끝낸다."""
     llm = _FakeLlm(
