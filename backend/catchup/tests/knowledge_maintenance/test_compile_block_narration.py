@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import threading
 import uuid
 from dataclasses import replace
 
@@ -53,6 +54,10 @@ from catchup.tests.knowledge_maintenance.test_compile_definition_artifacts impor
     _definition_row,
 )
 from catchup.tests.knowledge_maintenance.test_compile_definition_artifacts import _spec
+
+# 겹침 관찰이 상대 요청을 기다리는 상한 초다. 병렬이면 곧바로 풀리고,
+# 순차면 이 시간을 다 쓴 뒤 실패한다.
+_OVERLAP_TIMEOUT = 2.0
 
 
 def _content_headings(narrator) -> list[str]:
@@ -139,6 +144,60 @@ class _FakeNarrator:
         if self.explain_error is not None:
             raise self.explain_error
         return f"{request.heading} 블록이 바뀐 이유다."
+
+
+class _ConcurrentNarrator(_FakeNarrator):
+    """두 요청이 겹쳐 도는지 이벤트로 관찰하는 서술기다.
+
+    요청마다 자기 이벤트를 세우고 상대 이벤트를 기다린다. 둘이 함께
+    돌면 양쪽 기다림이 모두 통과하고, 하나씩 차례로 돌면 먼저 시작한
+    쪽의 기다림이 시간을 넘긴다.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._lock = threading.Lock()
+        self._started = 0
+        self.events = (threading.Event(), threading.Event())
+        self.overlapped: list[bool] = []
+
+    def narrate_document(
+        self, request: DocumentNarrationRequest
+    ) -> DocumentNarration:
+        with self._lock:
+            index = self._started
+            self._started += 1
+        if index < len(self.events):
+            self.events[index].set()
+            self.overlapped.append(
+                self.events[1 - index].wait(timeout=_OVERLAP_TIMEOUT)
+            )
+        return super().narrate_document(request)
+
+
+class _FailingNarrator(_FakeNarrator):
+    """지정한 낱말이 실린 요청에만 실패를 던지는 서술기다.
+
+    호출 차례로 고르면 병렬 실행에서 어느 문서가 실패할지 흔들리므로,
+    요청에 실린 문장으로 고른다.
+    """
+
+    def __init__(self, marker: str) -> None:
+        super().__init__()
+        self.marker = marker
+
+    def narrate_document(
+        self, request: DocumentNarrationRequest
+    ) -> DocumentNarration:
+        doomed = any(
+            self.marker in statement
+            for block in request.blocks
+            for statement in block.statements
+        )
+        if doomed:
+            self.requests.append(request)
+            raise NarrationError(f"{self.marker} 문서를 못 썼다")
+        return super().narrate_document(request)
 
 
 def _verified(claim: StoredClaimCandidate) -> StoredClaimCandidate:
@@ -612,6 +671,97 @@ def test_narration_error_abandons_the_earlier_pending() -> None:
     assert result.nodes_failed == 1
     assert result.proposals_abandoned == 1
     assert uow.artifacts.pending_rows() == []
+
+
+def test_all_reused_document_is_not_asked_at_all() -> None:
+    """블록이 모두 재사용에 걸리면 서술기를 한 번도 부르지 않는다.
+
+    절의 차례만 바꾸면 문서 지문은 달라지고 블록 하나하나의 지문은
+    그대로다. 무변경 건너뛰기에 걸리지 않으면서 물을 것은 하나도 없는
+    자리라, 빈 요청을 보내지 않는지 여기서 본다.
+    """
+    node_id = uuid.uuid4()
+    uow = _uow(
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[
+            _verified(_claim(node_id=node_id, predicate="status")),
+            _verified(
+                _claim(node_id=node_id, predicate="priority", value="높음")
+            ),
+        ],
+        sections=("status", "priority"),
+    )
+    narrator = _FakeNarrator()
+    _run(uow, narrator)
+    narrator.requests.clear()
+    definition_id, channel_id, kind, spec = uow.artifact_definitions.rows[0]
+    uow.artifact_definitions.rows[0] = (
+        definition_id,
+        channel_id,
+        kind,
+        {**spec, "predicate_sections": ["priority", "status"]},
+    )
+
+    result = _run(uow, narrator)
+
+    assert narrator.requests == []
+    assert result.blocks_narrated == 0
+    assert result.blocks_narrative_reused == len(_blocks(uow))
+
+
+def test_two_documents_are_narrated_at_the_same_time() -> None:
+    """노드가 둘이면 두 문서의 서술이 겹쳐 돈다.
+
+    순차로 돌면 먼저 시작한 쪽이 상대 이벤트를 기다리다 시간을 넘긴다.
+    """
+    first = uuid.uuid4()
+    second = uuid.uuid4()
+    uow = _uow(
+        nodes=[
+            (first, "요청 A", "feature_request", "active"),
+            (second, "요청 B", "feature_request", "active"),
+        ],
+        claims=[
+            _verified(_claim(node_id=first)),
+            _verified(_claim(node_id=second, value="배포됨")),
+        ],
+    )
+    narrator = _ConcurrentNarrator()
+
+    result = _run(uow, narrator)
+
+    assert len(narrator.requests) == 2
+    assert narrator.overlapped == [True, True]
+    assert result.nodes_failed == 0
+    assert result.proposals_created == 2
+
+
+def test_one_failing_document_does_not_stop_the_other() -> None:
+    """한 노드의 서술만 실패하면 그 노드만 접히고 나머지는 선다."""
+    first = uuid.uuid4()
+    second = uuid.uuid4()
+    uow = _uow(
+        nodes=[
+            (first, "요청 A", "feature_request", "active"),
+            (second, "요청 B", "feature_request", "active"),
+        ],
+        claims=[
+            _verified(_claim(node_id=first)),
+            _verified(_claim(node_id=second, value="배포됨")),
+        ],
+    )
+
+    with capture_logs() as logs:
+        result = _run(uow, _FailingNarrator("배포됨"))
+
+    assert result.nodes_failed == 1
+    assert result.proposals_created == 1
+    rows = uow.artifacts.pending_rows()
+    assert len(rows) == 1
+    assert uow.artifacts.titles[rows[0]["artifact_id"]].endswith("요청 A")
+    assert "artifact_compile_node_failed_narration" in [
+        entry["event"] for entry in logs
+    ]
 
 
 def test_case_g_relation_section_is_narrated_from_body_lines() -> None:
