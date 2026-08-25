@@ -21,7 +21,7 @@ const ASSIGNEE_OPTIONS = [
 /** 남이 담당자·내가 관리자인 판 — 판정(can_review)은 닫히고 담당자 관리만 열린다 */
 const OTHER_OWNER_ADMIN_ARGS = {
   // 내가 관리자여도 남의 행은 담당자 배지뿐이다 — 서버가 남의 관리자 여부를 주지 않는다
-  participants: [{ id: '1', userId: 1, name: '팀원F', roles: ['담당자'] }],
+  participants: [{ id: '1', userId: 1, name: '팀원F', description: '어제 검토', roles: ['담당자'] }],
   ownerNotice: 'other-owner',
   canReview: false,
   canAssignOwners: true,
@@ -81,15 +81,16 @@ const meta = {
     selectedId: selected.id,
     onSelectItem: fn(),
     breadcrumbs: [
-      { kind: 'channel', label: '결제' },
-      { kind: 'folder', label: '승인·실패 처리' },
+      { kind: 'channel', label: '결제', id: 'ch-billing' },
+      { kind: 'folder', label: '승인·실패 처리', id: 'folder-approval' },
       { kind: 'document', label: selected.title },
     ],
+    onBreadcrumbClick: fn(),
     title: selected.title,
     waitingLabel: selected.waitingLabel,
     summary: '재시도 한도가 1회에서 3회로 늘고 PG 점검 시간 예외가 추가되었습니다.',
     // 내가 담당자인 문서가 기본 판 — 판정이 열리고 배너가 없다. 담당자 본인은 지정만 열린다(해제는 관리자만)
-    participants: [{ id: '6', userId: 6, name: '팀원G', isMe: true, roles: ['담당자'] }],
+    participants: [{ id: '6', userId: 6, name: '팀원G', description: '검토 전', isMe: true, roles: ['담당자'] }],
     ownerNotice: null,
     canAssignOwners: true,
     canRemoveOwners: false,
@@ -173,10 +174,9 @@ const meta = {
         '첫 로딩은 좌측 목록과 상세 자리에 각각 골격을 세운다(사용자 확정) — 시안 MISSING이라 행·카드 기하만 근사한 자작분이다. 목록을 기다리는 동안에는 빈 안내 대신 골격이 서서 "없음"으로 오독되지 않는다.',
         '상세 골격은 안건 교체와 같은 모션 상자(stepReplace) 안에서 상태만 갈아 끼운다 — 로딩이 별도 레이어로 튀지 않는다.',
         '에러 시각은 시안이 없어 만들지 않는다 — 조회 실패는 판정 토스트와 같은 전역 기본 자리에 문구만 띄운다.',
-        '담당자 카드(8/24): 배너 분기·+ 버튼·추가 드롭다운·확인 모달·해제 팝오버는 라우트가 권한(can_manage_owners 규칙: 지정=관리자∨담당자 본인, 해제=관리자만)과 데이터를 실어 준다. 후보 직책(B17)·담당자 활동 시각(B18)은 API에 없어 그 구역을 비운다.',
+        '담당자 카드(8/24): 배너 분기·+ 버튼·추가 드롭다운·확인 모달·해제 팝오버는 라우트가 권한(can_manage_owners 규칙: 지정=관리자∨담당자 본인, 해제=관리자만)과 데이터를 실어 준다. 후보 직책(B17)은 API에 없어 그 구역을 비우고, 담당자 활동 줄(B18)은 블록 판정 시각에서 파생한다 — 최근 판정의 상대시각 검토 또는 "검토 전".',
         '판정(can_review)은 담당자 관리와 규칙이 다르다 — 담당자가 있으면 담당자 본인만(관리자도 못 한다), 없으면 구성원 누구나.',
         '역할 배지는 배열이다 — 담당자이면서 채널 관리자면 배지 둘이 나란히 선다. 채널 관리자 배지는 내 행에만 붙는다 — 서버가 내 관리자 여부(is_admin)만 주고 남의 관리자 여부는 주지 않는다.',
-        '담당자 0명 + 내가 관리자면 내 행이 채널 관리자 배지만 달고 선다. 배너는 그대로 판정 규칙(구성원 누구나)을 말한다 — 배지는 역할 표시일 뿐 검토자 지정이 아니고, 폴백 행은 해제 팝오버도 갖지 않는다.',
         '담당자 미지정 배너 문구는 시안 실측("채널 관리자가 검토")이 서버 규칙과 어긋나 사용자 확정 문구("구성원 누구나 검토")로 교체했다.',
         '담당자 행 규격은 확정 노드로 닫혔다(기본 18788:55469·호버 18773:89303, 2026-08-24) — 행 패딩 4·radius 8·행 간 2, 호버 채움 rgba(30,33,36,6%) = fill-normal-interaction-hover. 시안은 행 호버 상태만 그리고 팝오버 개폐 방식은 그리지 않아, 해제 동선(클릭 액션)이 끊기지 않게 클릭 트리거를 유지했다. 해제 팝오버는 앵커 좌측(side=left)에 선다(사용자 지시 — 우측 패널이라 아래보다 좌측이 안전).',
         '+ 버튼 툴팁도 확정 노드로 닫혔다(18788:55263, 2026-08-24) — add_small 아이콘 20 + 제목 "담당자 추가하기", 좌측 배치(사용자 지시). 배경 75% 검정·radius 8·패딩 6·label(rg)/xsmall 흰 글자는 공용 Tooltip sm과 일치해 소비만 한다. 그림자만 공용 shadow-tooltip(알파 12%)이 시안 Shadow/tooltip(10%)과 미세하게 어긋난다 — 공용 토큰이라 기록만.',
@@ -214,6 +214,13 @@ export const Default: Story = {
     await expect(within(header).getByRole('button', { name: '다음 변경사항' })).toBeInTheDocument();
     await userEvent.click(within(header).getByRole('button', { name: /미리보기/ }));
     await expect(args.onPreview).toHaveBeenCalled();
+
+    // 이전 마디는 클릭이 밖으로 나간다 — 채널·폴더 라우팅은 소비처가 잇는다
+    await userEvent.click(within(header).getByRole('button', { name: '결제' }));
+    await expect(args.onBreadcrumbClick).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'channel', id: 'ch-billing' }),
+      0,
+    );
 
     // 헤더가 우측 패널 위까지 뻗는지는 눈이 아니라 기하로 본다
     const sidePanel = canvas.getByText('문서 위치').closest('aside')!;

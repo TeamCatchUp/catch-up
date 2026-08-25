@@ -15,7 +15,7 @@ const meta = {
   title: 'Compositions/LLM Wiki/ReviewQueue/ReviewParticipantsCard',
   component: ReviewParticipantsCard,
   tags: ['autodocs'],
-  /** 우측 패널 폭(350) 슬롯을 흉내낸다 — 카드 자체는 px를 갖지 않는다 */
+  /** 우측 패널 폭 슬롯을 흉내낸다 — 카드 자체는 px를 갖지 않는다 */
   decorators: [(Story) => <div className="w-87.5">{Story()}</div>],
   args: {
     participants: [],

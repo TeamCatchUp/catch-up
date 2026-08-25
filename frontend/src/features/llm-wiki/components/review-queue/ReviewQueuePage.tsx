@@ -54,6 +54,8 @@ export interface ReviewQueuePageProps {
 
   /** 상세 헤더의 경로. 마지막 마디가 현재 문서다 — 문서 위치 카드도 같은 경로를 그린다 */
   breadcrumbs: readonly DocumentBreadcrumb[];
+  /** 이전 마디 클릭 — 채널·폴더 이동은 소비처가 잇는다 */
+  onBreadcrumbClick?: (crumb: DocumentBreadcrumb, index: number) => void;
   title: string;
   waitingLabel: string;
   /** [BE] 변경안 요약. 큐 목록 응답의 summary다 */
@@ -125,6 +127,7 @@ export default function ReviewQueuePage({
   selectedId,
   onSelectItem,
   breadcrumbs,
+  onBreadcrumbClick,
   title,
   waitingLabel,
   summary,
@@ -262,6 +265,7 @@ export default function ReviewQueuePage({
           <WikiPageHeader
             variant="detail"
             breadcrumbs={breadcrumbs}
+            onBreadcrumbClick={onBreadcrumbClick}
             actions={
               <>
                 <Button

@@ -107,9 +107,9 @@ export default function ReviewParticipantsCard({
 
       {/* 행 목록 — 행마다 패딩 4를 갖고 행 사이는 2가 남는다 */}
       <div className="flex flex-col gap-0.5">
-        {/* 해제는 실제 담당자 행에만 — 관리자 폴백 행은 지울 지정이 없다 */}
+        {/* 해제 권한이 있으면 행이 해제 팝오버 트리거가 된다 — 이 카드에는 담당자 행만 선다 */}
         {participants.map((participant) =>
-          canRemove && participant.roles.includes('담당자') ? (
+          canRemove ? (
             <OwnerDetailPopover
               key={participant.id}
               name={participant.name}
