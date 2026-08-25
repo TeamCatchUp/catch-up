@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
-import { expect, fn, within } from 'storybook/test';
+import { expect, fn, waitFor, within } from 'storybook/test';
 
 import { catchupParameters } from '../../../../../.storybook/catchupStoryParameters';
-import MoveTargetPicker, { type MoveTargetChannel } from './MoveTargetPicker';
+import MoveTargetPicker, { MOVE_PICKER_FOLDER_INPUT_ATTR, type MoveTargetChannel } from './MoveTargetPicker';
 
 const meta = {
   title: 'Compositions/LLM Wiki/Navigation/MoveTargetPicker',
@@ -29,6 +29,7 @@ const meta = {
         'current-location',
         'no-folders',
         'create-folder',
+        'create-folder-failure',
         'max-height-scroll',
       ],
       reuseNotes: [
@@ -47,6 +48,8 @@ const meta = {
         '열릴 때는 트리 전체가 펼쳐져 있다(사용자 확정, 8/24). 빈 목록·검색 결과 없음 문구는 시안에 없어 만들지 않는다.',
         '새 폴더 진입점은 확정 노드의 하단 행이다. 이름 입력 UX(같은 자리 인라인 전환·Enter 제출·Escape 취소·빈 값 무시)는 시안에 없어 자작이고, 필드 규격은 위 검색 입력과 같은 토큰이다.',
         '새 폴더는 onCreateFolder가 있어야(=폴더 생성 권한) 선다 — 생성 요청·트리 갱신은 소비처(WikiSideNavContainer) 몫이고, 생성 후 자동 이동은 하지 않는다(사용자 지시 8/24) — 이동은 사용자가 목록에서 직접 고른다.',
+        '새 폴더 제출은 onCreateFolder가 resolve해야 닫힌다. 대기 중엔 입력이 잠기고, reject(이름 중복 409 등)면 값을 유지한 채 열어 둔다 — 오류 토스트는 소비처 뮤테이션 몫이다.',
+        '이 스토리는 팝오버 없는 bare 렌더라 Escape가 패널 dismiss를 막는지는 못 잰다 — 컨테이너의 onEscapeKeyDown 가드가 참조하는 입력 표식 속성만 계약으로 고정한다.',
       ],
       interactionNotes: [
         '행을 고르면 그 자리를 알리기만 한다 — 이동 요청·토스트는 소비처가 보낸다.',
@@ -55,7 +58,7 @@ const meta = {
         '현재 위치 행(폴더 또는 채널 루트)은 비활성이다 — 제자리 이동 요청을 만들지 않는다.',
         '검색 중에는 걸린 폴더가 보여야 하므로 접혀 있어도 펼친다.',
         '폴더가 없는 채널에는 캐럿을 그리지 않고 슬롯만 비워 라벨 정렬을 지킨다.',
-        '새 폴더 입력의 Escape는 stopPropagation으로 끊는다 — 안 그러면 패널 팝오버까지 함께 닫힌다.',
+        '새 폴더 입력의 Escape는 인라인 입력만 닫는다 — Radix Escape 리스너가 capture 단계라 stopPropagation으로는 못 끊고, 소비처 팝오버의 onEscapeKeyDown이 입력 표식 속성을 보고 dismiss를 preventDefault로 막는다.',
       ],
       tokenNotes: [
         '패널 테두리 #e1e2e4=line/normal/normal, 검색 테두리 #eaebec=line/normal/neutral.',
@@ -88,12 +91,15 @@ export const Expanded: Story = {
     const canvas = within(canvasElement);
     const panel = canvas.getByTestId('move-target-picker');
 
-    // 고정 높이는 없다 — max-height 계약만 있고 내용이 적으면 패널이 줄어든다(사용자 확정).
+    // 고정 높이는 없다 — max-height 계약만 있고 내용이 적으면 패널이 줄어든다.
     await expect(panel.getBoundingClientRect().width).toBe(300);
     await expect(getComputedStyle(panel).maxHeight).toBe('380px');
     await expect(panel.getBoundingClientRect().height).toBeLessThan(380);
 
-    // 열릴 때 트리가 전부 펼쳐져 있다 — 채널 1행 + 폴더 2행(사용자 확정).
+    // 새 폴더 푸터가 없는 경로는 하단 패딩이 그 여백을 대신 만든다 — 마지막 행이 테두리에 붙지 않는다.
+    await expect(getComputedStyle(panel).paddingBottom).toBe('10px');
+
+    // 열릴 때 트리가 전부 펼쳐져 있다 — 채널 1행 + 폴더 2행.
     const rows = canvas.getAllByTestId('move-target-row');
     await expect(rows).toHaveLength(3);
     await expect(rows[0].getBoundingClientRect().height).toBe(36);
@@ -130,9 +136,15 @@ export const CreateFolder: Story = {
   play: async ({ args, canvasElement, userEvent }) => {
     const canvas = within(canvasElement);
 
+    // 푸터가 서는 경로는 하단 여백을 푸터가 만든다 — 루트 패딩은 위쪽만 남는다.
+    await expect(getComputedStyle(canvas.getByTestId('move-target-picker')).paddingBottom).toBe('0px');
+
     await userEvent.click(canvas.getByRole('button', { name: '새 폴더' }));
     const input = canvas.getByRole('textbox', { name: '폴더 이름' });
     await expect(input).toHaveFocus();
+
+    // 컨테이너의 Escape dismiss 가드가 이 표식으로 입력을 판별한다.
+    await expect(input).toHaveAttribute(MOVE_PICKER_FOLDER_INPUT_ATTR);
 
     // 빈 값 Enter는 제출로 세지 않는다.
     await userEvent.keyboard('{Enter}');
@@ -142,8 +154,8 @@ export const CreateFolder: Story = {
     await userEvent.keyboard('{Enter}');
     await expect(args.onCreateFolder).toHaveBeenCalledWith('신규 폴더');
 
-    // 제출하면 입력이 닫히고 진입점 행으로 돌아온다.
-    await expect(canvas.queryByRole('textbox', { name: '폴더 이름' })).toBeNull();
+    // 제출이 resolve되면 입력이 닫히고 진입점 행으로 돌아온다.
+    await waitFor(() => expect(canvas.queryByRole('textbox', { name: '폴더 이름' })).toBeNull());
     await expect(canvas.getByRole('button', { name: '새 폴더' })).toBeInTheDocument();
 
     // Escape는 입력만 닫는다 — 취소이므로 콜백이 나가지 않는다.
@@ -151,6 +163,43 @@ export const CreateFolder: Story = {
     await userEvent.keyboard('{Escape}');
     await expect(canvas.queryByRole('textbox', { name: '폴더 이름' })).toBeNull();
     await expect(args.onCreateFolder).toHaveBeenCalledTimes(1);
+  },
+};
+
+/** 제출 실패(이름 중복 409 등) — 입력을 잃지 않는다. resolve 전에는 잠기고, reject면 값째 열려 있다. */
+export const CreateFolderSubmitFailure: Story = {
+  args: { channel: CHANNEL, onSelect, onCreateFolder: fn() },
+  play: async ({ args, canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+    const onCreateFolder = args.onCreateFolder as ReturnType<typeof fn<(name: string) => Promise<void>>>;
+
+    let rejectCreate!: (reason: Error) => void;
+    onCreateFolder.mockImplementationOnce(
+      () =>
+        new Promise<void>((_, reject) => {
+          rejectCreate = reject;
+        }),
+    );
+
+    await userEvent.click(canvas.getByRole('button', { name: '새 폴더' }));
+    const input = canvas.getByRole('textbox', { name: '폴더 이름' });
+    await userEvent.type(input, '중복 폴더');
+    await userEvent.keyboard('{Enter}');
+
+    // 서버 응답을 기다리는 동안 재제출·수정이 잠긴다.
+    await expect(input).toBeDisabled();
+
+    rejectCreate(new Error('FOLDER_NAME_TAKEN'));
+
+    // 실패하면 값을 유지한 채 다시 편집 상태다 — 처음부터 다시 치지 않는다.
+    await waitFor(() => expect(input).toBeEnabled());
+    await expect(input).toHaveValue('중복 폴더');
+    await waitFor(() => expect(input).toHaveFocus());
+
+    // 같은 값으로 재제출이 성공하면 그때 닫힌다.
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(canvas.queryByRole('textbox', { name: '폴더 이름' })).toBeNull());
+    await expect(onCreateFolder).toHaveBeenCalledTimes(2);
   },
 };
 

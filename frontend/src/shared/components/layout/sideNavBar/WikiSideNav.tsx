@@ -241,6 +241,9 @@ export default function WikiSideNav({
   /** 문서는 이름 변경 API가 없고, 채널·폴더는 그 채널 관리자만 바꿀 수 있다 */
   const canRename = (node?: WikiTreeNode): node is WikiTreeNode =>
     node !== undefined && node.kind !== 'document' && isChannelAdmin(node.channelId);
+  /** 이동은 문서 단위 API이고 대상 채널이 있어야 한다 — 미분류 문서는 옮길 곳을 셀 수 없다 */
+  const canMove = (node?: WikiTreeNode): node is WikiTreeNode =>
+    node !== undefined && node.kind === 'document' && node.channelId !== '';
   const activeTreeId = useMemo(() => {
     const flatten = (node: WikiTreeNode): WikiTreeNode[] => [node, ...(node.children ?? []).flatMap(flatten)];
     return nodes.flatMap(flatten).find((node) => node.href === pathname)?.id;
@@ -264,8 +267,8 @@ export default function WikiSideNav({
     // 폴더는 채널 바로 아래에만 생긴다
     else if (actionId === 'folder' && menu && node?.kind === 'channel')
       setNameInput({ mode: 'create-folder', node, anchor: menu.anchor });
-    // 옮기기 대상 패널은 소비처가 같은 앵커에 이어 띄운다 — 이동 API가 문서 단위라 문서에서만 넘긴다
-    else if (actionId === 'move' && menu && node?.kind === 'document') onMoveRequest?.(node, menu.anchor);
+    // 옮기기 대상 패널은 소비처가 같은 앵커에 이어 띄운다
+    else if (actionId === 'move' && menu && canMove(node)) onMoveRequest?.(node, menu.anchor);
     // 폴더 삭제는 파괴적이라 확인 모달을 거친다
     else if (actionId === 'delete-folder' && node?.kind === 'folder' && isChannelAdmin(node.channelId))
       setDeleteConfirm(node);
@@ -310,8 +313,8 @@ export default function WikiSideNav({
           ...(canRename(node)
             ? [{ id: 'rename', label: '이름 바꾸기', Icon: IconEditSquare, onSelect: select('rename') }]
             : []),
-          // 이동은 artifact 단위 API라 문서 행에만 건다 — 채널·폴더에는 보낼 경로가 없다
-          ...(node?.kind === 'document'
+          // 이동은 artifact 단위 API라 문서 행에만 걸고, 대상 채널이 없는 문서에는 진입점을 내지 않는다
+          ...(canMove(node)
             ? [{ id: 'move', label: '옮기기', Icon: IconArrowTurnRight, onSelect: select('move') }]
             : []),
         ],
@@ -384,7 +387,7 @@ export default function WikiSideNav({
             <SnbRailFooter userName={user?.name ?? '이름없음'} onSettingsClick={goSettings} profileMenu={profileMenu} />
           }
         >
-          <SnbRailItem Icon={IconAdd400} label="새 채팅" onClick={go('/')} />
+          <SnbRailItem Icon={IconAdd400} label="새 채팅" iconOnDisc onClick={go('/')} />
           <SnbRailItem Icon={IconUpdate} label="요청됨" selected={isReview} onClick={go('/llm-wiki/review')} />
           <SnbRailItem Icon={IconGrid} label="대시보드" selected={isDashboard} onClick={go('/llm-wiki')} />
         </SideNavRail>

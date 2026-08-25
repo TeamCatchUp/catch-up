@@ -28,14 +28,17 @@ export interface MoveTarget {
   label: string;
 }
 
+/** 새 폴더 이름 입력 표식. 패널 팝오버의 Escape dismiss 가드가 이 속성으로 판별한다 */
+export const MOVE_PICKER_FOLDER_INPUT_ATTR = 'data-move-picker-folder-input';
+
 export interface MoveTargetPickerProps {
   /** 대상 채널 하나. 이동 API가 같은 채널 안만 받아 목록을 채널 단위로 좁힌다 */
   channel?: MoveTargetChannel;
   /** 문서가 지금 있는 자리. null이면 채널 행을, 폴더 id면 그 폴더 행을 비활성한다 */
   currentFolderId?: string | null;
   onSelect?: (target: MoveTarget) => void;
-  /** 새 폴더 만들기. 권한이 없으면 넘기지 않고, 그러면 하단 진입점도 없다 */
-  onCreateFolder?: (name: string) => void;
+  /** 새 폴더 만들기. resolve된 뒤에만 입력이 닫힌다. 권한이 없으면 넘기지 않고, 그러면 하단 진입점도 없다 */
+  onCreateFolder?: (name: string) => Promise<void>;
   className?: string;
 }
 
@@ -85,23 +88,38 @@ function TargetRow({
 }
 
 /** 하단 "새 폴더" 진입점. 누르면 같은 자리에서 이름 입력으로 바뀐다 */
-function FolderCreateFooter({ onCreate }: { onCreate: (name: string) => void }) {
+function FolderCreateFooter({ onCreate }: { onCreate: (name: string) => Promise<void> }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
+  const [pending, setPending] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // 편집 시작과 제출 실패 복귀 모두 입력으로 포커스를 되돌린다
   useEffect(() => {
-    if (editing) inputRef.current?.focus();
-  }, [editing]);
+    if (editing && !pending) inputRef.current?.focus();
+  }, [editing, pending]);
 
   const close = () => {
     setEditing(false);
     setName('');
   };
 
+  // 성공해야만 닫는다 — 실패하면 값을 유지한 채 열어 두고, 오류 안내는 생성 뮤테이션의 토스트 몫이다
+  const submit = async (trimmed: string) => {
+    setPending(true);
+    try {
+      await onCreate(trimmed);
+      close();
+    } catch {
+      // 입력 유지가 곧 실패 처리다
+    } finally {
+      setPending(false);
+    }
+  };
+
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Escape') {
-      // 패널 팝오버까지 닫히지 않게 여기서 끊는다
+      // 패널 dismiss 차단은 팝오버 소비처의 onEscapeKeyDown 가드 몫이다 — 여기서는 인라인 입력만 닫는다
       event.preventDefault();
       event.stopPropagation();
       close();
@@ -111,9 +129,8 @@ function FolderCreateFooter({ onCreate }: { onCreate: (name: string) => void }) 
     if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
       event.preventDefault();
       const trimmed = name.trim();
-      if (!trimmed) return;
-      onCreate(trimmed);
-      close();
+      if (!trimmed || pending) return;
+      void submit(trimmed);
     }
   };
 
@@ -124,14 +141,16 @@ function FolderCreateFooter({ onCreate }: { onCreate: (name: string) => void }) 
           <div className="border-line-normal-neutral focus-within:border-line-primary-normal flex h-9 items-center gap-2 rounded-lg border px-2.5 py-1.5">
             <IconFolder aria-hidden className="text-icon-normal-alternative size-5 shrink-0" />
             <input
+              {...{ [MOVE_PICKER_FOLDER_INPUT_ATTR]: '' }}
               ref={inputRef}
               type="text"
               value={name}
+              disabled={pending}
               placeholder="폴더 이름"
               aria-label="폴더 이름"
               onChange={(event) => setName(event.target.value)}
               onKeyDown={handleKeyDown}
-              className="text-body-small text-text-normal-normal placeholder:text-text-normal-assistive min-w-0 flex-1 bg-transparent outline-none"
+              className="text-body-small text-text-normal-normal placeholder:text-text-normal-assistive disabled:text-text-normal-assistive min-w-0 flex-1 bg-transparent outline-none"
             />
           </div>
         </div>
@@ -163,7 +182,7 @@ export default function MoveTargetPicker({
   className,
 }: MoveTargetPickerProps) {
   const [keyword, setKeyword] = useState('');
-  // 열릴 때는 항상 전체 펼침 — 폴더가 바로 보여야 한다(사용자 확정)
+  // 열릴 때는 항상 전체 펼침 — 폴더가 바로 보여야 한다
   const [collapsed, setCollapsed] = useState(false);
 
   const searching = keyword.trim().length > 0;
@@ -182,11 +201,15 @@ export default function MoveTargetPicker({
   // 검색 중에는 걸린 폴더가 보여야 하므로 접혀 있어도 펼친다
   const expanded = searching || !collapsed;
 
+  const hasFooter = channel !== undefined && onCreateFolder !== undefined;
+
   return (
     <div
       data-testid="move-target-picker"
       className={cn(
         'bg-background-elevated-normal border-line-normal-normal shadow-modal flex max-h-95 w-75 flex-col gap-3 rounded-xl border pt-2.5',
+        // 푸터가 없는 경로는 그 자리의 여백을 하단 패딩이 대신 만든다
+        !hasFooter && 'pb-2.5',
         className,
       )}
     >

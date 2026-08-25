@@ -26,7 +26,7 @@ const meta = {
         nodeId: '18658:50794',
       },
       viewport: { width: 420, height: 320 },
-      states: ['channel', 'folder', 'document', 'default', 'focused', 'max-height', 'ime-composing'],
+      states: ['channel', 'folder', 'document', 'default', 'focused', 'max-height', 'ime-composing', 'submit-trims'],
       reuseNotes: [
         '채널·폴더·파일 3종은 아이콘만 갈리고 셸·입력 규격이 같다. 그래서 컴포넌트를 나누지 않고 kind prop으로 가른다.',
         '자동 성장은 리포 선례(scrollHeight를 상한으로 클램프)를 그대로 따른다. 새 훅이나 라이브러리를 들이지 않았다.',
@@ -42,7 +42,7 @@ const meta = {
       dataNotes: [
         '시안의 입력 문구는 값 텍스트(Text/Normal/Normal)라 placeholder 상태가 아니다. placeholder는 optional prop이고 기본 문구를 정하지 않았다.',
         '에러·글자수 카운터·중복 이름 안내는 시안에 없어 만들지 않았다.',
-        '빈 문자열도 그대로 onSubmit으로 넘긴다 — 시안에 검증 상태가 없어 컴포넌트가 규칙을 정하지 않는다.',
+        '제출값은 trim해서 넘기고 공백뿐인 값은 제출하지 않는다 — 서버 제약이 min_length뿐이라 공백 이름·꼬리 공백이 유사 중복 폴더를 만든다. 옮기기 패널의 새 폴더 입력과 같은 정규화다.',
       ],
       interactionNotes: [
         'Enter 저장 / Escape 취소 / Shift+Enter 줄바꿈은 시안 근거 없는 기본값이다. 시안에 저장·취소 버튼도 트리거 표기도 없다 — 디자이너 확인 필요.',
@@ -279,5 +279,29 @@ export const ComposingEnterIgnored: Story = {
 
     await userEvent.keyboard('{Escape}');
     await expect(onCancel).toHaveBeenCalled();
+  },
+};
+
+/** 제출 정규화 — 앞뒤 공백은 지우고, 공백뿐인 이름은 제출하지 않는다 */
+export const SubmitTrimsName: Story = {
+  args: { kind: 'folder', defaultValue: '', onSubmit },
+  render: (args) => (
+    <Frame>
+      <SnbRenamePopover {...args} />
+    </Frame>
+  ),
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+    const textarea = canvas.getByRole('textbox') as HTMLTextAreaElement;
+    onSubmit.mockClear();
+
+    await userEvent.type(textarea, '   ');
+    await userEvent.keyboard('{Enter}');
+    await expect(onSubmit).not.toHaveBeenCalled();
+
+    await userEvent.clear(textarea);
+    await userEvent.type(textarea, '  장애 대응  ');
+    await userEvent.keyboard('{Enter}');
+    await expect(onSubmit).toHaveBeenCalledWith('장애 대응');
   },
 };

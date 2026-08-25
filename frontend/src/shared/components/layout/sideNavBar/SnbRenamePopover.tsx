@@ -24,7 +24,7 @@ export interface SnbRenamePopoverProps {
   /** 편집 시작 시점의 이름. 열릴 때 전체 선택된다 */
   defaultValue?: string;
   placeholder?: string;
-  /** Enter. 값을 다듬지 않고 그대로 넘긴다 — 검증 규칙이 정해지지 않았다 */
+  /** Enter. 앞뒤 공백을 지워 넘기고, 공백뿐인 값은 제출하지 않는다 */
   onSubmit?: (name: string) => void;
   /** Escape */
   onCancel?: () => void;
@@ -76,7 +76,10 @@ export default function SnbRenamePopover({
     // 조합 중 Enter는 한글 확정이라 제출로 세지 않는다
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
-      onSubmit?.(value);
+      // 서버 제약이 min_length뿐이라 여기서 다듬지 않으면 공백 이름·꼬리 공백이 그대로 저장된다
+      const trimmed = value.trim();
+      if (!trimmed) return;
+      onSubmit?.(trimmed);
     }
   };
 

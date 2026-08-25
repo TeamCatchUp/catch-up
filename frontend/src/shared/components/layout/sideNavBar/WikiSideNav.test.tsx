@@ -224,13 +224,27 @@ describe('WikiSideNav 펼침', () => {
     expect(add.parentElement).toHaveClass('flex');
     expect(add.parentElement).not.toHaveClass('hidden');
 
-    await user.type(input, '장애 대응{Enter}');
+    // 앞뒤 공백은 지워 나간다 — 서버 제약이 min_length뿐이라 여기서 안 다듬으면 유사 중복 폴더가 생긴다
+    await user.type(input, '  장애 대응  {Enter}');
 
     expect(onFolderCreateSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'channel-1', kind: 'channel' }),
       '장애 대응',
     );
     expect(screen.queryByTestId('snb-rename-popover')).toBeNull();
+  });
+
+  it('공백뿐인 폴더 이름은 제출되지 않고 입력이 남는다', async () => {
+    const user = userEvent.setup();
+    const onFolderCreateSubmit = vi.fn();
+    renderWikiNav({ onFolderCreateSubmit });
+
+    await user.click(screen.getAllByRole('button', { name: `${CHANNEL_LABEL} 하위 페이지 추가` })[0]);
+    await user.click(screen.getByRole('button', { name: '폴더' }));
+    await user.type(screen.getByRole('textbox', { name: '폴더 이름' }), '   {Enter}');
+
+    expect(onFolderCreateSubmit).not.toHaveBeenCalled();
+    expect(screen.getByTestId('snb-rename-popover')).toBeInTheDocument();
   });
 
   // 접기는 높이 애니메이션이 끝난 뒤에 언마운트된다 — 클릭 직후에는 아직 트리에 있다
@@ -413,6 +427,22 @@ describe('WikiSideNav 펼침', () => {
     await user.click(menu.getByRole('button', { name: '즐겨찾기 해제' }));
     expect(onMenuAction).toHaveBeenCalledWith('fav-doc-1', 'unfavorite');
     expect(screen.queryByTestId('snb-dropdown-menu')).toBeNull();
+  });
+
+  it('채널이 없는 즐겨찾기 문서에는 옮기기가 뜨지 않는다 — 옮길 대상을 셀 수 없다', async () => {
+    const user = userEvent.setup();
+    renderWikiNav({
+      treeNodes: [],
+      favorites: [{ id: 'fav-doc-1', label: '미분류 즐겨찾기', href: '/llm-wiki/fav-doc-1', channelId: null }],
+    });
+
+    await user.click(screen.getByRole('button', { name: '미분류 즐겨찾기 추가 작업' }));
+
+    const menu = within(screen.getByTestId('snb-dropdown-menu'));
+    // 나머지 문서 항목은 그대로 남는다 — 옮기기만 빠진다
+    expect(menu.getByRole('button', { name: '링크 복사' })).toBeInTheDocument();
+    expect(menu.getByRole('button', { name: '즐겨찾기 해제' })).toBeInTheDocument();
+    expect(menu.queryByRole('button', { name: '옮기기' })).toBeNull();
   });
 
   it('즐겨찾기 케밥의 옮기기는 즐겨찾기 데이터로 지은 문서 노드를 넘긴다', async () => {
@@ -633,6 +663,13 @@ describe('WikiSideNav 닫힘', () => {
 
     expect(mockSidebarState.setSidebarOpen).toHaveBeenCalledWith(true);
   });
+
+  it('새 채팅 아이콘은 원형 배경 위에 얹힌다 — 홈 레일과 같은 만들기 구분이다', () => {
+    renderWikiNav();
+
+    const disc = screen.getByRole('button', { name: '새 채팅' }).querySelector('span > span');
+    expect(disc).toHaveClass('bg-fill-normal-interaction-disable', 'rounded-full');
+  });
 });
 
 describe('SNB 폭 전환', () => {
@@ -649,5 +686,28 @@ describe('SNB 폭 전환', () => {
     mockSidebarState.isSidebarOpen = false;
     const collapsed = renderWikiNav();
     expect(frame(collapsed.container).style.width).toBe('var(--snb-width-collapsed)');
+  });
+
+  // 동시에 서면 nav 랜드마크가 둘이 되고 나가는 사본이 히트테스트에 남는다
+  it('열림→닫힘 전환은 순차다 — 두 네비가 동시에 마운트되지 않는다', async () => {
+    mockSidebarState.isSidebarOpen = true;
+    const view = renderWikiNav();
+    expect(frame(view.container).children).toHaveLength(1);
+
+    mockSidebarState.isSidebarOpen = false;
+    view.rerender(
+      <WikiSideNav
+        treeNodes={PROJECT_TREE_NODES}
+        favorites={WIKI_FAVORITE_ITEMS}
+        channelAdmins={WIKI_CHANNEL_ADMINS}
+      />,
+    );
+
+    // 나가는 사본이 끝나기 전에는 들어오는 사본이 마운트되지 않는다
+    expect(frame(view.container).children).toHaveLength(1);
+    await waitFor(() => expect(screen.getByRole('button', { name: '사이드바 펼치기' })).toBeInTheDocument(), {
+      timeout: 3000,
+    });
+    expect(frame(view.container).children).toHaveLength(1);
   });
 });
