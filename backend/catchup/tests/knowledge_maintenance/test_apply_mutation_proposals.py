@@ -1147,3 +1147,58 @@ def test_merge_into_merged_node_fails_that_proposal() -> None:
     assert result.proposals_failed == 1
     assert state.proposals[proposal_id]["status"] == "approved"
     assert state.candidates[representative]["resolved_node_id"] is None
+
+
+def test_merge_into_node_fails_when_representative_moved_elsewhere() -> None:
+    """대표가 승인 대상과 다른 노드로 해소됐으면 그 안건만 실패로 남는다.
+
+    승인 내용은 "노드 A에 붙여라"인데 적용 전에 대표가 다른 경로로 노드 B에
+    붙었다면, 그대로 진행하면 나머지 멤버와 event가 승인받지 않은 노드 B로
+    간다.
+    """
+    state = FakeState()
+    approved = state.add_node()
+    elsewhere = state.add_node()
+    representative = state.add_candidate(
+        status="merged",
+        resolved_node_id=elsewhere.id,
+    )
+    member = state.add_candidate()
+    proposal_id = state.add_approved_merge(
+        representative=representative,
+        members=(member,),
+        merge_into_node_id=approved.id,
+    )
+
+    result, _ = _run(state)
+
+    assert result.proposals_applied == 0
+    assert result.proposals_failed == 1
+    assert state.proposals[proposal_id]["status"] == "approved"
+    assert state.candidates[representative]["resolved_node_id"] == elsewhere.id
+    assert state.candidates[member]["resolved_node_id"] is None
+    assert state.events == []
+
+
+def test_merge_into_node_applies_when_representative_already_there() -> None:
+    """대표가 이미 승인 대상 노드에 붙어 있으면 그대로 적용한다."""
+    state = FakeState()
+    approved = state.add_node()
+    representative = state.add_candidate(
+        status="merged",
+        resolved_node_id=approved.id,
+    )
+    member = state.add_candidate()
+    proposal_id = state.add_approved_merge(
+        representative=representative,
+        members=(member,),
+        merge_into_node_id=approved.id,
+    )
+
+    result, _ = _run(state)
+
+    assert result.proposals_applied == 1
+    assert result.proposals_failed == 0
+    assert state.proposals[proposal_id]["status"] == "applied"
+    assert state.candidates[member]["resolved_node_id"] == approved.id
+    assert [node.id for node in state.nodes] == [approved.id]

@@ -470,6 +470,13 @@ def _apply_create(
     있어야 한다는 계약을 쓰기 쪽에서 지킨다. 기존 노드를 재사용하는
     분기는 이전 적용이나 다른 경로가 이미 그 계약을 지켰으므로 여기서
     alias를 더하지 않는다.
+
+    `merge_into_node_id`가 있는데 대표가 이미 해소돼 있으면, 지금 붙어 있는
+    노드가 승인 대상과 같을 때만 그대로 둔다. 다르면 이 안건만 실패로 남긴다.
+    사람이 승인한 내용은 "이 노드에 붙여라"인데, 승인 이후 대표가 다른 경로로
+    다른 노드에 붙었다면 나머지 멤버를 그 노드로 끌고 가는 일은 승인받지 않은
+    결정이다. 그대로 진행하면 event도 다른 노드로 남고 안건은 applied가 되어
+    사람이 뒤늦게 알아차릴 방법이 없다.
     """
     candidate_id = operation.entity_candidate_id
     if candidate_id is None:
@@ -480,7 +487,13 @@ def _apply_create(
     if current is None:
         raise ApplyOperationError(f"후보가 없다: {candidate_id}")
     status, resolved_node_id = current
+    target_raw = operation.operation_data.get("merge_into_node_id")
     if resolved_node_id is not None:
+        if target_raw is not None:
+            _require_same_node(
+                approved_node_id_raw=target_raw,
+                current_node_id=resolved_node_id,
+            )
         # 대표가 이미 해소됐으면 그 노드가 곧 병합 대상이다. 새 노드를
         # 만들면 같은 대상이 둘로 갈라진다.
         tally.already += 1
@@ -492,7 +505,6 @@ def _apply_create(
         return None
 
     proposed_name = str(operation.operation_data["proposed_name"])
-    target_raw = operation.operation_data.get("merge_into_node_id")
     if target_raw is not None:
         return _merge_into_existing_node(
             uow,
@@ -532,6 +544,34 @@ def _apply_create(
         (candidate_id, names_by_candidate.get(candidate_id, proposed_name))
     )
     return node.id
+
+
+def _require_same_node(
+    *,
+    approved_node_id_raw: object,
+    current_node_id: uuid.UUID,
+) -> None:
+    """이미 해소된 대표가 승인 대상 노드에 붙어 있는지 확인한다.
+
+    다른 노드에 붙어 있으면 이 안건만 실패로 남기고, 승인 대상 노드와 지금
+    붙어 있는 노드를 메시지에 함께 적어 사람이 무엇이 어긋났는지 볼 수 있게
+    한다.
+
+    Raises:
+        ApplyOperationError: 승인 대상 노드 id를 읽을 수 없거나, 대표가
+            승인 대상과 다른 노드에 붙어 있을 때 던진다.
+    """
+    try:
+        approved_node_id = uuid.UUID(str(approved_node_id_raw))
+    except ValueError as error:
+        raise ApplyOperationError(
+            f"병합 대상 노드 id를 읽을 수 없다: {approved_node_id_raw}"
+        ) from error
+    if approved_node_id != current_node_id:
+        raise ApplyOperationError(
+            "대표 후보가 승인 대상과 다른 노드에 이미 해소됐다: "
+            f"승인 대상 {approved_node_id}, 현재 {current_node_id}"
+        )
 
 
 def _merge_into_existing_node(
