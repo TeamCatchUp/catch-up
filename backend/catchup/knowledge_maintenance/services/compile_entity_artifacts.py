@@ -1366,6 +1366,10 @@ def _document_narration_request(
     블록에서 걸리든 같은 재료가 나간다. 세 블록이 모두 재사용에 걸리면
     summary는 None이다.
 
+    머리말은 문서 전체를 요약하는 블록이라 관계 간선도 재료다. 요청자
+    이름처럼 인용에 없는 사실이 여기서 온다. 그래서 문서의 모든 관계 절
+    블록에서 간선 줄을 모아 머리말 재료에 얹는다. 표현 힌트는 얹지 않는다.
+
     Args:
         blocks: 이번 판에 실릴 블록을 차례대로 받는다.
         reusable: 블록 내용 지문을 지난 산문에 짝지은 사전을 받는다.
@@ -1379,9 +1383,12 @@ def _document_narration_request(
     """
     summary_input: BlockNarrationInput | None = None
     summary_wanted = False
+    document_edges: list[str] = []
     section_inputs: list[BlockNarrationInput] = []
     indices: dict[int, int] = {}
     for index, block in enumerate(blocks):
+        if block.block_kind == BLOCK_KIND_RELATION_SECTION:
+            document_edges.extend(_relation_edge_lines(block))
         is_reusable = block_content_hash(block) in reusable
         if block.block_kind == BLOCK_KIND_SUMMARY:
             if summary_input is None:
@@ -1402,6 +1409,8 @@ def _document_narration_request(
             continue
         indices[block_input.block_id] = index
         section_inputs.append(block_input)
+    if summary_input is not None:
+        summary_input = replace(summary_input, edges=tuple(document_edges))
     return (
         DocumentNarrationRequest(
             style_instruction=style_instruction,

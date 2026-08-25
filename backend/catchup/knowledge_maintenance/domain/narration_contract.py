@@ -53,7 +53,8 @@ class BlockNarrationInput:
         topic_hint: 컴파일이 만든 본문을 담는다. 색인용 라벨에서 온
             문장이라 근거가 아니라 주제 힌트다.
         statements: 검증된 인용 원문을 담는다.
-        edges: 관계 절의 간선 줄을 담는다. 관계 절이 아닌 블록에서는
+        edges: 관계 간선 줄을 담는다. 관계 절 블록은 제 간선을 담고,
+            머리말 재료는 문서 전체의 간선을 담는다. 나머지 블록에서는
             비어 있다.
         hints: 관계에 붙은 원문 유래 문장을 담는다. 사실 입력이 아니라
             표현 힌트다.
@@ -83,7 +84,7 @@ class DocumentNarrationRequest:
         purpose_sentence: 이 문서가 무엇에 쓰이는지 알리는 한 줄이다.
         summary: 머리말 세 칸을 쓰는 데 필요한 재료를 담는다. 머리말이
             필요 없으면 None이다. 머리말의 근거는 문서 전체의 검증된
-            인용이다.
+            인용과 문서 전체의 관계 간선이다.
         blocks: 산문이 필요한 섹션 블록만 담는다. 앞 버전의 산문을 그대로
             쓰는 블록은 담지 않는다.
     """
@@ -196,6 +197,10 @@ def _summary_violations(
 
     한 줄 요약만 한 문장으로 묶는다. 나머지 두 칸은 본문 블록과 같은
     1~3문장이다.
+
+    숫자 근거는 섹션 블록과 같은 자리에서 고른다. 머리말 재료에는 인용뿐
+    아니라 문서 전체의 관계 간선도 실리므로, 인용만 근거로 치면 간선에만
+    있는 요청자 이름 같은 사실이 근거 없는 수로 잡힌다.
     """
     if request_summary is None:
         return []
@@ -206,7 +211,7 @@ def _summary_violations(
             )
         ]
 
-    evidence_digits = _digit_runs(" ".join(request_summary.statements))
+    evidence_digits = _block_evidence_digits(request_summary)
     fields = (
         ("one_line_summary", summary.one_line_summary, 1),
         ("desired_outcome", summary.desired_outcome, _MAX_BLOCK_SENTENCES),
@@ -281,16 +286,36 @@ def _prose_violations(
     return violations
 
 
-def _block_evidence_digits(block: BlockNarrationInput) -> set[str]:
-    """블록이 사실로 쓸 수 있는 글에서 숫자 열을 모은다.
+def block_fact_texts(block: BlockNarrationInput) -> tuple[str, ...]:
+    """블록이 사실로 쓸 수 있는 텍스트를 프롬프트에 실리는 차례대로 모은다.
 
-    사실 입력은 인용과 간선 줄뿐이다. 대조 블록은 후보마다 인용이 갈려
-    있어 후보의 인용까지 함께 본다. topic_hint와 hints는 넣지 않는다.
+    프롬프트가 그 블록 섹션에 사실로 싣는 텍스트와 이 함수의 반환이 같아야
+    한다. 어긋나면 모델이 본 사실이 위반으로 잡히거나(오탐) 못 본 것이
+    허용된다(미탐). 그래서 근거를 쓰는 자리마다 따로 고르지 않고 이 함수
+    하나로 모으고, 템플릿과 어긋나지 않는지는 회귀 테스트로 잠근다.
+
+    사실 텍스트는 검증된 인용, 관계 간선 줄, 대조 후보의 인용이다. 대조
+    블록은 후보마다 인용이 갈려 있어 후보의 인용까지 함께 모은다.
+    topic_hint와 hints는 색인용 라벨과 표현 힌트라 넣지 않는다. 대조 후보의
+    본문도 넣지 않는다. 후보 라벨에는 관찰 날짜가 찍혀 있고 프롬프트가 그
+    날짜를 옮겨 쓰지 말라고 시키므로, 라벨을 사실로 치면 막으려던 날짜가
+    도로 허용된다.
+
+    Args:
+        block: 사실 텍스트를 모을 블록 재료를 받는다.
+
+    Returns:
+        사실 텍스트를 프롬프트 차례대로 담은 튜플이다.
     """
-    parts = [*block.statements, *block.edges]
-    for _variant_text, quotes in block.variants:
-        parts.extend(quotes)
-    return _digit_runs(" ".join(parts))
+    texts = [*block.statements, *block.edges]
+    for _variant_body, quotes in block.variants:
+        texts.extend(quotes)
+    return tuple(texts)
+
+
+def _block_evidence_digits(block: BlockNarrationInput) -> set[str]:
+    """블록이 사실로 쓸 수 있는 글에서 숫자 열을 모은다."""
+    return _digit_runs(" ".join(block_fact_texts(block)))
 
 
 def _digit_runs(text: str) -> set[str]:

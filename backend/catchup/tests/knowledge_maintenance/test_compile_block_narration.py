@@ -815,6 +815,53 @@ def test_case_g_relation_section_is_narrated_from_body_lines() -> None:
     assert relation_block.narrative
 
 
+def test_summary_request_carries_the_document_relation_edges() -> None:
+    """머리말 재료에 문서의 관계 간선이 함께 실린다.
+
+    요청자 이름처럼 인용에 없는 사실은 간선에만 있다. 간선을 싣지 않으면
+    머리말이 그 이름을 쓸 때 근거 없는 문장으로 반려된다.
+    """
+    node_id = uuid.uuid4()
+    target = uuid.uuid4()
+    uow = FakeDefinitionUnitOfWork(
+        definitions=[
+            _definition_row(
+                spec=_spec(
+                    relation_paths=[
+                        {"steps": [{"type": "owned_by", "dir": "out"}]}
+                    ],
+                    predicate_sections=["status"],
+                )
+            )
+        ],
+        nodes=[(node_id, "요청 A", "feature_request", "active")],
+        claims=[_verified(_claim(node_id=node_id))],
+        relations=FakeRelationRepository(
+            [
+                (
+                    "owned_by",
+                    StoredRelationEdge(
+                        id=uuid.uuid4(),
+                        source_node_id=node_id,
+                        target_node_id=target,
+                        assertion_text="요청 A는 결제팀이 맡는다",
+                        source_display_name="요청 A",
+                        target_display_name="결제팀",
+                    ),
+                )
+            ]
+        ),
+    )
+    narrator = _FakeNarrator()
+
+    _run(uow, narrator)
+
+    summary = narrator.requests[0].summary
+    assert summary is not None
+    assert summary.edges == ("요청 A → owned_by → 결제팀",)
+    assert summary.hints == ()
+
+
 def test_style_and_purpose_fall_back_to_the_defaults() -> None:
     """채널 문체도 카탈로그 kind도 없으면 기본 문장을 쓴다."""
     node_id = uuid.uuid4()

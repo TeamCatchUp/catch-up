@@ -53,6 +53,10 @@ exist in total.
 Fill all three fields. Never leave one empty and never move the content of one
 field into another.
 
+The Opening section summarises the whole page, so it carries the page's
+`Relations (graph facts)` next to its Evidence. Both are facts for the three
+fields: a party named only on a relation line may be stated there.
+
 ## What this page is for
 
 << purpose_sentence >>
@@ -81,6 +85,13 @@ Match their voice and never repeat what they say.
 {%- endfor %}
 {%- if not summary.statements %}
 (no direct quotes for the opening)
+{%- endif %}
+{%- if summary.edges %}
+
+#### Relations (graph facts)
+{% for edge in summary.edges %}
+- << edge >>
+{%- endfor %}
 {%- endif %}
 {% if summary.previous %}
 ### Previous attempt

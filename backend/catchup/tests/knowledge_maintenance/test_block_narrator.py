@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import pytest
@@ -32,6 +33,7 @@ from catchup.knowledge_maintenance.domain.narration_contract import BlockNarrati
 from catchup.knowledge_maintenance.domain.narration_contract import (
     DocumentNarrationRequest,
 )
+from catchup.knowledge_maintenance.domain.narration_contract import block_fact_texts
 from catchup.knowledge_maintenance.ports.narrator import ChangeExplanationRequest
 from catchup.knowledge_maintenance.ports.narrator import NarrationError
 
@@ -341,6 +343,136 @@ def test_prompt_forbids_the_candidate_observation_date() -> None:
         "never repeat the observation date printed in the candidate label."
         in rendered
     )
+
+
+def test_prompt_carries_the_document_relations_in_the_opening() -> None:
+    """머리말 재료의 관계 간선이 Opening 섹션에 사실로 실린다."""
+    llm = _FakeLlm(
+        [
+            _doc(
+                ((0, "이 요구는 아직 검토 중이다."),),
+                one_line_summary="엘리 221이 CSV 내보내기를 원한다.",
+                desired_outcome="요청 내역을 파일로 받는다.",
+                background="지금은 손으로 옮겨 적는다.",
+            )
+        ]
+    )
+    summary = _block(
+        block_id=-1,
+        block_kind="summary",
+        heading="기능 요청: CSV",
+        topic_hint="요청 세 건",
+        statements=("A사가 CSV 내보내기를 원한다",),
+        edges=("기능 요청 A → requested_by → 엘리 221",),
+    )
+
+    LlmBlockNarrator(llm).narrate_document(_request((_block(0),), summary=summary))
+
+    rendered = llm.document_structured.prompts[0]
+    opening = _prompt_section(rendered, "## Opening (three fields)")
+    assert "#### Relations (graph facts)" in opening
+    assert "기능 요청 A → requested_by → 엘리 221" in opening
+
+
+# 사실 텍스트를 싣는 소제목만 모은다. 이 목록에 없는 소제목 아래 줄은
+# 사실이 아니다. `#### Wording hints (not facts)`는 표현 힌트라 빠지고,
+# `#### Candidate: <본문>` 줄 자체도 빠진다. 후보 라벨에는 관찰 날짜가
+# 찍혀 있어 프롬프트가 그 날짜를 옮겨 쓰지 말라고 시키기 때문이다.
+# 소제목 앞의 `- heading (hint only)` 같은 줄도 소제목이 없으므로 빠진다.
+_FACT_HEADINGS = ("### Evidence", "#### Relations (graph facts)")
+_CANDIDATE_HEADING = "#### Candidate:"
+
+
+def _prompt_section(rendered: str, start_heading: str) -> str:
+    """렌더된 프롬프트에서 큰 제목 하나가 다스리는 구간만 잘라낸다.
+
+    다음 `## `가 나오기 전까지가 그 구간이다. 고정 지시문에도 소제목
+    이름이 글로 나오므로, 구간을 먼저 자르지 않으면 남의 글을 센다.
+    """
+    lines = rendered.split("\n")
+    start = next(
+        index for index, line in enumerate(lines) if line.startswith(start_heading)
+    )
+    end = next(
+        (
+            index
+            for index in range(start + 1, len(lines))
+            if lines[index].startswith("## ")
+        ),
+        len(lines),
+    )
+    return "\n".join(lines[start:end])
+
+
+def _section_fact_digits(section: str) -> set[str]:
+    """구간 안에서 사실 소제목이 다스리는 목록 줄의 숫자 열을 모은다."""
+    digits: set[str] = set()
+    heading = ""
+    for line in section.split("\n"):
+        if line.startswith("#"):
+            heading = line
+            continue
+        if not line.startswith("- "):
+            continue
+        if heading in _FACT_HEADINGS or heading.startswith(_CANDIDATE_HEADING):
+            digits.update(re.findall(r"\d+", line))
+    return digits
+
+
+def test_prompt_fact_text_matches_the_contract_for_a_block() -> None:
+    """블록 섹션이 사실로 싣는 숫자와 검증기가 허용하는 숫자가 같다.
+
+    템플릿이 사실로 싣는 필드와 검증기가 근거로 보는 필드가 어긋나면
+    참인 문장이 위반으로 잡히거나 근거 없는 문장이 통과한다. 양쪽 집합이
+    같은지 봐서 그 어긋남을 잡는다.
+    """
+    llm = _FakeLlm([_doc(((0, "문의 3건이 남았고 한도는 60이다."),))])
+    block = _block(
+        0,
+        topic_hint="검토 중 (2026-08-15 관찰)",
+        statements=("문의 3건이 남았다",),
+        edges=("기능 요청 A → requested_by → 엘리 221",),
+        hints=("담당자 7명이 붙었다",),
+        variants=(("60", ("한도는 60이다",)),),
+    )
+
+    LlmBlockNarrator(llm).narrate_document(_request((block,)))
+
+    section = _prompt_section(llm.document_structured.prompts[0], "## Block 0 ")
+    contract_digits = set(re.findall(r"\d+", " ".join(block_fact_texts(block))))
+    assert _section_fact_digits(section) == contract_digits
+    assert contract_digits == {"3", "221", "60"}
+
+
+def test_prompt_fact_text_matches_the_contract_for_the_opening() -> None:
+    """머리말 섹션이 사실로 싣는 숫자와 검증기가 허용하는 숫자가 같다."""
+    llm = _FakeLlm(
+        [
+            _doc(
+                ((0, "이 요구는 아직 검토 중이다."),),
+                one_line_summary="엘리 221이 CSV 내보내기를 원한다.",
+                desired_outcome="요청 내역을 파일로 받는다.",
+                background="지금은 손으로 옮겨 적는다.",
+            )
+        ]
+    )
+    summary = _block(
+        block_id=-1,
+        block_kind="summary",
+        heading="기능 요청: CSV",
+        topic_hint="요청 세 건 (2026-08-15 관찰)",
+        statements=("A사가 CSV 내보내기를 원한다",),
+        edges=("기능 요청 A → requested_by → 엘리 221",),
+    )
+
+    LlmBlockNarrator(llm).narrate_document(_request((_block(0),), summary=summary))
+
+    section = _prompt_section(
+        llm.document_structured.prompts[0], "## Opening (three fields)"
+    )
+    contract_digits = set(re.findall(r"\d+", " ".join(block_fact_texts(summary))))
+    assert _section_fact_digits(section) == contract_digits
+    assert contract_digits == {"221"}
 
 
 def test_narrative_whitespace_is_stripped() -> None:
