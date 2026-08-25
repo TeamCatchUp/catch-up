@@ -10,7 +10,6 @@ import IconHistory from '@/public/icons/icon/history.svg';
 import IconHomeFilled from '@/public/icons/icon/home_filled.svg';
 import IconSearch300 from '@/public/icons/icon/search_300.svg';
 import IconStacksFilled from '@/public/icons/icon/stacks_filled.svg';
-import IconStar from '@/public/icons/icon/star.svg';
 import IconTeamspace from '@/public/icons/icon/teamspace.svg';
 import IconUpdate from '@/public/icons/icon/update.svg';
 import IconWikiChannel from '@/public/icons/icon/wiki_channel.svg';
@@ -41,9 +40,7 @@ export const HOME_PRIMARY_ITEMS: readonly SnbNavFixtureItem[] = [
   { id: 'requested', label: '요청됨', Icon: IconUpdate, selected: true },
 ];
 
-export const HOME_AGENT_ITEMS: readonly SnbNavFixtureItem[] = [
-  { id: 'inquiry', label: '문의 대응', Icon: IconAgent },
-];
+export const HOME_AGENT_ITEMS: readonly SnbNavFixtureItem[] = [{ id: 'inquiry', label: '문의 대응', Icon: IconAgent }];
 
 /** 조립 스토리 전용 데이터. 홈 펼침 시안에는 즐겨찾기 섹션이 없다 */
 export const HOME_FAVORITE_ITEMS: readonly SnbNavFixtureItem[] = [
@@ -76,7 +73,7 @@ export const WIKI_PRIMARY_ITEMS: readonly SnbNavFixtureItem[] = [
 ];
 
 export const WIKI_DROPDOWN_ITEMS: readonly SnbNavFixtureItem[] = [
-  { id: 'dashboard', label: '위키 대시보드', Icon: IconDashboard, selected: true },
+  { id: 'dashboard', label: '대시보드', Icon: IconDashboard, selected: true },
 ];
 
 /** 위키 펼침의 즐겨찾기 섹션. 시안은 문서 5행이다 */
@@ -88,13 +85,12 @@ export const WIKI_FAVORITE_ITEMS: readonly WikiSideNavFavorite[] = [
   { id: 'wiki-fav-5', label: '채널명 text text text text text text', href: '/llm-wiki/wiki-fav-5' },
 ];
 
+// 즐겨찾기·최근 위키는 갈 곳이 없어 접힘 구성에서 뺐다
 export const WIKI_RAIL_ITEMS: readonly SnbNavFixtureItem[] = [
   { id: 'new-chat', label: '새 채팅', Icon: IconAdd },
   { id: 'search', label: '검색', Icon: IconSearch300 },
   { id: 'requested', label: '요청됨', Icon: IconUpdate, selected: true, hasNotification: true },
-  { id: 'dashboard', label: '위키 대시보드', Icon: IconDashboard },
-  { id: 'favorites', label: '즐겨찾기', Icon: IconStar },
-  { id: 'recent-wiki', label: '최근 위키', Icon: IconFolder },
+  { id: 'dashboard', label: '대시보드', Icon: IconDashboard },
 ];
 
 /** 시안 문구 표본. 실 데이터는 목록 응답의 last_edited_by·last_edited_at으로 조립된다 */

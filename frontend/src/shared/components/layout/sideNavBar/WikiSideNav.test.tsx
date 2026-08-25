@@ -83,7 +83,7 @@ describe('WikiSideNav 펼침', () => {
     expect(screen.queryByRole('button', { name: '검색' })).toBeNull();
     // 접근 이름에 배지 건수가 붙는다
     expect(screen.getByRole('button', { name: /^요청됨/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '위키 대시보드' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '대시보드' })).toBeInTheDocument();
     // 즐겨찾기는 단일 행이 아니라 섹션이다 (시안 15338:92139)
     expect(screen.getByText('즐겨찾기')).toBeInTheDocument();
     expect(screen.getByText('위키')).toBeInTheDocument();
@@ -106,7 +106,7 @@ describe('WikiSideNav 펼침', () => {
     expect(screen.getByRole('button', { name: '목적지 없는 문서' })).toBeDisabled();
   });
 
-  it('요청됨·위키 대시보드·홈 스위처가 각자 목적지로 이동한다', async () => {
+  it('요청됨·대시보드·홈 스위처가 각자 목적지로 이동한다', async () => {
     const user = userEvent.setup();
     renderWikiNav();
 
@@ -166,7 +166,7 @@ describe('WikiSideNav 펼침', () => {
     renderWikiNav();
 
     expect(screen.getByRole('button', { name: /^요청됨/ })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('button', { name: '위키 대시보드' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('button', { name: '대시보드' })).not.toHaveAttribute('aria-current');
   });
 
   it('트리 행의 더보기를 누르면 행 종류에 맞는 메뉴가 열린다', async () => {
@@ -612,10 +612,12 @@ describe('WikiSideNav 닫힘', () => {
   it('Rail 항목을 시안 순서대로 렌더한다', () => {
     renderWikiNav();
 
-    // 시안 15346:97297에서 검색을 뺀 5항목
-    ['새 채팅', '요청됨', '위키 대시보드', '즐겨찾기', '최근 위키'].forEach((label) =>
+    ['새 채팅', '요청됨', '대시보드'].forEach((label) =>
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument(),
     );
+    // 즐겨찾기·최근 위키는 갈 곳이 없어 접힘에서 뺐다
+    expect(screen.queryByRole('button', { name: '즐겨찾기' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '최근 위키' })).toBeNull();
     // 지식 관리는 제품 결정으로 빠졌고, 검색은 목적지가 없어 내렸다
     expect(screen.queryByRole('button', { name: '지식 관리' })).toBeNull();
     expect(screen.queryByRole('button', { name: '검색' })).toBeNull();
@@ -630,5 +632,22 @@ describe('WikiSideNav 닫힘', () => {
     await user.click(screen.getByRole('button', { name: '사이드바 펼치기' }));
 
     expect(mockSidebarState.setSidebarOpen).toHaveBeenCalledWith(true);
+  });
+});
+
+describe('SNB 폭 전환', () => {
+  const frame = (container: HTMLElement) =>
+    container.querySelector<HTMLElement>('[data-slot="side-nav-motion-frame"]')!;
+
+  it('열림·닫힘 폭 변수를 틀이 들고 있고 폭 전환 클래스가 걸려 있다', () => {
+    mockSidebarState.isSidebarOpen = true;
+    const opened = renderWikiNav();
+    expect(frame(opened.container).style.width).toBe('var(--snb-width-open)');
+    expect(frame(opened.container).className).toContain('transition-[width]');
+    opened.unmount();
+
+    mockSidebarState.isSidebarOpen = false;
+    const collapsed = renderWikiNav();
+    expect(frame(collapsed.container).style.width).toBe('var(--snb-width-collapsed)');
   });
 });
