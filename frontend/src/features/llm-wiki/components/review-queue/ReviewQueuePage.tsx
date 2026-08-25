@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 
 import IconArrowDown from '@/public/icons/icon/arrow_down.svg';
@@ -166,6 +166,14 @@ export default function ReviewQueuePage({
   const canMoveNext = selectedIndex < 0 ? items.length > 0 : selectedIndex < items.length - 1;
 
   const prefersReducedMotion = usePrefersReducedMotion();
+
+  // 고른 안건이 목록 밖에 있으면 보이는 자리로 끌어온다 — 순서는 그대로 두고 스크롤만 움직인다
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const row = listRef.current?.querySelector('[aria-current="true"]');
+    row?.scrollIntoView({ block: 'nearest', behavior: prefersReducedMotion ? 'auto' : 'smooth' });
+  }, [selectedId, prefersReducedMotion]);
+
   // 상세가 넘어가는 방향. 목록에서 아래 안건을 고르면 아래에서, 위면 위에서 들어온다
   const [swap, setSwap] = useState({ id: selectedId, direction: 1 });
   if (swap.id !== selectedId) {
@@ -235,7 +243,7 @@ export default function ReviewQueuePage({
             />
           }
         />
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
           {listPending ? (
             <ReviewQueueListSkeleton />
           ) : (
