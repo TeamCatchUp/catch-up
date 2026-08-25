@@ -755,6 +755,9 @@ def _derive_status(
 
     자동 병합의 ``proposals_failed``도 부분 실패로 센다. 승인은 끝났는데
     적용이 남은 안건이므로 다음 회차가 다시 집어야 한다.
+
+    해소의 ``blocks_failed``도 부분 실패로 센다. 판정 실패로 격리한 블록의
+    후보는 pending으로 남아 다음 회차가 다시 집어야 한다.
     """
     has_incomplete_work = any(
         (
@@ -763,6 +766,7 @@ def _derive_status(
             intake_failure is not None,
             extraction.failures,
             resolution.groups_failed,
+            resolution.blocks_failed,
             artifacts.nodes_failed,
             auto_merge.proposals_failed if auto_merge is not None else 0,
         )

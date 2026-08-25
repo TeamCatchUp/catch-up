@@ -297,6 +297,24 @@ def test_status_reports_every_incomplete_work_signal(
     assert status is expected
 
 
+def test_status_counts_failed_judge_blocks_as_incomplete_work() -> None:
+    """판정에 실패해 격리한 블록이 회차 상태에 드러나는지 확인한다.
+
+    격리한 블록의 후보는 pending으로 남아 다음 회차가 다시 집어야 하므로
+    부분 실패로 센다.
+    """
+    status = pipeline._derive_status(
+        skipped_item_count=0,
+        held_back_item_count=0,
+        intake_failure=None,
+        extraction=pipeline.ExtractionStageResult(),
+        resolution=ResolutionResult(blocks_failed=1),
+        artifacts=ArtifactCompileResult(),
+    )
+
+    assert status is pipeline.PreReviewPipelineStatus.PARTIAL_FAILURE
+
+
 @pytest.mark.parametrize(
     ("auto_merge", "expected"),
     [
