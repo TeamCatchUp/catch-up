@@ -1,10 +1,13 @@
 import IconAssignmentFilled from '@/public/icons/icon/assignment_filled.svg';
 import IconInfoFilled from '@/public/icons/icon/info_filled.svg';
 import { Avatar } from '@/shared/components/ui/avatar';
+import { cn } from '@/shared/utils/cn';
 
 import OwnerAddPopover from './OwnerAddPopover';
 import OwnerDetailPopover from './OwnerDetailPopover';
 import type { ReviewQueueFilterOption } from './ReviewQueueFilterSearchPanel';
+
+export type ParticipantRole = '담당자' | '채널 관리자';
 
 export interface ReviewParticipant {
   id: string;
@@ -15,6 +18,8 @@ export interface ReviewParticipant {
   description?: string;
   /** 내 계정 여부 — 이름 뒤 "(나)" 표기 */
   isMe?: boolean;
+  /** 역할 배지 — 겹치면 나란히 선다. 채널 관리자는 서버가 내 여부만 알려줘 내 행에만 붙는다 */
+  roles: readonly ParticipantRole[];
   avatarSrc?: string | null;
 }
 
@@ -26,7 +31,7 @@ const NOTICE_CONTENT = {
   'other-owner': { Icon: IconAssignmentFilled, message: '담당자가 검토할 문서입니다' },
 } as const;
 
-/** 행 하나 — 아바타 40 + 이름·(나)·담당자 태그, 아래줄은 활동 설명. 버튼 안에서도 쓰여 span으로만 짠다. */
+/** 행 하나 — 아바타 40 + 이름·(나)·역할 태그, 아래줄은 활동 설명. 버튼 안에서도 쓰여 span으로만 짠다. */
 function ParticipantRow({ participant }: { participant: ReviewParticipant }) {
   return (
     <span className="flex w-full items-center gap-4">
@@ -35,9 +40,19 @@ function ParticipantRow({ participant }: { participant: ReviewParticipant }) {
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="text-body-small text-text-normal-neutral min-w-0 truncate">{participant.name}</span>
           {participant.isMe && <span className="text-body-small text-text-normal-assistive shrink-0">(나)</span>}
-          <span className="rounded-md2 text-body-xsmall bg-fill-normal-strong text-text-normal-alternative flex shrink-0 items-center px-1.5 py-0.5">
-            담당자
-          </span>
+          {participant.roles.map((role) => (
+            <span
+              key={role}
+              className={cn(
+                'rounded-md2 text-body-xsmall flex shrink-0 items-center px-1.5 py-0.5',
+                role === '채널 관리자'
+                  ? 'bg-fill-primary-normal-neutral text-text-primary-normal'
+                  : 'bg-fill-normal-strong text-text-normal-alternative',
+              )}
+            >
+              {role}
+            </span>
+          ))}
         </span>
         {participant.description && (
           <span className="text-body-small text-text-normal-assistive truncate">{participant.description}</span>
@@ -92,8 +107,9 @@ export default function ReviewParticipantsCard({
 
       {/* 행 목록 — 행마다 패딩 4를 갖고 행 사이는 2가 남는다 */}
       <div className="flex flex-col gap-0.5">
+        {/* 해제는 실제 담당자 행에만 — 관리자 폴백 행은 지울 지정이 없다 */}
         {participants.map((participant) =>
-          canRemove ? (
+          canRemove && participant.roles.includes('담당자') ? (
             <OwnerDetailPopover
               key={participant.id}
               name={participant.name}

@@ -20,7 +20,8 @@ const ASSIGNEE_OPTIONS = [
 
 /** 남이 담당자·내가 관리자인 판 — 판정(can_review)은 닫히고 담당자 관리만 열린다 */
 const OTHER_OWNER_ADMIN_ARGS = {
-  participants: [{ id: '1', userId: 1, name: '팀원F' }],
+  // 내가 관리자여도 남의 행은 담당자 배지뿐이다 — 서버가 남의 관리자 여부를 주지 않는다
+  participants: [{ id: '1', userId: 1, name: '팀원F', roles: ['담당자'] }],
   ownerNotice: 'other-owner',
   canReview: false,
   canAssignOwners: true,
@@ -88,7 +89,7 @@ const meta = {
     waitingLabel: selected.waitingLabel,
     summary: '재시도 한도가 1회에서 3회로 늘고 PG 점검 시간 예외가 추가되었습니다.',
     // 내가 담당자인 문서가 기본 판 — 판정이 열리고 배너가 없다. 담당자 본인은 지정만 열린다(해제는 관리자만)
-    participants: [{ id: '6', userId: 6, name: '팀원G', isMe: true }],
+    participants: [{ id: '6', userId: 6, name: '팀원G', isMe: true, roles: ['담당자'] }],
     ownerNotice: null,
     canAssignOwners: true,
     canRemoveOwners: false,
@@ -173,7 +174,9 @@ const meta = {
         '상세 골격은 안건 교체와 같은 모션 상자(stepReplace) 안에서 상태만 갈아 끼운다 — 로딩이 별도 레이어로 튀지 않는다.',
         '에러 시각은 시안이 없어 만들지 않는다 — 조회 실패는 판정 토스트와 같은 전역 기본 자리에 문구만 띄운다.',
         '담당자 카드(8/24): 배너 분기·+ 버튼·추가 드롭다운·확인 모달·해제 팝오버는 라우트가 권한(can_manage_owners 규칙: 지정=관리자∨담당자 본인, 해제=관리자만)과 데이터를 실어 준다. 후보 직책(B17)·담당자 활동 시각(B18)은 API에 없어 그 구역을 비운다.',
-        '판정(can_review)은 담당자 관리와 규칙이 다르다 — 담당자가 있으면 담당자 본인만(관리자도 못 한다), 없으면 구성원 누구나. 담당자 0명이면 카드도 빈다 — 폴백을 사람 행으로 흉내내지 않고 배너가 상태를 말한다.',
+        '판정(can_review)은 담당자 관리와 규칙이 다르다 — 담당자가 있으면 담당자 본인만(관리자도 못 한다), 없으면 구성원 누구나.',
+        '역할 배지는 배열이다 — 담당자이면서 채널 관리자면 배지 둘이 나란히 선다. 채널 관리자 배지는 내 행에만 붙는다 — 서버가 내 관리자 여부(is_admin)만 주고 남의 관리자 여부는 주지 않는다.',
+        '담당자 0명 + 내가 관리자면 내 행이 채널 관리자 배지만 달고 선다. 배너는 그대로 판정 규칙(구성원 누구나)을 말한다 — 배지는 역할 표시일 뿐 검토자 지정이 아니고, 폴백 행은 해제 팝오버도 갖지 않는다.',
         '담당자 미지정 배너 문구는 시안 실측("채널 관리자가 검토")이 서버 규칙과 어긋나 사용자 확정 문구("구성원 누구나 검토")로 교체했다.',
         '담당자 행 규격은 확정 노드로 닫혔다(기본 18788:55469·호버 18773:89303, 2026-08-24) — 행 패딩 4·radius 8·행 간 2, 호버 채움 rgba(30,33,36,6%) = fill-normal-interaction-hover. 시안은 행 호버 상태만 그리고 팝오버 개폐 방식은 그리지 않아, 해제 동선(클릭 액션)이 끊기지 않게 클릭 트리거를 유지했다. 해제 팝오버는 앵커 좌측(side=left)에 선다(사용자 지시 — 우측 패널이라 아래보다 좌측이 안전).',
         '+ 버튼 툴팁도 확정 노드로 닫혔다(18788:55263, 2026-08-24) — add_small 아이콘 20 + 제목 "담당자 추가하기", 좌측 배치(사용자 지시). 배경 75% 검정·radius 8·패딩 6·label(rg)/xsmall 흰 글자는 공용 Tooltip sm과 일치해 소비만 한다. 그림자만 공용 shadow-tooltip(알파 12%)이 시안 Shadow/tooltip(10%)과 미세하게 어긋난다 — 공용 토큰이라 기록만.',
@@ -221,6 +224,10 @@ export const Default: Story = {
     await expect(canvas.queryByText('담당자가 검토할 문서입니다')).toBeNull();
     await expect(canvas.queryByText('담당자가 지정되지 않아 구성원 누구나 검토할 수 있습니다.')).toBeNull();
     await expect(canvas.getByRole('button', { name: '담당자 추가하기' })).toBeInTheDocument();
+    // 배지는 담당자 하나다 — 관리자가 아니라 채널 관리자 배지는 서지 않는다
+    const participantsCard = canvas.getByRole('heading', { name: '담당자' }).closest('section')!;
+    await expect(within(participantsCard).getAllByText('담당자')).toHaveLength(2);
+    await expect(within(participantsCard).queryByText('채널 관리자')).toBeNull();
 
     // 중앙 — 요약과 diff 카드 3장
     await expect(canvas.getByText('변경 내용')).toBeInTheDocument();
@@ -304,9 +311,10 @@ export const NoReviewPermission: Story = {
     await expect(canvas.queryByRole('button', { name: '전체 승인' })).toBeNull();
     await expect(canvas.queryByRole('button', { name: '전체 반려' })).toBeNull();
     await expect(canvas.queryByRole('button', { name: '최종 내보내기' })).toBeNull();
-    // 담당자 카드 — 그 사람 행과 배너만 남고 지정·해제 진입점이 없다
+    // 담당자 카드 — 그 사람 행(담당자 배지)과 배너만 남고 지정·해제 진입점이 없다
     await expect(canvas.getByText('담당자가 검토할 문서입니다')).toBeInTheDocument();
     await expect(canvas.getByText('팀원F')).toBeInTheDocument();
+    await expect(canvas.queryByText('채널 관리자')).toBeNull();
     await expect(canvas.queryByRole('button', { name: '담당자 추가하기' })).toBeNull();
     await expect(canvas.queryByRole('button', { name: /팀원F/ })).toBeNull();
     // 열람은 그대로다
@@ -324,16 +332,18 @@ export const OtherOwnerAsAdmin: Story = {
     await expect(canvas.queryAllByRole('button', { name: '승인' })).toHaveLength(0);
     await expect(canvas.queryByRole('button', { name: '최종 내보내기' })).toBeNull();
     await expect(canvas.getByText('담당자가 검토할 문서입니다')).toBeInTheDocument();
+    // 내가 관리자여도 남의 행에는 관리자 배지가 없다 — 서버가 남의 관리자 여부를 주지 않는다
+    await expect(canvas.queryByText('채널 관리자')).toBeNull();
     // 담당자 관리 진입점 — + 버튼과 행 팝오버 트리거는 관리자에게만 선다
     await expect(canvas.getByRole('button', { name: '담당자 추가하기' })).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: /팀원F/ })).toBeInTheDocument();
   },
 };
 
-/** 담당자 0명 · 내가 관리자 — 판정은 구성원 자격으로 열리고, 카드는 빈 목록에 지정 진입점만 선다. */
+/** 담당자 0명 · 내가 관리자 — 판정은 구성원 자격으로 열리고, 내 행이 채널 관리자 배지로 선다. */
 export const NoOwnerAsAdmin: Story = {
   args: {
-    participants: [],
+    participants: [{ id: '6', userId: 6, name: '팀원G', isMe: true, roles: ['채널 관리자'] }],
     ownerNotice: 'no-owner',
     canAssignOwners: true,
     canRemoveOwners: true,
@@ -347,10 +357,15 @@ export const NoOwnerAsAdmin: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
+    // 배너는 그대로 선다 — 배지는 내 역할을 말할 뿐 검토자 지정이 아니다
     await expect(canvas.getByText('담당자가 지정되지 않아 구성원 누구나 검토할 수 있습니다.')).toBeInTheDocument();
     const card = canvas.getByRole('heading', { name: '담당자' }).closest('section')!;
-    // 카드가 비어 '담당자' 텍스트는 제목 하나뿐이다 — 없는 담당자를 행으로 흉내내지 않는다
+    // 내 행은 채널 관리자 배지만 단다 — '담당자' 텍스트는 제목 하나뿐이라 담당자 행으로 오독되지 않는다
+    await expect(within(card).getByText('채널 관리자')).toBeInTheDocument();
     await expect(within(card).getAllByText('담당자')).toHaveLength(1);
+    await expect(within(card).getByText('(나)')).toBeInTheDocument();
+    // 폴백 행은 해제 팝오버 트리거가 아니다 — 지울 지정이 없다
+    await expect(within(card).queryByRole('button', { name: /팀원G/ })).toBeNull();
     await expect(within(card).getByRole('button', { name: '담당자 추가하기' })).toBeInTheDocument();
     // 판정·발행 진입점은 열린 채다
     await expect(canvas.getAllByRole('button', { name: '승인' }).length).toBeGreaterThan(0);
@@ -358,7 +373,7 @@ export const NoOwnerAsAdmin: Story = {
   },
 };
 
-/** 담당자 0명 · 일반 구성원 — 판정은 똑같이 열리고, 카드에는 지정 진입점조차 없다. */
+/** 담당자 0명 · 일반 구성원 — 판정은 똑같이 열리고, 카드는 비고 지정 진입점조차 없다. */
 export const NoOwnerAsMember: Story = {
   args: {
     participants: [],
@@ -371,6 +386,10 @@ export const NoOwnerAsMember: Story = {
 
     await expect(canvas.getByText('담당자가 지정되지 않아 구성원 누구나 검토할 수 있습니다.')).toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: '담당자 추가하기' })).toBeNull();
+    // 관리자가 아니라 폴백 행도 배지도 없다 — 내 관리자 여부만 서버가 준다
+    const card = canvas.getByRole('heading', { name: '담당자' }).closest('section')!;
+    await expect(within(card).getAllByText('담당자')).toHaveLength(1);
+    await expect(within(card).queryByText('채널 관리자')).toBeNull();
     await expect(canvas.getAllByRole('button', { name: '승인' }).length).toBeGreaterThan(0);
     await expect(canvas.getByRole('button', { name: '최종 내보내기' })).toBeInTheDocument();
   },

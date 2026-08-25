@@ -581,33 +581,75 @@ describe('useReviewQueueModel', () => {
     expect(result.current.selectedId).toBeNull();
   });
 
-  it('담당자 없는 문서 — 관리자는 지정·해제만 열리고 카드는 빈 목록으로 남는다', async () => {
+  /** ch-1을 내가 관리하는 채널로 돌려주는 응답 */
+  const adminChannels = () =>
+    HttpResponse.json({
+      channels: [
+        {
+          id: 'ch-1',
+          name: '결제',
+          workspace_id: 1,
+          is_admin: true,
+          document_count: 0,
+          folders: [],
+          purpose_presets: [],
+          definitions: [],
+        },
+      ],
+    });
+
+  it('담당자 없는 문서 — 관리자는 지정·해제가 열리고 내 행이 채널 관리자 배지로 선다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    server.use(http.get('*/api/v1/wiki/channels', adminChannels));
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.canAssignOwners).toBe(true));
+    expect(result.current.canRemoveOwners).toBe(true);
+    // 배너는 그대로 선다 — 배지는 내 역할을 말할 뿐 판정 폴백(구성원 전체)을 좁히지 않는다
+    expect(result.current.ownerNotice).toBe('no-owner');
+    expect(result.current.participants).toEqual([
+      { id: '99', userId: 99, name: '검토자', isMe: true, roles: ['채널 관리자'], avatarSrc: null },
+    ]);
+  });
+
+  it('담당자이면서 관리자면 내 행에 배지가 둘 선다 — 담당자 + 채널 관리자', async () => {
     stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
     server.use(
-      http.get('*/api/v1/wiki/channels', () =>
+      http.get('*/api/v1/wiki/channels', adminChannels),
+      http.get('*/api/v1/knowledge-review/queue/:proposalId', ({ params }) =>
         HttpResponse.json({
-          channels: [
-            {
-              id: 'ch-1',
-              name: '결제',
-              workspace_id: 1,
-              is_admin: true,
-              document_count: 0,
-              folders: [],
-              purpose_presets: [],
-              definitions: [],
-            },
-          ],
+          ...detail(String(params.proposalId), false),
+          owners: [{ user_id: 99, display_name: '검토자', profile_image_url: null }],
         }),
       ),
     );
     const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
 
-    await waitFor(() => expect(result.current.canAssignOwners).toBe(true));
-    expect(result.current.canRemoveOwners).toBe(true);
-    expect(result.current.ownerNotice).toBe('no-owner');
-    // 판정 폴백이 구성원 전체라 관리자를 담당자 행으로 흉내내지 않는다
-    expect(result.current.participants).toEqual([]);
+    await waitFor(() => expect(result.current.participants).toHaveLength(1));
+    expect(result.current.participants[0]).toMatchObject({
+      userId: 99,
+      isMe: true,
+      roles: ['담당자', '채널 관리자'],
+    });
+    expect(result.current.ownerNotice).toBeNull();
+  });
+
+  it('남의 담당자 행에는 관리자 배지를 붙이지 않는다 — 서버가 남의 관리자 여부를 주지 않는다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    server.use(
+      http.get('*/api/v1/wiki/channels', adminChannels),
+      http.get('*/api/v1/knowledge-review/queue/:proposalId', ({ params }) =>
+        HttpResponse.json({
+          ...detail(String(params.proposalId), false),
+          owners: [{ user_id: 7, display_name: '팀원F', profile_image_url: null }],
+        }),
+      ),
+    );
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.participants).toHaveLength(1));
+    // 담당자가 있으니 내 행(관리자 폴백)도 서지 않는다
+    expect(result.current.participants[0]).toMatchObject({ userId: 7, isMe: false, roles: ['담당자'] });
   });
 
   it('담당자 없는 문서 — 일반 구성원도 배너는 서고 지정·해제는 닫힌다', async () => {
@@ -633,7 +675,7 @@ describe('useReviewQueueModel', () => {
     const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
 
     await waitFor(() => expect(result.current.participants).toHaveLength(1));
-    expect(result.current.participants[0]).toMatchObject({ userId: 7, isMe: false });
+    expect(result.current.participants[0]).toMatchObject({ userId: 7, isMe: false, roles: ['담당자'] });
     expect(result.current.ownerNotice).toBe('other-owner');
     expect(result.current.canAssignOwners).toBe(false);
     expect(result.current.canRemoveOwners).toBe(false);
@@ -654,7 +696,8 @@ describe('useReviewQueueModel', () => {
     await waitFor(() => expect(result.current.canAssignOwners).toBe(true));
     expect(result.current.canRemoveOwners).toBe(false);
     expect(result.current.ownerNotice).toBeNull();
-    expect(result.current.participants[0]).toMatchObject({ userId: 99, isMe: true });
+    // 관리자가 아니라 배지는 담당자 하나다
+    expect(result.current.participants[0]).toMatchObject({ userId: 99, isMe: true, roles: ['담당자'] });
     // 이미 담당자인 사람은 추가 후보에서 빠진다 — 멤버 목록이 비어 있어 후보도 빈다
     expect(result.current.ownerCandidates).toEqual([]);
   });

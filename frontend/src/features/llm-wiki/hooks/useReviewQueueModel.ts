@@ -197,14 +197,26 @@ export function useReviewQueueModel({
   const canAssignOwners = isArtifactAdmin || isMeOwner;
   const canRemoveOwners = isArtifactAdmin;
 
-  // 담당자가 없으면 카드도 빈다 — 판정 폴백은 구성원 전체라 특정인을 행으로 세울 근거가 없다
+  // 채널 관리자 배지는 내 행에만 — 서버는 내 관리자 여부(is_admin)만 주고 남의 것은 주지 않는다
   const participants: ReviewParticipant[] = owners.map((owner) => ({
     id: String(owner.userId),
     userId: owner.userId,
     name: owner.displayName,
     isMe: owner.userId === myUserId,
+    roles: owner.userId === myUserId && isArtifactAdmin ? ['담당자', '채널 관리자'] : ['담당자'],
     avatarSrc: owner.profileImageUrl,
   }));
+  // 담당자 0명 + 내가 관리자면 내 행이 채널 관리자 배지로 선다 — 판정 폴백(구성원 전체)은 배너 몫이다
+  if (detail !== null && participants.length === 0 && isArtifactAdmin && me && myUserId !== null) {
+    participants.push({
+      id: String(myUserId),
+      userId: myUserId,
+      name: me.name,
+      isMe: true,
+      roles: ['채널 관리자'],
+      avatarSrc: me.picture ?? null,
+    });
+  }
 
   const ownerNotice = detail === null ? null : owners.length === 0 ? 'no-owner' : isMeOwner ? null : 'other-owner';
 

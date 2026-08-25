@@ -42,25 +42,33 @@ import * as QueueStories from '../components/review-queue/ReviewQueuePage.storie
 ## 3. 담당자 카드 — 다섯 케이스
 
 우측 담당자 카드가 이 규칙을 그대로 비춘다. 담당자 지정·해제는 판정과 **다른 규칙**(지정=관리자
-또는 담당자 본인, 해제=관리자만)이라, 카드의 관리 진입점은 판정 진입점과 따로 갈린다. 담당자가
-없으면 카드도 빈다 — 판정 폴백이 구성원 전체라 특정인을 행으로 세울 근거가 없고, 배너가 상태를
-말한다.
+또는 담당자 본인, 해제=관리자만)이라, 카드의 관리 진입점은 판정 진입점과 따로 갈린다.
 
-| 케이스                    | 판정 진입점       | 담당자 카드                | 배너                         | 화면 전체                                                                                 |
-| ------------------------- | ----------------- | -------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------- |
-| 담당자 0명 · 내가 관리자  | 열림(구성원 자격) | 빈 목록 + 지정(+) 버튼     | "구성원 누구나 검토"         | [NoOwnerAsAdmin](?path=/story/screens-llm-wiki-reviewqueuepage--no-owner-as-admin)        |
-| 담당자 0명 · 일반 구성원  | 열림              | 빈 목록, + 버튼 없음       | 같은 배너                    | [NoOwnerAsMember](?path=/story/screens-llm-wiki-reviewqueuepage--no-owner-as-member)      |
-| 내가 담당자               | 열림              | 내 행(나)                  | 없음                         | [Default](?path=/story/screens-llm-wiki-reviewqueuepage--default)                         |
-| 남이 담당자 · 내가 관리자 | **닫힘**          | 그 사람 행 + 지정·해제     | "담당자가 검토할 문서입니다" | [OtherOwnerAsAdmin](?path=/story/screens-llm-wiki-reviewqueuepage--other-owner-as-admin)  |
-| 남이 담당자 · 일반 구성원 | 닫힘              | 그 사람 행, 관리 버튼 없음 | 같은 배너                    | [NoReviewPermission](?path=/story/screens-llm-wiki-reviewqueuepage--no-review-permission) |
+행마다 역할 배지가 선다 — 담당자는 회색, 채널 관리자는 파랑 태그다. 역할이 겹치면 배지도 겹치는
+만큼 선다: 담당자이면서 채널 관리자면 **담당자 + 채널 관리자** 둘이 나란히다. 단 채널 관리자
+배지는 **내 행에만** 붙는다 — 서버가 내 관리자 여부(`is_admin`)만 주고 남의 관리자 여부는 주지
+않아, 남의 행에 추측으로 붙일 근거가 없다. 담당자가 0명이고 내가 관리자면 내 행이 채널 관리자
+배지만 달고 서는데, 배너("구성원 누구나 검토")는 그대로다 — 배지는 내 역할을 말할 뿐 검토자
+지정이 아니고, 이 폴백 행은 지울 지정이 없어 해제 팝오버도 갖지 않는다.
 
-카드만 떼어 보면 다섯 케이스가 이렇게 선다. 복수 담당자 스택은
+| 케이스                    | 판정 진입점       | 담당자 카드                         | 배너                         | 화면 전체                                                                                 |
+| ------------------------- | ----------------- | ----------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------- |
+| 담당자 0명 · 내가 관리자  | 열림(구성원 자격) | 내 행(채널 관리자 배지) + 지정(+)   | "구성원 누구나 검토"         | [NoOwnerAsAdmin](?path=/story/screens-llm-wiki-reviewqueuepage--no-owner-as-admin)        |
+| 담당자 0명 · 일반 구성원  | 열림              | 빈 목록, + 버튼 없음                | 같은 배너                    | [NoOwnerAsMember](?path=/story/screens-llm-wiki-reviewqueuepage--no-owner-as-member)      |
+| 내가 담당자               | 열림              | 내 행(담당자 배지)                  | 없음                         | [Default](?path=/story/screens-llm-wiki-reviewqueuepage--default)                         |
+| 남이 담당자 · 내가 관리자 | **닫힘**          | 그 사람 행(담당자 배지) + 지정·해제 | "담당자가 검토할 문서입니다" | [OtherOwnerAsAdmin](?path=/story/screens-llm-wiki-reviewqueuepage--other-owner-as-admin)  |
+| 남이 담당자 · 일반 구성원 | 닫힘              | 그 사람 행, 관리 버튼 없음          | 같은 배너                    | [NoReviewPermission](?path=/story/screens-llm-wiki-reviewqueuepage--no-review-permission) |
+
+카드만 떼어 보면 다섯 케이스가 이렇게 선다. 역할 중첩(배지 2개)은
+[MeAsOwnerAndAdmin](?path=/story/compositions-llm-wiki-reviewqueue-reviewparticipantscard--me-as-owner-and-admin),
+복수 담당자 스택은
 [MultipleOwners](?path=/story/compositions-llm-wiki-reviewqueue-reviewparticipantscard--multiple-owners)에
 따로 두었다.
 
 <Canvas of={ParticipantsStories.NoOwnerAsAdmin} />
 <Canvas of={ParticipantsStories.NoOwnerAsMember} />
 <Canvas of={ParticipantsStories.MeAsOwner} />
+<Canvas of={ParticipantsStories.MeAsOwnerAndAdmin} />
 <Canvas of={ParticipantsStories.OtherOwnerAsAdmin} />
 <Canvas of={ParticipantsStories.OtherOwnerAsMember} />
 
