@@ -235,7 +235,11 @@ class LlmBlockNarrator:
             summary=request.summary if summary_failed else None,
             blocks=retry_blocks,
         )
-        retry_context = {**call_context, "prompt_version": RETRY_PROMPT_VERSION}
+        retry_context = {
+            **call_context,
+            "prompt_version": RETRY_PROMPT_VERSION,
+            "block_count": len(retry_blocks),
+        }
         parsed, elapsed = _invoke_contract(
             structured=self._document_structured,
             template_path=RETRY_TEMPLATE_PATH,
@@ -397,6 +401,9 @@ def _split_response(
     같은 번호가 두 번 오면 먼저 온 값도 쓰지 않는다. 둘 중 어느 쪽이
     그 블록의 답인지 정할 근거가 없어, 고르는 대신 다시 묻는다.
 
+    산문과 머리말 세 칸은 앞뒤 공백을 잘라서 담는다. 모델이 붙여 보내는
+    줄바꿈과 들여쓰기가 그대로 문서에 실리면 안 되기 때문이다.
+
     머리말은 묻지 않았으면 버린다. 세 칸이 모두 비어 오면 머리말이 오지
     않은 것으로 본다. 칸마다 빈 값이라고 지적하는 것보다 머리말이 없다고
     한 번 지적하는 편이 고칠 거리가 분명하다.
@@ -418,14 +425,15 @@ def _split_response(
             )
             continue
         seen.add(item.block_id)
-        narratives[item.block_id] = str(item.narrative)
+        narratives[item.block_id] = str(item.narrative).strip()
 
     summary: SummaryNarrative | None = None
     if want_summary:
         values = {
-            field: str(getattr(parsed, field) or "") for field in _SUMMARY_FIELDS
+            field: str(getattr(parsed, field) or "").strip()
+            for field in _SUMMARY_FIELDS
         }
-        if any(value.strip() for value in values.values()):
+        if any(values.values()):
             summary = SummaryNarrative(**values)
 
     return narratives, summary, tuple(violations)

@@ -150,7 +150,9 @@ def document_narration_violations(
         summary: 받아 온 머리말 세 칸을 받는다. 없으면 None이다.
 
     Returns:
-        찾은 위반을 블록 번호 순으로 담은 튜플이다.
+        찾은 위반을 담은 튜플이다. 요청한 블록의 위반이 요청 순서대로
+        먼저 오고, 요청에 없던 블록 번호의 위반이 번호 순으로 뒤에 붙고,
+        머리말 위반이 맨 끝에 온다.
     """
     violations: list[NarrationViolation] = []
     requested_ids = {block.block_id for block in request.blocks}

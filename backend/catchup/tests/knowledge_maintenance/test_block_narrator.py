@@ -19,6 +19,9 @@ from catchup.knowledge_maintenance.adapters.llm.block_narrator import (
 from catchup.knowledge_maintenance.adapters.llm.block_narrator import (
     EXPLAIN_PROMPT_VERSION,
 )
+from catchup.knowledge_maintenance.adapters.llm.block_narrator import (
+    RETRY_PROMPT_VERSION,
+)
 from catchup.knowledge_maintenance.adapters.llm.block_narrator import LlmBlockNarrator
 from catchup.knowledge_maintenance.adapters.llm.block_narrator import _BlockNarrativeOut
 from catchup.knowledge_maintenance.adapters.llm.block_narrator import (
@@ -278,6 +281,89 @@ def test_prompt_keeps_relations_and_variants_apart() -> None:
     assert "한도는 백이십이다" in rendered
     assert "do not judge which one is right." in rendered
     assert "The list may be partial" in rendered
+
+
+def test_prompt_allows_relation_lines_as_evidence() -> None:
+    """규칙 1이 관계 줄도 말해도 되는 근거로 친다.
+
+    관계 절 블록은 인용이 없고 관계 줄만 있다. 규칙 1이 인용만 근거로
+    치면 그 블록은 쓸 것이 없다고 읽힌다.
+    """
+    llm = _FakeLlm([_doc(((0, "관계가 있다."),))])
+    request = _request(
+        (
+            _block(
+                0,
+                block_kind="relation_section",
+                heading="requested_by(out)",
+                statements=(),
+                edges=("기능 요청 A → requested_by → 팀원A",),
+            ),
+        )
+    )
+
+    LlmBlockNarrator(llm).narrate_document(request)
+
+    rendered = llm.document_structured.prompts[0]
+    assert (
+        "State only what that block's Evidence and relation lines already say."
+        in rendered
+    )
+
+
+def test_prompt_forbids_the_candidate_observation_date() -> None:
+    """대조 후보를 값으로만 부르게 하고 라벨의 관찰 날짜는 막는다.
+
+    후보 라벨에 관찰 날짜가 찍혀 있어, 그대로 옮겨 쓰면 근거 밖 숫자로
+    걸려 재시도가 난다.
+    """
+    llm = _FakeLlm([_doc(((0, "값이 갈린다."),))])
+    request = _request(
+        (
+            _block(
+                0,
+                block_kind="contested",
+                heading="rate_limit",
+                statements=(),
+                variants=(
+                    ("60 (2026-08-07 관찰)", ("한도는 육십이다",)),
+                    ("120 (2026-08-09 관찰)", ("한도는 백이십이다",)),
+                ),
+            ),
+        )
+    )
+
+    LlmBlockNarrator(llm).narrate_document(request)
+
+    rendered = llm.document_structured.prompts[0]
+    assert "Name each candidate by its" in rendered
+    assert (
+        "never repeat the observation date printed in the candidate label."
+        in rendered
+    )
+
+
+def test_narrative_whitespace_is_stripped() -> None:
+    """산문과 머리말 세 칸의 앞뒤 공백을 잘라서 담는다."""
+    llm = _FakeLlm(
+        [
+            _doc(
+                ((0, "\n  이 요구는 아직 검토 중이다.  \n"),),
+                one_line_summary="  A사가 CSV 내보내기를 원한다.  ",
+                desired_outcome="\n요청 내역을 파일로 받는다.\n",
+                background="  지금은 손으로 옮겨 적는다.  ",
+            )
+        ]
+    )
+    request = _request((_block(0),), summary=_summary_input())
+
+    result = LlmBlockNarrator(llm).narrate_document(request)
+
+    assert result.narratives == {0: "이 요구는 아직 검토 중이다."}
+    assert result.summary is not None
+    assert result.summary.one_line_summary == "A사가 CSV 내보내기를 원한다."
+    assert result.summary.desired_outcome == "요청 내역을 파일로 받는다."
+    assert result.summary.background == "지금은 손으로 옮겨 적는다."
 
 
 def test_violating_block_is_retried_with_feedback() -> None:
@@ -552,6 +638,34 @@ def test_retry_log_carries_reasons_without_prose() -> None:
     dumped = str(logs)
     assert "담당자 3명이 붙었다." not in dumped
     assert "담당은 아직 정해지지 않았다." not in dumped
+
+
+def test_retry_log_counts_only_the_retried_blocks() -> None:
+    """재시도 로그의 block_count가 다시 묻는 블록 수를 가리킨다."""
+    llm = _FakeLlm(
+        [
+            _doc(((0, "담당은 아직 정해지지 않았다."), (1, "담당자 3명이 붙었다."))),
+            _doc(((1, "상태는 아직 검토 중이다."),)),
+        ]
+    )
+    request = _request(
+        (
+            _block(0, statements=("담당이 정해지지 않았다",)),
+            _block(1),
+        )
+    )
+
+    with capture_logs() as logs:
+        LlmBlockNarrator(llm).narrate_document(request)
+
+    started = [
+        entry
+        for entry in logs
+        if entry["event"] == "document_narration_retry_started"
+    ]
+    assert len(started) == 1
+    assert started[0]["prompt_version"] == RETRY_PROMPT_VERSION
+    assert started[0]["block_count"] == 1
 
 
 def test_failure_log_carries_no_prose() -> None:
