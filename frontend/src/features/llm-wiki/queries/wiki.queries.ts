@@ -45,10 +45,13 @@ export const wikiQueries = {
       staleTime: 30_000,
     }),
 
+  /** 문서 상세 키 프리픽스. 어떤 문서가 바뀌었는지 모를 때 상세 전체 무효화에 쓴다. */
+  artifactRoot: () => [...wikiQueries.all(), 'artifact'] as const,
+
   /** 발행판 상세. 발행된 판이 없는 문서는 404라 에러 분기가 정상 경로다. */
   artifact: (artifactId: string) =>
     queryOptions({
-      queryKey: [...wikiQueries.all(), 'artifact', artifactId] as const,
+      queryKey: [...wikiQueries.artifactRoot(), artifactId] as const,
       queryFn: ({ signal }) => fetchWikiArtifactDocument(artifactId, signal),
       enabled: artifactId.length > 0,
       staleTime: 30_000,
