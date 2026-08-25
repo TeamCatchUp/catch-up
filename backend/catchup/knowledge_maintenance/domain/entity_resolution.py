@@ -136,20 +136,33 @@ class IdentityPartition:
 def validate_partition(
     partition: IdentityPartition,
     member_ids: Sequence[str],
+    *,
+    entity_type: str,
 ) -> None:
-    """분할이 블록 멤버를 정확히 한 번씩 덮는지 본다.
+    """분할이 블록 멤버를 정확히 한 번씩 덮고 종류를 지키는지 본다.
 
-    셋을 본다. 블록에 없던 멤버가 나왔는지, 두 그룹에 걸친 멤버가 있는지,
-    어느 그룹에도 못 들어간 멤버가 있는지다. 모델 출력은 이 셋을 모두
-    어길 수 있고, 어긴 채로 뒤 단계에 넘기면 후보가 사라지거나 한 후보가
-    두 노드에 붙는다.
+    넷을 본다. 블록에 없던 멤버가 나왔는지, 두 그룹에 걸친 멤버가 있는지,
+    어느 그룹에도 못 들어간 멤버가 있는지, 그룹의 canonical_type이 블록의
+    entity_type과 다른지다. 모델 출력은 이 넷을 모두 어길 수 있고, 어긴
+    채로 뒤 단계에 넘기면 후보가 사라지거나 한 후보가 두 노드에 붙는다.
+
+    종류를 함께 보는 이유는 블록이 이미 entity_type 단위로 묶여 있어
+    종류가 정해져 있기 때문이다. 판정은 누가 누구와 같은 대상인지만
+    정하면 된다. 모델이 종류까지 바꾸면 그 값이 그대로 proposal의
+    proposed_type이 되고, 자동 병합에서는 사람이 보기 전에 잘못된 종류의
+    노드가 선다.
 
     Raises:
-        PartitionContractError: 셋 중 하나라도 어겼을 때 던진다.
+        PartitionContractError: 넷 중 하나라도 어겼을 때 던진다.
     """
     expected = set(member_ids)
     seen: set[str] = set()
     for group in partition.groups:
+        if group.canonical_type != entity_type:
+            raise PartitionContractError(
+                "그룹의 entity 종류가 블록과 다르다: "
+                f"{group.canonical_type} (블록 {entity_type})"
+            )
         for member_id in group.member_ids:
             if member_id not in expected:
                 raise PartitionContractError(

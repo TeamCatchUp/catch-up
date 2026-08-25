@@ -233,7 +233,11 @@ class BedrockIdentityJudge:
             raise PartitionContractError(f"분할 그룹이 규칙을 어겼다: {error}") from error
 
         try:
-            validate_partition(partition, block.member_ids)
+            validate_partition(
+                partition,
+                block.member_ids,
+                entity_type=block.entity_type,
+            )
         except PartitionContractError:
             logger.warning(
                 "identity_partition_failed",

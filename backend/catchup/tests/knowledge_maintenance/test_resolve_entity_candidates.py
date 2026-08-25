@@ -15,6 +15,7 @@ from catchup.knowledge_maintenance.domain.entity_resolution import (
     PartitionContractError,
 )
 from catchup.knowledge_maintenance.domain.entity_resolution import normalize_name
+from catchup.knowledge_maintenance.domain.entity_resolution import validate_partition
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
 )
@@ -1333,9 +1334,15 @@ class FakePartitionJudge:
     실 어댑터처럼 판정에 쓴 모델과 프롬프트 판본을 결과에 실어 돌려준다.
     """
 
-    def __init__(self, *, failing_types: tuple[str, ...] = ()) -> None:
+    def __init__(
+        self,
+        *,
+        failing_types: tuple[str, ...] = (),
+        canonical_type: str | None = None,
+    ) -> None:
         self.blocks: list = []
         self._failing_types = failing_types
+        self._canonical_type = canonical_type
 
     def judge(self, group):
         raise AssertionError("분할 경로는 예·아니오 판정을 부르지 않는다")
@@ -1349,11 +1356,11 @@ class FakePartitionJudge:
             grouped.setdefault(
                 " ".join(member.name.split()[:2]), []
             ).append(member)
-        return IdentityPartition(
+        partition = IdentityPartition(
             groups=tuple(
                 IdentityGroup(
                     canonical_name="정규 이름 제안",
-                    canonical_type=block.entity_type,
+                    canonical_type=self._canonical_type or block.entity_type,
                     member_ids=tuple(
                         member.member_id for member in members
                     ),
@@ -1364,6 +1371,13 @@ class FakePartitionJudge:
             model_id=PARTITION_MODEL_ID,
             prompt_version=PARTITION_PROMPT_VERSION,
         )
+        # 실 어댑터와 같은 자리에서 계약을 본다.
+        validate_partition(
+            partition,
+            block.member_ids,
+            entity_type=block.entity_type,
+        )
+        return partition
 
 
 def _google_candidates() -> list[StoredEntityCandidate]:
@@ -1574,6 +1588,26 @@ def test_partition_failure_isolates_only_that_block() -> None:
     assert result.singletons_promoted == 0
     assert uow.knowledge_candidates.resolved == {}
     assert uow.committed
+
+
+def test_partition_with_other_entity_type_is_rejected() -> None:
+    """그룹 종류가 블록과 다르면 그 블록을 접고 제안을 만들지 않는다."""
+    judge = FakePartitionJudge(canonical_type="made_up_type")
+    uow = FakeUnitOfWork(_google_candidates())
+
+    result = resolve_entity_candidates(
+        workspace_id=WORKSPACE,
+        judge=judge,
+        uow=uow,
+        name_embedder=_google_embedder(),
+    )
+
+    assert result.blocks_formed == 1
+    assert result.blocks_failed == 1
+    assert result.proposals_created == 0
+    assert result.singletons_promoted == 0
+    # 판정을 못 받은 후보는 pending으로 남는다.
+    assert uow.knowledge_candidates.resolved == {}
 
 
 def test_rerun_of_same_block_opens_no_new_event() -> None:

@@ -40,7 +40,9 @@ def test_full_cover_without_overlap_passes() -> None:
         )
     )
 
-    validate_partition(partition, ("a", "b", "c"))
+    validate_partition(
+        partition, ("a", "b", "c"), entity_type="feature_request"
+    )
 
 
 def test_unassigned_member_raises() -> None:
@@ -48,7 +50,9 @@ def test_unassigned_member_raises() -> None:
     partition = IdentityPartition(groups=(_group("가", ("a", "b")),))
 
     with pytest.raises(PartitionContractError):
-        validate_partition(partition, ("a", "b", "c"))
+        validate_partition(
+        partition, ("a", "b", "c"), entity_type="feature_request"
+    )
 
 
 def test_duplicate_assignment_raises() -> None:
@@ -58,7 +62,9 @@ def test_duplicate_assignment_raises() -> None:
     )
 
     with pytest.raises(PartitionContractError):
-        validate_partition(partition, ("a", "b", "c"))
+        validate_partition(
+        partition, ("a", "b", "c"), entity_type="feature_request"
+    )
 
 
 def test_unknown_member_raises() -> None:
@@ -66,7 +72,20 @@ def test_unknown_member_raises() -> None:
     partition = IdentityPartition(groups=(_group("가", ("a", "b", "z")),))
 
     with pytest.raises(PartitionContractError):
-        validate_partition(partition, ("a", "b"))
+        validate_partition(
+            partition, ("a", "b"), entity_type="feature_request"
+        )
+
+
+def test_group_type_other_than_block_type_raises() -> None:
+    """그룹 종류가 블록 종류와 다르면 예외다.
+
+    블록이 이미 종류를 정해 두었으므로 판정이 종류를 바꿀 자리가 없다.
+    """
+    partition = IdentityPartition(groups=(_group("가", ("a", "b")),))
+
+    with pytest.raises(PartitionContractError):
+        validate_partition(partition, ("a", "b"), entity_type="faq_question")
 
 
 def test_group_needs_at_least_one_member() -> None:
