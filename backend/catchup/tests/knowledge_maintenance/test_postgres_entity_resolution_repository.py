@@ -34,7 +34,14 @@ from catchup.knowledge_maintenance.contracts.extraction import ClaimCandidateDra
 from catchup.knowledge_maintenance.contracts.extraction import EntityCandidateDraft
 from catchup.knowledge_maintenance.contracts.extraction import KnowledgeCandidateBatch
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    EntityResolutionConflict,
+)
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
+)
+from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
+from catchup.knowledge_maintenance.ports.mutation_proposals import (
+    MergeProposalAlreadyDecided,
 )
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
     query_claims_as_of,
@@ -165,6 +172,7 @@ def test_mark_entity_resolved_excludes_from_pending(
             candidate_id=target,
             status=EntityResolutionStatus.ACCEPTED,
             resolved_node_id=node.id,
+            expected_node_id=None,
         )
         uow.commit()
 
@@ -176,6 +184,85 @@ def test_mark_entity_resolved_excludes_from_pending(
             )
         }
     assert target not in pending_ids
+
+
+def test_list_entity_candidate_ids_resolved_to_returns_sorted_ids(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """노드를 가리키는 후보 id를 오름차순으로 돌려준다.
+
+    다른 노드에 붙은 후보는 빠진다. 적용은 이 값을 event에 적고, 되돌림은
+    같은 값을 다시 읽어 견준다.
+    """
+    stored = _stored_candidates(workspace_id, session_factory, uow_factory)
+    payment = stored.entity_ids["e1"]
+    auth = stored.entity_ids["e2"]
+    elsewhere = stored.entity_ids["m1"]
+
+    with uow_factory() as uow:
+        node = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=None,
+            display_name="결제 기능",
+        )
+        other = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=None,
+            display_name="다른 기능",
+        )
+        for candidate_id, target in (
+            (payment, node.id),
+            (auth, node.id),
+            (elsewhere, other.id),
+        ):
+            uow.knowledge_candidates.mark_entity_resolved(
+                candidate_id=candidate_id,
+                status=EntityResolutionStatus.MERGED,
+                resolved_node_id=target,
+                expected_node_id=None,
+            )
+        uow.commit()
+
+    with uow_factory() as uow:
+        found = uow.knowledge_candidates.list_entity_candidate_ids_resolved_to(
+            workspace_id=workspace_id,
+            node_id=node.id,
+        )
+    assert found == tuple(sorted((payment, auth)))
+
+
+def test_lock_entity_node_returns_node_or_none(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """잠근 노드를 도메인 값으로 돌려주고, 없는 노드에는 None을 준다."""
+    with uow_factory() as uow:
+        node = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=None,
+            display_name="결제 기능",
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        locked = uow.knowledge_nodes.lock_entity_node(
+            workspace_id=workspace_id,
+            node_id=node.id,
+        )
+        missing = uow.knowledge_nodes.lock_entity_node(
+            workspace_id=workspace_id,
+            node_id=uuid.uuid4(),
+        )
+    assert locked is not None
+    assert locked.id == node.id
+    assert locked.lifecycle_state is NodeLifecycleState.ACTIVE
+    assert missing is None
 
 
 def test_entity_node_roundtrip_by_canonical_key(
@@ -209,7 +296,11 @@ def test_add_alias_ignores_duplicates(
     session_factory: Callable[[], Session],
     uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
 ) -> None:
-    """같은 정규화 alias를 다시 넣어도 조용히 넘어간다."""
+    """같은 정규화 alias를 다시 넣어도 조용히 넘어간다.
+
+    두 번째 호출은 거짓을 준다. 부르는 쪽이 "이 이름은 내가 붙였다"를
+    저널에 적을지 이 값으로 가른다.
+    """
     with uow_factory() as uow:
         node = uow.knowledge_nodes.create_entity_node(
             workspace_id=workspace_id,
@@ -217,14 +308,14 @@ def test_add_alias_ignores_duplicates(
             canonical_key=f"{SOURCE_TYPE}:channel_talk_manager:m-1",
             display_name="캐치업 팀",
         )
-        uow.knowledge_nodes.add_alias(
+        first = uow.knowledge_nodes.add_alias(
             workspace_id=workspace_id,
             node_id=node.id,
             alias="캐치업 팀",
             normalized_alias="캐치업 팀",
             source="source",
         )
-        uow.knowledge_nodes.add_alias(
+        second = uow.knowledge_nodes.add_alias(
             workspace_id=workspace_id,
             node_id=node.id,
             alias="캐치업 팀",
@@ -233,6 +324,9 @@ def test_add_alias_ignores_duplicates(
         )
         uow.commit()
 
+    assert first is True
+    assert second is False
+
     with session_factory() as session:
         count = len(
             session.scalars(
@@ -240,6 +334,326 @@ def test_add_alias_ignores_duplicates(
             ).all()
         )
     assert count == 1
+
+
+def test_remove_alias_only_removes_confirmation_source(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """되돌림의 alias 제거는 확정이 남긴 행만 지운다.
+
+    같은 노드는 정규화 alias 하나당 행 하나라(uq_knowledge_node_aliases_
+    normalized), 추출기가 먼저 붙여 둔 이름에는 병합이 add_alias를 불러도
+    행이 늘지 않는다. 그 행까지 지우면 병합이 만들지도 않은 단서가
+    되돌림에 딸려 사라진다. 다른 노드에 붙은 같은 표기도 건드리면 안
+    된다.
+    """
+    with uow_factory() as uow:
+        node = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=None,
+            display_name="결제 기능",
+        )
+        other = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=None,
+            display_name="결제 기능",
+        )
+        # 추출기가 먼저 붙인 이름이다. 병합이 남긴 것이 아니다.
+        uow.knowledge_nodes.add_alias(
+            workspace_id=workspace_id,
+            node_id=node.id,
+            alias="결제 기능",
+            normalized_alias="결제 기능",
+            source="extractor",
+        )
+        # 병합이 남긴 이름이다.
+        uow.knowledge_nodes.add_alias(
+            workspace_id=workspace_id,
+            node_id=node.id,
+            alias="페이먼트",
+            normalized_alias="페이먼트",
+            source="system",
+        )
+        # 같은 표기가 다른 노드에도 확정으로 붙어 있다.
+        uow.knowledge_nodes.add_alias(
+            workspace_id=workspace_id,
+            node_id=other.id,
+            alias="페이먼트",
+            normalized_alias="페이먼트",
+            source="system",
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        uow.knowledge_nodes.remove_alias(
+            workspace_id=workspace_id,
+            node_id=node.id,
+            normalized_alias="결제 기능",
+        )
+        uow.knowledge_nodes.remove_alias(
+            workspace_id=workspace_id,
+            node_id=node.id,
+            normalized_alias="페이먼트",
+        )
+        # 없는 이름을 지우라고 해도 조용히 넘어간다.
+        uow.knowledge_nodes.remove_alias(
+            workspace_id=workspace_id,
+            node_id=node.id,
+            normalized_alias="없는 이름",
+        )
+        uow.commit()
+
+    with session_factory() as session:
+        remaining = session.scalars(
+            select(AliasRow).where(AliasRow.node_id == node.id)
+        ).all()
+        untouched = session.scalars(
+            select(AliasRow).where(AliasRow.node_id == other.id)
+        ).all()
+    assert [(row.normalized_alias, row.source) for row in remaining] == [
+        ("결제 기능", "extractor")
+    ]
+    assert [(row.normalized_alias, row.source) for row in untouched] == [
+        ("페이먼트", "system")
+    ]
+
+
+def test_retire_entity_node_clears_merge_target(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """퇴역은 lifecycle을 retired로 바꾸고 흡수처를 비운 채 commit된다.
+
+    ck_knowledge_nodes_merged_target이 merged가 아닌 행에 흡수처가 남아
+    있는 것을 막으므로, 흡수된 노드를 물릴 때 merged_into_node_id를 함께
+    비우지 않으면 flush에서 막힌다.
+    """
+    with uow_factory() as uow:
+        absorbed = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=None,
+            display_name="결제",
+        )
+        target = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=None,
+            display_name="결제 기능",
+        )
+        uow.commit()
+
+    with session_factory() as session:
+        row = session.get(NodeRow, absorbed.id)
+        assert row is not None
+        row.lifecycle_state = "merged"
+        row.merged_into_node_id = target.id
+        session.commit()
+
+    with uow_factory() as uow:
+        retired = uow.knowledge_nodes.retire_entity_node(
+            workspace_id=workspace_id,
+            node_id=absorbed.id,
+        )
+        uow.commit()
+    assert retired is True
+
+    with session_factory() as session:
+        row = session.get(NodeRow, absorbed.id)
+        assert row is not None
+        assert row.lifecycle_state == "retired"
+        assert row.merged_into_node_id is None
+
+    with uow_factory() as uow:
+        found = uow.knowledge_nodes.get_entity_by_id(
+            workspace_id=workspace_id,
+            node_id=absorbed.id,
+        )
+    assert found is not None
+    assert found.lifecycle_state is NodeLifecycleState.RETIRED
+
+
+def test_retire_entity_node_keeps_a_node_a_candidate_still_points_to(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """가리키는 후보가 남아 있는 노드는 물리지 않고 거짓을 돌려준다.
+
+    남은 후보 확인은 저장소가 노드 행을 잠근 채로 한다. 부르는 쪽이 먼저
+    세어 보고 그 뒤에 물리면 그 사이에 붙은 후보가 퇴역한 노드를 가리키게
+    된다.
+    """
+    stored = _stored_candidates(workspace_id, session_factory, uow_factory)
+
+    with uow_factory() as uow:
+        node = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=None,
+            display_name="결제 기능",
+        )
+        uow.knowledge_candidates.mark_entity_resolved(
+            candidate_id=stored.entity_ids["e1"],
+            status=EntityResolutionStatus.MERGED,
+            resolved_node_id=node.id,
+            expected_node_id=None,
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        retired = uow.knowledge_nodes.retire_entity_node(
+            workspace_id=workspace_id,
+            node_id=node.id,
+        )
+        uow.commit()
+    assert retired is False
+
+    with uow_factory() as uow:
+        found = uow.knowledge_nodes.get_entity_by_id(
+            workspace_id=workspace_id,
+            node_id=node.id,
+        )
+    assert found is not None
+    assert found.lifecycle_state is NodeLifecycleState.ACTIVE
+
+
+def test_mark_entity_resolved_moves_only_from_the_expected_node(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """후보가 지금 가리키는 노드가 기대와 같을 때만 옮긴다.
+
+    기대와 다르면 다른 결정이 먼저 옮겼다는 뜻이라 갱신하지 않는다.
+    이미 붙은 후보를 expected_node_id=None으로 다시 붙이려는 것도 같다.
+    """
+    stored = _stored_candidates(workspace_id, session_factory, uow_factory)
+    candidate_id = stored.entity_ids["e1"]
+
+    with uow_factory() as uow:
+        first = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=None,
+            display_name="결제 기능",
+        )
+        second = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=None,
+            display_name="다른 기능",
+        )
+        uow.knowledge_candidates.mark_entity_resolved(
+            candidate_id=candidate_id,
+            status=EntityResolutionStatus.MERGED,
+            resolved_node_id=first.id,
+            expected_node_id=None,
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        with pytest.raises(EntityResolutionConflict):
+            uow.knowledge_candidates.mark_entity_resolved(
+                candidate_id=candidate_id,
+                status=EntityResolutionStatus.MERGED,
+                resolved_node_id=second.id,
+                expected_node_id=None,
+            )
+
+    with uow_factory() as uow:
+        with pytest.raises(EntityResolutionConflict):
+            uow.knowledge_candidates.mark_entity_resolved(
+                candidate_id=candidate_id,
+                status=EntityResolutionStatus.MERGED,
+                resolved_node_id=second.id,
+                expected_node_id=second.id,
+            )
+
+    with uow_factory() as uow:
+        uow.knowledge_candidates.mark_entity_resolved(
+            candidate_id=candidate_id,
+            status=EntityResolutionStatus.MERGED,
+            resolved_node_id=second.id,
+            expected_node_id=first.id,
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        resolution = uow.knowledge_candidates.get_entity_resolution(
+            candidate_id=candidate_id,
+        )
+    assert resolution == (EntityResolutionStatus.MERGED.value, second.id)
+
+
+def test_mark_entity_resolved_rejects_a_retired_node(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """퇴역한 노드에는 후보를 붙이지 않는다.
+
+    붙이면 그 후보와 그 후보로 읽히는 지식이 살아 있는 graph에서 사라진다.
+    """
+    stored = _stored_candidates(workspace_id, session_factory, uow_factory)
+
+    with uow_factory() as uow:
+        node = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=None,
+            display_name="결제 기능",
+        )
+        assert uow.knowledge_nodes.retire_entity_node(
+            workspace_id=workspace_id,
+            node_id=node.id,
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        with pytest.raises(ValueError):
+            uow.knowledge_candidates.mark_entity_resolved(
+                candidate_id=stored.entity_ids["e1"],
+                status=EntityResolutionStatus.MERGED,
+                resolved_node_id=node.id,
+                expected_node_id=None,
+            )
+
+
+def test_mark_entity_resolved_rejects_an_unknown_node(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """없는 노드로 해소했다고 적을 수 없다."""
+    stored = _stored_candidates(workspace_id, session_factory, uow_factory)
+
+    with uow_factory() as uow:
+        with pytest.raises(ValueError):
+            uow.knowledge_candidates.mark_entity_resolved(
+                candidate_id=stored.entity_ids["e1"],
+                status=EntityResolutionStatus.MERGED,
+                resolved_node_id=uuid.uuid4(),
+                expected_node_id=None,
+            )
+
+
+def test_retire_unknown_entity_node_is_rejected(
+    workspace_id: int,
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """없는 노드를 물리라는 요청은 거부한다."""
+    with uow_factory() as uow:
+        with pytest.raises(ValueError):
+            uow.knowledge_nodes.retire_entity_node(
+                workspace_id=workspace_id,
+                node_id=uuid.uuid4(),
+            )
 
 
 def test_duplicate_proposal_roundtrip_and_abandon(
@@ -368,6 +782,64 @@ def test_replacing_proposal_reuses_key_row(
         ).all()
     assert operations[0].entity_candidate_id == other
     assert operations[1].entity_candidate_id == representative
+
+
+def test_mark_stale_moves_only_an_approved_proposal(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """approved 안건만 stale이 되고 결정 저널은 그대로 남는다.
+
+    승인 뒤 세계가 바뀌어 실행할 수 없게 된 안건을 끝맺는 자리다. 사람이
+    승인했다는 사실을 지우면 안 되므로 reviewer와 reviewed_at은 건드리지
+    않는다. 이미 끝난 안건을 다시 끝맺으려 하면 거부한다.
+    """
+    stored = _stored_candidates(workspace_id, session_factory, uow_factory)
+    representative = stored.entity_ids["e1"]
+    other = stored.entity_ids["e2"]
+
+    with uow_factory() as uow:
+        proposal_id = uow.mutation_proposals.add_duplicate_proposal(
+            workspace_id=workspace_id,
+            idempotency_key=f"stale-{uuid.uuid4().hex[:8]}",
+            trigger_entity_candidate_id=representative,
+            detector="catchup.name_group_judge",
+            detector_version="1",
+            summary="같은 이름 후보 병합",
+            resolver_metadata={"member_hash": "abc"},
+            representative_candidate_id=representative,
+            merge_candidate_ids=(other,),
+            proposed_type="feature",
+            proposed_name="결제 기능",
+        )
+        uow.mutation_proposals.mark_merge_approved(
+            workspace_id=workspace_id,
+            proposal_id=proposal_id,
+            reviewer="tester",
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        uow.mutation_proposals.mark_stale(
+            workspace_id=workspace_id,
+            proposal_id=proposal_id,
+        )
+        uow.commit()
+
+    with session_factory() as session:
+        row = session.get(ProposalRow, proposal_id)
+        assert row is not None
+        assert row.status == "stale"
+        assert row.reviewer == "tester"
+        assert row.reviewed_at is not None
+
+    with uow_factory() as uow:
+        with pytest.raises(MergeProposalAlreadyDecided):
+            uow.mutation_proposals.mark_stale(
+                workspace_id=workspace_id,
+                proposal_id=proposal_id,
+            )
 
 
 class _UnusedJudge:

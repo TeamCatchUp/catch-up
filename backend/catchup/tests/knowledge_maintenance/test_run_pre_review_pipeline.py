@@ -11,6 +11,7 @@ from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabul
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunSpec
 from catchup.knowledge_maintenance.ports.source_poller import SourcePollResult
 from catchup.knowledge_maintenance.services import run_pre_review_pipeline as pipeline
+from catchup.knowledge_maintenance.services.apply_mutation_proposals import ApplyResult
 from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
     ArtifactCompileResult,
 )
@@ -294,3 +295,211 @@ def test_status_reports_every_incomplete_work_signal(
     )
 
     assert status is expected
+
+
+def test_status_counts_failed_judge_blocks_as_incomplete_work() -> None:
+    """판정에 실패해 격리한 블록이 회차 상태에 드러나는지 확인한다.
+
+    격리한 블록의 후보는 pending으로 남아 다음 회차가 다시 집어야 하므로
+    부분 실패로 센다.
+    """
+    status = pipeline._derive_status(
+        skipped_item_count=0,
+        held_back_item_count=0,
+        intake_failure=None,
+        extraction=pipeline.ExtractionStageResult(),
+        resolution=ResolutionResult(blocks_failed=1),
+        artifacts=ArtifactCompileResult(),
+    )
+
+    assert status is pipeline.PreReviewPipelineStatus.PARTIAL_FAILURE
+
+
+@pytest.mark.parametrize(
+    ("auto_merge", "expected"),
+    [
+        (None, pipeline.PreReviewPipelineStatus.COMPLETED),
+        (
+            ApplyResult(
+                proposals_applied=1,
+                proposals_failed=0,
+                candidates_resolved=2,
+                candidates_already_resolved=0,
+            ),
+            pipeline.PreReviewPipelineStatus.COMPLETED,
+        ),
+        (
+            ApplyResult(
+                proposals_applied=0,
+                proposals_failed=1,
+                candidates_resolved=0,
+                candidates_already_resolved=0,
+            ),
+            pipeline.PreReviewPipelineStatus.PARTIAL_FAILURE,
+        ),
+    ],
+)
+def test_status_counts_unapplied_auto_merge_as_incomplete_work(
+    auto_merge: ApplyResult | None,
+    expected: pipeline.PreReviewPipelineStatus,
+) -> None:
+    """적용하지 못한 자동 병합 안건이 회차 상태에 드러나는지 확인한다.
+
+    승인은 끝났는데 적용이 실패한 안건은 approved로 남아 다음 회차가 다시
+    집어야 한다. 다 적용했거나 자동 병합을 돌리지 않은 회차는 상태를
+    낮추지 않는다.
+    """
+    status = pipeline._derive_status(
+        skipped_item_count=0,
+        held_back_item_count=0,
+        intake_failure=None,
+        extraction=pipeline.ExtractionStageResult(),
+        resolution=ResolutionResult(),
+        artifacts=ArtifactCompileResult(),
+        auto_merge=auto_merge,
+    )
+
+    assert status is expected
+
+
+def test_status_stays_completed_when_proposals_went_stale() -> None:
+    """stale은 다시 시도할 것이 없으므로 부분 실패가 아니다.
+
+    승인 뒤 세계가 바뀐 안건은 stale로 종결됐고, 남은 후보는 다음 회차가
+    새 구성으로 다시 판정한다.
+    """
+    status = pipeline._derive_status(
+        skipped_item_count=0,
+        held_back_item_count=0,
+        intake_failure=None,
+        extraction=pipeline.ExtractionStageResult(),
+        resolution=ResolutionResult(),
+        artifacts=ArtifactCompileResult(),
+        auto_merge=ApplyResult(
+            proposals_applied=0,
+            proposals_failed=0,
+            proposals_stale=2,
+            candidates_resolved=0,
+            candidates_already_resolved=0,
+        ),
+    )
+
+    assert status is pipeline.PreReviewPipelineStatus.COMPLETED
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("auto_merge_enabled", [True, False])
+async def test_auto_merge_flag_drives_resolution_and_apply(
+    monkeypatch: pytest.MonkeyPatch,
+    auto_merge_enabled: bool,
+) -> None:
+    resolve_kwargs: list[dict] = []
+    apply_calls: list[tuple[object, dict]] = []
+
+    async def run_extraction(**_: object) -> pipeline.ExtractionStageResult:
+        return pipeline.ExtractionStageResult()
+
+    def resolve_candidates(**kwargs: object) -> ResolutionResult:
+        resolve_kwargs.append(dict(kwargs))
+        return ResolutionResult(proposals_created=1)
+
+    def apply_proposals(uow_factory: object, **kwargs: object) -> ApplyResult:
+        apply_calls.append((uow_factory, dict(kwargs)))
+        return ApplyResult(
+            proposals_applied=1,
+            proposals_failed=0,
+            candidates_resolved=2,
+            candidates_already_resolved=0,
+        )
+
+    monkeypatch.setattr(pipeline, "_run_extraction", run_extraction)
+    monkeypatch.setattr(pipeline, "resolve_entity_candidates", resolve_candidates)
+    monkeypatch.setattr(pipeline, "apply_mutation_proposals", apply_proposals)
+    monkeypatch.setattr(
+        pipeline,
+        "resolve_claim_conflicts",
+        lambda **_: ClaimConflictResult(),
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "compile_definition_artifacts",
+        lambda *_args, **_kwargs: ArtifactCompileResult(),
+    )
+
+    result = await pipeline.run_pre_review_pipeline(
+        SourcePollResult(),
+        workspace_id=1,
+        normalizer=object(),  # type: ignore[arg-type]
+        extractor=object(),  # type: ignore[arg-type]
+        extraction_spec=ExtractionRunSpec(
+            provider="test",
+            extractor_version="1",
+            ontology_id="wiki",
+            vocabulary=ExtractionVocabulary(snapshot_id="v1"),
+        ),
+        extraction_contract_version="1",
+        judge=None,
+        uow_factory=_WorkspaceBoundUow,  # type: ignore[arg-type]
+        auto_merge_enabled=auto_merge_enabled,
+    )
+
+    assert resolve_kwargs[0]["auto_merge_enabled"] is auto_merge_enabled
+    if auto_merge_enabled:
+        assert len(apply_calls) == 1
+        assert apply_calls[0][0] is _WorkspaceBoundUow
+        assert apply_calls[0][1] == {"workspace_id": 1}
+        assert result.auto_merge is not None
+        assert result.auto_merge.candidates_resolved == 2
+    else:
+        assert apply_calls == []
+        assert result.auto_merge is None
+
+
+@pytest.mark.asyncio
+async def test_auto_merge_stays_off_when_caller_omits_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    resolve_kwargs: list[dict] = []
+
+    async def run_extraction(**_: object) -> pipeline.ExtractionStageResult:
+        return pipeline.ExtractionStageResult()
+
+    def resolve_candidates(**kwargs: object) -> ResolutionResult:
+        resolve_kwargs.append(dict(kwargs))
+        return ResolutionResult()
+
+    def unexpected_apply(*_args: object, **_kwargs: object) -> ApplyResult:
+        raise AssertionError("apply must not run while auto merge is off")
+
+    monkeypatch.setattr(pipeline, "_run_extraction", run_extraction)
+    monkeypatch.setattr(pipeline, "resolve_entity_candidates", resolve_candidates)
+    monkeypatch.setattr(pipeline, "apply_mutation_proposals", unexpected_apply)
+    monkeypatch.setattr(
+        pipeline,
+        "resolve_claim_conflicts",
+        lambda **_: ClaimConflictResult(),
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "compile_definition_artifacts",
+        lambda *_args, **_kwargs: ArtifactCompileResult(),
+    )
+
+    result = await pipeline.run_pre_review_pipeline(
+        SourcePollResult(),
+        workspace_id=1,
+        normalizer=object(),  # type: ignore[arg-type]
+        extractor=object(),  # type: ignore[arg-type]
+        extraction_spec=ExtractionRunSpec(
+            provider="test",
+            extractor_version="1",
+            ontology_id="wiki",
+            vocabulary=ExtractionVocabulary(snapshot_id="v1"),
+        ),
+        extraction_contract_version="1",
+        judge=None,
+        uow_factory=_WorkspaceBoundUow,  # type: ignore[arg-type]
+    )
+
+    assert resolve_kwargs[0]["auto_merge_enabled"] is False
+    assert result.auto_merge is None

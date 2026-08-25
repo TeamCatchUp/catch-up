@@ -104,6 +104,9 @@ from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     AssertionResolutionStatus,
 )
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    EntityResolutionConflict,
+)
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
 )
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionMethod
@@ -142,6 +145,8 @@ from catchup.knowledge_maintenance.ports.artifacts import ProposalAlreadyDecided
 from catchup.knowledge_maintenance.ports.artifacts import StoredArtifactProposal
 from catchup.knowledge_maintenance.ports.block_verdicts import StoredBlockVerdict
 from catchup.knowledge_maintenance.ports.knowledge_candidates import AsOfClaim
+from catchup.knowledge_maintenance.ports.knowledge_nodes import ActiveEntityAlias
+from catchup.knowledge_maintenance.ports.mutation_proposals import ApprovedProposal
 from catchup.knowledge_maintenance.ports.mutation_proposals import (
     MergeProposalAlreadyDecided,
 )
@@ -532,6 +537,52 @@ class SqlAlchemyKnowledgeNodeRepository:
         )
         return knowledge_node_to_domain(row) if row is not None else None
 
+    def list_active_entity_aliases(
+        self,
+        *,
+        workspace_id: int,
+    ) -> list[ActiveEntityAlias]:
+        """살아 있는 entity 노드의 이름을 모두 모은다.
+
+        노드 하나에 이름이 여럿이면 그 수만큼 행이 나온다. 어느 표기가
+        후보와 닮았는지는 부르는 쪽이 견줘야 알 수 있어 저장소가 미리
+        하나로 줄이지 않는다. 정렬을 node id·정규화 이름으로 고정해 같은
+        질의가 같은 순서를 주게 한다.
+        """
+        rows = self._session.execute(
+            select(
+                KnowledgeNodeAliasRow.node_id,
+                KnowledgeNodeRow.entity_type,
+                KnowledgeNodeAliasRow.alias,
+                KnowledgeNodeAliasRow.normalized_alias,
+            )
+            .join(
+                KnowledgeNodeRow,
+                KnowledgeNodeRow.id == KnowledgeNodeAliasRow.node_id,
+            )
+            .where(
+                KnowledgeNodeAliasRow.workspace_id == workspace_id,
+                KnowledgeNodeRow.workspace_id == workspace_id,
+                KnowledgeNodeRow.node_kind == NodeKind.ENTITY.value,
+                KnowledgeNodeRow.lifecycle_state
+                == NodeLifecycleState.ACTIVE.value,
+                KnowledgeNodeRow.entity_type.is_not(None),
+            )
+            .order_by(
+                KnowledgeNodeAliasRow.node_id,
+                KnowledgeNodeAliasRow.normalized_alias,
+            )
+        ).all()
+        return [
+            ActiveEntityAlias(
+                node_id=row.node_id,
+                entity_type=row.entity_type,
+                alias=row.alias,
+                normalized_alias=row.normalized_alias,
+            )
+            for row in rows
+        ]
+
     def get_entity_by_id(
         self,
         *,
@@ -551,6 +602,33 @@ class SqlAlchemyKnowledgeNodeRepository:
             )
         )
         return knowledge_node_to_domain(row) if row is not None else None
+
+    def lock_entity_node(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+    ) -> KnowledgeNode | None:
+        """노드 행을 SELECT ... FOR UPDATE로 잠그고 현재 값을 준다.
+
+        후보를 붙이는 mark_entity_resolved와 노드를 물리는
+        retire_entity_node가 같은 행을 잠그므로, 먼저 잠근 쪽이 commit할
+        때까지 나머지는 기다린다. 없는 노드에는 None을 준다.
+        """
+        row = self._session.scalar(
+            select(KnowledgeNodeRow)
+            .where(
+                KnowledgeNodeRow.workspace_id == workspace_id,
+                KnowledgeNodeRow.id == node_id,
+            )
+            .with_for_update()
+            # 이 세션이 앞서 읽어 둔 노드가 있으면 잠금을 얻고도 예전 값을
+            # 그대로 볼 수 있다. 잠근 뒤의 값으로 다시 채운다.
+            .execution_options(populate_existing=True)
+        )
+        if row is None:
+            return None
+        return knowledge_node_to_domain(row)
 
     def find_entity_candidates_by_similarity(
         self,
@@ -733,8 +811,13 @@ class SqlAlchemyKnowledgeNodeRepository:
         alias: str,
         normalized_alias: str,
         source: str,
-    ) -> None:
-        """노드에 이름 단서를 남긴다. 같은 정규화 alias면 넘어간다."""
+    ) -> bool:
+        """노드에 이름 단서를 남긴다. 같은 정규화 alias면 넘어간다.
+
+        Returns:
+            이번 호출이 행을 새로 넣었으면 참, 이미 있어 넘어갔으면 거짓을
+            준다.
+        """
         exists = self._session.scalar(
             select(KnowledgeNodeAliasRow.id).where(
                 KnowledgeNodeAliasRow.workspace_id == workspace_id,
@@ -743,7 +826,7 @@ class SqlAlchemyKnowledgeNodeRepository:
             )
         )
         if exists is not None:
-            return
+            return False
         self._session.add(
             KnowledgeNodeAliasRow(
                 id=uuid.uuid4(),
@@ -755,6 +838,90 @@ class SqlAlchemyKnowledgeNodeRepository:
             )
         )
         self._session.flush()
+        return True
+
+    def remove_alias(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+        normalized_alias: str,
+    ) -> None:
+        """확정이 남긴 이름 단서 하나를 노드에서 거둔다.
+
+        source가 "system"인 행만 지운다. 같은 표기를 다른 관찰이 따로
+        붙여 두었을 수 있어, 정규화 이름만 보고 지우면 되돌림과 무관한
+        단서까지 사라진다.
+        """
+        row = self._session.scalar(
+            select(KnowledgeNodeAliasRow).where(
+                KnowledgeNodeAliasRow.workspace_id == workspace_id,
+                KnowledgeNodeAliasRow.node_id == node_id,
+                KnowledgeNodeAliasRow.normalized_alias == normalized_alias,
+                KnowledgeNodeAliasRow.source == "system",
+            )
+        )
+        if row is None:
+            return
+        self._session.delete(row)
+        self._session.flush()
+
+    def retire_entity_node(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+    ) -> bool:
+        """가리키는 후보가 없는 entity 노드를 퇴역 상태로 물린다.
+
+        행을 지우지 않는다. 저널과 지난 기록이 이 노드를 계속 가리키므로
+        노드는 남되 살아 있는 노드를 보는 경로에서만 빠져야 한다.
+
+        노드 행을 SELECT ... FOR UPDATE로 먼저 잠그고, 그 잠금을 쥔 채로
+        이 노드를 가리키는 후보가 있는지 센다. 후보를 붙이는
+        mark_entity_resolved도 같은 행을 잠그므로, 두 트랜잭션이 겹치면
+        먼저 잠근 쪽이 commit할 때까지 뒤의 쪽이 기다린다. 잠금을 얻은 뒤
+        다시 읽으므로 READ COMMITTED에서도 상대가 방금 commit한 결과가
+        보인다.
+
+        Returns:
+            퇴역시켰으면 참, 아직 이 노드를 가리키는 후보가 있어 그대로
+            두었으면 거짓을 준다. 이미 퇴역한 노드는 참이다.
+
+        Raises:
+            ValueError: 노드가 없을 때 던진다.
+        """
+        row = self._session.scalar(
+            select(KnowledgeNodeRow)
+            .where(
+                KnowledgeNodeRow.workspace_id == workspace_id,
+                KnowledgeNodeRow.id == node_id,
+            )
+            .with_for_update()
+            # 이 세션이 앞서 읽어 둔 노드가 있으면 잠금을 얻고도 예전 값을
+            # 그대로 볼 수 있다. 잠근 뒤의 값으로 다시 채운다.
+            .execution_options(populate_existing=True)
+        )
+        if row is None:
+            raise ValueError(f"unknown knowledge node: {node_id}")
+        if row.lifecycle_state == NodeLifecycleState.RETIRED.value:
+            return True
+        remaining = self._session.scalar(
+            select(func.count())
+            .select_from(KnowledgeEntityCandidateRow)
+            .where(
+                KnowledgeEntityCandidateRow.workspace_id == workspace_id,
+                KnowledgeEntityCandidateRow.resolved_node_id == node_id,
+            )
+        )
+        if remaining:
+            return False
+        row.lifecycle_state = NodeLifecycleState.RETIRED.value
+        # merged_into_node_id는 비운다. lifecycle이 merged가 아닌 행에
+        # 흡수처가 남아 있으면 DB CHECK가 막는다.
+        row.merged_into_node_id = None
+        self._session.flush()
+        return True
 
 
 class SqlAlchemyKnowledgeCandidateRepository:
@@ -1572,16 +1739,62 @@ class SqlAlchemyKnowledgeCandidateRepository:
         candidate_id: uuid.UUID,
         status: EntityResolutionStatus,
         resolved_node_id: uuid.UUID,
+        expected_node_id: uuid.UUID | None,
     ) -> None:
-        """후보가 어느 canonical 노드로 해소됐는지 기록한다."""
-        self._session.execute(
+        """후보가 어느 canonical 노드로 해소됐는지 기록한다.
+
+        붙일 노드 행을 SELECT ... FOR UPDATE로 먼저 잠근다. 노드를
+        퇴역시키는 retire_entity_node도 같은 행을 잠그고 남은 후보를 세므로,
+        잠금이 두 경로를 한 줄로 세운다. 잠금을 얻은 뒤 lifecycle을 읽으니
+        상대가 방금 물린 결과도 보인다.
+
+        후보 UPDATE에는 expected_node_id 조건을 함께 건다. 노드 잠금은 붙일
+        노드끼리만 두 경로를 세우므로, 서로 다른 노드로 같은 후보를 옮기는
+        두 결정은 잠금으로 걸러지지 않는다. 기대한 상태와 다르면 UPDATE가
+        0건이 되고, 그때 EntityResolutionConflict를 던진다.
+
+        Raises:
+            ValueError: 붙일 노드가 없거나 이미 퇴역한 노드일 때 던진다.
+                퇴역한 노드에 후보를 붙이면 그 후보와 그 후보로 읽히는
+                지식이 살아 있는 graph에서 사라진다.
+            EntityResolutionConflict: 후보가 지금 expected_node_id를
+                가리키지 않을 때 던진다.
+        """
+        lifecycle_state = self._session.scalar(
+            select(KnowledgeNodeRow.lifecycle_state)
+            .where(KnowledgeNodeRow.id == resolved_node_id)
+            .with_for_update()
+        )
+        if lifecycle_state is None:
+            raise ValueError(f"unknown knowledge node: {resolved_node_id}")
+        if lifecycle_state == NodeLifecycleState.RETIRED.value:
+            raise ValueError(f"retired knowledge node: {resolved_node_id}")
+        statement = (
             update(KnowledgeEntityCandidateRow)
-            .where(KnowledgeEntityCandidateRow.id == candidate_id)
+            .where(
+                KnowledgeEntityCandidateRow.id == candidate_id,
+                KnowledgeEntityCandidateRow.resolved_node_id.is_not_distinct_from(
+                    expected_node_id
+                ),
+            )
             .values(
                 resolution_status=status.value,
                 resolved_node_id=resolved_node_id,
             )
         )
+        if expected_node_id is None:
+            # 아직 어느 노드도 가리키지 않는 후보는 pending이어야 한다.
+            # rejected나 superseded로 닫힌 후보를 붙이지 않는다.
+            statement = statement.where(
+                KnowledgeEntityCandidateRow.resolution_status
+                == EntityResolutionStatus.PENDING.value
+            )
+        result = self._session.execute(statement)
+        if result.rowcount != 1:
+            raise EntityResolutionConflict(
+                f"후보의 해소 상태가 바뀌었다: {candidate_id} "
+                f"(기대 노드 {expected_node_id})"
+            )
         self._session.flush()
 
     def get_entity_resolution(
@@ -1599,6 +1812,23 @@ class SqlAlchemyKnowledgeCandidateRepository:
         if row is None:
             return None
         return (row[0], row[1])
+
+    def list_entity_candidate_ids_resolved_to(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+    ) -> tuple[uuid.UUID, ...]:
+        """어떤 노드를 지금 가리키는 entity 후보 id를 오름차순으로 준다."""
+        rows = self._session.scalars(
+            select(KnowledgeEntityCandidateRow.id)
+            .where(
+                KnowledgeEntityCandidateRow.workspace_id == workspace_id,
+                KnowledgeEntityCandidateRow.resolved_node_id == node_id,
+            )
+            .order_by(KnowledgeEntityCandidateRow.id)
+        ).all()
+        return tuple(rows)
 
     def get_claim_validity(
         self,
@@ -1996,18 +2226,19 @@ class SqlAlchemyMutationProposalRepository:
         self,
         *,
         workspace_id: int,
-    ) -> list[tuple[uuid.UUID, tuple[StoredOperation, ...]]]:
+    ) -> list[ApprovedProposal]:
         """승인됐지만 아직 적용되지 않은 안건을 명령과 함께 모은다."""
-        proposal_ids = self._session.scalars(
-            select(KnowledgeMutationProposalRow.id)
+        proposal_rows = self._session.scalars(
+            select(KnowledgeMutationProposalRow)
             .where(
                 KnowledgeMutationProposalRow.workspace_id == workspace_id,
                 KnowledgeMutationProposalRow.status == "approved",
             )
             .order_by(KnowledgeMutationProposalRow.created_at)
         ).all()
-        if not proposal_ids:
+        if not proposal_rows:
             return []
+        proposal_ids = [row.id for row in proposal_rows]
         operation_rows = self._session.scalars(
             select(KnowledgeMutationOperationRow)
             .where(
@@ -2031,8 +2262,18 @@ class SqlAlchemyMutationProposalRepository:
                 )
             )
         return [
-            (proposal_id, tuple(grouped.get(proposal_id, ())))
-            for proposal_id in proposal_ids
+            ApprovedProposal(
+                proposal_id=row.id,
+                proposal_kind=row.proposal_kind,
+                # 승인 행에는 reviewer가 반드시 있지만 컬럼은 pending 행을
+                # 위해 nullable이라 빈 문자열로 받아 둔다.
+                reviewer=row.reviewer or "",
+                detector=row.detector,
+                detector_version=row.detector_version,
+                resolver_metadata=dict(row.resolver_metadata or {}),
+                operations=tuple(grouped.get(row.id, ())),
+            )
+            for row in proposal_rows
         ]
 
     def mark_applied(
@@ -2054,6 +2295,33 @@ class SqlAlchemyMutationProposalRepository:
                 KnowledgeMutationProposalRow.status == "approved",
             )
             .values(status="applied", applied_at=func.now())
+        )
+        if result.rowcount != 1:
+            raise MergeProposalAlreadyDecided(str(proposal_id))
+        self._session.flush()
+
+    def mark_stale(
+        self,
+        *,
+        workspace_id: int,
+        proposal_id: uuid.UUID,
+    ) -> None:
+        """승인 뒤 실행할 수 없게 된 안건을 stale로 끝맺는다.
+
+        결정(reviewer·reviewed_at)은 그대로 둔다. 사람이 승인했다는 사실은
+        남아야 한다.
+
+        Raises:
+            MergeProposalAlreadyDecided: approved 상태가 아니다.
+        """
+        result = self._session.execute(
+            update(KnowledgeMutationProposalRow)
+            .where(
+                KnowledgeMutationProposalRow.workspace_id == workspace_id,
+                KnowledgeMutationProposalRow.id == proposal_id,
+                KnowledgeMutationProposalRow.status == "approved",
+            )
+            .values(status="stale")
         )
         if result.rowcount != 1:
             raise MergeProposalAlreadyDecided(str(proposal_id))
@@ -2320,8 +2588,12 @@ class SqlAlchemyMutationProposalRepository:
         merge_candidate_ids: tuple[uuid.UUID, ...],
         proposed_type: str,
         proposed_name: str,
+        merge_into_node_id: uuid.UUID | None = None,
     ) -> uuid.UUID:
         """같은 대상 후보들을 하나로 합치는 계획서를 쓴다.
+
+        `merge_into_node_id`를 주면 1번 명령이 노드를 새로 만들지 않고 그
+        노드로 붙는다는 표시를 명령 재료에 함께 적는다.
 
         같은 key의 행이 계류·접힘 상태면 그 행을 되살려 내용을
         갈아끼운다. `(workspace_id, idempotency_key)` UNIQUE가 상태를
@@ -2392,6 +2664,12 @@ class SqlAlchemyMutationProposalRepository:
             # 먼저 확정한다.
             self._session.flush()
 
+        operation_data: dict[str, JsonValue] = {
+            "proposed_type": proposed_type,
+            "proposed_name": proposed_name,
+        }
+        if merge_into_node_id is not None:
+            operation_data["merge_into_node_id"] = str(merge_into_node_id)
         self._session.add(
             KnowledgeMutationOperationRow(
                 id=uuid.uuid4(),
@@ -2400,10 +2678,7 @@ class SqlAlchemyMutationProposalRepository:
                 sequence=1,
                 operation_type="create_entity",
                 entity_candidate_id=representative_candidate_id,
-                operation_data={
-                    "proposed_type": proposed_type,
-                    "proposed_name": proposed_name,
-                },
+                operation_data=operation_data,
             )
         )
         for offset, candidate_id in enumerate(merge_candidate_ids, start=2):

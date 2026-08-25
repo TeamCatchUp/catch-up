@@ -129,3 +129,27 @@ async def test_job_rejects_incomplete_poll_before_pipeline(monkeypatch) -> None:
 
     with pytest.raises(RuntimeError, match="incomplete"):
         await job.run_channel_talk_pre_review_job(3)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("auto_merge_enabled", [True, False])
+async def test_job_passes_auto_merge_kill_switch_to_pipeline(
+    monkeypatch, auto_merge_enabled: bool
+) -> None:
+    _patch_dependencies(monkeypatch)
+    monkeypatch.setattr(
+        job.settings,
+        "KNOWLEDGE_AUTO_MERGE_ENABLED",
+        auto_merge_enabled,
+    )
+    pipeline_calls = []
+
+    async def _run_pipeline(poll_result, **kwargs):
+        pipeline_calls.append(kwargs)
+        return SimpleNamespace(status=PreReviewPipelineStatus.COMPLETED)
+
+    monkeypatch.setattr(job, "run_pre_review_pipeline", _run_pipeline)
+
+    await job.run_channel_talk_pre_review_job(3)
+
+    assert pipeline_calls[0]["auto_merge_enabled"] is auto_merge_enabled

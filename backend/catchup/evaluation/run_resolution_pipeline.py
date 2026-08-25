@@ -6,6 +6,10 @@
 (proposal)으로 해소한다. 행 2 Resolution의 첫 슬라이스를 손으로 돌려
 보는 것이다.
 
+`KNOWLEDGE_AUTO_MERGE_ENABLED`가 켜져 있으면 해소가 병합 proposal을
+시스템 이름으로 승인하고, 이 스크립트가 곧바로 적용까지 이어서 돌린다.
+꺼져 있으면 승인도 적용도 하지 않고 proposal을 pending으로 남긴다.
+
 여러 번 돌려도 안전하다. 해소된 후보는 스캔에서 빠지고, proposal은
 그룹당 pending 하나만 유지된다.
 
@@ -23,6 +27,8 @@ import argparse
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from catchup.components.embedder.constants import EmbeddingProvider
+from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.llm.constants import LlmProvider
 from catchup.components.llm.constants import ModelCapacity
 from catchup.components.llm.factory import get_llm_service
@@ -30,11 +36,23 @@ from catchup.configs.config import settings
 from catchup.knowledge_maintenance.adapters.llm.identity_judge import (
     BedrockIdentityJudge,
 )
+from catchup.knowledge_maintenance.adapters.llm.name_embedder import (
+    EmbeddingServiceNameEmbedder,
+)
+from catchup.knowledge_maintenance.adapters.llm.name_embedder import (
+    cached_name_embedder,
+)
 from catchup.knowledge_maintenance.adapters.llm.structured_extractor import CONTRACT_ID
+from catchup.knowledge_maintenance.adapters.postgres.name_embedding_cache import (
+    SqlAlchemyNameEmbeddingCache,
+)
 from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
     KnowledgeMaintenanceUnitOfWork,
 )
 from catchup.knowledge_maintenance.contracts.extraction import EntityTypeEntry
+from catchup.knowledge_maintenance.services.apply_mutation_proposals import (
+    apply_mutation_proposals,
+)
 from catchup.knowledge_maintenance.services.converge_vocabulary import (
     resolve_latest_published_version,
 )
@@ -113,6 +131,7 @@ def main() -> None:
     uow = KnowledgeMaintenanceUnitOfWork(session_factory)
 
     judge = None
+    name_embedder = None
     if not args.skip_judge:
         version = args.vocabulary_version
         if version is None:
@@ -147,11 +166,29 @@ def main() -> None:
             service.get_llm(),
             entity_types=entity_types,
         )
+        # 임베더를 못 만들면 여기서 멈춘다. 조용히 없이 돌면 후보군이
+        # 정확 일치로 좁아져 표기가 조금 다른 같은 대상이 다시 각자
+        # 노드로 굳는데, 그렇게 굳은 노드는 이 단계가 다시 합쳐 주지
+        # 않는다.
+        # 캐시를 둘러 이미 벡터로 바꿔 본 이름은 다시 임베딩하지 않는다.
+        # 라운드마다 살아 있는 노드 별칭을 전부 다시 부르던 몫이 줄어든다.
+        name_embedder = cached_name_embedder(
+            EmbeddingServiceNameEmbedder(
+                get_embedding_service(EmbeddingProvider.AWS_BEDROCK)
+            ),
+            SqlAlchemyNameEmbeddingCache(session_factory),
+            workspace_id=args.workspace_id,
+        )
 
+    # kill switch를 읽는 자리는 이 러너 한 곳이다. 해소 서비스와 적용
+    # 서비스는 설정을 직접 읽지 않고 넘겨받은 값만 본다.
+    auto_merge_enabled = settings.KNOWLEDGE_AUTO_MERGE_ENABLED
     result = resolve_entity_candidates(
         workspace_id=args.workspace_id,
         judge=judge,
         uow=uow,
+        name_embedder=name_embedder,
+        auto_merge_enabled=auto_merge_enabled,
     )
 
     print("=== Resolution 결과 ===")
@@ -167,6 +204,35 @@ def main() -> None:
         f"  | proposal 생성 {result.proposals_created}"
         f" · 폐기 {result.proposals_abandoned}"
     )
+    print(
+        f"  유사 이름 블록 {result.blocks_formed}"
+        f"  | 분할 판정 {result.blocks_judged}"
+        f" (실패 {result.blocks_failed})"
+        f"  | 병합 abstain {result.groups_abstained}"
+    )
+
+    if auto_merge_enabled:
+        # 승인과 적용은 트랜잭션이 다르므로 안건마다 새 경계가 필요하다.
+        def apply_uow() -> KnowledgeMaintenanceUnitOfWork:
+            return KnowledgeMaintenanceUnitOfWork(
+                session_factory,
+                workspace_id=args.workspace_id,
+            )
+
+        applied = apply_mutation_proposals(
+            apply_uow,
+            workspace_id=args.workspace_id,
+        )
+        print("=== 자동 병합 적용 결과 ===")
+        print(f"  적용된 안건 {applied.proposals_applied}")
+        print(f"  실패한 안건 {applied.proposals_failed}")
+        print(f"  stale로 끝낸 안건 {applied.proposals_stale}")
+        print(f"  새로 해소된 후보 {applied.candidates_resolved}")
+    else:
+        print(
+            "자동 병합이 꺼져 있다(KNOWLEDGE_AUTO_MERGE_ENABLED=false). "
+            "병합 안건은 pending으로 남는다."
+        )
 
     engine.dispose()
 

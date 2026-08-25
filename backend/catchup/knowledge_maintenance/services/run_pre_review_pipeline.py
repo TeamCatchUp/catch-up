@@ -37,9 +37,14 @@ from catchup.knowledge_maintenance.ports.extraction import ExtractionAPIError
 from catchup.knowledge_maintenance.ports.extraction import ExtractionContractError
 from catchup.knowledge_maintenance.ports.extraction import KnowledgeExtractionPort
 from catchup.knowledge_maintenance.ports.identity_judge import IdentityJudge
+from catchup.knowledge_maintenance.ports.name_embedder import NameEmbedder
 from catchup.knowledge_maintenance.ports.observation_normalizer import ObservationNormalizer
 from catchup.knowledge_maintenance.ports.source_poller import SkippedItem
 from catchup.knowledge_maintenance.ports.source_poller import SourcePollResult
+from catchup.knowledge_maintenance.services.apply_mutation_proposals import ApplyResult
+from catchup.knowledge_maintenance.services.apply_mutation_proposals import (
+    apply_mutation_proposals,
+)
 from catchup.knowledge_maintenance.services.compile_entity_artifacts import ArtifactCompileResult
 from catchup.knowledge_maintenance.services.compile_entity_artifacts import (
     compile_definition_artifacts,
@@ -102,6 +107,7 @@ class PreReviewPipelineResult:
     resolution: ResolutionResult
     claim_conflicts: ClaimConflictResult
     artifacts: ArtifactCompileResult
+    auto_merge: ApplyResult | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,7 +131,9 @@ async def run_pre_review_pipeline(
     extraction_contract_version: str,
     judge: IdentityJudge | None,
     uow_factory: UnitOfWorkFactory,
+    name_embedder: NameEmbedder | None = None,
     event_limit: int | None = None,
+    auto_merge_enabled: bool = False,
     clock: Callable[[], datetime] | None = None,
 ) -> PreReviewPipelineResult:
     """
@@ -133,6 +141,10 @@ async def run_pre_review_pipeline(
 
     항목 단위 실패는 `PARTIAL_FAILURE` 결과로 반환하며
     파이프라인 자체를 계속할 수 없는 예외는 `failed`로 처리하여 호출자에게 전달한다.
+
+    ``auto_merge_enabled``는 병합 자동 확정 여부를 호출자가 정하게 하는
+    인자다. 이 서비스는 설정을 직접 읽지 않는다. 러너가 kill switch 값을
+    읽어 넘긴다.
     """
     started_at = perf_counter()
     pipeline_logger = logger.bind(
@@ -149,7 +161,9 @@ async def run_pre_review_pipeline(
             extraction_contract_version=extraction_contract_version,
             judge=judge,
             uow_factory=uow_factory,
+            name_embedder=name_embedder,
             event_limit=event_limit,
+            auto_merge_enabled=auto_merge_enabled,
             clock=clock,
         )
     except Exception as error:
@@ -175,6 +189,18 @@ async def run_pre_review_pipeline(
         extraction_failed_count=len(result.extraction.failures),
         artifact_created_count=result.artifacts.proposals_created,
         artifact_revived_count=result.artifacts.proposals_revived,
+        auto_merge_enabled=auto_merge_enabled,
+        auto_merge_applied_count=(
+            result.auto_merge.proposals_applied
+            if result.auto_merge is not None
+            else 0
+        ),
+        auto_merge_failed_count=(
+            result.auto_merge.proposals_failed if result.auto_merge is not None else 0
+        ),
+        auto_merge_stale_count=(
+            result.auto_merge.proposals_stale if result.auto_merge is not None else 0
+        ),
     )
     return result
 
@@ -189,7 +215,9 @@ async def _execute_pre_review_pipeline(
     extraction_contract_version: str,
     judge: IdentityJudge | None,
     uow_factory: UnitOfWorkFactory,
+    name_embedder: NameEmbedder | None = None,
     event_limit: int | None = None,
+    auto_merge_enabled: bool = False,
     clock: Callable[[], datetime] | None = None,
 ) -> PreReviewPipelineResult:
     """
@@ -198,6 +226,7 @@ async def _execute_pre_review_pipeline(
     ``uow_factory``는 호출마다 새 transaction 경계를 반환해야 하며 Artifact repository가 ``workspace_id``로 고정된 UoW를 만들어야 한다.
     목록이 잘린 poll 결과는 쓰기를 시작하기 전에 거부한다.
     개별 intake 실패는 증분 커서가 실패 항목을 지나가지 않도록 그 뒤 Envelope를 보류한다.
+    ``auto_merge_enabled``가 참이면 해소가 승인해 둔 병합 안건을 같은 회차에서 적용한다. 적용을 Artifact 편찬보다 먼저 두는 이유는 병합으로 합쳐진 노드가 이번 회차의 카드에 반영되게 하기 위해서다.
     """
     _validate_inputs(
         poll_result,
@@ -245,7 +274,17 @@ async def _execute_pre_review_pipeline(
         workspace_id=workspace_id,
         judge=judge,
         uow=uow_factory(),
+        name_embedder=name_embedder,
+        auto_merge_enabled=auto_merge_enabled,
     )
+
+    auto_merge = None
+    if auto_merge_enabled:
+        auto_merge = await asyncio.to_thread(
+            apply_mutation_proposals,
+            uow_factory,
+            workspace_id=workspace_id,
+        )
 
     claim_conflicts = resolve_claim_conflicts(
         workspace_id=workspace_id,
@@ -269,6 +308,7 @@ async def _execute_pre_review_pipeline(
         extraction=extraction,
         resolution=resolution,
         artifacts=artifacts,
+        auto_merge=auto_merge,
     )
     result = PreReviewPipelineResult(
         status=status,
@@ -282,6 +322,7 @@ async def _execute_pre_review_pipeline(
         resolution=resolution,
         claim_conflicts=claim_conflicts,
         artifacts=artifacts,
+        auto_merge=auto_merge,
     )
     return result
 
@@ -706,6 +747,7 @@ def _derive_status(
     extraction: ExtractionStageResult,
     resolution: ResolutionResult,
     artifacts: ArtifactCompileResult,
+    auto_merge: ApplyResult | None = None,
 ) -> PreReviewPipelineStatus:
     """Scheduler가 재시도·알림에 쓸 한 회차의 상태를 계산한다.
 
@@ -713,6 +755,15 @@ def _derive_status(
     쓰지 않은 정상적인 동시성 결과이므로 부분 실패에 포함하지 않는다.
     반면 ``nodes_failed``는 카드를 세우지 못해 비워 둔 노드 수이므로 부분
     실패로 센다.
+
+    자동 병합의 ``proposals_failed``도 부분 실패로 센다. 승인은 끝났는데
+    적용이 남은 안건이므로 다음 회차가 다시 집어야 한다.
+
+    자동 병합의 ``proposals_stale``은 세지 않는다. 승인 뒤 세계가 바뀐 안건은
+    종결됐고 남은 후보는 다음 회차가 새 구성으로 판정한다.
+
+    해소의 ``blocks_failed``도 부분 실패로 센다. 판정 실패로 격리한 블록의
+    후보는 pending으로 남아 다음 회차가 다시 집어야 한다.
     """
     has_incomplete_work = any(
         (
@@ -721,7 +772,9 @@ def _derive_status(
             intake_failure is not None,
             extraction.failures,
             resolution.groups_failed,
+            resolution.blocks_failed,
             artifacts.nodes_failed,
+            auto_merge.proposals_failed if auto_merge is not None else 0,
         )
     )
     return (

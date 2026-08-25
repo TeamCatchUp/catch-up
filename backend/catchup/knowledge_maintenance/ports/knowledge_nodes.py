@@ -2,11 +2,30 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Protocol
 
 from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
 from catchup.knowledge_maintenance.domain.source_version import JsonValue
+
+
+@dataclass(frozen=True, slots=True)
+class ActiveEntityAlias:
+    """살아 있는 entity 노드가 지금 들고 있는 이름 하나를 담는다.
+
+    Attributes:
+        node_id: 이 이름을 가진 노드를 가리킨다.
+        entity_type: 노드의 entity 종류를 나타낸다. 종류가 다르면 비교하지
+            않으므로 이름과 함께 와야 한다.
+        alias: 사람이 읽는 이름 그대로다.
+        normalized_alias: 비교에 쓰는 정규화 이름이다.
+    """
+
+    node_id: uuid.UUID
+    entity_type: str
+    alias: str
+    normalized_alias: str
 
 
 class KnowledgeNodeRepository(Protocol):
@@ -49,6 +68,24 @@ class KnowledgeNodeRepository(Protocol):
         """
         ...
 
+    def list_active_entity_aliases(
+        self,
+        *,
+        workspace_id: int,
+    ) -> list[ActiveEntityAlias]:
+        """살아 있는 entity 노드의 이름을 모두 모은다.
+
+        해소가 이름 유사도로 판정 블록을 만들 때 쓴다. 이번 라운드 후보만
+        서로 견주면 라운드를 넘어 갈라진 노드들과는 영영 만나지 못하므로,
+        이미 서 있는 노드의 이름도 같은 판정대에 올린다.
+
+        노드 하나가 여러 이름을 들고 있으면 그 수만큼 돌려준다. 어느
+        표기가 후보와 닮았는지는 부르는 쪽이 견줘 봐야 알 수 있기
+        때문이다. 흡수·퇴역한 노드는 빼고, node id·정규화 이름 순으로
+        정렬해 같은 질의가 같은 순서를 주게 한다.
+        """
+        ...
+
     def get_entity_by_id(
         self,
         *,
@@ -65,6 +102,20 @@ class KnowledgeNodeRepository(Protocol):
         lifecycle은 거르지 않고 찾은 그대로 돌려준다. 살아 있는 노드만
         쓸지는 읽기 경로마다 다른 판단이라 저장소가 미리 정하지 않는다.
         entity가 아니거나 없으면 None이다.
+        """
+        ...
+
+    def lock_entity_node(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+    ) -> KnowledgeNode | None:
+        """노드 행을 이 트랜잭션이 끝날 때까지 잠그고 현재 값을 준다.
+
+        후보를 붙이는 mark_entity_resolved와 노드를 물리는
+        retire_entity_node가 같은 행을 잠그므로, 먼저 잠근 쪽이 끝날 때까지
+        나머지는 기다린다. 되돌림이 노드 상태를 견주기 전에 부른다.
         """
         ...
 
@@ -155,8 +206,60 @@ class KnowledgeNodeRepository(Protocol):
         alias: str,
         normalized_alias: str,
         source: str,
+    ) -> bool:
+        """노드에 이름 단서를 남긴다. 같은 정규화 alias면 넘어간다.
+
+        Returns:
+            이번 호출이 행을 새로 넣었으면 참, 같은 정규화 alias가 이미
+            있어 넘어갔으면 거짓을 준다. 부르는 쪽이 "이 이름은 내가
+            붙였다"를 저널에 적을 때 이 값으로 가른다. 시도만 보고 적으면
+            같은 이름의 두 번째 병합이 앞 병합의 alias를 자기 것으로
+            적고, 그 되돌림이 남의 이름을 지운다.
+        """
+        ...
+
+    def remove_alias(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+        normalized_alias: str,
     ) -> None:
-        """노드에 이름 단서를 남긴다. 같은 정규화 alias면 넘어간다."""
+        """확정이 남긴 이름 단서 하나를 노드에서 거둔다.
+
+        되돌림이 쓴다. 같은 표기가 다른 관찰에서 따로 붙어 있을 수 있어
+        정규화 이름만으로 지우면 되돌림과 무관한 단서까지 함께 사라진다.
+        그래서 확정이 남긴 표시(source가 "system")가 붙은 행만 지운다.
+        지울 행이 없으면 아무것도 하지 않는다.
+        """
+        ...
+
+    def retire_entity_node(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+    ) -> bool:
+        """가리키는 후보가 없는 entity 노드를 퇴역 상태로 물린다.
+
+        되돌림이 쓴다. 확정이 세운 노드에서 후보가 전부 떠나면 그 노드는
+        가리키는 것이 없는 빈 자리로 남는데, 지우지는 않는다. 저널과 지난
+        기록이 그 노드를 계속 가리키기 때문이다. 대신 lifecycle을 물려
+        살아 있는 노드를 보는 경로에서 빠지게 한다.
+
+        남은 후보가 있는지는 이 호출 안에서 확인한다. 부르는 쪽이 먼저
+        세어 보고 그 뒤에 물리면, 세는 시점과 물리는 시점 사이에 다른
+        트랜잭션이 같은 노드로 후보를 붙일 수 있고 그 후보는 퇴역한 노드를
+        가리키게 된다. 구현은 노드 행을 잠근 뒤 확인해서 후보를 붙이는
+        경로와 순서를 맞춘다.
+
+        Returns:
+            퇴역시켰으면 참, 아직 이 노드를 가리키는 후보가 있어 그대로
+            두었으면 거짓을 준다. 이미 퇴역한 노드는 참이다.
+
+        Raises:
+            ValueError: 노드가 없을 때 던진다.
+        """
         ...
 
     def ensure_for_resource(

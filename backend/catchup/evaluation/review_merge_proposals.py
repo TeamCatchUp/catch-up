@@ -1,7 +1,12 @@
-"""병합 안건을 사람이 읽고 승인하거나 반려한다.
+"""pending 상태의 병합 안건을 사람이 읽고 승인하거나 반려한다.
 
-judge가 올려 둔 "이 후보들이 같은 대상인가"라는 질문에 답하는 자리다.
-안건은 그래프 언어(노드·merge)가 아니라 도메인 언어로 보여 준다 —
+정상 경로는 시스템 자동 확정이다. 해소가 병합 계획서를 쓰면 시스템이
+그 자리에서 승인하고 적용까지 이어지므로, 이 러너를 거치는 안건은
+없다.
+
+이 러너는 kill switch(`KNOWLEDGE_AUTO_MERGE_ENABLED`)를 꺼서 자동
+확정을 멈춘 상태에서 쌓인 안건을 손으로 결정해 보는 개발 도구다.
+안건은 그래프 언어(노드·merge)가 아니라 도메인 언어로 보여 준다.
 결정은 사실("SSO와 SSO 로그인이 같은 기능인가")에 대한 것이고, 그래프
 변경은 답에서 기계가 유도한다.
 
@@ -109,7 +114,7 @@ def main() -> int:
             pending = read_uow.mutation_proposals.list_pending_duplicates(
                 workspace_id=args.workspace_id,
             )
-        print(f"=== 계류 중인 병합 안건 {len(pending)}건 ===")
+        print(f"=== pending 병합 안건 {len(pending)}건 ===")
         for proposal in pending:
             print()
             print(render_merge_card(proposal))
@@ -140,8 +145,8 @@ def main() -> int:
         print(
             f"적용: 안건 {outcome.proposals_applied}건"
             f" · 실패 {outcome.proposals_failed}건"
+            f" · stale {outcome.proposals_stale}건"
             f" · 후보 해소 {outcome.candidates_resolved}건"
-            f" · 기해소 스킵 {outcome.candidates_already_resolved}건"
         )
     return 0
 

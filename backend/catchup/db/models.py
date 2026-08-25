@@ -5659,3 +5659,151 @@ class KnowledgeArtifactRevision(Base):
             name="fk_knowledge_artifact_revisions_source_proposal",
         ),
     )
+
+
+class KnowledgeNameEmbedding(Base):
+    """이름 하나를 벡터로 바꾼 결과를 정규화 이름 단위로 보관한다.
+
+    해소 단계는 라운드마다 이번 후보 이름과 살아 있는 노드 별칭 전부를
+    벡터로 바꾼다. 별칭이 쌓이면 이미 바꿔 본 이름을 매 라운드 다시
+    임베딩하게 되므로, 여기에 담아 두고 없는 이름만 임베딩한다.
+
+    이 표는 정본이 아니라 다시 만들 수 있는 사본이다. 통째로 지워도 다음
+    라운드가 임베딩을 다시 불러 같은 값을 채운다. 그래서 사람 결정이나
+    claim처럼 보존 규칙이 걸린 자료와 달리 마음대로 비워도 된다.
+
+    벡터는 pgvector 컬럼이 아니라 JSONB 실수 배열로 담고 HNSW 색인도 두지
+    않는다. 여기서 하는 일은 이름으로 정확히 찾아오는 조회지 가까운 벡터를
+    훑는 ANN 검색이 아니다. 조회 경로가 (workspace_id, model_id,
+    normalized_name) 하나뿐이라 UNIQUE 제약이 만드는 색인이면 충분하다.
+
+    model_id를 키에 넣는 이유는 모델이 다르면 벡터 공간이 달라 같은 이름의
+    옛 벡터를 새 모델 벡터와 나란히 견줄 수 없기 때문이다. 모델을 바꾸면
+    옛 행은 조회되지 않고 남아 있다가 지워질 뿐이다.
+    """
+
+    __tablename__ = "knowledge_name_embeddings"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    normalized_name: Mapped[str] = mapped_column(Text, nullable=False)
+    model_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    vector: Mapped[list[Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "model_id",
+            "normalized_name",
+            name="uq_knowledge_name_embeddings_name",
+        ),
+    )
+
+
+class KnowledgeResolutionEvent(Base):
+    """entity 병합과 되돌림 확정 한 건을 불변 저널로 남긴다.
+
+    병합이 자동으로 적용되면 왜, 무슨 근거로, 어떤 멤버 구성으로 붙였는지가
+    이 행에만 남는다. 판정 당시의 멤버 구성과 근거는 그 순간에만 존재하므로
+    사후에 다시 만들어 낼 수 없다. 그래서 판정 시점의 구성을
+    member_snapshot에, 판단 근거를 basis에 그대로 담아 둔다.
+
+    이 표는 덧붙이기만 하는 표다. 갱신하거나 지우는 경로를 만들지 않는다.
+    병합을 되돌릴 때도 원본 행을 고치지 않고, reverses_event_id로 원본을
+    가리키는 unmerge 행을 새로 쓴다.
+    """
+
+    __tablename__ = "knowledge_resolution_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    decider: Mapped[str] = mapped_column(String(16), nullable=False)
+    decider_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # node_id에는 외래 키를 걸지 않는다. 되돌림으로 노드가 물러나도 저널 행은
+    # 그 노드를 계속 가리켜야 하고, 저널은 그래프의 현재 상태에 딸린 자료가
+    # 아니라 그와 무관하게 남는 기록이기 때문이다.
+    node_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    member_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    member_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    basis: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    reverses_event_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["reverses_event_id"],
+            ["knowledge_resolution_events.id"],
+            name="fk_knowledge_resolution_events_reverses",
+        ),
+        CheckConstraint(
+            "event_type IN ('merge_create_node', 'merge_into_node', 'unmerge')",
+            name="ck_knowledge_resolution_events_type",
+        ),
+        CheckConstraint(
+            "decider IN ('system', 'human')",
+            name="ck_knowledge_resolution_events_decider",
+        ),
+        # 되돌림 행은 무엇을 되돌리는지가 반드시 있어야 저널이 짝을 이룬다.
+        CheckConstraint(
+            "event_type != 'unmerge' OR reverses_event_id IS NOT NULL",
+            name="ck_knowledge_resolution_events_unmerge_reversal",
+        ),
+        Index(
+            "ix_knowledge_resolution_events_member_hash",
+            "workspace_id",
+            "member_hash",
+        ),
+        # 한 원본에 되돌림 행은 하나뿐이다. 서비스가 되돌림 여부를 미리
+        # 읽어 보기는 하지만 그것은 잠금 없는 읽기라, 두 운영자가 거의
+        # 동시에 되돌리면 둘 다 통과한다. 원본당 한 번이라는 규칙은 DB가
+        # 지킨다.
+        Index(
+            "uq_knowledge_resolution_events_reversal",
+            "reverses_event_id",
+            unique=True,
+            postgresql_where=text("reverses_event_id IS NOT NULL"),
+        ),
+    )

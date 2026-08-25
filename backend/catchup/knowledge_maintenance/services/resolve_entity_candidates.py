@@ -22,7 +22,13 @@ fuzzy 단계는 이름 그룹의 크기로 갈린다. 후보가 여럿인 그룹
 from __future__ import annotations
 
 import hashlib
+import uuid
+from collections.abc import Mapping
+from collections.abc import Sequence
 from dataclasses import dataclass
+from dataclasses import replace
+from datetime import UTC
+from datetime import datetime
 from types import TracebackType
 from typing import Protocol
 from typing import Self
@@ -34,6 +40,15 @@ from catchup.knowledge_maintenance.domain.actor_identity import (
     actor_identity_from_candidate_attributes,
 )
 from catchup.knowledge_maintenance.domain.actor_identity import actor_node_attributes
+from catchup.knowledge_maintenance.domain.entity_blocking import BlockingMember
+from catchup.knowledge_maintenance.domain.entity_blocking import BlockingOrigin
+from catchup.knowledge_maintenance.domain.entity_blocking import EntityBlock
+from catchup.knowledge_maintenance.domain.entity_blocking import build_entity_blocks
+from catchup.knowledge_maintenance.domain.entity_resolution import (
+    SYSTEM_AUTO_MERGE_REVIEWER,
+)
+from catchup.knowledge_maintenance.domain.entity_resolution import IdentityGroup
+from catchup.knowledge_maintenance.domain.entity_resolution import IdentityPartition
 from catchup.knowledge_maintenance.domain.entity_resolution import (
     deterministic_canonical_key,
 )
@@ -48,21 +63,52 @@ from catchup.knowledge_maintenance.domain.knowledge_candidate import (
 from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
+from catchup.knowledge_maintenance.domain.source_version import JsonValue
 from catchup.knowledge_maintenance.ports.identity_judge import IdentityJudge
 from catchup.knowledge_maintenance.ports.identity_judge import JudgeCandidate
 from catchup.knowledge_maintenance.ports.knowledge_candidates import (
     KnowledgeCandidateRepository,
 )
+from catchup.knowledge_maintenance.ports.knowledge_nodes import ActiveEntityAlias
 from catchup.knowledge_maintenance.ports.knowledge_nodes import KnowledgeNodeRepository
 from catchup.knowledge_maintenance.ports.mutation_proposals import (
     MutationProposalRepository,
+)
+from catchup.knowledge_maintenance.ports.name_embedder import NameEmbedder
+from catchup.knowledge_maintenance.ports.name_embedder import NameEmbeddingError
+from catchup.knowledge_maintenance.ports.resolution_events import (
+    ResolutionEventRepository,
 )
 from catchup.observability.logging import get_logger
 
 logger = get_logger(__name__)
 
+# 시스템이 자동으로 승인했을 때 결정 저널에 남기는 검토자 이름이다.
+# 도메인이 정한 앞머리에서 유도한다. 적용 쪽은 그 앞머리로 시스템 결정을
+# 가르므로, 여기서 이름을 따로 적으면 두 리터럴이 말없이 갈라진다.
+SYSTEM_REVIEWER = SYSTEM_AUTO_MERGE_REVIEWER
+
 JUDGE_DETECTOR = "catchup.name_group_judge"
 JUDGE_DETECTOR_VERSION = "1"
+BLOCK_DETECTOR = "catchup.name_block_partition"
+BLOCK_DETECTOR_VERSION = "1"
+
+# 블록 멤버 식별자의 앞머리다. 후보와 기존 노드가 한 판정대에 섞이므로
+# 판정 결과를 받아 다시 풀 때 어느 쪽인지 앞머리로 가른다.
+CANDIDATE_MEMBER_PREFIX = "candidate:"
+NODE_MEMBER_PREFIX = "node:"
+
+# 노드 맥락에서 빼는 값 종류다. 판정 프롬프트는 속성 값이 어긋나는 것을
+# 다른 대상의 증거로 삼지 말라고 지시하므로, 수치·시점·참거짓처럼 시간에
+# 따라 흔들리는 값은 애초에 판정대에 올리지 않는다. 남는 것은 text와
+# enum이다.
+CONTEXT_EXCLUDED_VALUE_TYPES = frozenset({"number", "date", "boolean"})
+
+# 노드 맥락에 싣는 claim 수의 상한이다.
+CONTEXT_CLAIM_LIMIT = 3
+
+# 맥락 한 줄의 길이 상한이다. 긴 값 하나가 프롬프트를 밀어내지 않게 한다.
+CONTEXT_LINE_LIMIT = 120
 
 
 def group_idempotency_key(normalized_name: str) -> str:
@@ -75,12 +121,28 @@ def group_idempotency_key(normalized_name: str) -> str:
     return hashlib.sha256(normalized_name.encode("utf-8")).hexdigest()
 
 
+def block_idempotency_key(member_ids: Sequence[str]) -> str:
+    """분할 판정이 낸 그룹의 proposal key를 만든다.
+
+    같은 멤버 구성이 다시 오면 같은 key다. 그래서 재실행이 같은 안건을
+    새로 열지 않는다. 반대로 멤버가 하나라도 달라지면 key가 달라져 새
+    검토 사건이 열린다 — 사람이 이미 결정한 안건을 구성이 바뀐 판정이
+    덮지 않게 하려는 것이다.
+
+    해시할 문자열 앞에 "block"을 붙여 같은 이름 그룹 key와 값이 겹치지
+    않게 한다. 두 경로는 세는 단위가 달라 한 key 공간에 섞이면 안 된다.
+    """
+    joined = ",".join(sorted(member_ids))
+    return hashlib.sha256(f"block:{joined}".encode("utf-8")).hexdigest()
+
+
 class ResolutionUnitOfWork(Protocol):
     """resolution이 쓰는 transaction 경계를 정의한다."""
 
     knowledge_candidates: KnowledgeCandidateRepository
     knowledge_nodes: KnowledgeNodeRepository
     mutation_proposals: MutationProposalRepository
+    resolution_events: ResolutionEventRepository
 
     def __enter__(self) -> Self: ...
 
@@ -109,8 +171,16 @@ class ResolutionResult:
         proposals_abandoned: 멤버가 달라져 접은 proposal 수를 나타낸다.
         groups_judged: LLM이 판정한 그룹 수를 나타낸다.
         groups_failed: 판정에 실패해 건너뛴 그룹 수를 나타낸다.
+        groups_abstained: 기존 노드가 둘 이상 섞여 병합을 미룬 그룹 수를
+            나타낸다.
         singletons_promoted: 후보가 하나뿐이라 판정 없이 노드로 승격한
             후보 수를 나타낸다. 후보 하나가 노드 하나다.
+        blocks_formed: 이름 유사도로 만들어진 판정 블록 가운데 멤버가
+            둘 이상이고 후보가 섞인 것의 수를 나타낸다. 판정을 물을
+            값어치가 있는 블록만 센다.
+        blocks_judged: 분할 판정을 받아낸 블록 수를 나타낸다.
+        blocks_failed: 판정이 실패하거나 계약을 어겨 격리한 블록 수를
+            나타낸다.
     """
 
     nodes_created: int = 0
@@ -120,7 +190,11 @@ class ResolutionResult:
     proposals_abandoned: int = 0
     groups_judged: int = 0
     groups_failed: int = 0
+    groups_abstained: int = 0
     singletons_promoted: int = 0
+    blocks_formed: int = 0
+    blocks_judged: int = 0
+    blocks_failed: int = 0
 
 
 def resolve_entity_candidates(
@@ -128,10 +202,23 @@ def resolve_entity_candidates(
     workspace_id: int,
     judge: IdentityJudge | None,
     uow: ResolutionUnitOfWork,
+    name_embedder: NameEmbedder | None = None,
+    auto_merge_enabled: bool = False,
 ) -> ResolutionResult:
     """pending entity 후보를 해소하고 집계를 돌려준다.
 
     judge가 None이면 결정론 단계만 수행한다.
+
+    name_embedder가 있으면 fuzzy 단계의 후보군을 이름 유사도로 넓힌다.
+    남은 후보와 살아 있는 노드의 이름을 한데 놓고 블록을 만든 뒤, 블록마다
+    분할 판정을 한 번 받는다. None이면 지금까지처럼 정규화 이름이 완전히
+    같은 후보끼리만 묶어 판정한다 — judge가 없을 때와 같은 원칙으로,
+    재료가 없으면 있던 경로만 탄다.
+
+    auto_merge_enabled가 참이면 이번에 쓴 병합 계획서를 시스템이 그
+    자리에서 승인한다. 기본값은 거짓이라 명시한 호출자만 자동 확정을
+    얻는다. 켠 경우에도 사람이 되돌린 적 있는 구성은 승인하지 않고 검토
+    큐에 남긴다.
     """
     with uow:
         pending = uow.knowledge_candidates.find_pending_entity_candidates(
@@ -170,10 +257,13 @@ def resolve_entity_candidates(
                     accepted += 1
                 else:
                     merged += 1
+                # 여기서 EntityResolutionConflict가 나면 같은 후보를 두
+                # 회차가 동시에 해소한 것이므로 잡지 않고 올려 보낸다.
                 uow.knowledge_candidates.mark_entity_resolved(
                     candidate_id=candidate.id,
                     status=status,
                     resolved_node_id=node.id,
+                    expected_node_id=None,
                 )
                 uow.knowledge_nodes.add_alias(
                     workspace_id=workspace_id,
@@ -218,6 +308,7 @@ def resolve_entity_candidates(
                 candidate_id=candidate.id,
                 status=status,
                 resolved_node_id=node.id,
+                expected_node_id=None,
             )
             uow.knowledge_nodes.add_alias(
                 workspace_id=workspace_id,
@@ -250,6 +341,7 @@ def resolve_entity_candidates(
                 candidate_id=candidate.id,
                 status=EntityResolutionStatus.MERGED,
                 resolved_node_id=node.id,
+                expected_node_id=None,
             )
             uow.knowledge_nodes.add_alias(
                 workspace_id=workspace_id,
@@ -262,11 +354,13 @@ def resolve_entity_candidates(
 
         fuzzy = _FuzzyCounts()
         if judge is not None:
-            fuzzy = _judge_name_groups(
+            fuzzy = _resolve_fuzzy(
                 workspace_id=workspace_id,
                 candidates=remaining_llm,
                 judge=judge,
+                name_embedder=name_embedder,
                 uow=uow,
+                auto_merge_enabled=auto_merge_enabled,
             )
 
         uow.commit()
@@ -279,7 +373,11 @@ def resolve_entity_candidates(
         proposals_abandoned=fuzzy.abandoned,
         groups_judged=fuzzy.judged,
         groups_failed=fuzzy.failed,
+        groups_abstained=fuzzy.abstained,
         singletons_promoted=fuzzy.promoted,
+        blocks_formed=fuzzy.blocks_formed,
+        blocks_judged=fuzzy.blocks_judged,
+        blocks_failed=fuzzy.blocks_failed,
     )
     logger.info(
         "entity_resolution_completed",
@@ -291,9 +389,26 @@ def resolve_entity_candidates(
         proposals_abandoned=result.proposals_abandoned,
         groups_judged=result.groups_judged,
         groups_failed=result.groups_failed,
+        groups_abstained=result.groups_abstained,
         singletons_promoted=result.singletons_promoted,
+        blocks_formed=result.blocks_formed,
+        blocks_judged=result.blocks_judged,
+        blocks_failed=result.blocks_failed,
     )
     return result
+
+
+@dataclass(frozen=True, slots=True)
+class _NodeMember:
+    """판정대에 올라간 기존 노드 이름 하나를 표현한다.
+
+    Attributes:
+        node_id: 그 이름을 가진 노드를 가리킨다.
+        alias: 판정대에 올린 이름 그대로다. 검토 문장에 쓴다.
+    """
+
+    node_id: uuid.UUID
+    alias: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -304,7 +419,27 @@ class _FuzzyCounts:
     abandoned: int = 0
     judged: int = 0
     failed: int = 0
+    abstained: int = 0
     promoted: int = 0
+    blocks_formed: int = 0
+    blocks_judged: int = 0
+    blocks_failed: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class _GroupOutcome:
+    """분할 그룹 하나를 처리한 결과를 표현한다.
+
+    Attributes:
+        created: 이 그룹이 새로 쓴 제안 수를 나타낸다. 0 또는 1이다.
+        abstained: 병합을 미뤘으면 1이다.
+        settled: 이번 그룹에서 처리를 마친 후보 id들을 담는다. 제안을
+            썼든 미뤘든 여기 담긴 후보는 이번 라운드에 승격하지 않는다.
+    """
+
+    created: int = 0
+    abstained: int = 0
+    settled: frozenset[uuid.UUID] = frozenset()
 
 
 def _external_key(candidate: StoredEntityCandidate) -> str | None:
@@ -461,6 +596,7 @@ def _judge_name_groups(
     candidates: list[StoredEntityCandidate],
     judge: IdentityJudge,
     uow: ResolutionUnitOfWork,
+    auto_merge_enabled: bool = False,
 ) -> _FuzzyCounts:
     """같은 정규화 이름 그룹을 판정하고 proposal을 쓴다.
 
@@ -489,19 +625,18 @@ def _judge_name_groups(
             promoted += 1
             continue
         members = sorted(members, key=lambda c: (c.created_at, c.id))
-        member_hash = _member_hash(members)
+        member_hash = _member_hash([str(member.id) for member in members])
         key = group_idempotency_key(normalized_name)
 
-        existing = uow.mutation_proposals.find_pending_by_idempotency_key(
+        unchanged, dropped = _clear_stale_proposal(
             workspace_id=workspace_id,
-            idempotency_key=key,
+            key=key,
+            member_hash=member_hash,
+            uow=uow,
         )
-        if existing is not None:
-            if existing.resolver_metadata.get("member_hash") == member_hash:
-                continue
-            # 멤버가 달라진 순간 기존 계획서는 낡았다. 새 판정이 무엇이든
-            # 옛 구성의 병합안을 검토 큐에 남겨두면 안 된다.
-            uow.mutation_proposals.abandon(proposal_id=existing.id)
+        if unchanged:
+            continue
+        if dropped:
             abandoned += 1
 
         try:
@@ -541,11 +676,10 @@ def _judge_name_groups(
         if not verdict.same:
             continue
 
-        representative = members[0]
-        uow.mutation_proposals.add_duplicate_proposal(
+        proposal_id = _write_merge_proposal(
             workspace_id=workspace_id,
-            idempotency_key=key,
-            trigger_entity_candidate_id=representative.id,
+            key=key,
+            members=members,
             detector=JUDGE_DETECTOR,
             detector_version=JUDGE_DETECTOR_VERSION,
             summary=(
@@ -557,15 +691,24 @@ def _judge_name_groups(
                 "member_ids": [str(member.id) for member in members],
                 "member_hash": member_hash,
                 "reason": verdict.reason,
+                **_judge_basis(
+                    model_id=verdict.model_id,
+                    prompt_version=verdict.prompt_version,
+                ),
             },
-            representative_candidate_id=representative.id,
-            merge_candidate_ids=tuple(
-                member.id for member in members[1:]
-            ),
             proposed_type=verdict.proposed_type or "",
             proposed_name=verdict.proposed_name or "",
+            merge_into_node_id=None,
+            uow=uow,
         )
         created += 1
+        if auto_merge_enabled and proposal_id is not None:
+            _auto_approve(
+                workspace_id=workspace_id,
+                proposal_id=proposal_id,
+                member_hash=member_hash,
+                uow=uow,
+            )
 
     return _FuzzyCounts(
         created=created,
@@ -573,6 +716,583 @@ def _judge_name_groups(
         judged=judged,
         failed=failed,
         promoted=promoted,
+    )
+
+
+def _resolve_fuzzy(
+    *,
+    workspace_id: int,
+    candidates: list[StoredEntityCandidate],
+    judge: IdentityJudge,
+    name_embedder: NameEmbedder | None,
+    uow: ResolutionUnitOfWork,
+    auto_merge_enabled: bool = False,
+) -> _FuzzyCounts:
+    """fuzzy 단계의 후보군 형성 방식을 고른다.
+
+    임베더가 있으면 이름 유사도 블록을 만들어 분할 판정을 받고, 없으면
+    정규화 이름이 완전히 같은 후보끼리만 묶어 판정한다.
+
+    임베딩이 실패하면 정확 일치 경로로 물러난다. 벡터가 없으면 후보군이
+    좁아질 뿐이고, 해소 자체를 멈추면 결정론 병합과 승격까지 함께 멈춘다.
+    """
+    if name_embedder is None:
+        return _judge_name_groups(
+            workspace_id=workspace_id,
+            candidates=candidates,
+            judge=judge,
+            uow=uow,
+            auto_merge_enabled=auto_merge_enabled,
+        )
+    try:
+        return _judge_name_blocks(
+            workspace_id=workspace_id,
+            candidates=candidates,
+            judge=judge,
+            name_embedder=name_embedder,
+            uow=uow,
+            auto_merge_enabled=auto_merge_enabled,
+        )
+    except NameEmbeddingError as error:
+        logger.warning(
+            "name_blocking_skipped",
+            workspace_id=workspace_id,
+            candidate_count=len(candidates),
+            error=f"{type(error).__name__}: {error}",
+        )
+        return _judge_name_groups(
+            workspace_id=workspace_id,
+            candidates=candidates,
+            judge=judge,
+            uow=uow,
+            auto_merge_enabled=auto_merge_enabled,
+        )
+
+
+def _judge_name_blocks(
+    *,
+    workspace_id: int,
+    candidates: list[StoredEntityCandidate],
+    judge: IdentityJudge,
+    name_embedder: NameEmbedder,
+    uow: ResolutionUnitOfWork,
+    auto_merge_enabled: bool = False,
+) -> _FuzzyCounts:
+    """이름 유사도 블록마다 분할 판정을 받아 proposal을 쓴다.
+
+    판정대에 올리는 것은 이번 라운드 후보와 살아 있는 노드의 이름이다.
+    기존 노드를 빼면 라운드를 넘어 갈라진 대상은 영영 만나지 못한다.
+
+    블록 하나에 판정 한 번이다. 판정이 실패하거나 계약을 어기면 그 블록의
+    후보는 이번 라운드에서 그대로 둔다 — 판정을 못 받은 후보를 승격하면
+    아직 물어보지 못한 질문을 노드 발급으로 답해 버린다.
+
+    블록에 못 낀 후보와 혼자 남은 그룹의 후보는 지금까지처럼 승격한다.
+
+    블록 구성이 그대로여도 판정은 다시 부른다. 어떤 그룹이 나올지는 판정
+    뒤에야 알 수 있어 미리 건너뛸 자리가 없기 때문이다. 대신 그룹마다
+    같은 멤버 구성이면 같은 key라, 재실행이 같은 안건을 새로 열지 않는다.
+    """
+    aliases = uow.knowledge_nodes.list_active_entity_aliases(
+        workspace_id=workspace_id,
+    )
+    members, candidate_by_id, node_by_id = _blocking_members(
+        candidates,
+        aliases,
+    )
+    if not members:
+        return _FuzzyCounts()
+
+    vectors = name_embedder.embed([member.name for member in members])
+    blocks = build_entity_blocks(members, vectors)
+
+    created = 0
+    judged = 0
+    failed = 0
+    abstained = 0
+    promoted = 0
+    formed = 0
+    # 판정을 받은 후보만 그 결과대로 처리하고, 남은 후보는 승격한다.
+    settled: set[uuid.UUID] = set()
+    # 노드 맥락은 노드마다 한 번만 만든다. 한 노드가 이름을 여럿 가지면
+    # 그 이름마다 멤버가 하나씩이고, 블록도 여럿에 걸칠 수 있다.
+    node_contexts: dict[uuid.UUID, str | None] = {}
+    for block in blocks:
+        block_candidates = [
+            candidate_by_id[member.member_id]
+            for member in block.members
+            if member.member_id in candidate_by_id
+        ]
+        if len(block.members) < 2 or not block_candidates:
+            continue
+        formed += 1
+        block = _with_node_context(
+            block,
+            workspace_id=workspace_id,
+            node_by_id=node_by_id,
+            cache=node_contexts,
+            uow=uow,
+        )
+
+        try:
+            partition = judge.partition(block)
+        except Exception as error:
+            failed += 1
+            settled.update(candidate.id for candidate in block_candidates)
+            logger.warning(
+                "identity_partition_skipped",
+                workspace_id=workspace_id,
+                entity_type=block.entity_type,
+                block_size=len(block.members),
+                error=f"{type(error).__name__}: {error}",
+            )
+            continue
+        judged += 1
+        logger.info(
+            "identity_block_judged",
+            workspace_id=workspace_id,
+            entity_type=block.entity_type,
+            block_size=len(block.members),
+            group_count=len(partition.groups),
+        )
+
+        for group in partition.groups:
+            outcome = _apply_identity_group(
+                workspace_id=workspace_id,
+                block=block,
+                partition=partition,
+                group=group,
+                candidate_by_id=candidate_by_id,
+                node_by_id=node_by_id,
+                uow=uow,
+                auto_merge_enabled=auto_merge_enabled,
+            )
+            created += outcome.created
+            abstained += outcome.abstained
+            settled.update(outcome.settled)
+
+    for candidate in candidates:
+        if candidate.id in settled:
+            continue
+        _promote_singleton(
+            workspace_id=workspace_id,
+            candidate=candidate,
+            normalized_name=normalize_name(candidate.proposed_name),
+            uow=uow,
+        )
+        promoted += 1
+
+    return _FuzzyCounts(
+        created=created,
+        abstained=abstained,
+        promoted=promoted,
+        blocks_formed=formed,
+        blocks_judged=judged,
+        blocks_failed=failed,
+    )
+
+
+def _with_node_context(
+    block: EntityBlock,
+    *,
+    workspace_id: int,
+    node_by_id: dict[str, _NodeMember],
+    cache: dict[uuid.UUID, str | None],
+    uow: ResolutionUnitOfWork,
+) -> EntityBlock:
+    """블록의 노드 멤버에 그 노드가 지금 들고 있는 사실을 붙인다.
+
+    후보 멤버는 원문 발췌를 맥락으로 들고 판정대에 오르는데 기존 노드
+    멤버는 이름뿐이라, 판정이 한쪽 재료만 보고 답하게 된다. 노드가
+    accepted claim으로 들고 있는 사실을 같은 자리에 실어 그 차이를
+    없앤다.
+
+    맥락이 붙지 않는 노드 멤버는 그대로 둔다. 사실이 없으면 이름만으로
+    판정하는 지금까지의 동작과 같다.
+    """
+    at = datetime.now(UTC)
+    members = []
+    changed = False
+    for member in block.members:
+        node = node_by_id.get(member.member_id)
+        if node is None:
+            members.append(member)
+            continue
+        if node.node_id not in cache:
+            cache[node.node_id] = _node_context(
+                uow,
+                workspace_id=workspace_id,
+                node_id=node.node_id,
+                at=at,
+            )
+        context = cache[node.node_id]
+        if context is None:
+            members.append(member)
+            continue
+        members.append(replace(member, excerpt=context))
+        changed = True
+    if not changed:
+        return block
+    return EntityBlock(entity_type=block.entity_type, members=tuple(members))
+
+
+def _node_context(
+    uow: ResolutionUnitOfWork,
+    *,
+    workspace_id: int,
+    node_id: uuid.UUID,
+    at: datetime,
+) -> str | None:
+    """노드가 at 시점에 들고 있는 사실을 판정용 맥락 문자열로 만든다.
+
+    수치·시점·참거짓 계열의 값은 뺀다. 그런 값은 같은 대상이라도 시간과
+    출처에 따라 어긋나는데, 판정 프롬프트는 값의 불일치를 다른 대상의
+    증거로 쓰지 말라고 지시한다. 넣지 않으면 어길 기회도 없다.
+
+    조회가 실패하면 None을 준다. 맥락은 판정을 돕는 재료일 뿐이라, 없다고
+    해서 판정을 멈출 이유가 없다.
+    """
+    try:
+        claims = uow.knowledge_candidates.find_accepted_claims_as_of(
+            workspace_id=workspace_id,
+            subject_node_id=node_id,
+            at=at,
+        )
+    except Exception as error:
+        logger.warning(
+            "node_context_failed",
+            workspace_id=workspace_id,
+            node_id=str(node_id),
+            error=f"{type(error).__name__}: {error}",
+        )
+        return None
+
+    lines = []
+    for claim in claims:
+        if claim.value_type in CONTEXT_EXCLUDED_VALUE_TYPES:
+            continue
+        line = f"{claim.predicate}: {claim.value}"
+        lines.append(line[:CONTEXT_LINE_LIMIT])
+        if len(lines) == CONTEXT_CLAIM_LIMIT:
+            break
+    if not lines:
+        return None
+    return " / ".join(lines)
+
+
+def _apply_identity_group(
+    *,
+    workspace_id: int,
+    block: EntityBlock,
+    partition: IdentityPartition,
+    group: IdentityGroup,
+    candidate_by_id: dict[str, StoredEntityCandidate],
+    node_by_id: dict[str, _NodeMember],
+    uow: ResolutionUnitOfWork,
+    auto_merge_enabled: bool = False,
+) -> _GroupOutcome:
+    """분할 그룹 하나를 병합 제안으로 옮긴다.
+
+    멤버가 둘 이상이고 후보가 하나라도 있는 그룹만 제안이 된다. 기존
+    노드가 하나 섞여 있으면 그 노드로 붙이는 제안이고, 후보끼리면 새
+    노드를 세우는 제안이다. 어느 쪽이든 확정은 사람의 승인 뒤 적용이
+    한다.
+
+    기존 노드가 둘 이상 섞인 그룹은 제안을 쓰지 않고 이번 라운드에서
+    그대로 둔다. 그런 그룹은 사실상 노드끼리의 병합인데, 승인 뒤 적용
+    경로는 후보를 노드 하나에 붙이는 일만 할 줄 안다. 그대로 두면 후보만
+    한쪽 노드로 가고 갈라진 노드는 갈라진 채 남는 반쪽 실행이 된다.
+
+    혼자 남은 후보는 승격 대상이므로 여기서 처리하지 않고 부르는 쪽에
+    남긴다. 기존 노드만 모인 그룹도 건드리지 않는다 — 서 있는 노드끼리
+    합치는 일은 이 단계의 몫이 아니다.
+    """
+    members = [
+        candidate_by_id[member_id]
+        for member_id in group.member_ids
+        if member_id in candidate_by_id
+    ]
+    if not members or len(group.member_ids) < 2:
+        return _GroupOutcome()
+
+    members = sorted(members, key=lambda member: (member.created_at, member.id))
+    settled = frozenset(member.id for member in members)
+
+    node_ids = {
+        node_by_id[member_id].node_id
+        for member_id in group.member_ids
+        if member_id in node_by_id
+    }
+    if len(node_ids) > 1:
+        logger.info(
+            "merge_abstained_multi_node",
+            workspace_id=workspace_id,
+            entity_type=block.entity_type,
+            node_count=len(node_ids),
+            candidate_count=len(members),
+        )
+        return _GroupOutcome(abstained=1, settled=settled)
+
+    target = _merge_target(block, group, node_by_id)
+    key = block_idempotency_key(group.member_ids)
+    member_hash = _member_hash(list(group.member_ids))
+
+    unchanged, _dropped = _clear_stale_proposal(
+        workspace_id=workspace_id,
+        key=key,
+        member_hash=member_hash,
+        uow=uow,
+    )
+    if unchanged:
+        return _GroupOutcome(settled=settled)
+
+    names = ", ".join(f"'{member.proposed_name}'" for member in members)
+    if target is None:
+        summary = f"이름이 닮은 후보 {len(members)}건 병합: {names}"
+    else:
+        summary = (
+            f"후보 {len(members)}건을 기존 '{target.alias}'로 병합: {names}"
+        )
+
+    proposal_id = _write_merge_proposal(
+        workspace_id=workspace_id,
+        key=key,
+        members=members,
+        detector=BLOCK_DETECTOR,
+        detector_version=BLOCK_DETECTOR_VERSION,
+        summary=summary,
+        resolver_metadata={
+            "block_member_ids": list(group.member_ids),
+            "member_ids": [str(member.id) for member in members],
+            "member_hash": member_hash,
+            "reason": group.reason,
+            "proposed_name": group.canonical_name,
+            "merge_into_node_id": (
+                None if target is None else str(target.node_id)
+            ),
+            **_judge_basis(
+                model_id=partition.model_id,
+                prompt_version=partition.prompt_version,
+            ),
+        },
+        proposed_type=group.canonical_type,
+        proposed_name=group.canonical_name,
+        merge_into_node_id=None if target is None else target.node_id,
+        uow=uow,
+    )
+    if auto_merge_enabled and proposal_id is not None:
+        _auto_approve(
+            workspace_id=workspace_id,
+            proposal_id=proposal_id,
+            member_hash=member_hash,
+            uow=uow,
+        )
+    return _GroupOutcome(created=1, settled=settled)
+
+
+def _merge_target(
+    block: EntityBlock,
+    group: IdentityGroup,
+    node_by_id: dict[str, _NodeMember],
+) -> _NodeMember | None:
+    """그룹에 섞인 기존 노드의 이름 가운데 붙일 곳 하나를 고른다.
+
+    부르는 쪽이 서로 다른 노드가 둘 이상인 그룹을 이미 걸러내므로 여기
+    도달한 그룹의 노드는 많아야 하나다. 다만 한 노드가 이름을 여럿
+    가지면 그 이름마다 멤버가 하나씩이라 고를 것이 여러 개 남는다.
+
+    블록 멤버 순서로 가장 앞선 이름을 고른다. 판정이 돌려준 순서는
+    호출마다 달라질 수 있지만 블록 순서는 고정이라, 같은 그룹이면 늘 같은
+    이름을 고른다. 어느 이름을 고르든 노드는 같지만, 검토 문장에 실리는
+    별칭이 실행마다 흔들리지 않게 하려는 것이다.
+    """
+    assigned = set(group.member_ids)
+    for member in block.members:
+        if member.member_id in assigned and member.member_id in node_by_id:
+            return node_by_id[member.member_id]
+    return None
+
+
+def _blocking_members(
+    candidates: list[StoredEntityCandidate],
+    aliases: Sequence[ActiveEntityAlias],
+) -> tuple[
+    list[BlockingMember],
+    dict[str, StoredEntityCandidate],
+    dict[str, _NodeMember],
+]:
+    """후보와 기존 노드 이름을 한 판정대의 멤버로 옮긴다.
+
+    노드가 이름을 여럿 들고 있으면 이름마다 멤버 하나다. 어느 표기가
+    후보와 닮았는지는 견줘 봐야 알 수 있어 미리 하나로 줄이지 않는다.
+    그래서 멤버 식별자에 이름의 자리 번호를 붙여 같은 노드의 이름들을
+    서로 구분한다.
+
+    Returns:
+        (멤버 목록, 후보 되짚기, 노드 되짚기)를 준다.
+    """
+    members: list[BlockingMember] = []
+    candidate_by_id: dict[str, StoredEntityCandidate] = {}
+    node_by_id: dict[str, _NodeMember] = {}
+
+    for candidate in candidates:
+        if not candidate.proposed_name.strip():
+            continue
+        if not candidate.proposed_type.strip():
+            continue
+        member_id = f"{CANDIDATE_MEMBER_PREFIX}{candidate.id}"
+        members.append(
+            BlockingMember(
+                member_id=member_id,
+                entity_type=candidate.proposed_type,
+                name=candidate.proposed_name,
+                origin=BlockingOrigin.CANDIDATE,
+                excerpt=candidate.observation_excerpt,
+            )
+        )
+        candidate_by_id[member_id] = candidate
+
+    seen_per_node: dict[uuid.UUID, int] = {}
+    for alias in aliases:
+        if not alias.alias.strip() or not alias.entity_type.strip():
+            continue
+        position = seen_per_node.get(alias.node_id, 0)
+        seen_per_node[alias.node_id] = position + 1
+        member_id = f"{NODE_MEMBER_PREFIX}{alias.node_id}#{position}"
+        members.append(
+            BlockingMember(
+                member_id=member_id,
+                entity_type=alias.entity_type,
+                name=alias.alias,
+                origin=BlockingOrigin.NODE,
+            )
+        )
+        node_by_id[member_id] = _NodeMember(
+            node_id=alias.node_id,
+            alias=alias.alias,
+        )
+
+    return members, candidate_by_id, node_by_id
+
+
+def _clear_stale_proposal(
+    *,
+    workspace_id: int,
+    key: str,
+    member_hash: str,
+    uow: ResolutionUnitOfWork,
+) -> tuple[bool, bool]:
+    """같은 검토 단위의 pending 계획서를 살펴 쓸 자리를 낸다.
+
+    구성이 그대로면 이번 판정은 같은 사실을 다시 묻는 것이므로 아무것도
+    하지 않는다. 구성이 달라졌으면 기존 계획서를 접는다 — 멤버가 달라진
+    순간 옛 계획서는 낡았고, 새 판정이 무엇이든 낡은 병합안을 검토 큐에
+    남겨두면 안 된다.
+
+    Returns:
+        (그대로인가, 접었는가)를 준다.
+    """
+    existing = uow.mutation_proposals.find_pending_by_idempotency_key(
+        workspace_id=workspace_id,
+        idempotency_key=key,
+    )
+    if existing is None:
+        return False, False
+    if existing.resolver_metadata.get("member_hash") == member_hash:
+        return True, False
+    uow.mutation_proposals.abandon(proposal_id=existing.id)
+    return False, True
+
+
+def _write_merge_proposal(
+    *,
+    workspace_id: int,
+    key: str,
+    members: list[StoredEntityCandidate],
+    detector: str,
+    detector_version: str,
+    summary: str,
+    resolver_metadata: Mapping[str, JsonValue],
+    proposed_type: str,
+    proposed_name: str,
+    merge_into_node_id: uuid.UUID | None,
+    uow: ResolutionUnitOfWork,
+) -> uuid.UUID | None:
+    """후보들을 하나로 모으는 계획서를 쓴다.
+
+    첫 후보가 대표다. `merge_into_node_id`가 있으면 대표가 새 노드를
+    세우지 않고 그 노드로 붙는 계획서가 된다.
+
+    summary에는 판정 모델이 지은 canonical 이름을 넣지 않는다. 검토 화면에
+    그대로 실리는 문장이라, 아직 승인되지 않은 모델의 작명이 확정된 이름처럼
+    읽히기 때문이다. 그 이름은 사람이 승인 여부를 정할 제안 값으로만
+    (operation의 proposed_name과 resolver_metadata에) 남긴다.
+
+    Returns:
+        방금 쓴 pending 계획서의 id를 준다. 같은 key에 이미 결정이 내려져
+        있으면 저장소가 그 결정 행의 id를 그대로 돌려주므로, pending이
+        아닌 것을 확인해 None을 준다. 이미 사람이 결정한 안건을 뒤의
+        자동 승인이 다시 건드리지 않게 하려는 것이다.
+    """
+    representative = members[0]
+    # 멤버의 이름을 판정 근거에 함께 남긴다. 되돌림이 후보를 다시 갈라
+    # 놓을 때 각 후보가 어떤 이름으로 묶였는지 알아야 하는데, 후보 행은
+    # 그때 이미 다른 상태로 바뀌어 있을 수 있다.
+    enriched_metadata = {
+        **resolver_metadata,
+        "member_names": [member.proposed_name for member in members],
+    }
+    proposal_id = uow.mutation_proposals.add_duplicate_proposal(
+        workspace_id=workspace_id,
+        idempotency_key=key,
+        trigger_entity_candidate_id=representative.id,
+        detector=detector,
+        detector_version=detector_version,
+        summary=summary,
+        resolver_metadata=enriched_metadata,
+        representative_candidate_id=representative.id,
+        merge_candidate_ids=tuple(member.id for member in members[1:]),
+        proposed_type=proposed_type,
+        proposed_name=proposed_name,
+        merge_into_node_id=merge_into_node_id,
+    )
+    pending = uow.mutation_proposals.find_pending_by_idempotency_key(
+        workspace_id=workspace_id,
+        idempotency_key=key,
+    )
+    if pending is None or pending.id != proposal_id:
+        return None
+    return proposal_id
+
+
+def _auto_approve(
+    *,
+    workspace_id: int,
+    proposal_id: uuid.UUID,
+    member_hash: str,
+    uow: ResolutionUnitOfWork,
+) -> None:
+    """방금 쓴 병합 계획서를 시스템 이름으로 승인한다.
+
+    같은 멤버 구성을 사람이 되돌린 적이 있으면 승인하지 않고 pending
+    상태로 남긴다. 사람이 갈라 놓은 구성을 판정기 재실행이 다시 붙이면
+    사람의 결정이 조용히 뒤집히기 때문이다. 이때는 안건이 검토 큐에
+    남아 사람이 다시 판단한다.
+    """
+    if uow.resolution_events.has_human_unmerge(
+        workspace_id=workspace_id,
+        member_hash=member_hash,
+    ):
+        logger.info(
+            "auto_merge_suppressed",
+            workspace_id=workspace_id,
+            member_hash=member_hash,
+        )
+        return
+    uow.mutation_proposals.mark_merge_approved(
+        workspace_id=workspace_id,
+        proposal_id=proposal_id,
+        reviewer=SYSTEM_REVIEWER,
     )
 
 
@@ -625,6 +1345,7 @@ def _promote_singleton(
         candidate_id=candidate.id,
         status=EntityResolutionStatus.ACCEPTED,
         resolved_node_id=node.id,
+        expected_node_id=None,
     )
     logger.info(
         "entity_singleton_promoted",
@@ -635,7 +1356,31 @@ def _promote_singleton(
     )
 
 
-def _member_hash(members: list[StoredEntityCandidate]) -> str:
-    """그룹 구성의 지문을 만든다. 멤버가 달라지면 값이 달라진다."""
-    joined = ",".join(sorted(str(member.id) for member in members))
+def _judge_basis(
+    *,
+    model_id: str | None,
+    prompt_version: str | None,
+) -> dict[str, JsonValue]:
+    """판정을 낸 모델과 프롬프트 판본을 판정 근거 항목으로 만든다.
+
+    적용이 resolver_metadata를 그대로 event 저널의 basis에 합치므로, 여기
+    넣은 값이 확정 기록까지 따라간다. 값이 없으면 키를 아예 넣지 않는다.
+    빈 문자열이나 null을 남기면 "모르는 값"과 "그런 모델로 판정했다"가
+    저널에서 구분되지 않는다.
+
+    임베딩 임계값은 넣지 않는다. 그 값은 코드에 박힌 도메인 상수라 판본만
+    알면 되짚을 수 있지만, 모델과 프롬프트는 바깥에서 바뀌므로 기록해야
+    한다.
+    """
+    basis: dict[str, JsonValue] = {}
+    if model_id:
+        basis["model_id"] = model_id
+    if prompt_version:
+        basis["prompt_version"] = prompt_version
+    return basis
+
+
+def _member_hash(member_ids: Sequence[str]) -> str:
+    """그룹 구성을 한 값으로 접는다. 멤버가 달라지면 값이 달라진다."""
+    joined = ",".join(sorted(member_ids))
     return hashlib.sha256(joined.encode("utf-8")).hexdigest()

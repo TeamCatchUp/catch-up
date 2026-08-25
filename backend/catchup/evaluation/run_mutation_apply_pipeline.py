@@ -44,8 +44,8 @@ def main() -> int:
     print("=== 병합 적용 결과 ===")
     print(f"  적용된 안건 {result.proposals_applied}")
     print(f"  실패한 안건 {result.proposals_failed}")
+    print(f"  stale로 끝낸 안건 {result.proposals_stale}")
     print(f"  새로 해소된 후보 {result.candidates_resolved}")
-    print(f"  기해소 스킵 {result.candidates_already_resolved}")
     return 0
 
 

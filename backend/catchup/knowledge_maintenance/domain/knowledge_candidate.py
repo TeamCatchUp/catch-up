@@ -94,6 +94,15 @@ class EntityResolutionStatus(StrEnum):
     SUPERSEDED = "superseded"  # 재추출이 대체한 구 배치의 후보. 사람 결정이 아니다.
 
 
+class EntityResolutionConflict(Exception):
+    """후보의 현재 해소 상태가 호출자가 기대한 것과 달라 갱신하지 않았음을 알린다.
+
+    같은 후보를 두 결정이 동시에 옮기려 할 때 뒤에 온 쪽이 이 예외를 본다.
+    앞선 결정이 이미 후보를 어느 노드로 옮겼다는 뜻이므로, 뒤에 온 쪽은
+    제 트랜잭션을 되돌려야 한다.
+    """
+
+
 class AssertionResolutionStatus(StrEnum):
     """주장 후보(Claim·RelationAssertion)의 해소 상태를 나타낸다.
 

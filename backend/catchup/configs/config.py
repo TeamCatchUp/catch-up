@@ -224,6 +224,11 @@ class Settings(BaseSettings):
     EMBEDDING_MAX_CONCURRENCY: int = 5  # 동시 Embedding API 호출 수
     EMBEDDING_BATCH_SIZE: int = 96  # Cohere embed-v4 max texts per request
 
+    # Knowledge Maintenance Settings
+    # 병합 자동 확정 kill switch. 끄면 병합 계획서를 승인하지 않고
+    # pending으로 남긴다. blocking과 LLM 판정은 끈 상태에서도 계속 돈다.
+    KNOWLEDGE_AUTO_MERGE_ENABLED: bool = True
+
     # Summarizer Settings (Bedrock Haiku 4.5) 
     # [IMPORTANT] : Bedrock에 적용된 Quota 보다 작은 값으로 설정
     AWS_BEDROCK_SMALL_RPM: int = 50

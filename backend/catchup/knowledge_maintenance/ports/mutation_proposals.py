@@ -125,6 +125,36 @@ class StoredOperation:
 
 
 @dataclass(frozen=True, slots=True)
+class ApprovedProposal:
+    """적용을 기다리는 승인 안건 하나를 읽는 형태로 담는다.
+
+    명령만으로는 저널에 남길 근거가 모자란다. 누가 승인했는지, 어떤
+    판정기가 무슨 근거로 묶었는지는 proposal 행에만 있으므로 명령과
+    함께 읽어 온다.
+
+    Attributes:
+        proposal_id: proposal 행을 식별한다.
+        proposal_kind: 어떤 종류의 안건인지 나타낸다. 병합만 해소
+            event를 남기므로 적용이 이 값으로 갈라진다.
+        reviewer: 승인을 남긴 주체다. `system:`으로 시작하면 자동
+            승인이고 그렇지 않으면 사람이다.
+        detector: 안건을 만든 판정기다.
+        detector_version: 판정기의 버전이다.
+        resolver_metadata: 판정 근거를 보존한다. 병합 안건은 여기에
+            member_hash와 멤버 이름 목록이 들어 있다.
+        operations: 적용 명령을 sequence 순서로 담는다.
+    """
+
+    proposal_id: uuid.UUID
+    proposal_kind: str
+    reviewer: str
+    detector: str
+    detector_version: str
+    resolver_metadata: Mapping[str, JsonValue]
+    operations: tuple[StoredOperation, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class StoredPendingProposal:
     """어떤 대상에 걸려 있는 계류 안건 하나를 읽는 형태로 담는다.
 
@@ -323,10 +353,12 @@ class MutationProposalRepository(Protocol):
         self,
         *,
         workspace_id: int,
-    ) -> list[tuple[uuid.UUID, tuple[StoredOperation, ...]]]:
+    ) -> list[ApprovedProposal]:
         """승인됐지만 아직 적용되지 않은 안건을 명령과 함께 모은다.
 
         Applier의 입력이다. operations는 sequence 순서로 담는다.
+        결정 주체와 판정 근거도 함께 담는다. 적용이 해소 event를 남길 때
+        쓰는 재료이고, 그 재료는 이 조회 말고는 읽을 자리가 없다.
         """
         ...
 
@@ -340,6 +372,23 @@ class MutationProposalRepository(Protocol):
 
         approved 행 하나만 갱신한다. 결정 없이 적용되는 경로를 DB
         수준에서 막기 위해서다.
+
+        Raises:
+            MergeProposalAlreadyDecided: approved 상태가 아니다.
+        """
+        ...
+
+    def mark_stale(
+        self,
+        *,
+        workspace_id: int,
+        proposal_id: uuid.UUID,
+    ) -> None:
+        """승인 뒤 세계가 바뀌어 실행할 수 없게 된 안건을 stale로 끝맺는다.
+
+        approved 행 하나만 갱신한다. 결정(reviewer·reviewed_at)은 지우지
+        않는다. 사람이 승인했다는 사실은 남고, 그 승인이 실행되지 못한
+        이유는 로그에 남는다.
 
         Raises:
             MergeProposalAlreadyDecided: approved 상태가 아니다.
@@ -360,12 +409,17 @@ class MutationProposalRepository(Protocol):
         merge_candidate_ids: tuple[uuid.UUID, ...],
         proposed_type: str,
         proposed_name: str,
+        merge_into_node_id: uuid.UUID | None = None,
     ) -> uuid.UUID:
         """같은 대상 후보들을 하나로 합치는 계획서를 쓴다.
 
         operation은 두 종류다. 대표 후보의 create_entity가 1번이고,
         나머지 후보의 merge_entity가 그 뒤를 따르며 1번이 만들 노드를
         가리킨다.
+
+        `merge_into_node_id`를 주면 1번이 노드를 새로 만들지 않고 그 노드로
+        붙는다. 이미 서 있는 노드와 같은 대상이라는 판정이 나온 경우다.
+        노드를 또 만들면 합치자는 결정이 도리어 대상을 하나 더 세운다.
 
         같은 key의 행이 이미 결정돼 있으면(approved·applied·rejected)
         되살리지 않고 그 id를 그대로 돌려준다 — 사람은 같은 사실에

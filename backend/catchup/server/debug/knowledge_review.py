@@ -407,6 +407,7 @@ def apply_decisions(workspace_id: int = 1) -> dict[str, Any]:
     return {
         "proposals_applied": result.proposals_applied,
         "proposals_failed": result.proposals_failed,
+        "proposals_stale": result.proposals_stale,
         "candidates_resolved": result.candidates_resolved,
         "candidates_already_resolved": result.candidates_already_resolved,
         "claims_superseded": result.claims_superseded,
