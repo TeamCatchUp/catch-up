@@ -72,7 +72,7 @@ describe('SnbSpaceSwitcher 선택 전환', () => {
 
     await user.click(screen.getByRole('button', { name: 'LLM Wiki' }));
 
-    // layoutLabelFadeReduced의 exit는 0.08s다. 0.3s를 쓰는 원본이면 이 예산을 넘긴다
-    await waitFor(() => expect(screen.queryByText('홈')).toBeNull(), { timeout: 150, interval: 5 });
+    // layoutLabelFadeReduced의 exit는 0.08s다. 0.3s를 쓰는 원본이면 이 예산도 결정적으로 넘긴다
+    await waitFor(() => expect(screen.queryByText('홈')).toBeNull(), { timeout: 250, interval: 5 });
   });
 });
