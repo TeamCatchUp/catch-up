@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Mapping
+from collections.abc import Sequence
 from dataclasses import dataclass
 from dataclasses import field
 from datetime import UTC
@@ -56,11 +57,17 @@ class FakeState:
     aliases: list[dict[str, Any]] = field(default_factory=list)
     events: list[dict[str, Any]] = field(default_factory=list)
 
-    def add_candidate(self, *, resolved_node_id: uuid.UUID) -> uuid.UUID:
+    def add_candidate(
+        self,
+        *,
+        resolved_node_id: uuid.UUID,
+        proposed_name: str = "결제",
+    ) -> uuid.UUID:
         candidate_id = uuid.uuid4()
         self.candidates[candidate_id] = {
             "resolution_status": EntityResolutionStatus.MERGED.value,
             "resolved_node_id": resolved_node_id,
+            "proposed_name": proposed_name,
         }
         return candidate_id
 
@@ -121,12 +128,23 @@ class FakeCandidateRepo:
         return (row["resolution_status"], row["resolved_node_id"])
 
     def count_entities_resolved_to(
-        self, *, workspace_id: int, node_id: uuid.UUID
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+        normalized_name: str | None = None,
+        exclude_candidate_ids: Sequence[uuid.UUID] = (),
     ) -> int:
+        excluded = set(exclude_candidate_ids)
         return sum(
             1
-            for row in self.state.candidates.values()
+            for candidate_id, row in self.state.candidates.items()
             if row["resolved_node_id"] == node_id
+            and candidate_id not in excluded
+            and (
+                normalized_name is None
+                or normalize_name(row["proposed_name"]) == normalized_name
+            )
         )
 
     def mark_entity_resolved(
@@ -747,3 +765,69 @@ def test_rollback_without_applied_members_is_rejected() -> None:
             event_id=event_id,
             operator="ops:junsu",
         )
+
+
+def test_rollback_keeps_an_alias_that_a_later_candidate_still_uses() -> None:
+    """병합 뒤 같은 이름으로 붙은 후보가 있으면 그 별칭은 남긴다.
+
+    별칭 행은 (노드, 정규화 이름)당 하나뿐이라 뒤에 온 같은 이름의 후보는
+    새 행을 만들지 않는다. 되돌림이 저널만 보고 그 행을 지우면 남은 후보는
+    노드에 그대로 있는데 그 이름으로는 노드를 찾을 수 없게 된다.
+
+    이번에 옮기는 멤버가 쓰던 이름은 세지 않는다. 그 후보는 곧 노드를
+    떠나므로 이름을 붙잡아 둘 이유가 없다.
+    """
+    other_alias = "페이"
+    state = FakeState()
+    target = state.add_node()
+    member_ids = [
+        state.add_candidate(resolved_node_id=target.id, proposed_name=name)
+        for name in (other_alias, "결제", "페이먼트")
+    ]
+    # 병합이 대상 노드에 남긴 두 이름이다.
+    for alias in (PROPOSED_NAME, other_alias):
+        state.aliases.append(
+            {
+                "workspace_id": WORKSPACE_ID,
+                "node_id": target.id,
+                "alias": alias,
+                "normalized_alias": normalize_name(alias),
+                "source": "system",
+            }
+        )
+    # 병합 뒤에 같은 이름으로 이 노드에 붙은 후보다. 멤버가 아니다.
+    later_id = state.add_candidate(
+        resolved_node_id=target.id,
+        proposed_name=PROPOSED_NAME,
+    )
+    event_id = state.add_event(
+        event_type="merge_into_node",
+        node_id=target.id,
+        member_snapshot={
+            "representative_candidate_id": str(member_ids[0]),
+            "member_candidate_ids": [str(cid) for cid in member_ids[1:]],
+            "member_names": list(MEMBER_NAMES),
+            "proposed_name": PROPOSED_NAME,
+            "proposed_type": "feature",
+            "merge_into_node_id": str(target.id),
+            "aliases_added": [PROPOSED_NAME, other_alias],
+            "applied_members": _applied(member_ids),
+        },
+    )
+
+    result = rollback_resolution_event(
+        FakeUnitOfWork(state),
+        workspace_id=WORKSPACE_ID,
+        event_id=event_id,
+        operator="ops:junsu",
+    )
+
+    # 뒤에 온 후보가 쓰는 이름은 남고, 떠나는 멤버만 쓰던 이름은 지워진다.
+    assert result.removed_aliases == (other_alias,)
+    kept = {
+        row["normalized_alias"] for row in state.aliases if row["node_id"] == target.id
+    }
+    assert kept == {normalize_name(PROPOSED_NAME)}
+    assert state.candidates[later_id]["resolved_node_id"] == target.id
+    assert result.unmerge_event_id is not None
+    assert state.events[-1]["member_snapshot"]["removed_aliases"] == [other_alias]

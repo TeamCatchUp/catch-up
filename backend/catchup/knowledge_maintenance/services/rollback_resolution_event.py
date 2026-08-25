@@ -91,7 +91,8 @@ class RollbackResult:
         new_node_ids: 후보를 받아 준 새 노드들을 가리킨다. 첫 번째가
             대표 후보의 노드다.
         repointed_candidate_ids: 자리를 옮긴 후보들을 가리킨다.
-        removed_aliases: 병합 대상 노드에서 지운 이름들을 담는다.
+        removed_aliases: 병합 대상 노드에서 지운 이름들을 담는다. 다른
+            후보가 아직 쓰고 있어 남겨 둔 이름은 들어가지 않는다.
     """
 
     unmerge_event_id: uuid.UUID
@@ -194,6 +195,9 @@ def rollback_resolution_event(
                 workspace_id=workspace_id,
                 node_id=event.node_id,
                 aliases=_texts(event.member_snapshot.get("aliases_added")),
+                moved_candidate_ids=tuple(
+                    member.candidate_id for member in live_members
+                ),
             )
         else:
             node_ids = _split_into_own_nodes(
@@ -375,21 +379,47 @@ def _remove_added_aliases(
     workspace_id: int,
     node_id: uuid.UUID,
     aliases: Sequence[str],
+    moved_candidate_ids: Sequence[uuid.UUID],
 ) -> tuple[str, ...]:
-    """병합이 대상 노드에 남긴 이름만 지운다.
+    """병합이 대상 노드에 남긴 이름 가운데 아무도 안 쓰는 것만 지운다.
 
     저널의 aliases_added는 계획이 아니라 그 병합이 실제로 적은 이름
     목록이다. 대표가 이미 서 있던 노드를 재사용해 이름을 더하지 않은
     경우에는 비어 있고, 그때는 지울 것도 없다.
+
+    적힌 이름이라도 지금 그 이름을 쓰고 있는 후보가 노드에 남아 있으면
+    지우지 않는다. 별칭 행은 (노드, 정규화 이름)당 하나뿐이라, 병합 뒤에
+    같은 이름의 후보가 이 노드로 해소됐어도 새 행이 생기지 않는다. 그
+    상태에서 되돌림이 행을 지우면 남은 후보는 노드에 그대로 있는데 그
+    이름으로는 노드를 찾을 수 없게 되어, 다음에 같은 이름의 후보가 와도
+    정확 일치로 이 노드에 붙지 못한다.
+
+    이번 되돌림이 옮기는 멤버는 세지 않는다. 그 후보들은 곧 이 노드를
+    떠나므로 이름을 붙잡아 둘 이유가 없다.
     """
     removed = []
     for alias in aliases:
         if not alias.strip():
             continue
+        normalized_alias = normalize_name(alias)
+        reusing = uow.knowledge_candidates.count_entities_resolved_to(
+            workspace_id=workspace_id,
+            node_id=node_id,
+            normalized_name=normalized_alias,
+            exclude_candidate_ids=moved_candidate_ids,
+        )
+        if reusing > 0:
+            logger.info(
+                "rollback_alias_kept",
+                workspace_id=workspace_id,
+                node_id=str(node_id),
+                alias=alias,
+            )
+            continue
         uow.knowledge_nodes.remove_alias(
             workspace_id=workspace_id,
             node_id=node_id,
-            normalized_alias=normalize_name(alias),
+            normalized_alias=normalized_alias,
         )
         removed.append(alias)
     return tuple(removed)
