@@ -88,12 +88,14 @@ export default function SnbNavRow({
       <div
         className={cn(
           'group flex h-9 w-full items-center gap-3 rounded-lg px-2.5 py-1.5 transition-colors',
-          selected
-            ? 'bg-fill-primary-normal-neutral hover:bg-fill-primary-normal-interaction-hover-assistive'
-            : cn(
-                'hover:bg-fill-normal-interaction-hover has-[button:active]:bg-fill-normal-interaction-pressed',
-                actionsOpen && 'bg-fill-normal-interaction-hover',
-              ),
+          // 원형인 button 분기와 같은 규칙 — disabled 행은 상호작용 배경을 내지 않는다
+          !disabled &&
+            (selected
+              ? 'bg-fill-primary-normal-neutral hover:bg-fill-primary-normal-interaction-hover-assistive'
+              : cn(
+                  'hover:bg-fill-normal-interaction-hover has-[button:active]:bg-fill-normal-interaction-pressed',
+                  actionsOpen && 'bg-fill-normal-interaction-hover',
+                )),
           className,
         )}
       >
@@ -116,7 +118,11 @@ export default function SnbNavRow({
           className={cn(
             'shrink-0 items-center gap-0.5',
             // 액션 아이콘 색은 NavTree 행 액션과 같은 규칙이다 — 래퍼가 정하고 아이콘은 상속만 한다
-            selected ? 'text-icon-primary-normal' : 'text-icon-normal-neutral',
+            disabled
+              ? 'text-icon-normal-assistive'
+              : selected
+                ? 'text-icon-primary-normal'
+                : 'text-icon-normal-neutral',
             actionsOpen ? 'flex' : 'hidden group-hover:flex group-has-[:focus-visible]:flex',
           )}
         >

@@ -26,7 +26,8 @@ export default function SideNavMotionFrame({ open, children }: SideNavMotionFram
       )}
       style={{ width: open ? 'var(--snb-width-open)' : 'var(--snb-width-collapsed)' }}
     >
-      <AnimatePresence initial={false}>
+      {/* wait가 아니면 두 네비가 동시에 마운트돼 나가는 사본이 랜드마크·히트테스트에 남는다 */}
+      <AnimatePresence initial={false} mode="wait">
         <motion.div
           key={open ? 'open' : 'collapsed'}
           className="absolute inset-y-0 left-0"

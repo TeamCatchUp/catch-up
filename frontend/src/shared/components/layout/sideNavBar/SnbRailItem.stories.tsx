@@ -94,7 +94,7 @@ export const IconOnDisc: Story = {
     const disc = canvas.getByRole('button', { name: '새 채팅' }).querySelector('span > span');
 
     await expect(disc).toHaveClass('bg-fill-normal-interaction-disable', 'rounded-full');
-    // 디스크는 아이콘 칸 36 안에 26으로 앉는다
+    // 디스크는 아이콘 칸 안쪽에 여백을 두고 앉는다
     await expect(disc?.getBoundingClientRect().width).toBe(26);
   },
 };
