@@ -10,11 +10,16 @@ from catchup.knowledge_maintenance.ports.narrator import DocumentNarrationReques
 from catchup.knowledge_maintenance.ports.narrator import SummaryNarrative
 
 
-def _input(block_id=0, statements=("고객이 문의 3건을 남겼다.",), edges=()):
+def _input(
+    block_id=0,
+    statements=("고객이 문의 3건을 남겼다.",),
+    edges=(),
+    heading="request_status",
+):
     return BlockNarrationInput(
         block_id=block_id,
         block_kind="claim_section",
-        heading="request_status",
+        heading=heading,
         topic_hint="collected (2026-08-07 관찰)",
         statements=statements,
         edges=edges,
@@ -177,6 +182,93 @@ def test_section_block_may_not_borrow_another_blocks_number():
     )
     assert any(v.block_id == 1 and "3" in v.reason for v in found)
     assert not any(v.block_id == 0 for v in found)
+
+
+def _two_section_request():
+    """heading이 다른 섹션 두 개를 같은 근거로 묻는 요청을 만든다."""
+    return _request(
+        (
+            _input(0, heading="request_status"),
+            _input(1, heading="support_status"),
+        )
+    )
+
+
+def test_same_narrative_in_two_blocks_is_reported_on_both():
+    """서로 다른 섹션에 똑같은 산문이 실리면 양쪽 모두 위반이다."""
+    found = document_narration_violations(
+        _two_section_request(),
+        narratives={
+            0: "문의 3건이 접수되었다.",
+            1: "문의 3건이 접수되었다.",
+        },
+        summary=None,
+    )
+    duplicated = [v for v in found if "같은 문장" in v.reason]
+    assert {v.block_id for v in duplicated} == {0, 1}
+    for violation in duplicated:
+        assert "request_status" in violation.reason
+        assert "support_status" in violation.reason
+
+
+def test_duplicate_check_ignores_whitespace_differences():
+    """줄바꿈과 겹친 공백만 다른 산문도 같은 문장으로 본다."""
+    found = document_narration_violations(
+        _two_section_request(),
+        narratives={
+            0: "문의 3건이  접수되었다.",
+            1: "문의 3건이\n접수되었다.",
+        },
+        summary=None,
+    )
+    assert {v.block_id for v in found if "같은 문장" in v.reason} == {0, 1}
+
+
+def test_similar_but_different_narratives_pass():
+    """한 낱말이라도 다르면 중복으로 보지 않는다."""
+    found = document_narration_violations(
+        _two_section_request(),
+        narratives={
+            0: "문의 3건이 접수되었다.",
+            1: "문의 3건이 아직 접수되었다.",
+        },
+        summary=None,
+    )
+    assert found == ()
+
+
+def test_summary_field_matching_a_block_is_reported():
+    """머리말 필드와 섹션 산문이 같으면 양쪽 모두 위반이다."""
+    found = document_narration_violations(
+        _request((_input(0),), summary=_input(block_id=-1)),
+        narratives={0: "문의 3건이 접수되었다."},
+        summary=SummaryNarrative(
+            one_line_summary="고객이 문의를 남겼다.",
+            desired_outcome="문의를 한자리에서 본다.",
+            background="문의 3건이 접수되었다.",
+        ),
+    )
+    duplicated = [v for v in found if "같은 문장" in v.reason]
+    assert {v.block_id for v in duplicated} == {0, None}
+    field = next(v for v in duplicated if v.block_id is None)
+    assert field.reason.startswith("머리말 background:")
+    assert "request_status" in field.reason
+
+
+def test_summary_fields_matching_each_other_are_reported():
+    """머리말 필드끼리 같아도 위반이다."""
+    found = document_narration_violations(
+        _request((), summary=_input(block_id=-1)),
+        narratives={},
+        summary=SummaryNarrative(
+            one_line_summary="고객이 문의를 남겼다.",
+            desired_outcome="문의 3건이 접수되었다.",
+            background="문의 3건이 접수되었다.",
+        ),
+    )
+    duplicated = [v for v in found if "같은 문장" in v.reason]
+    assert len(duplicated) == 2
+    assert all(v.block_id is None for v in duplicated)
 
 
 def test_summary_may_not_state_the_topic_hint_date():

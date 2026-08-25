@@ -535,6 +535,37 @@ def test_violating_block_is_retried_with_feedback() -> None:
     }
 
 
+def test_duplicate_narratives_across_blocks_are_retried() -> None:
+    """두 섹션에 같은 산문이 오면 둘 다 다시 묻고 서로 다른 문장을 받는다."""
+    llm = _FakeLlm(
+        [
+            _doc(((0, "문의가 접수되었다."), (1, "문의가 접수되었다."), (2, "담당이 없다."))),
+            _doc(((0, "접수 상태는 완료다."), (1, "지원은 아직 시작되지 않았다."))),
+        ]
+    )
+    request = _request(
+        (
+            _block(0, heading="request_status", statements=("문의가 접수되었다",)),
+            _block(1, heading="support_status", statements=("지원이 시작되지 않았다",)),
+            _block(2, heading="owner", statements=("담당이 없다",)),
+        )
+    )
+
+    result = LlmBlockNarrator(llm).narrate_document(request)
+
+    assert len(llm.document_structured.prompts) == 2
+    retry_prompt = llm.document_structured.prompts[1]
+    assert "## Block 0" in retry_prompt
+    assert "## Block 1" in retry_prompt
+    assert "## Block 2" not in retry_prompt
+    assert "request_status와 support_status의 산문이 같은 문장이다" in retry_prompt
+    assert result.narratives == {
+        0: "접수 상태는 완료다.",
+        1: "지원은 아직 시작되지 않았다.",
+        2: "담당이 없다.",
+    }
+
+
 def test_unknown_block_id_is_dropped_without_retry() -> None:
     """묻지 않은 번호가 딸려 와도 다시 묻지 않고 그 산문만 버린다."""
     llm = _FakeLlm(
@@ -791,6 +822,19 @@ def test_templates_ask_for_single_quotes_inside_narratives() -> None:
     instruction = (
         "When quoting text inside a narrative, use single quotes ('), "
         'never double quotes (").'
+    )
+
+    for source in _narration_template_sources():
+        assert instruction in source
+
+
+def test_templates_forbid_repeating_a_sentence_across_blocks() -> None:
+    """두 산문 템플릿이 같은 문장을 여러 블록에 되풀이하지 말라고 시킨다."""
+    instruction = (
+        "Write each block's paragraph from the angle its heading asks about. "
+        "Blocks often share the same evidence, but never repeat the same "
+        "sentence in two places. If the evidence adds nothing to that angle, "
+        "write one short sentence."
     )
 
     for source in _narration_template_sources():

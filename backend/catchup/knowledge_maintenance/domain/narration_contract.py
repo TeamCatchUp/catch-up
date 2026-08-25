@@ -3,7 +3,8 @@
 문서 하나의 산문을 한 번에 받으면 응답은 여러 블록의 문장이 섞인 덩어리가
 된다. 그 덩어리를 그대로 믿고 문서에 넣을 수는 없으므로, 블록마다 따로
 받던 시절에 걸어 두었던 규칙을 여기서 다시 건다. 빠진 블록, 요청에 없던
-블록, 마크다운 표기, 너무 긴 문단, 근거에 없는 숫자를 찾는다.
+블록, 마크다운 표기, 너무 긴 문단, 근거에 없는 숫자, 서로 다른 자리에
+똑같이 실린 산문을 찾는다.
 
 검사는 전부 결정론이다. 모델을 다시 부르지 않고 문자열만 보므로 같은
 응답이면 언제나 같은 위반 목록이 나온다. 위반의 reason은 사람이 읽는
@@ -153,7 +154,8 @@ def document_narration_violations(
     Returns:
         찾은 위반을 담은 튜플이다. 요청한 블록의 위반이 요청 순서대로
         먼저 오고, 요청에 없던 블록 번호의 위반이 번호 순으로 뒤에 붙고,
-        머리말 위반이 맨 끝에 온다.
+        머리말 위반이 그다음에 오고, 여러 자리에 걸친 중복 위반이 맨 끝에
+        온다.
     """
     violations: list[NarrationViolation] = []
     requested_ids = {block.block_id for block in request.blocks}
@@ -186,7 +188,80 @@ def document_narration_violations(
         )
 
     violations.extend(_summary_violations(request.summary, summary))
+    violations.extend(_duplicate_violations(request, narratives, summary))
     return tuple(violations)
+
+
+def _duplicate_violations(
+    request: DocumentNarrationRequest,
+    narratives: Mapping[int, str],
+    summary: SummaryNarrative | None,
+) -> list[NarrationViolation]:
+    """서로 다른 자리에 똑같은 산문이 실렸는지 본다.
+
+    한 발화가 여러 predicate의 인용이 되면 블록들의 근거가 겹친다. 그때
+    모델이 같은 문장을 여러 섹션에 그대로 붙여 놓는 일이 실측에서 나왔다.
+    읽는 사람에게는 같은 말을 되풀이하는 문서로 보이므로 위반으로 잡는다.
+
+    비교는 문자열 동일성만 본다. 공백을 고른 뒤 완전히 같을 때만 위반이다.
+    비슷한 문장은 건드리지 않는다. 어디까지가 비슷한 것인지 정하려면
+    문장을 재는 기준이 필요한데, 그 기준이 흔들리면 제대로 쓴 문장까지
+    걸린다. 겹치는 근거를 두 관점에서 쓴 문장은 원래 닮게 마련이다.
+
+    위반은 겹친 자리 모두에 단다. 어느 쪽을 남기고 어느 쪽을 고칠지는
+    검사기가 정하지 않는다. 각 heading이 무엇을 묻는지 아는 쪽은 모델이라,
+    고르는 일은 다시 묻는 자리에 넘긴다.
+
+    비교 대상에는 머리말 세 칸도 넣는다. 머리말 background와 어떤 섹션의
+    산문이 같은 문장이던 사례가 실측에 있다. 필드끼리 같아도 위반이다.
+
+    Args:
+        request: 무엇을 물었는지 알아야 요청한 블록만 셀 수 있어 받는다.
+        narratives: 블록 번호를 산문에 짝지어 받는다.
+        summary: 받아 온 머리말 세 칸을 받는다. 없으면 None이다.
+
+    Returns:
+        겹친 자리마다 하나씩 만든 위반을 담은 목록이다. 요청 순서대로
+        블록의 위반이 먼저 오고 머리말 필드의 위반이 뒤에 온다.
+    """
+    entries: list[tuple[int | None, str, str]] = []
+    for block in request.blocks:
+        text = narratives.get(block.block_id)
+        if text is not None and text.strip():
+            entries.append((block.block_id, block.heading, _normalized(text)))
+    if request.summary is not None and summary is not None:
+        for name in ("one_line_summary", "desired_outcome", "background"):
+            text = getattr(summary, name)
+            if text.strip():
+                entries.append((None, f"머리말 {name}", _normalized(text)))
+
+    groups: dict[str, list[tuple[int | None, str]]] = {}
+    for block_id, label, key in entries:
+        groups.setdefault(key, []).append((block_id, label))
+
+    violations: list[NarrationViolation] = []
+    for block_id, label, key in entries:
+        members = groups[key]
+        if len(members) < 2:
+            continue
+        reason = (
+            f"{'와 '.join(member_label for _id, member_label in members)}의 산문이"
+            " 같은 문장이다. 각 heading이 묻는 관점으로 다르게 써라"
+        )
+        if block_id is None:
+            reason = f"{label}: {reason}"
+        violations.append(NarrationViolation(block_id=block_id, reason=reason))
+    return violations
+
+
+def _normalized(text: str) -> str:
+    """산문을 견줄 수 있게 공백을 고른다.
+
+    앞뒤 공백을 자르고 이어진 공백과 줄바꿈을 하나로 눌러 준다. 같은
+    문장을 옮겨 적으면서 줄바꿈만 달라진 경우를 다른 문장으로 보지
+    않기 위해서다.
+    """
+    return " ".join(text.split())
 
 
 def _summary_violations(
