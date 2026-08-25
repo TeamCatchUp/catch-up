@@ -31,6 +31,7 @@ from catchup.knowledge_maintenance.adapters.connectors.channel_talk.observation_
 from catchup.knowledge_maintenance.adapters.connectors.channel_talk.user_chat_poller import (
     ChannelTalkUserChatPoller,
 )
+from catchup.knowledge_maintenance.adapters.llm.block_narrator import LlmBlockNarrator
 from catchup.knowledge_maintenance.adapters.llm.identity_judge import (
     BedrockIdentityJudge,
 )
@@ -78,6 +79,7 @@ _LOOKBACK_OVERLAP_MINUTES = 5
 _POLL_LIMIT = 50
 _MAX_PAGES = 20
 _EXTRACTION_CONTRACT_VERSION = "1"
+_NARRATION_READ_TIMEOUT_SECONDS = 120
 
 
 async def run_channel_talk_pre_review_job(
@@ -132,6 +134,9 @@ async def run_channel_talk_pre_review_job(
         provider=LlmProvider.AWS_BEDROCK,
         model_capacity=ModelCapacity.LARGE,
         streaming=False,
+        # 산문 호출은 추출 호출보다 오래 걸려 기본 읽기 제한시간을 넘긴다.
+        # CLI 러너와 같은 값을 준다.
+        read_timeout=_NARRATION_READ_TIMEOUT_SECONDS,
     ).get_llm()
     extraction_spec = ExtractionRunSpec(
         provider=LlmProvider.AWS_BEDROCK.value,
@@ -157,6 +162,9 @@ async def run_channel_talk_pre_review_job(
         # 다른 같은 대상이 각자 노드로 굳는다. 한 번 굳으면 이 단계가 다시
         # 합쳐 주지 않으므로 만들지 못하면 그대로 실패시킨다.
         name_embedder=_name_embedder(workspace_id),
+        # 산문 층은 CLI 러너와 같은 구성으로 붙인다. 빠지면 카드가 뼈대만
+        # 남는다.
+        narrator=LlmBlockNarrator(llm),
         # kill switch를 읽는 자리는 이 진입부 한 곳이다. 파이프라인과 해소
         # 서비스는 설정을 직접 읽지 않고 넘겨받은 값만 본다.
         auto_merge_enabled=settings.KNOWLEDGE_AUTO_MERGE_ENABLED,

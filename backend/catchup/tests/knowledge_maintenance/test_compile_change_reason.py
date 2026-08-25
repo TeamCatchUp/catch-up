@@ -416,11 +416,11 @@ class _PublishingNarrator(_FakeNarrator):
         self._revision_number = revision_number
         self.published = False
 
-    def narrate_summary(self, request):
+    def narrate_document(self, request):
         if not self.published:
             self.published = True
             _publish_pending(self._uow, self._revision_number)
-        return super().narrate_summary(request)
+        return super().narrate_document(request)
 
 
 def test_publish_during_narration_drops_the_stale_proposal() -> None:
@@ -447,10 +447,10 @@ def test_publish_during_narration_drops_the_stale_proposal() -> None:
     assert result.proposals_conflicted == 1
     assert result.proposals_abandoned == 0
     # 저장을 접어도 이미 쓴 서술 수는 그대로 센다. 감사 로그가 실제 호출
-    # 결과를 세야 하므로 물러나는 경로에서도 버리지 않는다. 요약 요청
-    # 한 번이 최상위 블록 3개를 채우므로 그만큼을 세어 맞춘다.
+    # 결과를 세야 하므로 물러나는 경로에서도 버리지 않는다. 요청의
+    # summary 한 칸이 최상위 블록 3개를 채우므로 그만큼을 세어 맞춘다.
     expected_narrated = sum(
-        3 if request.block_kind == BLOCK_KIND_SUMMARY else 1
+        len(request.blocks) + (3 if request.summary is not None else 0)
         for request in narrator.requests
     )
     assert result.blocks_narrated == expected_narrated

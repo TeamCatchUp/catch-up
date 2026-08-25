@@ -39,7 +39,10 @@ from collections.abc import Callable
 from collections.abc import Iterable
 from collections.abc import Mapping
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from dataclasses import dataclass
+from dataclasses import field
 from dataclasses import replace
 from datetime import datetime
 from datetime import timezone
@@ -95,11 +98,12 @@ from catchup.knowledge_maintenance.ports.mutation_proposals import (
     MutationProposalRepository,
 )
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPendingProposal
+from catchup.knowledge_maintenance.ports.narrator import BlockNarrationInput
 from catchup.knowledge_maintenance.ports.narrator import BlockNarrator
 from catchup.knowledge_maintenance.ports.narrator import ChangeExplanationRequest
+from catchup.knowledge_maintenance.ports.narrator import DocumentNarration
+from catchup.knowledge_maintenance.ports.narrator import DocumentNarrationRequest
 from catchup.knowledge_maintenance.ports.narrator import NarrationError
-from catchup.knowledge_maintenance.ports.narrator import NarrationRequest
-from catchup.knowledge_maintenance.ports.narrator import SummaryNarrative
 from catchup.knowledge_maintenance.ports.relations import RelationRepository
 from catchup.knowledge_maintenance.ports.relations import StoredRelationEdge
 from catchup.knowledge_maintenance.services.traverse_relations import (
@@ -119,6 +123,17 @@ logger = get_logger(__name__)
 
 # 값이 갈렸음을 알리는 계류 안건의 종류다.
 PROPOSAL_KIND_CONTRADICTION = "contradiction"
+
+# 머리말 재료에 붙이는 블록 번호다. 머리말은 요청의 blocks에 서지 않고
+# summary 한 칸으로 실려 응답도 번호로 오지 않으므로, 본문 블록의 연번과
+# 섞이지 않도록 음수를 쓴다. 이 번호는 요청 밖으로 나가지 않는다. 프롬프트
+# 와 응답 검증기에 닿지 않는 내부 자리표다.
+_SUMMARY_BLOCK_ID = -1
+
+# 한 정의 안에서 동시에 받아 올 문서 산문 수다. 문서 사이 산문 호출만
+# 병렬이고 DB 작업은 전부 부르는 스레드에서 한다. session은 스레드 안전하지
+# 않기 때문이다.
+_NARRATION_CONCURRENCY = 4
 
 
 class ArtifactCompileUnitOfWork(Protocol):
@@ -293,6 +308,12 @@ def compile_definition_artifacts(
                 entity_types=definition.selection_spec.entity_types,
             )
             nodes_considered += len(sources)
+            # 정의 하나를 세 걸음으로 나눠 돈다. 먼저 노드마다 DB를 읽어
+            # 계획을 세우고, 다음에 산문만 스레드로 나눠 받아 오고,
+            # 마지막에 원래 노드 차례대로 저장한다. 저장 차례를 고정하지
+            # 않으면 같은 입력이 실행마다 다른 순서로 커밋되고 로그도
+            # 흔들린다.
+            plans: list[_NodePlan] = []
             for source in sources:
                 pending = (
                     uow.mutation_proposals.find_pending_for_subject_node(
@@ -377,8 +398,8 @@ def compile_definition_artifacts(
                         folder_id=definition.folder_id,
                     )
                 )
-                try:
-                    outcome = _propose_node_blocks(
+                plans.append(
+                    _prepare_node_blocks(
                         uow,
                         workspace_id=workspace_id,
                         node_id=source.node_id,
@@ -390,6 +411,26 @@ def compile_definition_artifacts(
                         style_instruction=style_instruction,
                         purpose_sentence=purpose_sentence,
                     )
+                )
+
+            narrations = (
+                {}
+                if narrator is None
+                else _narrate_documents(plans, narrator)
+            )
+            for index, plan in enumerate(plans):
+                narration = narrations.get(index)
+                try:
+                    # 스레드에서 난 실패는 던지지 않고 실려 온다. 여기서
+                    # 다시 던져 수정 이유 실패와 같은 자리로 모은다.
+                    if isinstance(narration, NarrationError):
+                        raise narration
+                    outcome = _finish_node_blocks(
+                        uow,
+                        plan,
+                        narration,
+                        narrator=narrator,
+                    )
                 except NarrationError as error:
                     # 잘림 실패와 같은 격리다. 산문이 반쪽인 문서를
                     # 검수자에게 올리지 않으므로 이 문서만 접고, 앞선
@@ -397,15 +438,15 @@ def compile_definition_artifacts(
                     # 방금 세울 수 없다고 판정한 자리가 자동 승인 경로로
                     # 발행된다.
                     dropped = uow.artifacts.abandon_pending_proposals(
-                        artifact_id=artifact_id,
+                        artifact_id=plan.artifact_id,
                     )
                     abandoned += dropped
                     logger.warning(
                         "artifact_compile_node_failed_narration",
                         workspace_id=workspace_id,
                         definition_id=str(definition.id),
-                        node_id=str(source.node_id),
-                        artifact_id=str(artifact_id),
+                        node_id=str(plan.node_id),
+                        artifact_id=str(plan.artifact_id),
                         reason=str(error),
                         proposals_abandoned=dropped,
                     )
@@ -682,7 +723,100 @@ class _NodeOutcome:
     explanations_reused: int = 0
 
 
-def _propose_node_blocks(
+@dataclass(frozen=True, slots=True)
+class _NodePlan:
+    """노드 하나를 산문 호출 앞뒤로 가른 중간 상태를 담는다.
+
+    DB를 읽는 앞부분과 DB에 쓰는 뒷부분 사이에 산문 호출이 들어간다.
+    그 호출만 스레드로 나누려면 앞부분이 뒷부분에 넘길 것을 값 하나로
+    묶어야 한다.
+
+    Attributes:
+        workspace_id: 이 노드가 속한 workspace를 나타낸다.
+        node_id: 문서의 주어 노드를 나타낸다.
+        artifact_id: 변경안을 올릴 문서를 나타낸다.
+        blocks: 반려 억제와 머리말 재계산까지 마친 블록들이다.
+        content_hash: 그 블록들의 내용 지문이다.
+        latest: 앞에서 읽은 최신 판의 (식별자, 번호)다. 저장 직전에 다시
+            읽어 그사이 발행이 있었는지 이 값과 견준다.
+        base_revision_id: 이 변경안이 딛고 설 발행 판이다.
+        reusable: 블록 내용 지문을 지난 산문에 짝지은 사전이다.
+        request: 이번에 물을 서술 요청이다. 물을 것이 없으면 None이다.
+        block_indices: 요청 안의 블록 번호를 blocks 안의 자리 번호로 잇는
+            사전이다.
+        purpose_sentence: 이 문서가 무엇에 쓰이는지 알리는 한 줄이다.
+        suppressed: 반려 장부에 걸려 카드에서 뺀 블록 수를 나타낸다.
+        settled: 산문 없이 앞부분에서 이미 끝난 노드의 집계다. 빈 카드와
+            무변경이 그런 경우다. 값이 있으면 서술도 저장도 하지 않는다.
+    """
+
+    workspace_id: int
+    node_id: uuid.UUID
+    artifact_id: uuid.UUID
+    blocks: tuple[ArtifactBlock, ...] = ()
+    content_hash: str = ""
+    latest: tuple[uuid.UUID, int] | None = None
+    base_revision_id: uuid.UUID | None = None
+    reusable: Mapping[str, str] = field(default_factory=dict)
+    request: DocumentNarrationRequest | None = None
+    block_indices: Mapping[int, int] = field(default_factory=dict)
+    purpose_sentence: str = DEFAULT_PURPOSE_SENTENCE
+    suppressed: int = 0
+    settled: _NodeOutcome | None = None
+
+
+def _narrate_documents(
+    plans: Sequence[_NodePlan],
+    narrator: BlockNarrator,
+) -> dict[int, DocumentNarration | NarrationError]:
+    """요청이 있는 문서들의 산문을 스레드로 나눠 받아 온다.
+
+    병렬은 문서 사이에만 둔다. 스레드가 만지는 것은 요청 하나와 서술기
+    뿐이고 저장소에는 닿지 않는다. session은 스레드 안전하지 않으므로 DB
+    작업은 전부 부르는 스레드에 남는다.
+
+    실패는 던지지 않고 자리 번호에 담아 돌려준다. 한 문서가 실패해도
+    나머지 문서의 산문은 그대로 쓰고, 실패 처리는 부르는 쪽이 원래 노드
+    차례대로 한다.
+
+    로그 문맥은 복사해서 넘긴다. contextvars는 스레드마다 따로라, 그냥
+    넘기면 실행 문맥이 붙지 않은 산문 호출 로그가 남는다.
+
+    Args:
+        plans: 이번 정의가 세운 노드 계획을 차례대로 받는다.
+        narrator: 산문을 받아 올 서술기다.
+
+    Returns:
+        plans 안의 자리 번호를 받아 온 산문이나 실패에 짝지은 사전이다.
+        요청이 없던 노드는 사전에 서지 않는다.
+    """
+    targets = [
+        (index, plan.request)
+        for index, plan in enumerate(plans)
+        if plan.request is not None
+    ]
+    if not targets:
+        return {}
+    results: dict[int, DocumentNarration | NarrationError] = {}
+    with ThreadPoolExecutor(
+        max_workers=_NARRATION_CONCURRENCY,
+        thread_name_prefix="artifact-narrate",
+    ) as pool:
+        submitted = {
+            pool.submit(
+                copy_context().run, narrator.narrate_document, request
+            ): index
+            for index, request in targets
+        }
+        for future, index in submitted.items():
+            try:
+                results[index] = future.result()
+            except NarrationError as error:
+                results[index] = error
+    return results
+
+
+def _prepare_node_blocks(
     uow: ArtifactCompileUnitOfWork,
     *,
     workspace_id: int,
@@ -694,21 +828,27 @@ def _propose_node_blocks(
     narrator: BlockNarrator | None = None,
     style_instruction: str = DEFAULT_STYLE_INSTRUCTION,
     purpose_sentence: str = DEFAULT_PURPOSE_SENTENCE,
-) -> _NodeOutcome:
-    """만들어 둔 블록을 반려 장부와 지문을 거쳐 변경안으로 올린다.
+) -> _NodePlan:
+    """만들어 둔 블록을 반려 장부와 지문을 거쳐 서술 직전까지 세운다.
 
     무엇을 싣느냐는 입구가 정하고, 그것을 사람 앞에 어떻게 올리느냐는
-    여기가 정한다. 두 입구가 이 자리를 나눠 쓰므로 반려 억제와 지문
-    비교와 멱등 키 규칙이 입구마다 갈리지 않는다.
+    여기와 `_finish_node_blocks`가 정한다. 두 입구가 이 자리를 나눠 쓰므로
+    반려 억제와 지문 비교와 멱등 키 규칙이 입구마다 갈리지 않는다.
+
+    여기는 DB를 읽기만 하고 쓰지 않는다. 예외는 남은 pending 변경안을
+    접는 두 자리다. 하나는 블록이 모두 빠져 빈 카드가 된 자리이고, 다른
+    하나는 지문이 그대로라 이번에 쓸 것이 없어 건너뛰는 자리다
+    (`_abandon_stale_pending`). 두 자리 모두 그 노드는 서술도 저장도 하지
+    않으므로 산문 호출 앞뒤를 가르는 경계에 걸리지 않는다.
 
     머리말 블록은 여기서 다시 센다. 머리말은 아래 블록을 집계한 줄이라,
     반려로 빠진 블록이 있는데 옛 집계를 그대로 두면 문서가 싣지 않은
     근거를 가리키게 된다. 다시 센 줄도 반려 장부를 거치므로 사람이
     머리말 자체를 물린 판단은 그대로 살아 있다.
 
-    Raises:
-        NarrationError: 블록 산문이나 수정 이유를 받아 오지 못했을 때
-            그대로 올라간다. 부르는 쪽이 이 문서 하나만 접는다.
+    Returns:
+        서술과 저장에 필요한 것을 묶은 계획이다. 앞에서 이미 끝난 노드는
+        계획의 settled에 집계가 담겨 온다.
     """
     rejected = uow.block_verdicts.find_rejected_hashes(
         artifact_id=artifact_id,
@@ -782,21 +922,31 @@ def _propose_node_blocks(
             artifact_id=str(artifact_id),
             blocks_suppressed=dropped,
         )
-        return _NodeOutcome(abandoned=abandoned, suppressed=suppressed)
+        return _NodePlan(
+            workspace_id=workspace_id,
+            node_id=node_id,
+            artifact_id=artifact_id,
+            settled=_NodeOutcome(abandoned=abandoned, suppressed=suppressed),
+        )
 
     content_hash = blocks_content_hash(blocks)
     known = uow.artifacts.find_latest_content_hashes(
         artifact_id=artifact_id,
     )
     if content_hash in known:
-        return _NodeOutcome(
-            skipped=1,
-            abandoned=_abandon_stale_pending(
-                uow,
-                artifact_id=artifact_id,
-                content_hash=content_hash,
+        return _NodePlan(
+            workspace_id=workspace_id,
+            node_id=node_id,
+            artifact_id=artifact_id,
+            settled=_NodeOutcome(
+                skipped=1,
+                abandoned=_abandon_stale_pending(
+                    uow,
+                    artifact_id=artifact_id,
+                    content_hash=content_hash,
+                ),
+                suppressed=suppressed,
             ),
-            suppressed=suppressed,
         )
 
     # 기준 판은 두 자리에서 쓴다. 수정 이유를 다시 쓸 수 있는지 고를 때와
@@ -809,66 +959,86 @@ def _propose_node_blocks(
 
     # 지문 비교를 지나 "이번에 새로 올린다"가 정해진 뒤에만 서술한다.
     # 앞에 두면 무변경 재컴파일에서도 LLM이 돈다. 산문이 붙어도 위에서
-    # 구한 content_hash는 그대로다 — 지문 계산이 산문을 빼고 세므로 다시
+    # 구한 content_hash는 그대로다. 지문 계산이 산문을 빼고 세므로 다시
     # 계산하지 않는다.
-    narrated = 0
-    reused = 0
+    reusable: Mapping[str, str] = {}
+    request: DocumentNarrationRequest | None = None
+    block_indices: Mapping[int, int] = {}
     if narrator is not None:
         reusable = uow.artifacts.list_reusable_narratives(
             artifact_id=artifact_id,
         )
-        # 머리말 세 블록은 한 번의 서술로 함께 채운다. 세 섹션은 같은
-        # 집계 한 줄을 딛고 선 한 벌이라, 블록마다 따로 물으면 같은 질문을
-        # 세 번 하는 셈이고 세 섹션이 서로 어긋난 문장을 받을 수도 있다.
-        # 요청은 언제나 첫 머리말 블록으로 만들어, 어느 블록에서 재사용이
-        # 걸리든 같은 재료를 묻게 한다.
-        summary_request = _summary_narration_request(
+        # 문서 하나의 산문을 한 번에 묻는다. 블록마다 따로 물으면 문체
+        # 지시와 문서 목적이 블록 수만큼 되풀이되고, 같은 문서의 블록들이
+        # 서로 어긋난 문장을 받을 수도 있다. 머리말 세 블록도 같은 요청에
+        # 함께 실린다.
+        request, block_indices = _document_narration_request(
             blocks,
+            reusable=reusable,
             style_instruction=style_instruction,
             purpose_sentence=purpose_sentence,
         )
-        summary_narrative: SummaryNarrative | None = None
-        narrated_blocks: list[ArtifactBlock] = []
-        for block in blocks:
-            found = reusable.get(block_content_hash(block))
-            if found is not None:
-                narrated_blocks.append(replace(block, narrative=found))
-                reused += 1
-                continue
-            if block.block_kind == BLOCK_KIND_SUMMARY:
-                if (
-                    summary_request is None
-                    or block.heading not in SUMMARY_SECTION_KEYS
-                ):
-                    narrated_blocks.append(block)
-                    continue
-                if summary_narrative is None:
-                    summary_narrative = narrator.narrate_summary(
-                        summary_request
-                    )
-                # heading이 SummaryNarrative의 필드 이름과 같은 기계 키라
-                # 그대로 골라 담는다.
-                narrated_blocks.append(
-                    replace(
-                        block,
-                        narrative=getattr(summary_narrative, block.heading),
-                    )
-                )
-                narrated += 1
-                continue
-            request = _narration_request(
-                block,
-                style_instruction=style_instruction,
-                purpose_sentence=purpose_sentence,
-            )
-            if request is None:
-                narrated_blocks.append(block)
-                continue
-            narrated_blocks.append(
-                replace(block, narrative=narrator.narrate(request))
-            )
-            narrated += 1
-        blocks = tuple(narrated_blocks)
+        # 물을 것이 없으면 부르지 않는다. 모두 재사용에 걸렸거나 근거가
+        # 하나도 없는 문서라, 불러도 빈 응답이 돌아온다.
+        if request.summary is None and not request.blocks:
+            request = None
+    return _NodePlan(
+        workspace_id=workspace_id,
+        node_id=node_id,
+        artifact_id=artifact_id,
+        blocks=blocks,
+        content_hash=content_hash,
+        latest=latest,
+        base_revision_id=base_revision_id,
+        reusable=reusable,
+        request=request,
+        block_indices=block_indices,
+        purpose_sentence=purpose_sentence,
+        suppressed=suppressed,
+    )
+
+
+def _finish_node_blocks(
+    uow: ArtifactCompileUnitOfWork,
+    plan: _NodePlan,
+    narration: DocumentNarration | None,
+    *,
+    narrator: BlockNarrator | None = None,
+) -> _NodeOutcome:
+    """받아 온 산문을 블록에 얹고 변경안을 저장한다.
+
+    수정 이유는 여기서 차례대로 묻는다. 그것도 LLM 호출이지만 발행 판의
+    블록을 읽어 짝을 지어야 하므로 저장소가 필요하고, 저장소를 쓰는 일은
+    부르는 스레드에 남긴다.
+
+    Args:
+        uow: 문서 저장소를 담은 작업 단위다.
+        plan: 서술 앞부분이 세운 계획이다.
+        narration: 받아 온 문서 산문이다. 물을 것이 없었으면 None이다.
+        narrator: 수정 이유를 받아 올 서술기다. 없으면 산문도 이유도
+            붙이지 않는다.
+
+    Returns:
+        이 노드 하나를 컴파일한 집계다.
+
+    Raises:
+        NarrationError: 수정 이유를 받아 오지 못했을 때 그대로 올라간다.
+            부르는 쪽이 이 문서 하나만 접는다.
+    """
+    if plan.settled is not None:
+        return plan.settled
+    workspace_id = plan.workspace_id
+    node_id = plan.node_id
+    artifact_id = plan.artifact_id
+    blocks = plan.blocks
+    content_hash = plan.content_hash
+    latest = plan.latest
+    base_revision_id = plan.base_revision_id
+    suppressed = plan.suppressed
+    narrated = 0
+    reused = 0
+    if narrator is not None:
+        blocks, narrated, reused = _place_narratives(plan, narration)
 
     explained = 0
     explanations_reused = 0
@@ -879,7 +1049,7 @@ def _propose_node_blocks(
             blocks=blocks,
             base_revision_id=base_revision_id,
             narrator=narrator,
-            purpose_sentence=purpose_sentence,
+            purpose_sentence=plan.purpose_sentence,
         )
 
     # 기준 판을 저장 직전에 한 번 더 읽어 그사이 발행이 있었는지 본다.
@@ -977,6 +1147,59 @@ def _propose_node_blocks(
         explained=explained,
         explanations_reused=explanations_reused,
     )
+
+
+def _place_narratives(
+    plan: _NodePlan,
+    narration: DocumentNarration | None,
+) -> tuple[tuple[ArtifactBlock, ...], int, int]:
+    """받아 온 산문과 지난 산문을 블록에 얹는다.
+
+    지난 산문이 있는 블록은 그것을 먼저 쓴다. 그 블록은 애초에 요청에
+    실리지 않았으므로 이번 응답에도 자리가 없다.
+
+    Args:
+        plan: 서술 앞부분이 세운 계획이다.
+        narration: 받아 온 문서 산문이다. 물을 것이 없었으면 None이다.
+
+    Returns:
+        산문을 얹은 블록들과, 새로 받은 수, 다시 쓴 수다.
+    """
+    narratives_by_index = (
+        {}
+        if narration is None
+        else {
+            index: narration.narratives[block_id]
+            for block_id, index in plan.block_indices.items()
+            if block_id in narration.narratives
+        }
+    )
+    summary_narrative = None if narration is None else narration.summary
+    narrated = 0
+    reused = 0
+    narrated_blocks: list[ArtifactBlock] = []
+    for index, block in enumerate(plan.blocks):
+        found = plan.reusable.get(block_content_hash(block))
+        if found is not None:
+            narrated_blocks.append(replace(block, narrative=found))
+            reused += 1
+            continue
+        text = narratives_by_index.get(index)
+        if (
+            text is None
+            and summary_narrative is not None
+            and block.block_kind == BLOCK_KIND_SUMMARY
+            and block.heading in SUMMARY_SECTION_KEYS
+        ):
+            # heading이 SummaryNarrative의 필드 이름과 같은 기계 키라
+            # 그대로 골라 담는다.
+            text = getattr(summary_narrative, block.heading)
+        if text is None:
+            narrated_blocks.append(block)
+            continue
+        narrated_blocks.append(replace(block, narrative=text))
+        narrated += 1
+    return tuple(narrated_blocks), narrated, reused
 
 
 def _explain_changed_blocks(
@@ -1122,45 +1345,89 @@ def _verified_statements(block: ArtifactBlock) -> tuple[str, ...]:
     )
 
 
-def _summary_narration_request(
+def _document_narration_request(
     blocks: Sequence[ArtifactBlock],
     *,
+    reusable: Mapping[str, str],
     style_instruction: str,
     purpose_sentence: str,
-) -> NarrationRequest | None:
-    """머리말 세 블록을 대표하는 서술 요청 하나를 만든다.
+) -> tuple[DocumentNarrationRequest, dict[int, int]]:
+    """산문이 필요한 블록만 모아 문서 하나의 서술 요청을 만든다.
 
-    첫 머리말 블록으로 만든다. 세 블록은 heading만 다르고 본문과 근거가
-    같아 어느 블록으로 만들어도 사실 입력은 같지만, 만드는 자리를 첫
-    블록으로 못박아야 지난 산문 재사용이 어느 블록에서 걸리든 같은 요청이
-    나간다.
+    지난 산문을 그대로 쓸 수 있는 블록은 요청에 싣지 않는다. 이미 답이
+    있는 것을 다시 물으면 값을 치르고 문장이 흔들리기만 한다. 근거가 없어
+    서술하지 않는 블록도 싣지 않는다.
 
-    머리말 블록이 없거나 검증된 인용이 하나도 없으면 None이다.
+    머리말 세 블록은 요청에 따로 서지 않고 summary 한 칸으로 함께 실린다.
+    세 블록은 같은 집계 한 줄을 딛고 선 한 벌이라 따로 물으면 서로 어긋난
+    문장을 받을 수 있다. summary의 재료는 언제나 첫 머리말 블록으로
+    만든다. 세 블록은 heading만 다르고 본문과 근거가 같아 어느 블록으로
+    만들어도 사실 입력은 같지만, 만드는 자리를 못박아야 재사용이 어느
+    블록에서 걸리든 같은 재료가 나간다. 세 블록이 모두 재사용에 걸리면
+    summary는 None이다.
+
+    머리말은 문서 전체를 요약하는 블록이라 관계 간선도 재료다. 요청자
+    이름처럼 인용에 없는 사실이 여기서 온다. 그래서 문서의 모든 관계 절
+    블록에서 간선 줄을 모아 머리말 재료에 얹는다. 표현 힌트는 얹지 않는다.
+
+    Args:
+        blocks: 이번 판에 실릴 블록을 차례대로 받는다.
+        reusable: 블록 내용 지문을 지난 산문에 짝지은 사전을 받는다.
+        style_instruction: 문서 전체에 한 번 실을 문체 지시를 받는다.
+        purpose_sentence: 문서 전체에 한 번 실을 목적 문장을 받는다.
+
+    Returns:
+        서술 요청과, 요청 안의 블록 번호를 blocks 안의 자리 번호로 잇는
+        사전을 함께 돌려준다. 응답이 블록 번호로 오므로 그 산문을 다시
+        블록에 얹으려면 이 사전이 필요하다.
     """
-    summary = next(
-        (
-            block
-            for block in blocks
-            if block.block_kind == BLOCK_KIND_SUMMARY
+    summary_input: BlockNarrationInput | None = None
+    summary_wanted = False
+    document_edges: list[str] = []
+    section_inputs: list[BlockNarrationInput] = []
+    indices: dict[int, int] = {}
+    for index, block in enumerate(blocks):
+        if block.block_kind == BLOCK_KIND_RELATION_SECTION:
+            document_edges.extend(_relation_edge_lines(block))
+        is_reusable = block_content_hash(block) in reusable
+        if block.block_kind == BLOCK_KIND_SUMMARY:
+            if summary_input is None:
+                summary_input = _block_narration_input(
+                    block, block_id=_SUMMARY_BLOCK_ID
+                )
+            if not is_reusable and block.heading in SUMMARY_SECTION_KEYS:
+                summary_wanted = True
+            continue
+        if is_reusable:
+            continue
+        # 번호를 이미 실은 블록 수로 먼저 매기고 근거가 없으면 그 재료를
+        # 버린다. 그래서 빠진 블록이 있어도 요청의 연번은 끊기지 않는다.
+        block_input = _block_narration_input(
+            block, block_id=len(section_inputs)
+        )
+        if block_input is None:
+            continue
+        indices[block_input.block_id] = index
+        section_inputs.append(block_input)
+    if summary_input is not None:
+        summary_input = replace(summary_input, edges=tuple(document_edges))
+    return (
+        DocumentNarrationRequest(
+            style_instruction=style_instruction,
+            purpose_sentence=purpose_sentence,
+            summary=summary_input if summary_wanted else None,
+            blocks=tuple(section_inputs),
         ),
-        None,
-    )
-    if summary is None:
-        return None
-    return _narration_request(
-        summary,
-        style_instruction=style_instruction,
-        purpose_sentence=purpose_sentence,
+        indices,
     )
 
 
-def _narration_request(
+def _block_narration_input(
     block: ArtifactBlock,
     *,
-    style_instruction: str,
-    purpose_sentence: str,
-) -> NarrationRequest | None:
-    """블록 하나를 서술 요청으로 옮긴다. 근거가 없으면 None이다.
+    block_id: int,
+) -> BlockNarrationInput | None:
+    """블록 하나를 서술 재료로 옮긴다. 근거가 없으면 None이다.
 
     관계 절은 사실 입력이 다르다. 그 블록은 인용을 갖지 않고 근거를
     관계 장부로 남기며, 본문 줄이 곧 사실 입력이다. 그래서 관계 절만 본문
@@ -1184,6 +1451,11 @@ def _narration_request(
 
     검증된 인용이 하나도 없으면 서술하지 않는다. 근거 없는 문장을 만들지
     않는 것이지 오류가 아니므로 예외가 아니라 None으로 알린다.
+
+    Args:
+        block: 재료로 옮길 블록을 받는다.
+        block_id: 요청 안에서 이 블록을 가리킬 번호를 받는다. 응답이 이
+            번호로 오므로 부르는 쪽이 정해서 준다.
     """
     if block.block_kind == BLOCK_KIND_RELATION_SECTION:
         edges = _relation_edge_lines(block)
@@ -1194,16 +1466,15 @@ def _narration_request(
         )
         if not edges and not hints:
             return None
-        return NarrationRequest(
+        return BlockNarrationInput(
+            block_id=block_id,
             block_kind=block.block_kind,
             heading=block.heading,
             topic_hint=block.heading,
             statements=(),
             edges=edges,
-            variants=(),
-            style_instruction=style_instruction,
-            purpose_sentence=purpose_sentence,
             hints=hints,
+            variants=(),
         )
     statements = _verified_statements(block)
     variants = tuple(
@@ -1223,15 +1494,15 @@ def _narration_request(
     )
     if not statements and not variants:
         return None
-    return NarrationRequest(
+    return BlockNarrationInput(
+        block_id=block_id,
         block_kind=block.block_kind,
         heading=block.heading,
         topic_hint=block.body,
         statements=statements,
         edges=(),
+        hints=(),
         variants=variants,
-        style_instruction=style_instruction,
-        purpose_sentence=purpose_sentence,
     )
 
 

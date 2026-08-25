@@ -38,6 +38,7 @@ from catchup.knowledge_maintenance.ports.extraction import ExtractionContractErr
 from catchup.knowledge_maintenance.ports.extraction import KnowledgeExtractionPort
 from catchup.knowledge_maintenance.ports.identity_judge import IdentityJudge
 from catchup.knowledge_maintenance.ports.name_embedder import NameEmbedder
+from catchup.knowledge_maintenance.ports.narrator import BlockNarrator
 from catchup.knowledge_maintenance.ports.observation_normalizer import ObservationNormalizer
 from catchup.knowledge_maintenance.ports.source_poller import SkippedItem
 from catchup.knowledge_maintenance.ports.source_poller import SourcePollResult
@@ -132,6 +133,7 @@ async def run_pre_review_pipeline(
     judge: IdentityJudge | None,
     uow_factory: UnitOfWorkFactory,
     name_embedder: NameEmbedder | None = None,
+    narrator: BlockNarrator | None = None,
     event_limit: int | None = None,
     auto_merge_enabled: bool = False,
     clock: Callable[[], datetime] | None = None,
@@ -145,6 +147,9 @@ async def run_pre_review_pipeline(
     ``auto_merge_enabled``는 병합 자동 확정 여부를 호출자가 정하게 하는
     인자다. 이 서비스는 설정을 직접 읽지 않는다. 러너가 kill switch 값을
     읽어 넘긴다.
+
+    narrator가 없으면 산문 없이 layout만 편찬한다. 정상 경로는 항상
+    narrator를 넘긴다.
     """
     started_at = perf_counter()
     pipeline_logger = logger.bind(
@@ -162,6 +167,7 @@ async def run_pre_review_pipeline(
             judge=judge,
             uow_factory=uow_factory,
             name_embedder=name_embedder,
+            narrator=narrator,
             event_limit=event_limit,
             auto_merge_enabled=auto_merge_enabled,
             clock=clock,
@@ -216,6 +222,7 @@ async def _execute_pre_review_pipeline(
     judge: IdentityJudge | None,
     uow_factory: UnitOfWorkFactory,
     name_embedder: NameEmbedder | None = None,
+    narrator: BlockNarrator | None = None,
     event_limit: int | None = None,
     auto_merge_enabled: bool = False,
     clock: Callable[[], datetime] | None = None,
@@ -297,6 +304,7 @@ async def _execute_pre_review_pipeline(
         artifact_uow,
         workspace_id=workspace_id,
         vocabulary=extraction_spec.vocabulary,
+        narrator=narrator,
         clock=clock,
     )
 
