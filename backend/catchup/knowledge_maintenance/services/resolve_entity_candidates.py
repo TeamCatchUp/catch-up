@@ -257,10 +257,13 @@ def resolve_entity_candidates(
                     accepted += 1
                 else:
                     merged += 1
+                # 여기서 EntityResolutionConflict가 나면 같은 후보를 두
+                # 회차가 동시에 해소한 것이므로 잡지 않고 올려 보낸다.
                 uow.knowledge_candidates.mark_entity_resolved(
                     candidate_id=candidate.id,
                     status=status,
                     resolved_node_id=node.id,
+                    expected_node_id=None,
                 )
                 uow.knowledge_nodes.add_alias(
                     workspace_id=workspace_id,
@@ -305,6 +308,7 @@ def resolve_entity_candidates(
                 candidate_id=candidate.id,
                 status=status,
                 resolved_node_id=node.id,
+                expected_node_id=None,
             )
             uow.knowledge_nodes.add_alias(
                 workspace_id=workspace_id,
@@ -337,6 +341,7 @@ def resolve_entity_candidates(
                 candidate_id=candidate.id,
                 status=EntityResolutionStatus.MERGED,
                 resolved_node_id=node.id,
+                expected_node_id=None,
             )
             uow.knowledge_nodes.add_alias(
                 workspace_id=workspace_id,
@@ -1340,6 +1345,7 @@ def _promote_singleton(
         candidate_id=candidate.id,
         status=EntityResolutionStatus.ACCEPTED,
         resolved_node_id=node.id,
+        expected_node_id=None,
     )
     logger.info(
         "entity_singleton_promoted",

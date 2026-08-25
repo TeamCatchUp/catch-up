@@ -18,6 +18,9 @@ from structlog.testing import capture_logs
 
 from catchup.knowledge_maintenance.domain.entity_resolution import normalize_name
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    EntityResolutionConflict,
+)
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
 )
 from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
@@ -42,6 +45,11 @@ class FakeState:
     nodes: list[KnowledgeNode] = field(default_factory=list)
     aliases: list[dict[str, Any]] = field(default_factory=list)
     events: list[dict[str, Any]] = field(default_factory=list)
+    # 사전 검사가 후보를 읽은 직후 그 후보를 다른 노드로 옮겨 두는 자리다.
+    # 검사와 UPDATE 사이에 남이 끼어든 상황을 만든다.
+    move_after_precheck: dict[uuid.UUID, uuid.UUID] = field(
+        default_factory=dict
+    )
 
     def add_claim(
         self,
@@ -200,7 +208,12 @@ class FakeCandidateRepo:
         row = self.state.candidates.get(candidate_id)
         if row is None:
             return None
-        return (row["resolution_status"], row["resolved_node_id"])
+        current = (row["resolution_status"], row["resolved_node_id"])
+        moved_to = self.state.move_after_precheck.pop(candidate_id, None)
+        if moved_to is not None:
+            row["resolution_status"] = EntityResolutionStatus.MERGED.value
+            row["resolved_node_id"] = moved_to
+        return current
 
     def get_claim_validity(
         self, *, claim_id: uuid.UUID
@@ -241,10 +254,17 @@ class FakeCandidateRepo:
         candidate_id: uuid.UUID,
         status: EntityResolutionStatus,
         resolved_node_id: uuid.UUID,
+        expected_node_id: uuid.UUID | None,
     ) -> None:
         row = self.state.candidates[candidate_id]
-        if row["resolved_node_id"] is not None:
-            raise AssertionError("이미 해소된 후보를 다시 해소하면 안 된다")
+        if row["resolved_node_id"] != expected_node_id:
+            raise EntityResolutionConflict(
+                f"후보의 해소 상태가 바뀌었다: {candidate_id}"
+            )
+        if expected_node_id is None and row["resolution_status"] != "pending":
+            raise EntityResolutionConflict(
+                f"후보가 더는 pending이 아니다: {candidate_id}"
+            )
         row["resolution_status"] = status.value
         row["resolved_node_id"] = resolved_node_id
 
@@ -1060,6 +1080,35 @@ def test_superseded_member_makes_the_proposal_stale() -> None:
     result, _ = _run(state)
 
     _assert_stale_and_untouched(state, proposal_id, result)
+
+
+def test_candidate_moved_after_precheck_makes_the_proposal_stale() -> None:
+    """사전 검사 뒤 후보가 다른 노드로 옮겨졌으면 안건이 stale이다.
+
+    검사와 UPDATE가 원자적이지 않아 그 사이에 다른 결정이 같은 후보를
+    가져갈 수 있다. 저장소가 기대한 상태와 다르면 갱신하지 않고
+    EntityResolutionConflict를 내므로, 적용은 그 안건을 stale로 끝낸다.
+    """
+    state = FakeState()
+    existing = state.add_node()
+    other = state.add_node()
+    representative = state.add_candidate()
+    member = state.add_candidate()
+    state.move_after_precheck[representative] = other.id
+    proposal_id = state.add_approved_merge(
+        representative=representative,
+        members=(member,),
+        merge_into_node_id=existing.id,
+    )
+
+    result, _ = _run(state)
+
+    _assert_stale_and_untouched(state, proposal_id, result)
+    # 새 노드는 서지 않고 후보도 이 안건 때문에 옮겨지지 않는다. 가짜
+    # UoW가 트랜잭션 전체를 되감으므로 끼어든 갱신도 함께 되감긴다.
+    assert len(state.nodes) == 2
+    assert state.candidates[representative]["resolved_node_id"] is None
+    assert state.candidates[member]["resolved_node_id"] is None
 
 
 def test_merge_into_inactive_node_makes_the_proposal_stale() -> None:

@@ -17,6 +17,9 @@ from catchup.knowledge_maintenance.domain.entity_resolution import (
 from catchup.knowledge_maintenance.domain.entity_resolution import normalize_name
 from catchup.knowledge_maintenance.domain.entity_resolution import validate_partition
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    EntityResolutionConflict,
+)
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
 )
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionMethod
@@ -100,7 +103,15 @@ class FakeCandidateRepository:
             if candidate.id not in self.resolved
         )
 
-    def mark_entity_resolved(self, *, candidate_id, status, resolved_node_id):
+    def mark_entity_resolved(
+        self, *, candidate_id, status, resolved_node_id, expected_node_id
+    ):
+        current = self.resolved.get(candidate_id)
+        current_node = None if current is None else current[1]
+        if current_node != expected_node_id:
+            raise EntityResolutionConflict(
+                f"후보의 해소 상태가 바뀌었다: {candidate_id}"
+            )
         self.resolved[candidate_id] = (status, resolved_node_id)
 
     def find_accepted_claims_as_of(

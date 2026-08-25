@@ -35,6 +35,9 @@ from sqlalchemy.exc import IntegrityError
 
 from catchup.knowledge_maintenance.domain.entity_resolution import normalize_name
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    EntityResolutionConflict,
+)
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
 )
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
@@ -182,6 +185,7 @@ def rollback_resolution_event(
                 uow,
                 workspace_id=workspace_id,
                 members=members,
+                expected_node_id=event.node_id,
                 proposed_type=proposed_type,
                 # 이 경로는 후보들이 서로 같다는 판정을 그대로 두고 새 노드
                 # 하나로 옮기므로, 그 노드의 이름은 병합이 지은
@@ -200,6 +204,7 @@ def rollback_resolution_event(
                 uow,
                 workspace_id=workspace_id,
                 members=members,
+                expected_node_id=event.node_id,
                 proposed_type=proposed_type,
             )
             # 멤버 전부가 노드를 떠났으므로 노드를 물린다. 집합 비교가
@@ -284,6 +289,7 @@ def _repoint_to_single_node(
     *,
     workspace_id: int,
     members: Sequence[_Member],
+    expected_node_id: uuid.UUID,
     proposed_type: str,
     proposed_name: str,
 ) -> tuple[uuid.UUID, ...]:
@@ -299,10 +305,11 @@ def _repoint_to_single_node(
         name=proposed_name,
     )
     for member in members:
-        uow.knowledge_candidates.mark_entity_resolved(
+        _repoint_member(
+            uow,
             candidate_id=member.candidate_id,
-            status=EntityResolutionStatus.MERGED,
-            resolved_node_id=node_id,
+            node_id=node_id,
+            expected_node_id=expected_node_id,
         )
     return (node_id,)
 
@@ -312,6 +319,7 @@ def _split_into_own_nodes(
     *,
     workspace_id: int,
     members: Sequence[_Member],
+    expected_node_id: uuid.UUID,
     proposed_type: str,
 ) -> tuple[uuid.UUID, ...]:
     """후보마다 제 이름의 노드를 세워 갈라 놓는다."""
@@ -323,13 +331,43 @@ def _split_into_own_nodes(
             entity_type=proposed_type,
             name=member.name,
         )
-        uow.knowledge_candidates.mark_entity_resolved(
+        _repoint_member(
+            uow,
             candidate_id=member.candidate_id,
-            status=EntityResolutionStatus.MERGED,
-            resolved_node_id=node_id,
+            node_id=node_id,
+            expected_node_id=expected_node_id,
         )
         node_ids.append(node_id)
     return tuple(node_ids)
+
+
+def _repoint_member(
+    uow: RollbackUnitOfWork,
+    *,
+    candidate_id: uuid.UUID,
+    node_id: uuid.UUID,
+    expected_node_id: uuid.UUID,
+) -> None:
+    """후보 하나를 되돌림이 세운 노드로 옮긴다.
+
+    후보가 아직 event의 노드를 가리킬 때만 옮긴다. 되돌림은 그 노드 행을
+    잠근 채 돌아가므로 여기서 어긋날 일이 사실상 없지만, 어긋났다면 이
+    event가 만든 상태가 이미 아니라는 뜻이라 되돌림 전체를 물린다.
+
+    Raises:
+        RollbackError: 후보가 더는 event의 노드를 가리키지 않을 때 던진다.
+    """
+    try:
+        uow.knowledge_candidates.mark_entity_resolved(
+            candidate_id=candidate_id,
+            status=EntityResolutionStatus.MERGED,
+            resolved_node_id=node_id,
+            expected_node_id=expected_node_id,
+        )
+    except EntityResolutionConflict as error:
+        raise RollbackError(
+            f"후보가 더는 event의 노드를 가리키지 않는다: {candidate_id}"
+        ) from error
 
 
 def _create_named_node(

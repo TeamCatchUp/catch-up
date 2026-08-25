@@ -254,8 +254,14 @@ class KnowledgeCandidateRepository(Protocol):
         candidate_id: uuid.UUID,
         status: EntityResolutionStatus,
         resolved_node_id: uuid.UUID,
+        expected_node_id: uuid.UUID | None,
     ) -> None:
         """후보가 어느 canonical 노드로 해소됐는지 기록한다.
+
+        후보가 지금 expected_node_id를 가리킬 때만 갱신한다(None이면 아직
+        어느 노드도 가리키지 않을 때). 다르면 다른 결정이 먼저 옮긴 것이므로
+        EntityResolutionConflict를 던진다. 호출자는 자기가 기대하는 현재
+        노드를 반드시 말해야 하므로 기본값이 없다.
 
         구현은 후보를 고치기 전에 붙일 노드 행을 잠근다. 노드를 퇴역시키는
         경로가 같은 행을 잠그므로, 두 경로가 겹치면 한쪽이 끝날 때까지
@@ -265,6 +271,8 @@ class KnowledgeCandidateRepository(Protocol):
             ValueError: 붙일 노드가 없거나 이미 퇴역한 노드일 때 던진다.
                 퇴역한 노드에 후보를 붙이면 그 후보와 그 후보로 읽히는
                 지식이 살아 있는 graph에서 사라진다.
+            EntityResolutionConflict: 후보의 현재 해소 상태가
+                expected_node_id와 다를 때 던진다.
         """
         ...
 

@@ -296,6 +296,7 @@ def test_find_claim_candidates_carries_observed_at_and_resolution(
             candidate_id=subject,
             status=EntityResolutionStatus.ACCEPTED,
             resolved_node_id=node.id,
+            expected_node_id=None,
         )
         uow.commit()
 
@@ -463,6 +464,7 @@ def test_converged_values_abandon_stale_contradiction_proposal(
                 candidate_id=stored.entity_ids["e1"],
                 status=EntityResolutionStatus.ACCEPTED,
                 resolved_node_id=node.id,
+                expected_node_id=None,
             )
         uow.commit()
 

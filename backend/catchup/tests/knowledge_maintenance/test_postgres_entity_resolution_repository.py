@@ -34,6 +34,9 @@ from catchup.knowledge_maintenance.contracts.extraction import ClaimCandidateDra
 from catchup.knowledge_maintenance.contracts.extraction import EntityCandidateDraft
 from catchup.knowledge_maintenance.contracts.extraction import KnowledgeCandidateBatch
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    EntityResolutionConflict,
+)
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
 )
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
@@ -169,6 +172,7 @@ def test_mark_entity_resolved_excludes_from_pending(
             candidate_id=target,
             status=EntityResolutionStatus.ACCEPTED,
             resolved_node_id=node.id,
+            expected_node_id=None,
         )
         uow.commit()
 
@@ -219,6 +223,7 @@ def test_list_entity_candidate_ids_resolved_to_returns_sorted_ids(
                 candidate_id=candidate_id,
                 status=EntityResolutionStatus.MERGED,
                 resolved_node_id=target,
+                expected_node_id=None,
             )
         uow.commit()
 
@@ -497,6 +502,7 @@ def test_retire_entity_node_keeps_a_node_a_candidate_still_points_to(
             candidate_id=stored.entity_ids["e1"],
             status=EntityResolutionStatus.MERGED,
             resolved_node_id=node.id,
+            expected_node_id=None,
         )
         uow.commit()
 
@@ -515,6 +521,74 @@ def test_retire_entity_node_keeps_a_node_a_candidate_still_points_to(
         )
     assert found is not None
     assert found.lifecycle_state is NodeLifecycleState.ACTIVE
+
+
+def test_mark_entity_resolved_moves_only_from_the_expected_node(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """후보가 지금 가리키는 노드가 기대와 같을 때만 옮긴다.
+
+    기대와 다르면 다른 결정이 먼저 옮겼다는 뜻이라 갱신하지 않는다.
+    이미 붙은 후보를 expected_node_id=None으로 다시 붙이려는 것도 같다.
+    """
+    stored = _stored_candidates(workspace_id, session_factory, uow_factory)
+    candidate_id = stored.entity_ids["e1"]
+
+    with uow_factory() as uow:
+        first = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=None,
+            display_name="결제 기능",
+        )
+        second = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=None,
+            display_name="다른 기능",
+        )
+        uow.knowledge_candidates.mark_entity_resolved(
+            candidate_id=candidate_id,
+            status=EntityResolutionStatus.MERGED,
+            resolved_node_id=first.id,
+            expected_node_id=None,
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        with pytest.raises(EntityResolutionConflict):
+            uow.knowledge_candidates.mark_entity_resolved(
+                candidate_id=candidate_id,
+                status=EntityResolutionStatus.MERGED,
+                resolved_node_id=second.id,
+                expected_node_id=None,
+            )
+
+    with uow_factory() as uow:
+        with pytest.raises(EntityResolutionConflict):
+            uow.knowledge_candidates.mark_entity_resolved(
+                candidate_id=candidate_id,
+                status=EntityResolutionStatus.MERGED,
+                resolved_node_id=second.id,
+                expected_node_id=second.id,
+            )
+
+    with uow_factory() as uow:
+        uow.knowledge_candidates.mark_entity_resolved(
+            candidate_id=candidate_id,
+            status=EntityResolutionStatus.MERGED,
+            resolved_node_id=second.id,
+            expected_node_id=first.id,
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        resolution = uow.knowledge_candidates.get_entity_resolution(
+            candidate_id=candidate_id,
+        )
+    assert resolution == (EntityResolutionStatus.MERGED.value, second.id)
 
 
 def test_mark_entity_resolved_rejects_a_retired_node(
@@ -547,6 +621,7 @@ def test_mark_entity_resolved_rejects_a_retired_node(
                 candidate_id=stored.entity_ids["e1"],
                 status=EntityResolutionStatus.MERGED,
                 resolved_node_id=node.id,
+                expected_node_id=None,
             )
 
 
@@ -564,6 +639,7 @@ def test_mark_entity_resolved_rejects_an_unknown_node(
                 candidate_id=stored.entity_ids["e1"],
                 status=EntityResolutionStatus.MERGED,
                 resolved_node_id=uuid.uuid4(),
+                expected_node_id=None,
             )
 
 

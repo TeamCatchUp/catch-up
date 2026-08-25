@@ -15,6 +15,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from collections.abc import Mapping
+from collections.abc import Sequence
 from dataclasses import dataclass
 from dataclasses import field
 from types import TracebackType
@@ -27,6 +28,9 @@ from catchup.knowledge_maintenance.domain.entity_resolution import (
 from catchup.knowledge_maintenance.domain.entity_resolution import normalize_name
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     AssertionResolutionStatus,
+)
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    EntityResolutionConflict,
 )
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
@@ -269,7 +273,6 @@ def _apply_one(
         StaleProposal: 승인 뒤 후보나 대상 노드가 바뀌어 승인된 구성을
             그대로 실행할 수 없을 때 던진다.
     """
-    proposal_id = proposal.proposal_id
     operations = proposal.operations
     unsupported = [
         operation.operation_type
@@ -283,6 +286,33 @@ def _apply_one(
 
     tally = _Tally()
     names_by_candidate = _names_by_candidate(proposal)
+    try:
+        return _apply_operations(
+            uow_factory,
+            workspace_id=workspace_id,
+            proposal=proposal,
+            operations=operations,
+            names_by_candidate=names_by_candidate,
+            tally=tally,
+        )
+    except EntityResolutionConflict as error:
+        # 사전 검사와 UPDATE 사이에 다른 결정이 같은 후보를 먼저 옮긴
+        # 경우다. 승인된 구성을 그대로 실행할 수 없으므로 안건을 stale로
+        # 끝낸다. 트랜잭션은 이미 되돌아갔다.
+        raise StaleProposal(f"후보의 해소 상태가 바뀌었다: {error}") from error
+
+
+def _apply_operations(
+    uow_factory: Callable[[], ApplyUnitOfWork],
+    *,
+    workspace_id: int,
+    proposal: ApprovedProposal,
+    operations: Sequence[StoredOperation],
+    names_by_candidate: Mapping[uuid.UUID, str],
+    tally: _Tally,
+) -> _Tally:
+    """안건의 명령들을 한 트랜잭션 안에서 차례로 적용한다."""
+    proposal_id = proposal.proposal_id
     with uow_factory() as uow:
         _require_members_unresolved(
             uow,
@@ -627,6 +657,7 @@ def _apply_create(
         candidate_id=candidate_id,
         status=EntityResolutionStatus.ACCEPTED,
         resolved_node_id=node.id,
+        expected_node_id=None,
     )
     tally.resolved += 1
     tally.applied_members.append(
@@ -677,6 +708,7 @@ def _merge_into_existing_node(
         candidate_id=candidate_id,
         status=EntityResolutionStatus.MERGED,
         resolved_node_id=node_id,
+        expected_node_id=None,
     )
     tally.resolved += 1
     tally.applied_members.append((candidate_id, member_name))
@@ -706,6 +738,7 @@ def _apply_merge(
         candidate_id=candidate_id,
         status=EntityResolutionStatus.MERGED,
         resolved_node_id=target_node_id,
+        expected_node_id=None,
     )
     tally.resolved += 1
     tally.applied_members.append(

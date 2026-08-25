@@ -44,6 +44,9 @@ from catchup.knowledge_maintenance.adapters.postgres.repositories import (
     SqlAlchemyKnowledgeNodeRepository,
 )
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    EntityResolutionConflict,
+)
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
 )
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
@@ -90,6 +93,7 @@ class _Fixture:
     """두 트랜잭션이 함께 건드릴 노드와 후보를 담는다."""
 
     node_id: uuid.UUID
+    other_node_id: uuid.UUID
     candidate_id: uuid.UUID
 
 
@@ -112,6 +116,7 @@ def seeded(
     """entity 노드 하나와 아직 해소되지 않은 후보 하나를 실제로 적어 둔다."""
     input_node_id = uuid.uuid4()
     node_id = uuid.uuid4()
+    other_node_id = uuid.uuid4()
     run_id = uuid.uuid4()
     candidate_id = uuid.uuid4()
     ontology_id = "test.retire-lock"
@@ -134,6 +139,15 @@ def seeded(
                 node_kind="entity",
                 entity_type="feature",
                 display_name="결제 기능",
+            )
+        )
+        session.add(
+            NodeRow(
+                id=other_node_id,
+                workspace_id=workspace_id,
+                node_kind="entity",
+                entity_type="feature",
+                display_name="다른 기능",
             )
         )
         session.add(
@@ -175,7 +189,11 @@ def seeded(
         )
         session.commit()
 
-    yield _Fixture(node_id=node_id, candidate_id=candidate_id)
+    yield _Fixture(
+        node_id=node_id,
+        other_node_id=other_node_id,
+        candidate_id=candidate_id,
+    )
 
     with session_factory() as cleanup:
         # 외래 키 역순으로 지운다.
@@ -190,7 +208,11 @@ def seeded(
                 OntologySnapshotRow.version == ontology_version,
             )
         )
-        cleanup.execute(delete(NodeRow).where(NodeRow.id.in_((node_id, input_node_id))))
+        cleanup.execute(
+            delete(NodeRow).where(
+                NodeRow.id.in_((node_id, other_node_id, input_node_id))
+            )
+        )
         cleanup.commit()
 
 
@@ -216,6 +238,7 @@ def test_attach_waits_for_retire_and_then_refuses_the_retired_node(
                     candidate_id=seeded.candidate_id,
                     status=EntityResolutionStatus.MERGED,
                     resolved_node_id=seeded.node_id,
+                    expected_node_id=None,
                 )
                 session.commit()
                 attach_error.append(None)
@@ -273,6 +296,7 @@ def test_retire_gives_up_when_a_candidate_was_attached_first(
             candidate_id=seeded.candidate_id,
             status=EntityResolutionStatus.MERGED,
             resolved_node_id=seeded.node_id,
+            expected_node_id=None,
         )
         attach_session.commit()
 
@@ -315,6 +339,7 @@ def test_attach_waits_for_lock_entity_node(
                     candidate_id=seeded.candidate_id,
                     status=EntityResolutionStatus.MERGED,
                     resolved_node_id=seeded.node_id,
+                    expected_node_id=None,
                 )
                 session.commit()
                 attach_error.append(None)
@@ -353,3 +378,62 @@ def test_attach_waits_for_lock_entity_node(
         node = session.get(NodeRow, seeded.node_id)
         assert node is not None
         assert node.lifecycle_state == NodeLifecycleState.ACTIVE.value
+
+
+def test_attach_loses_to_another_decision_that_took_the_candidate(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    seeded: _Fixture,
+) -> None:
+    """같은 후보를 다른 노드로 먼저 가져간 결정이 있으면 부착이 거부된다.
+
+    노드 행 잠금은 같은 노드를 건드리는 경로끼리만 줄을 세운다. 후보 하나를
+    서로 다른 노드로 옮기는 두 결정은 잠는 행이 달라 나란히 지나간다.
+    그래서 후보 UPDATE 자체에 "지금 이 노드를 가리킬 때만"이라는 조건이
+    필요하고, 조건이 어긋난 쪽은 아무것도 바꾸지 않고 진다.
+    """
+    taken = threading.Event()
+
+    def take_candidate() -> None:
+        with session_factory() as session:
+            SqlAlchemyKnowledgeCandidateRepository(session).mark_entity_resolved(
+                candidate_id=seeded.candidate_id,
+                status=EntityResolutionStatus.MERGED,
+                resolved_node_id=seeded.other_node_id,
+                expected_node_id=None,
+            )
+            session.commit()
+        taken.set()
+
+    with session_factory() as session:
+        repository = SqlAlchemyKnowledgeCandidateRepository(session)
+        # 사전 검사에 해당한다. 이 시점에는 후보가 아직 pending이다.
+        assert repository.get_entity_resolution(
+            candidate_id=seeded.candidate_id,
+        ) == (EntityResolutionStatus.PENDING.value, None)
+        locked = SqlAlchemyKnowledgeNodeRepository(session).lock_entity_node(
+            workspace_id=workspace_id,
+            node_id=seeded.node_id,
+        )
+        assert locked is not None
+
+        worker = threading.Thread(target=take_candidate, daemon=True)
+        worker.start()
+        # 다른 노드를 잠그므로 이쪽 잠금에 걸리지 않고 지나간다.
+        assert taken.wait(timeout=RELEASED_SECONDS)
+        worker.join(timeout=RELEASED_SECONDS)
+        assert not worker.is_alive()
+
+        with pytest.raises(EntityResolutionConflict):
+            repository.mark_entity_resolved(
+                candidate_id=seeded.candidate_id,
+                status=EntityResolutionStatus.MERGED,
+                resolved_node_id=seeded.node_id,
+                expected_node_id=None,
+            )
+        session.rollback()
+
+    with session_factory() as session:
+        candidate = session.get(EntityCandidateRow, seeded.candidate_id)
+        assert candidate is not None
+        assert candidate.resolved_node_id == seeded.other_node_id

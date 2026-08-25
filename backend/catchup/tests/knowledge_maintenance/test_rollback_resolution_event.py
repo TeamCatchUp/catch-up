@@ -23,6 +23,9 @@ from sqlalchemy.exc import IntegrityError
 
 from catchup.knowledge_maintenance.domain.entity_resolution import normalize_name
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    EntityResolutionConflict,
+)
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
 )
 from catchup.knowledge_maintenance.domain.knowledge_node import KnowledgeNode
@@ -160,8 +163,17 @@ class FakeCandidateRepo:
         candidate_id: uuid.UUID,
         status: EntityResolutionStatus,
         resolved_node_id: uuid.UUID,
+        expected_node_id: uuid.UUID | None,
     ) -> None:
         row = self.state.candidates[candidate_id]
+        if row["resolved_node_id"] != expected_node_id:
+            raise EntityResolutionConflict(
+                f"후보의 해소 상태가 바뀌었다: {candidate_id}"
+            )
+        if expected_node_id is None and row["resolution_status"] != "pending":
+            raise EntityResolutionConflict(
+                f"후보가 더는 pending이 아니다: {candidate_id}"
+            )
         row["resolution_status"] = status.value
         row["resolved_node_id"] = resolved_node_id
 

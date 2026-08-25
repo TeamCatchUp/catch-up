@@ -1477,6 +1477,7 @@ def test_reextraction_supersedes_stale_pending_candidates(
             candidate_id=accepted_candidate_id,
             status=EntityResolutionStatus.ACCEPTED,
             resolved_node_id=node.id,
+            expected_node_id=None,
         )
         uow.commit()
 

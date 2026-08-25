@@ -104,6 +104,9 @@ from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     AssertionResolutionStatus,
 )
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    EntityResolutionConflict,
+)
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
 )
 from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionMethod
@@ -1736,6 +1739,7 @@ class SqlAlchemyKnowledgeCandidateRepository:
         candidate_id: uuid.UUID,
         status: EntityResolutionStatus,
         resolved_node_id: uuid.UUID,
+        expected_node_id: uuid.UUID | None,
     ) -> None:
         """후보가 어느 canonical 노드로 해소됐는지 기록한다.
 
@@ -1744,10 +1748,17 @@ class SqlAlchemyKnowledgeCandidateRepository:
         잠금이 두 경로를 한 줄로 세운다. 잠금을 얻은 뒤 lifecycle을 읽으니
         상대가 방금 물린 결과도 보인다.
 
+        후보 UPDATE에는 expected_node_id 조건을 함께 건다. 노드 잠금은 붙일
+        노드끼리만 두 경로를 세우므로, 서로 다른 노드로 같은 후보를 옮기는
+        두 결정은 잠금으로 걸러지지 않는다. 기대한 상태와 다르면 UPDATE가
+        0건이 되고, 그때 EntityResolutionConflict를 던진다.
+
         Raises:
             ValueError: 붙일 노드가 없거나 이미 퇴역한 노드일 때 던진다.
                 퇴역한 노드에 후보를 붙이면 그 후보와 그 후보로 읽히는
                 지식이 살아 있는 graph에서 사라진다.
+            EntityResolutionConflict: 후보가 지금 expected_node_id를
+                가리키지 않을 때 던진다.
         """
         lifecycle_state = self._session.scalar(
             select(KnowledgeNodeRow.lifecycle_state)
@@ -1758,14 +1769,32 @@ class SqlAlchemyKnowledgeCandidateRepository:
             raise ValueError(f"unknown knowledge node: {resolved_node_id}")
         if lifecycle_state == NodeLifecycleState.RETIRED.value:
             raise ValueError(f"retired knowledge node: {resolved_node_id}")
-        self._session.execute(
+        statement = (
             update(KnowledgeEntityCandidateRow)
-            .where(KnowledgeEntityCandidateRow.id == candidate_id)
+            .where(
+                KnowledgeEntityCandidateRow.id == candidate_id,
+                KnowledgeEntityCandidateRow.resolved_node_id.is_not_distinct_from(
+                    expected_node_id
+                ),
+            )
             .values(
                 resolution_status=status.value,
                 resolved_node_id=resolved_node_id,
             )
         )
+        if expected_node_id is None:
+            # 아직 어느 노드도 가리키지 않는 후보는 pending이어야 한다.
+            # rejected나 superseded로 닫힌 후보를 붙이지 않는다.
+            statement = statement.where(
+                KnowledgeEntityCandidateRow.resolution_status
+                == EntityResolutionStatus.PENDING.value
+            )
+        result = self._session.execute(statement)
+        if result.rowcount != 1:
+            raise EntityResolutionConflict(
+                f"후보의 해소 상태가 바뀌었다: {candidate_id} "
+                f"(기대 노드 {expected_node_id})"
+            )
         self._session.flush()
 
     def get_entity_resolution(
