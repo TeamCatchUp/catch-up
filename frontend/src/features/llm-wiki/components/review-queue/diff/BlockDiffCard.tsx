@@ -1,12 +1,15 @@
 'use client';
 
 import { type ComponentType, type SVGProps, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 
 import IconArrowDropdownDown from '@/public/icons/icon/arrow_dropdown_down.svg';
 import IconArrowDropdownRight from '@/public/icons/icon/arrow_dropdown_right.svg';
 import IconCheckCircle from '@/public/icons/icon/check_circle.svg';
 import IconDelete2 from '@/public/icons/icon/delete_2.svg';
 import { Button } from '@/shared/components/ui/button';
+import { usePrefersReducedMotion } from '@/shared/hooks/usePrefersReducedMotion';
+import { disclosureExpand, disclosureExpandReduced, MotionState } from '@/shared/motion';
 import { cn } from '@/shared/utils/cn';
 
 import type { BlockDiffEntry } from '../../../types/llmWikiDiff';
@@ -63,6 +66,7 @@ export default function BlockDiffCard({
   onApprove,
   onReject,
 }: BlockDiffCardProps) {
+  const prefersReducedMotion = usePrefersReducedMotion();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   // 판정이 들어오면 접힘 기본값이 바뀐다 — 카드가 남아 있는 채로 상태만 따라가야 한다
   const [appliedDefault, setAppliedDefault] = useState(defaultCollapsed);
@@ -77,7 +81,7 @@ export default function BlockDiffCard({
   const verdictBadge = (rejected && VERDICT_BADGES.rejected) || (approved && VERDICT_BADGES.approved) || null;
 
   return (
-    <section className="border-line-normal-neutral flex flex-col gap-4 rounded-xl border px-5 py-4">
+    <section className="border-line-normal-neutral flex flex-col rounded-xl border px-5 py-4">
       <header className="flex w-full items-center gap-2">
         <Button
           variant="icon-only-gray"
@@ -110,21 +114,33 @@ export default function BlockDiffCard({
         )}
       </header>
 
-      {!collapsed && (
-        <>
-          {kind === 'removed' && before ? (
-            <DeletedBlockPanel lines={before} />
-          ) : (
-            <div className={cn('flex gap-5', kind !== 'modified' && 'flex-col')}>
-              {before && <DiffText lines={before} tone="removed" />}
-              {after && <DiffText lines={after} tone="added" />}
+      {/* 헤더와의 간격은 안쪽 pt로 든다 — 높이 축소와 함께 사라져야 접힌 뒤 빈 gap이 남지 않는다 */}
+      <AnimatePresence initial={false}>
+        {!collapsed && (
+          <motion.div
+            key="body"
+            variants={prefersReducedMotion ? disclosureExpandReduced : disclosureExpand}
+            initial={MotionState.Hidden}
+            animate={MotionState.Visible}
+            exit={MotionState.Exit}
+            className="overflow-hidden"
+          >
+            <div className="flex flex-col gap-4 pt-4">
+              {kind === 'removed' && before ? (
+                <DeletedBlockPanel lines={before} />
+              ) : (
+                <div className={cn('flex gap-5', kind !== 'modified' && 'flex-col')}>
+                  {before && <DiffText lines={before} tone="removed" />}
+                  {after && <DiffText lines={after} tone="added" />}
+                </div>
+              )}
+              {reason && <CardNotePanel label="수정된 이유" body={reason} />}
+              {/* 반려 사유는 검토자가 남긴 글이라 판정이 끝난 뒤에도 읽을 자리가 있어야 한다 */}
+              {rejected && rejectionReason && <CardNotePanel label="반려 사유" body={rejectionReason} />}
             </div>
-          )}
-          {reason && <CardNotePanel label="수정된 이유" body={reason} />}
-          {/* 반려 사유는 검토자가 남긴 글이라 판정이 끝난 뒤에도 읽을 자리가 있어야 한다 */}
-          {rejected && rejectionReason && <CardNotePanel label="반려 사유" body={rejectionReason} />}
-        </>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }

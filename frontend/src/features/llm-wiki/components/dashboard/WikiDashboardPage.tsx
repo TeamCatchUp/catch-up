@@ -1,10 +1,13 @@
 'use client';
 
 import type { DateRange } from 'react-day-picker';
+import { AnimatePresence, motion } from 'motion/react';
 
 import IconGrid from '@/public/icons/icon/grid.svg';
 import IconKebabHorizontal from '@/public/icons/icon/kebab_horizontal.svg';
 import { Button } from '@/shared/components/ui/button';
+import { usePrefersReducedMotion } from '@/shared/hooks/usePrefersReducedMotion';
+import { MotionState, stepReplace, stepReplaceReduced } from '@/shared/motion';
 
 import type {
   DocumentBreadcrumb,
@@ -72,6 +75,14 @@ export default function WikiDashboardPage({
   onMoreClick,
 }: WikiDashboardPageProps) {
   const { filter, selectedAssigneeIds, createdAtRange, keyword, sortId, page } = queryState;
+
+  const prefersReducedMotion = usePrefersReducedMotion();
+  // 표 몸통의 교체 신호 — 골격·빈 상태·행 묶음 중 화면에 선 것이 실제로 바뀔 때만 전환한다
+  const tableBodyKey = documentsLoading
+    ? 'loading'
+    : documents.length === 0
+      ? 'empty'
+      : documents.map((document) => document.id).join('|');
 
   // 필터는 한 번에 하나다 — 지표 카드와 드롭다운이 같은 자리를 놓고 서로를 덮어쓴다.
   const applyFilter = (
@@ -158,22 +169,33 @@ export default function WikiDashboardPage({
           <div className="flex flex-col gap-8">
             <div className="flex flex-col">
               <DashboardDocumentTableHeader />
-              {documentsLoading ? (
-                <DocumentTableSkeleton withPath activityAlign="end" />
-              ) : documents.length === 0 ? (
-                <DocumentTableEmptyState />
-              ) : (
-                <div className="flex flex-col gap-1">
-                  {documents.map((document) => (
-                    <DashboardDocumentRow
-                      key={document.id}
-                      document={document}
-                      onClick={onDocumentClick}
-                      onBreadcrumbClick={onBreadcrumbClick}
-                    />
-                  ))}
-                </div>
-              )}
+              {/* 헤더는 그대로 두고 몸통만 교체한다 — 검토큐 상세와 같은 결의 전환 */}
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={tableBodyKey}
+                  variants={prefersReducedMotion ? stepReplaceReduced : stepReplace}
+                  initial={MotionState.Hidden}
+                  animate={MotionState.Visible}
+                  exit={MotionState.Exit}
+                >
+                  {documentsLoading ? (
+                    <DocumentTableSkeleton withPath activityAlign="end" />
+                  ) : documents.length === 0 ? (
+                    <DocumentTableEmptyState />
+                  ) : (
+                    <div className="flex flex-col gap-1">
+                      {documents.map((document) => (
+                        <DashboardDocumentRow
+                          key={document.id}
+                          document={document}
+                          onClick={onDocumentClick}
+                          onBreadcrumbClick={onBreadcrumbClick}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              </AnimatePresence>
             </div>
 
             {/* 시안 우측에 같은 컨트롤이 하나 더 있으나 레이어명이 "Page Size (중복?)"이라 렌더하지 않는다 */}
