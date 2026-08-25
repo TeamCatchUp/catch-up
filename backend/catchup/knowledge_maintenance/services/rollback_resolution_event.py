@@ -13,6 +13,10 @@ unmerge 행을 새로 적어 "이 병합은 사람이 갈라 놓았다"를 남�
 곧 분리다. 후보 전부를 새 노드 하나로 옮기면 같은 병합을 이름만 바꿔
 다시 만드는 셈이라, 후보마다 제 이름의 노드를 따로 세운다.
 
+되돌림은 event 이후 그 노드에 변화가 있으면 거부한다. 멤버가 다른 노드로
+떠났거나 후보가 더 붙었으면 이 event만 골라 되돌릴 수 없다. 일부만
+되돌리고 저널에 "되돌렸다"를 적으면 기록과 실제가 어긋난다.
+
 되돌림은 노드와 후보 층까지만 손댄다. retire된 노드로 편찬된 위키 문서는
 그대로 남고 재편찬 대상에서만 빠진다. 문서 정리는 별도 처리다.
 """
@@ -33,6 +37,7 @@ from catchup.knowledge_maintenance.domain.entity_resolution import normalize_nam
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
 )
+from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
 from catchup.knowledge_maintenance.domain.source_version import JsonValue
 from catchup.knowledge_maintenance.ports.knowledge_candidates import (
     KnowledgeCandidateRepository,
@@ -91,8 +96,7 @@ class RollbackResult:
         new_node_ids: 후보를 받아 준 새 노드들을 가리킨다. 첫 번째가
             대표 후보의 노드다.
         repointed_candidate_ids: 자리를 옮긴 후보들을 가리킨다.
-        removed_aliases: 병합 대상 노드에서 지운 이름들을 담는다. 다른
-            후보가 아직 쓰고 있어 남겨 둔 이름은 들어가지 않는다.
+        removed_aliases: 병합 대상 노드에서 지운 이름들을 담는다.
     """
 
     unmerge_event_id: uuid.UUID
@@ -129,14 +133,15 @@ def rollback_resolution_event(
     한쪽이 어긋날 자리를 만든다.
 
     되감을 대상은 저널의 applied_members, 곧 그 병합이 실제로 옮긴 후보다.
-    거기에 더해 후보마다 지금도 event의 노드를 가리키는지 확인하고, 아니면
-    건너뛴다. event 시점과 되돌림 시점 사이에 다른 결정이 후보를 옮겼을 수
-    있고, 그것을 덮으면 이 event가 아니라 뒤의 결정을 지운다.
+    거기에 더해 event 이후 그 노드에 변화가 있으면 거부한다. 적용 직후에
+    적어 둔 후보 집합과 지금 집합이 다르면 다른 결정이 끼어든 것이고, 그
+    상태에서 이 event만 되돌리면 뒤의 결정을 지우거나 절반만 되돌린 상태를
+    남긴다.
 
     Raises:
         RollbackError: event가 없거나, 되돌림 행이거나, 이미 되돌려졌거나,
-            멤버 구성을 읽을 수 없거나, 되돌릴 후보가 하나도 남아 있지
-            않을 때 던진다.
+            멤버 구성을 읽을 수 없거나, event 이후 노드에 변화가 있을 때
+            던진다.
     """
     with uow:
         event = uow.resolution_events.get(
@@ -165,24 +170,18 @@ def rollback_resolution_event(
                 f"event에 entity 종류가 없다: {event_id}"
             )
 
-        live_members = _live_members(
+        _require_unchanged_since_event(
             uow,
             workspace_id=workspace_id,
-            node_id=event.node_id,
-            members=members,
-            event_id=event_id,
+            event=event,
         )
-        if not live_members:
-            raise RollbackError(
-                f"이 event의 노드를 가리키는 후보가 남아 있지 않다: {event_id}"
-            )
 
         node_retired = False
         if event.event_type == MERGE_INTO_NODE:
             node_ids = _repoint_to_single_node(
                 uow,
                 workspace_id=workspace_id,
-                members=live_members,
+                members=members,
                 proposed_type=proposed_type,
                 # 이 경로는 후보들이 서로 같다는 판정을 그대로 두고 새 노드
                 # 하나로 옮기므로, 그 노드의 이름은 병합이 지은
@@ -195,39 +194,30 @@ def rollback_resolution_event(
                 workspace_id=workspace_id,
                 node_id=event.node_id,
                 aliases=_texts(event.member_snapshot.get("aliases_added")),
-                moved_candidate_ids=tuple(
-                    member.candidate_id for member in live_members
-                ),
             )
         else:
             node_ids = _split_into_own_nodes(
                 uow,
                 workspace_id=workspace_id,
-                members=live_members,
+                members=members,
                 proposed_type=proposed_type,
             )
-            # 후보가 전부 떠난 노드만 물린다. event가 세운 노드라도 그 뒤에
-            # 다른 후보가 같은 노드로 해소됐을 수 있고, 그 상태로 물리면
-            # 남은 후보와 그 후보로 읽히는 지식이 살아 있는 graph에서
-            # 사라진다.
-            #
-            # 남은 후보를 여기서 미리 세지 않는다. 세는 것과 물리는 것이
-            # 두 번의 호출로 갈라지면 그 사이에 다른 트랜잭션이 같은 노드로
-            # 후보를 붙일 수 있다. 저장소가 노드 행을 잠근 채로 확인하고
-            # 물리며, 물렸는지를 돌려준다.
+            # 멤버 전부가 노드를 떠났으므로 노드를 물린다. 집합 비교가
+            # 이미 다른 후보가 붙어 있지 않음을 확인했고, 노드 행이 잠긴
+            # 채라 그 사이에 후보가 새로 붙을 수도 없다. 저장소도 남은
+            # 후보를 다시 확인하므로, 거짓이 돌아오면 잠금 규칙이 깨진
+            # 것이라 되돌림 전체를 물린다.
             node_retired = uow.knowledge_nodes.retire_entity_node(
                 workspace_id=workspace_id,
                 node_id=event.node_id,
             )
             if not node_retired:
-                logger.info(
-                    "rollback_retire_skipped",
-                    workspace_id=workspace_id,
-                    node_id=str(event.node_id),
+                raise RollbackError(
+                    "후보를 옮긴 뒤에도 노드에 후보가 남아 있다. 잠금 규칙이 깨졌다"
                 )
             removed = ()
 
-        candidate_ids = tuple(member.candidate_id for member in live_members)
+        candidate_ids = tuple(member.candidate_id for member in members)
         unmerge_event_id = uuid.uuid4()
         try:
             uow.resolution_events.record(
@@ -248,9 +238,9 @@ def rollback_resolution_event(
                         str(candidate_id) for candidate_id in candidate_ids
                     ],
                     "removed_aliases": list(removed),
-                    # 노드를 물렸는지 저널에 남긴다. 남은 참조가 있어 그대로
-                    # 둔 경우와 물린 경우는 나중에 그래프만 봐서는 구분되지
-                    # 않는다.
+                    # 노드를 물렸는지 저널에 남긴다. 병합 종류에 따라
+                    # 정해지는 값이지만, 나중에 그래프만 봐서는 어느 쪽이었는지
+                    # 구분되지 않는다.
                     "node_retired": node_retired,
                 },
                 basis={"operator": operator},
@@ -377,47 +367,25 @@ def _remove_added_aliases(
     workspace_id: int,
     node_id: uuid.UUID,
     aliases: Sequence[str],
-    moved_candidate_ids: Sequence[uuid.UUID],
 ) -> tuple[str, ...]:
-    """병합이 대상 노드에 남긴 이름 가운데 아무도 안 쓰는 것만 지운다.
+    """병합이 대상 노드에 남긴 이름을 지운다.
 
     저널의 aliases_added는 계획이 아니라 그 병합이 실제로 적은 이름
     목록이다. 대표가 이미 서 있던 노드를 재사용해 이름을 더하지 않은
     경우에는 비어 있고, 그때는 지울 것도 없다.
 
-    적힌 이름이라도 지금 그 이름을 쓰고 있는 후보가 노드에 남아 있으면
-    지우지 않는다. 별칭 행은 (노드, 정규화 이름)당 하나뿐이라, 병합 뒤에
-    같은 이름의 후보가 이 노드로 해소됐어도 새 행이 생기지 않는다. 그
-    상태에서 되돌림이 행을 지우면 남은 후보는 노드에 그대로 있는데 그
-    이름으로는 노드를 찾을 수 없게 되어, 다음에 같은 이름의 후보가 와도
-    정확 일치로 이 노드에 붙지 못한다.
-
-    이번 되돌림이 옮기는 멤버는 세지 않는다. 그 후보들은 곧 이 노드를
-    떠나므로 이름을 붙잡아 둘 이유가 없다.
+    그 이름을 쓰는 다른 후보가 남아 있는지는 여기서 보지 않는다. 그런
+    후보가 있었다면 event 이후 노드에 후보가 더 붙은 것이고, 집합 비교가
+    이미 되돌림을 거부했다.
     """
     removed = []
     for alias in aliases:
         if not alias.strip():
             continue
-        normalized_alias = normalize_name(alias)
-        reusing = uow.knowledge_candidates.count_entities_resolved_to(
-            workspace_id=workspace_id,
-            node_id=node_id,
-            normalized_name=normalized_alias,
-            exclude_candidate_ids=moved_candidate_ids,
-        )
-        if reusing > 0:
-            logger.info(
-                "rollback_alias_kept",
-                workspace_id=workspace_id,
-                node_id=str(node_id),
-                alias=alias,
-            )
-            continue
         uow.knowledge_nodes.remove_alias(
             workspace_id=workspace_id,
             node_id=node_id,
-            normalized_alias=normalized_alias,
+            normalized_alias=normalize_name(alias),
         )
         removed.append(alias)
     return tuple(removed)
@@ -486,40 +454,60 @@ def _is_duplicate_reversal(error: IntegrityError) -> bool:
     return REVERSAL_UNIQUE_CONSTRAINT in str(error)
 
 
-def _live_members(
+def _require_unchanged_since_event(
     uow: RollbackUnitOfWork,
     *,
     workspace_id: int,
-    node_id: uuid.UUID,
-    members: Sequence[_Member],
-    event_id: uuid.UUID,
-) -> tuple[_Member, ...]:
-    """지금도 event의 노드를 가리키고 있는 후보만 남긴다.
+    event: StoredResolutionEvent,
+) -> None:
+    """event 이후 그 노드에 아무 일도 없었는지 본다. 있었으면 거부한다.
 
-    저널은 event 시점의 기록이고 되돌림은 그 뒤의 일이다. 그 사이에 다른
-    노드로 옮겨진 후보를 되돌림이 다시 끌어오면 이 event가 아니라 뒤에
-    내려진 결정을 지운다.
+    노드 행을 먼저 잠근다. 후보를 붙이는 경로와 노드를 물리는 경로가 같은
+    행을 잠그므로, 잠금을 얻은 뒤 읽은 집합은 이 트랜잭션이 끝날 때까지
+    바뀌지 않는다.
+
+    견주는 값은 event가 적용 직후에 적은 후보 집합이다. 지금 집합이 그것과
+    다르면 멤버가 떠났거나(다른 결정이 옮겼다) 후보가 더 붙은 것이다(뒤의
+    병합). 어느 쪽이든 이 event만 골라 되돌릴 수 없다. 일부만 되돌리면
+    "되돌렸다"는 저널과 실제가 어긋난다.
+
+    Raises:
+        RollbackError: snapshot에 집합이 없거나, 노드가 없거나 active가
+            아니거나, 집합이 다를 때 던진다.
     """
-    live = []
-    for member in members:
-        current = uow.knowledge_candidates.get_entity_resolution(
-            candidate_id=member.candidate_id,
+    recorded_raw = event.member_snapshot.get("node_candidate_ids_after")
+    if not isinstance(recorded_raw, list):
+        raise RollbackError(
+            f"event에 실행 직후 후보 집합(node_candidate_ids_after)이 없다: {event.id}"
         )
-        resolved_node_id = None if current is None else current[1]
-        if resolved_node_id != node_id:
-            logger.info(
-                "rollback_member_skipped",
-                workspace_id=workspace_id,
-                event_id=str(event_id),
-                candidate_id=str(member.candidate_id),
-                event_node_id=str(node_id),
-                current_node_id=(
-                    None if resolved_node_id is None else str(resolved_node_id)
-                ),
-            )
-            continue
-        live.append(member)
-    return tuple(live)
+    recorded = {_candidate_id(item, event_id=event.id) for item in recorded_raw}
+
+    node = uow.knowledge_nodes.lock_entity_node(
+        workspace_id=workspace_id, node_id=event.node_id
+    )
+    if node is None:
+        raise RollbackError(f"event의 노드가 없다: {event.node_id}")
+    if node.lifecycle_state is not NodeLifecycleState.ACTIVE:
+        raise RollbackError(
+            f"event의 노드가 살아 있지 않다: {event.node_id} ({node.lifecycle_state.value})"
+        )
+
+    current = set(
+        uow.knowledge_candidates.list_entity_candidate_ids_resolved_to(
+            workspace_id=workspace_id, node_id=event.node_id
+        )
+    )
+    left = sorted(str(item) for item in recorded - current)
+    attached = sorted(str(item) for item in current - recorded)
+    if left:
+        raise RollbackError(
+            f"event 이후 노드를 떠난 후보: {left} (event {event.id})"
+        )
+    if attached:
+        raise RollbackError(
+            f"event 이후 노드에 붙은 후보: {attached}. "
+            f"뒤에 일어난 event를 먼저 되돌려라 (event {event.id})"
+        )
 
 
 def _candidate_id(raw: object, *, event_id: uuid.UUID) -> uuid.UUID:
