@@ -1,7 +1,8 @@
-"""블록 서술 어댑터가 무엇을 묻고 무엇을 실패로 다루는지 확인한다.
+"""문서 서술 어댑터가 무엇을 묻고 무엇을 실패로 다루는지 확인한다.
 
-산문의 사실 입력은 statement뿐이다. 프롬프트에 문체·목적·인용이 실제로
-실리는지, 그리고 빈 답이 조용히 통과하지 않는지를 fake LLM으로 본다.
+문서 하나의 산문을 한 번에 받는다. 받아 온 덩어리를 검증기에 걸어 위반이
+있으면 위반 블록만 다시 묻고, 다시 물어도 남으면 실패로 끝낸다. 그 흐름과
+프롬프트에 실리는 재료를 fake LLM으로 본다.
 """
 
 from __future__ import annotations
@@ -13,28 +14,34 @@ from structlog.testing import capture_logs
 
 from catchup.knowledge_maintenance.adapters.llm import block_narrator
 from catchup.knowledge_maintenance.adapters.llm.block_narrator import (
+    DOCUMENT_PROMPT_VERSION,
+)
+from catchup.knowledge_maintenance.adapters.llm.block_narrator import (
     EXPLAIN_PROMPT_VERSION,
 )
-from catchup.knowledge_maintenance.adapters.llm.block_narrator import PROMPT_VERSION
-from catchup.knowledge_maintenance.adapters.llm.block_narrator import (
-    SUMMARY_PROMPT_VERSION,
-)
 from catchup.knowledge_maintenance.adapters.llm.block_narrator import LlmBlockNarrator
+from catchup.knowledge_maintenance.adapters.llm.block_narrator import _BlockNarrativeOut
+from catchup.knowledge_maintenance.adapters.llm.block_narrator import (
+    _DocumentNarrationContract,
+)
 from catchup.knowledge_maintenance.contracts.block_narration import ChangeReasonContract
-from catchup.knowledge_maintenance.contracts.block_narration import NarrativeContract
-from catchup.knowledge_maintenance.contracts.block_narration import (
-    SummaryNarrativeContract,
+from catchup.knowledge_maintenance.domain.narration_contract import BlockNarrationInput
+from catchup.knowledge_maintenance.domain.narration_contract import (
+    DocumentNarrationRequest,
 )
 from catchup.knowledge_maintenance.ports.narrator import ChangeExplanationRequest
 from catchup.knowledge_maintenance.ports.narrator import NarrationError
-from catchup.knowledge_maintenance.ports.narrator import NarrationRequest
 
 
 class _FakeStructured:
-    """구조화 출력을 흉내 내고 받은 프롬프트를 기록한다."""
+    """구조화 출력을 흉내 내고 받은 프롬프트를 기록한다.
 
-    def __init__(self, response: Any, error: Exception | None) -> None:
-        self.response = response
+    응답을 여러 개 받아 부른 순서대로 돌려준다. 재시도가 있어 한 번의
+    서술에서 호출이 두 번 일어나기 때문이다.
+    """
+
+    def __init__(self, responses: list[Any], error: Exception | None) -> None:
+        self.responses = list(responses)
         self.error = error
         self.prompts: list[str] = []
 
@@ -42,291 +49,392 @@ class _FakeStructured:
         self.prompts.append(rendered)
         if self.error is not None:
             raise self.error
-        return self.response
+        if not self.responses:
+            raise AssertionError("예상보다 많이 불렀다")
+        return self.responses.pop(0)
 
 
 class _FakeLlm:
     """with_structured_output만 흉내 내는 모델이다.
 
-    계약마다 다른 구조화 출력을 돌려준다. 어댑터가 산문 계약과 변경 이유
-    계약을 각각 따로 묶기 때문에, 하나로 뭉치면 어느 호출이 어느 프롬프트를
-    받았는지 알 수 없다.
+    계약마다 다른 구조화 출력을 돌려준다. 어댑터가 문서 산문 계약과 변경
+    이유 계약을 각각 따로 묶기 때문에, 하나로 뭉치면 어느 호출이 어느
+    프롬프트를 받았는지 알 수 없다.
     """
 
     def __init__(
         self,
-        response: Any = None,
-        error: Exception | None = None,
+        document_responses: list[Any] | None = None,
+        document_error: Exception | None = None,
         reason_response: Any = None,
         reason_error: Exception | None = None,
-        summary_response: Any = None,
-        summary_error: Exception | None = None,
     ):
-        self.structured = _FakeStructured(response, error)
-        self.reason_structured = _FakeStructured(reason_response, reason_error)
-        self.summary_structured = _FakeStructured(
-            summary_response, summary_error
+        self.document_structured = _FakeStructured(
+            document_responses or [], document_error
         )
-        self.kwargs: dict[str, Any] = {}
+        self.reason_structured = _FakeStructured(
+            [reason_response] if reason_response is not None else [], reason_error
+        )
+        self.document_kwargs: dict[str, Any] = {}
         self.reason_kwargs: dict[str, Any] = {}
-        self.summary_kwargs: dict[str, Any] = {}
 
     def with_structured_output(self, schema: Any, **kwargs: Any) -> Any:
         if schema is ChangeReasonContract:
             self.reason_kwargs = {"schema": schema, **kwargs}
             return self.reason_structured
-        if schema is SummaryNarrativeContract:
-            self.summary_kwargs = {"schema": schema, **kwargs}
-            return self.summary_structured
-        self.kwargs = {"schema": schema, **kwargs}
-        return self.structured
+        self.document_kwargs = {"schema": schema, **kwargs}
+        return self.document_structured
 
 
-def _parsed(text: str) -> dict[str, Any]:
-    """정상 구조화 출력 응답을 만든다."""
+def _doc(
+    narratives: tuple[tuple[int, str], ...] = (),
+    *,
+    one_line_summary: str | None = None,
+    desired_outcome: str | None = None,
+    background: str | None = None,
+) -> dict[str, Any]:
+    """정상 문서 산문 구조화 출력 응답을 만든다."""
     return {
-        "parsed": NarrativeContract(narrative=text),
+        "parsed": _DocumentNarrationContract(
+            narratives=[
+                _BlockNarrativeOut(block_id=block_id, narrative=text)
+                for block_id, text in narratives
+            ],
+            one_line_summary=one_line_summary,
+            desired_outcome=desired_outcome,
+            background=background,
+        ),
         "parsing_error": None,
     }
 
 
-def _request() -> NarrationRequest:
-    """문체·목적·인용이 모두 실린 요청 하나를 만든다."""
-    return NarrationRequest(
-        block_kind="claim_section",
-        heading="request_status",
-        topic_hint="검토 중 (2026-08-15 관찰)",
-        statements=("상태는 검토 중이다", "담당은 아직 정해지지 않았다"),
-        edges=(),
-        variants=(),
-        style_instruction="보고서 요약 문단처럼 쓴다.",
-        purpose_sentence="이 문서는 요구의 현황을 보는 데 쓴다.",
+def _block(
+    block_id: int = 0,
+    *,
+    block_kind: str = "claim_section",
+    heading: str = "request_status",
+    topic_hint: str = "검토 중 (2026-08-15 관찰)",
+    statements: tuple[str, ...] = ("상태는 검토 중이다",),
+    edges: tuple[str, ...] = (),
+    hints: tuple[str, ...] = (),
+    variants: tuple[tuple[str, tuple[str, ...]], ...] = (),
+) -> BlockNarrationInput:
+    """블록 재료 하나를 만든다."""
+    return BlockNarrationInput(
+        block_id=block_id,
+        block_kind=block_kind,
+        heading=heading,
+        topic_hint=topic_hint,
+        statements=statements,
+        edges=edges,
+        hints=hints,
+        variants=variants,
     )
 
 
-def test_returns_the_narrative() -> None:
-    """구조화 출력의 산문을 그대로 돌려준다."""
-    llm = _FakeLlm(_parsed("이 요구는 아직 검토 중이다."))
+def _request(
+    blocks: tuple[BlockNarrationInput, ...] = (),
+    summary: BlockNarrationInput | None = None,
+) -> DocumentNarrationRequest:
+    """문체·목적이 실린 문서 서술 요청을 만든다."""
+    return DocumentNarrationRequest(
+        style_instruction="보고서 요약 문단처럼 쓴다.",
+        purpose_sentence="이 문서는 요구의 현황을 보는 데 쓴다.",
+        summary=summary,
+        blocks=blocks,
+    )
 
-    narrative = LlmBlockNarrator(llm).narrate(_request())
 
-    assert narrative == "이 요구는 아직 검토 중이다."
+def _summary_input() -> BlockNarrationInput:
+    """머리말 재료를 만든다."""
+    return _block(
+        block_id=-1,
+        block_kind="summary",
+        heading="기능 요청: CSV",
+        topic_hint="요청 세 건",
+        statements=("A사가 CSV 내보내기를 원한다",),
+    )
 
 
-def test_uses_function_calling_with_raw() -> None:
-    """구조화 출력 호출 관례가 어휘 수렴 어댑터와 같다."""
-    llm = _FakeLlm(_parsed("문장이다."))
+def test_clean_response_returns_all_narratives() -> None:
+    """위반이 없으면 받아 온 산문을 그대로 돌려준다."""
+    llm = _FakeLlm(
+        [
+            _doc(
+                (
+                    (0, "이 요구는 아직 검토 중이다."),
+                    (1, "담당은 아직 정해지지 않았다."),
+                )
+            )
+        ]
+    )
+    request = _request(
+        (
+            _block(0),
+            _block(1, statements=("담당이 정해지지 않았다",)),
+        )
+    )
+
+    result = LlmBlockNarrator(llm).narrate_document(request)
+
+    assert result.narratives == {
+        0: "이 요구는 아직 검토 중이다.",
+        1: "담당은 아직 정해지지 않았다.",
+    }
+    assert result.summary is None
+    assert len(llm.document_structured.prompts) == 1
+
+
+def test_empty_request_makes_no_call() -> None:
+    """물을 것이 없으면 모델을 부르지 않는다."""
+    llm = _FakeLlm([])
+
+    result = LlmBlockNarrator(llm).narrate_document(_request())
+
+    assert result.narratives == {}
+    assert result.summary is None
+    assert llm.document_structured.prompts == []
+
+
+def test_document_uses_function_calling_with_raw() -> None:
+    """문서 산문도 어휘 수렴 어댑터와 같은 구조화 출력 관례를 쓴다."""
+    llm = _FakeLlm([])
 
     LlmBlockNarrator(llm)
 
-    assert llm.kwargs["schema"] is NarrativeContract
-    assert llm.kwargs["method"] == "function_calling"
-    assert llm.kwargs["include_raw"] is True
+    assert llm.document_kwargs["schema"] is _DocumentNarrationContract
+    assert llm.document_kwargs["method"] == "function_calling"
+    assert llm.document_kwargs["include_raw"] is True
 
 
-def test_prompt_carries_style_purpose_and_statements() -> None:
+def test_prompt_carries_style_purpose_and_evidence() -> None:
     """문체·목적·인용이 프롬프트에 실제로 실린다."""
-    llm = _FakeLlm(_parsed("문장이다."))
+    llm = _FakeLlm([_doc(((0, "이 요구는 아직 검토 중이다."),))])
 
-    LlmBlockNarrator(llm).narrate(_request())
+    LlmBlockNarrator(llm).narrate_document(_request((_block(0),)))
 
-    rendered = llm.structured.prompts[0]
+    rendered = llm.document_structured.prompts[0]
     assert "보고서 요약 문단처럼 쓴다." in rendered
     assert "이 문서는 요구의 현황을 보는 데 쓴다." in rendered
     assert "상태는 검토 중이다" in rendered
-    assert "담당은 아직 정해지지 않았다" in rendered
     assert "request_status" in rendered
-    assert "Write 1 to 3 sentences" in rendered
-    assert "No heading, no bullet list, no markdown." in rendered
-    assert "Write in Korean." in rendered
-
-
-def test_prompt_marks_the_topic_hint_as_a_hint() -> None:
-    """주제 힌트가 근거가 아님을 프롬프트가 못박는다."""
-    llm = _FakeLlm(_parsed("문장이다."))
-
-    LlmBlockNarrator(llm).narrate(_request())
-
-    rendered = llm.structured.prompts[0]
-    assert "hints only" in rendered
     assert "검토 중 (2026-08-15 관찰)" in rendered
+    assert "Write in Korean." in rendered
+    assert "## Block 0" in rendered
 
 
-def test_prompt_keeps_variants_apart() -> None:
-    """대조 후보는 후보별 인용과 함께 갈라져 실린다."""
-    llm = _FakeLlm(_parsed("문장이다."))
-    request = NarrationRequest(
-        block_kind="contested",
-        heading="rate_limit",
-        topic_hint="상충하는 값 2개 — 검토 필요",
-        statements=(),
-        edges=(),
-        variants=(
-            ("60", ("한도는 60이다",)),
-            ("120", ("한도는 120이다",)),
-        ),
-        style_instruction="담백하게 쓴다.",
-        purpose_sentence="이 문서는 현황을 보는 데 쓴다.",
-    )
+def test_prompt_puts_fixed_instructions_before_evidence() -> None:
+    """고정 지시문이 앞에 서고 블록별 근거가 뒤에 선다.
 
-    LlmBlockNarrator(llm).narrate(request)
-
-    rendered = llm.structured.prompts[0]
-    assert "한도는 60이다" in rendered
-    assert "한도는 120이다" in rendered
-    assert "do not judge" in rendered
-
-
-def test_prompt_says_the_variant_list_may_be_partial() -> None:
-    """후보 목록이 전부가 아닐 수 있음을 프롬프트가 못박는다.
-
-    검증된 인용이 없는 후보는 요청에서 빠진다. 그 사실을 알리지 않으면
-    모델이 남은 후보를 두고 갈린 값이 전부라고 셀 수 있다.
+    앞자리가 문서마다 같아야 프롬프트 캐시가 걸린다.
     """
-    llm = _FakeLlm(_parsed("문장이다."))
-    request = NarrationRequest(
-        block_kind="contested",
-        heading="rate_limit",
-        topic_hint="상충하는 값 2개 — 검토 필요",
-        statements=(),
-        edges=(),
-        variants=(("60", ("한도는 60이다",)),),
-        style_instruction="담백하게 쓴다.",
-        purpose_sentence="이 문서는 현황을 보는 데 쓴다.",
-    )
+    llm = _FakeLlm([_doc(((0, "이 요구는 아직 검토 중이다."),))])
 
-    LlmBlockNarrator(llm).narrate(request)
+    LlmBlockNarrator(llm).narrate_document(_request((_block(0),)))
 
-    rendered = llm.structured.prompts[0]
-    assert "The list may be partial" in rendered
-    assert "candidates with no" in rendered
-    assert "verified quote are left out" in rendered
-
-
-def test_prompt_lists_relation_edges() -> None:
-    """관계 절의 본문 줄이 그래프 사실로 프롬프트에 실린다."""
-    llm = _FakeLlm(_parsed("문장이다."))
-    request = NarrationRequest(
-        block_kind="relation_section",
-        heading="requested_by(out)",
-        topic_hint="requested_by(out)",
-        statements=(),
-        edges=(
-            "A사가 이 기능을 요청했다",
-            "(step 0에서 이웃 50개 상한 초과 — 일부만 따라감)",
-        ),
-        variants=(),
-        style_instruction="담백하게 쓴다.",
-        purpose_sentence="이 문서는 현황을 보는 데 쓴다.",
-    )
-
-    LlmBlockNarrator(llm).narrate(request)
-
-    rendered = llm.structured.prompts[0]
-    assert "Relations (graph facts)" in rendered
-    assert "A사가 이 기능을 요청했다" in rendered
-    assert "일부만 따라감" in rendered
-    assert "never infer another connection" in rendered
-    assert "(no direct quotes for this block)" in rendered
-    # 관계 절은 인용이 없고 관계 줄만 사실 입력이다. 규칙 1이 인용만
-    # 말하면 이 블록에서는 쓸 수 있는 사실이 하나도 없는 셈이 된다.
+    rendered = llm.document_structured.prompts[0]
     assert (
-        "State only what the quotes and relation lines above already say"
-        in rendered
+        rendered.index("## Rules")
+        < rendered.index("이 문서는 요구의 현황을 보는 데 쓴다.")
+        < rendered.index("## Block 0")
     )
 
 
-def test_prompt_separates_wording_hints_from_facts() -> None:
-    """원문 유래 문장은 사실이 아니라 표현 힌트 절에 실린다."""
-    llm = _FakeLlm(_parsed("문장이다."))
-    request = NarrationRequest(
-        block_kind="relation_section",
-        heading="requested_by(out)",
-        topic_hint="requested_by(out)",
-        statements=(),
-        edges=("기능 요청 A → requested_by → 팀원A",),
-        variants=(),
-        style_instruction="담백하게 쓴다.",
-        purpose_sentence="이 문서는 현황을 보는 데 쓴다.",
-        hints=("커넥터 있어?",),
+def test_prompt_keeps_relations_and_variants_apart() -> None:
+    """관계 줄과 대조 후보가 블록별로 갈라져 실린다."""
+    llm = _FakeLlm(
+        [_doc(((0, "관계가 있다."), (1, "값이 갈린다.")))]
+    )
+    request = _request(
+        (
+            _block(
+                0,
+                block_kind="relation_section",
+                heading="requested_by(out)",
+                statements=(),
+                edges=("기능 요청 A → requested_by → 팀원A",),
+                hints=("커넥터 있어?",),
+            ),
+            _block(
+                1,
+                block_kind="contested",
+                heading="rate_limit",
+                statements=(),
+                variants=(
+                    ("60", ("한도는 육십이다",)),
+                    ("120", ("한도는 백이십이다",)),
+                ),
+            ),
+        )
     )
 
-    LlmBlockNarrator(llm).narrate(request)
+    LlmBlockNarrator(llm).narrate_document(request)
 
-    rendered = llm.structured.prompts[0]
-    assert "## Wording hints (not facts)" in rendered
+    rendered = llm.document_structured.prompts[0]
+    assert "기능 요청 A → requested_by → 팀원A" in rendered
+    assert "never infer another" in rendered
     assert "커넥터 있어?" in rendered
-    assert "never add a party, a date or a number from them" in rendered
-    assert "wording hints add no facts" in rendered
+    assert "한도는 육십이다" in rendered
+    assert "한도는 백이십이다" in rendered
+    assert "do not judge which one is right." in rendered
+    assert "The list may be partial" in rendered
 
 
-def test_prompt_omits_the_hint_section_without_hints() -> None:
-    """힌트가 없으면 그 절 자체가 프롬프트에 서지 않는다."""
-    llm = _FakeLlm(_parsed("문장이다."))
+def test_violating_block_is_retried_with_feedback() -> None:
+    """위반한 블록만 사유와 함께 다시 묻는다."""
+    llm = _FakeLlm(
+        [
+            _doc(
+                (
+                    (0, "이 요구는 아직 검토 중이다."),
+                    (1, "담당자 3명이 붙었다."),
+                )
+            ),
+            _doc(((1, "담당은 아직 정해지지 않았다."),)),
+        ]
+    )
+    request = _request(
+        (
+            _block(0),
+            _block(1, heading="owner", statements=("담당이 정해지지 않았다",)),
+        )
+    )
 
-    LlmBlockNarrator(llm).narrate(_request())
+    result = LlmBlockNarrator(llm).narrate_document(request)
 
-    assert "## Wording hints (not facts)" not in llm.structured.prompts[0]
+    assert len(llm.document_structured.prompts) == 2
+    retry_prompt = llm.document_structured.prompts[1]
+    assert "담당이 정해지지 않았다" in retry_prompt
+    assert "담당자 3명이 붙었다." in retry_prompt
+    assert "3는 근거에 없는 수다" in retry_prompt
+    assert "## Accepted paragraphs (read-only)" in retry_prompt
+    assert "이 요구는 아직 검토 중이다." in retry_prompt
+    assert "## Block 0" not in retry_prompt
+    assert "## Block 1" in retry_prompt
+    assert result.narratives == {
+        0: "이 요구는 아직 검토 중이다.",
+        1: "담당은 아직 정해지지 않았다.",
+    }
 
 
-def test_empty_narrative_is_an_error() -> None:
-    """빈 산문은 성공이 아니라 실패다."""
-    llm = _FakeLlm(_parsed("   "))
+def test_retry_failure_raises_narration_error() -> None:
+    """다시 물어도 위반이 남으면 실패로 끝낸다."""
+    llm = _FakeLlm(
+        [
+            _doc(((0, "담당자 3명이 붙었다."),)),
+            _doc(((0, "담당자 4명이 붙었다."),)),
+        ]
+    )
 
     with pytest.raises(NarrationError):
-        LlmBlockNarrator(llm).narrate(_request())
+        LlmBlockNarrator(llm).narrate_document(_request((_block(0),)))
+
+    assert len(llm.document_structured.prompts) == 2
+
+
+def test_duplicate_block_id_triggers_retry() -> None:
+    """같은 블록에 산문이 두 번 오면 첫 값을 쓰지 않고 다시 묻는다."""
+    llm = _FakeLlm(
+        [
+            _doc(((0, "먼저 온 문장이다."), (0, "나중에 온 문장이다."))),
+            _doc(((0, "다시 쓴 문장이다."),)),
+        ]
+    )
+
+    result = LlmBlockNarrator(llm).narrate_document(_request((_block(0),)))
+
+    assert len(llm.document_structured.prompts) == 2
+    assert "같은 블록에 산문이 두 번 왔다" in llm.document_structured.prompts[1]
+    assert result.narratives == {0: "다시 쓴 문장이다."}
+
+
+def test_summary_fields_are_returned_when_requested() -> None:
+    """머리말을 물었으면 세 칸을 그대로 돌려준다."""
+    llm = _FakeLlm(
+        [
+            _doc(
+                ((0, "이 요구는 아직 검토 중이다."),),
+                one_line_summary="A사가 CSV 내보내기를 원한다.",
+                desired_outcome="내려받은 파일을 바로 회계에 올릴 수 있게 된다.",
+                background="지금은 화면을 손으로 옮겨 적고 있다.",
+            )
+        ]
+    )
+    request = _request((_block(0),), summary=_summary_input())
+
+    result = LlmBlockNarrator(llm).narrate_document(request)
+
+    assert result.summary is not None
+    assert result.summary.one_line_summary == "A사가 CSV 내보내기를 원한다."
+    assert (
+        result.summary.desired_outcome
+        == "내려받은 파일을 바로 회계에 올릴 수 있게 된다."
+    )
+    assert result.summary.background == "지금은 화면을 손으로 옮겨 적고 있다."
+    rendered = llm.document_structured.prompts[0]
+    assert "`one_line_summary`" in rendered
+    assert "who wants to do what" in rendered
+    assert "the final result the customer wants" in rendered
+    assert "why the request came up" in rendered
+    assert "A사가 CSV 내보내기를 원한다" in rendered
+
+
+def test_unrequested_summary_is_dropped() -> None:
+    """머리말을 묻지 않았으면 딸려 온 세 칸을 버린다."""
+    llm = _FakeLlm(
+        [
+            _doc(
+                ((0, "이 요구는 아직 검토 중이다."),),
+                one_line_summary="묻지 않은 요약이다.",
+                desired_outcome="묻지 않은 결과다.",
+                background="묻지 않은 배경이다.",
+            )
+        ]
+    )
+
+    result = LlmBlockNarrator(llm).narrate_document(_request((_block(0),)))
+
+    assert result.summary is None
+    assert len(llm.document_structured.prompts) == 1
+    assert "## Opening (three fields)" not in llm.document_structured.prompts[0]
+
+
+def test_missing_summary_is_retried() -> None:
+    """머리말을 물었는데 오지 않으면 다시 묻는다."""
+    llm = _FakeLlm(
+        [
+            _doc(((0, "이 요구는 아직 검토 중이다."),)),
+            _doc(
+                (),
+                one_line_summary="A사가 CSV 내보내기를 원한다.",
+                desired_outcome="내려받은 파일을 바로 회계에 올릴 수 있게 된다.",
+                background="지금은 화면을 손으로 옮겨 적고 있다.",
+            ),
+        ]
+    )
+    request = _request((_block(0),), summary=_summary_input())
+
+    result = LlmBlockNarrator(llm).narrate_document(request)
+
+    assert len(llm.document_structured.prompts) == 2
+    assert result.summary is not None
+    assert result.narratives == {0: "이 요구는 아직 검토 중이다."}
 
 
 def test_contract_violation_is_an_error() -> None:
     """구조화 출력이 깨지면 실패로 알린다."""
-    llm = _FakeLlm({"parsed": None, "parsing_error": ValueError("깨졌다")})
+    llm = _FakeLlm([{"parsed": None, "parsing_error": ValueError("깨졌다")}])
 
     with pytest.raises(NarrationError):
-        LlmBlockNarrator(llm).narrate(_request())
-
-
-def test_contract_violation_logs_no_narrative() -> None:
-    """파싱 예외 메시지에 실린 산문이 로그로 새지 않는다."""
-    parsing_error = ValueError("이 요구는 아직 검토 중이다. 를 파싱하지 못했다")
-    llm = _FakeLlm({"parsed": None, "parsing_error": parsing_error})
-
-    with capture_logs() as logs:
-        with pytest.raises(NarrationError):
-            LlmBlockNarrator(llm).narrate(_request())
-
-    dumped = str(logs)
-    assert "이 요구는 아직 검토 중이다." not in dumped
-    assert "파싱하지 못했다" not in dumped
-    failed = next(
-        entry for entry in logs if entry["event"] == "block_narration_failed"
-    )
-    assert failed["error_type"] == "ValueError"
+        LlmBlockNarrator(llm).narrate_document(_request((_block(0),)))
 
 
 def test_call_error_is_an_error() -> None:
     """호출 자체가 터져도 같은 예외로 감싼다."""
-    llm = _FakeLlm(error=RuntimeError("연결 실패"))
+    llm = _FakeLlm(document_error=RuntimeError("연결 실패"))
 
     with pytest.raises(NarrationError):
-        LlmBlockNarrator(llm).narrate(_request())
-
-
-def test_call_error_logs_no_statement_text() -> None:
-    """호출 실패 로그에 예외 메시지와 인용 원문이 남지 않는다."""
-    llm = _FakeLlm(error=RuntimeError("요청 거절: 상태는 검토 중이다"))
-
-    with capture_logs() as logs:
-        with pytest.raises(NarrationError):
-            LlmBlockNarrator(llm).narrate(_request())
-
-    dumped = str(logs)
-    assert "상태는 검토 중이다" not in dumped
-    assert "요청 거절" not in dumped
-    failed = next(
-        entry for entry in logs if entry["event"] == "block_narration_failed"
-    )
-    assert failed["error_type"] == "RuntimeError"
-    assert failed["reason"] == "llm_call_error"
+        LlmBlockNarrator(llm).narrate_document(_request((_block(0),)))
 
 
 def test_prompt_render_error_is_a_narration_error(
@@ -338,31 +446,75 @@ def test_prompt_render_error_is_a_narration_error(
         raise RuntimeError("렌더링 실패")
 
     monkeypatch.setattr(block_narrator.prompt_loader, "get_prompt", _boom)
-    llm = _FakeLlm(_parsed("문장이다."))
+    llm = _FakeLlm([_doc(((0, "문장이다."),))])
 
     with pytest.raises(NarrationError):
-        LlmBlockNarrator(llm).narrate(_request())
+        LlmBlockNarrator(llm).narrate_document(_request((_block(0),)))
 
 
 def test_logs_carry_prompt_version_and_no_content() -> None:
-    """감사 로그에 판본은 남고 원문·산문은 남지 않는다."""
-    llm = _FakeLlm(_parsed("이 요구는 아직 검토 중이다."))
+    """감사 로그에 판본과 개수만 남고 원문·산문은 남지 않는다."""
+    llm = _FakeLlm([_doc(((0, "이 요구는 아직 검토 중이다."),))])
 
     with capture_logs() as logs:
-        LlmBlockNarrator(llm).narrate(_request())
+        LlmBlockNarrator(llm).narrate_document(_request((_block(0),)))
 
     events = [entry["event"] for entry in logs]
-    assert "block_narration_started" in events
-    assert "block_narration_completed" in events
+    assert "document_narration_started" in events
+    assert "document_narration_completed" in events
     started = next(
-        entry for entry in logs if entry["event"] == "block_narration_started"
+        entry for entry in logs if entry["event"] == "document_narration_started"
     )
-    assert started["prompt_version"] == PROMPT_VERSION
-    assert started["block_kind"] == "claim_section"
-    assert started["statement_count"] == 2
+    assert started["prompt_version"] == DOCUMENT_PROMPT_VERSION
+    assert started["block_count"] == 1
     dumped = str(logs)
     assert "상태는 검토 중이다" not in dumped
     assert "이 요구는 아직 검토 중이다." not in dumped
+
+
+def test_retry_log_carries_reasons_without_prose() -> None:
+    """재시도 로그에 위반 사유는 남고 받아 온 산문은 남지 않는다."""
+    llm = _FakeLlm(
+        [
+            _doc(((0, "담당자 3명이 붙었다."),)),
+            _doc(((0, "담당은 아직 정해지지 않았다."),)),
+        ]
+    )
+    request = _request((_block(0, statements=("담당이 정해지지 않았다",)),))
+
+    with capture_logs() as logs:
+        LlmBlockNarrator(llm).narrate_document(request)
+
+    retry = next(
+        entry for entry in logs if entry["event"] == "document_narration_retry"
+    )
+    assert retry["violation_count"] == 1
+    assert any("근거에 없는 수" in reason for reason in retry["reasons"])
+    dumped = str(logs)
+    assert "담당자 3명이 붙었다." not in dumped
+    assert "담당은 아직 정해지지 않았다." not in dumped
+
+
+def test_failure_log_carries_no_prose() -> None:
+    """실패 로그에도 받아 온 산문이 남지 않는다."""
+    llm = _FakeLlm(
+        [
+            _doc(((0, "담당자 3명이 붙었다."),)),
+            _doc(((0, "담당자 4명이 붙었다."),)),
+        ]
+    )
+
+    with capture_logs() as logs:
+        with pytest.raises(NarrationError):
+            LlmBlockNarrator(llm).narrate_document(_request((_block(0),)))
+
+    failed = next(
+        entry for entry in logs if entry["event"] == "document_narration_failed"
+    )
+    assert failed["reason"] == "contract_violation"
+    dumped = str(logs)
+    assert "담당자 3명이 붙었다." not in dumped
+    assert "담당자 4명이 붙었다." not in dumped
 
 
 def _parsed_reason(text: str) -> dict[str, Any]:
@@ -371,20 +523,6 @@ def _parsed_reason(text: str) -> dict[str, Any]:
         "parsed": ChangeReasonContract(reason=text),
         "parsing_error": None,
     }
-
-
-def _summary_request() -> NarrationRequest:
-    """문서 머리말을 요청하는 요청 하나를 만든다."""
-    return NarrationRequest(
-        block_kind="summary",
-        heading="기능 요청: CSV",
-        topic_hint="요청 3건 (2026-08-15 관찰)",
-        statements=("A사가 CSV 내보내기를 원한다",),
-        edges=(),
-        variants=(),
-        style_instruction="보고서 요약 문단처럼 쓴다.",
-        purpose_sentence="이 문서는 요구의 현황을 보는 데 쓴다.",
-    )
 
 
 def _change_request() -> ChangeExplanationRequest:
@@ -398,170 +536,10 @@ def _change_request() -> ChangeExplanationRequest:
     )
 
 
-def _parsed_summary(
-    one_line_summary: str = "A사가 CSV 내보내기를 원한다.",
-    desired_outcome: str = "내려받은 파일을 바로 회계에 올릴 수 있게 된다.",
-    background: str = "지금은 화면을 손으로 옮겨 적고 있다.",
-) -> dict[str, Any]:
-    """정상 머리말 구조화 출력 응답을 만든다."""
-    return {
-        "parsed": SummaryNarrativeContract(
-            one_line_summary=one_line_summary,
-            desired_outcome=desired_outcome,
-            background=background,
-        ),
-        "parsing_error": None,
-    }
-
-
-def test_narrate_summary_returns_three_fields() -> None:
-    """머리말은 칸 셋을 그대로 돌려준다."""
-    llm = _FakeLlm(summary_response=_parsed_summary())
-
-    narrative = LlmBlockNarrator(llm).narrate_summary(_summary_request())
-
-    assert narrative.one_line_summary == "A사가 CSV 내보내기를 원한다."
-    assert (
-        narrative.desired_outcome
-        == "내려받은 파일을 바로 회계에 올릴 수 있게 된다."
-    )
-    assert narrative.background == "지금은 화면을 손으로 옮겨 적고 있다."
-
-
-def test_narrate_summary_uses_function_calling_with_raw() -> None:
-    """머리말도 같은 구조화 출력 관례를 쓴다."""
-    llm = _FakeLlm(summary_response=_parsed_summary())
-
-    LlmBlockNarrator(llm)
-
-    assert llm.summary_kwargs["schema"] is SummaryNarrativeContract
-    assert llm.summary_kwargs["method"] == "function_calling"
-    assert llm.summary_kwargs["include_raw"] is True
-
-
-def test_narrate_summary_prompt_defines_the_three_fields() -> None:
-    """머리말 프롬프트가 칸마다 무엇을 적을지 못박는다."""
-    llm = _FakeLlm(summary_response=_parsed_summary())
-
-    LlmBlockNarrator(llm).narrate_summary(_summary_request())
-
-    rendered = llm.summary_structured.prompts[0]
-    assert "`one_line_summary`" in rendered
-    assert "who wants to do what" in rendered
-    assert "`desired_outcome`" in rendered
-    assert "the final result the customer wants" in rendered
-    assert "`background`" in rendered
-    assert "why the request came up" in rendered
-    assert "A사가 CSV 내보내기를 원한다" in rendered
-    assert "보고서 요약 문단처럼 쓴다." in rendered
-    assert "Write in Korean." in rendered
-
-
-def test_narrate_summary_prompt_forbids_markdown() -> None:
-    """서식은 표시층 몫이므로 프롬프트가 굵게 기호를 금지한다."""
-    llm = _FakeLlm(summary_response=_parsed_summary())
-
-    LlmBlockNarrator(llm).narrate_summary(_summary_request())
-
-    rendered = llm.summary_structured.prompts[0]
-    assert "no markdown at all" in rendered
-    assert "no `**`" in rendered
-
-
-def test_block_prompt_has_no_summary_branch() -> None:
-    """본문 산문 프롬프트에는 머리말 분기가 남아 있지 않다."""
-    llm = _FakeLlm(_parsed("문장이다."))
-
-    LlmBlockNarrator(llm).narrate(_request())
-
-    rendered = llm.structured.prompts[0]
-    assert "headline" not in rendered.lower()
-    assert "Write 1 to 3 sentences" in rendered
-
-
-@pytest.mark.parametrize(
-    "field",
-    ["one_line_summary", "desired_outcome", "background"],
-)
-def test_narrate_summary_empty_field_is_an_error(field: str) -> None:
-    """칸 하나만 비어도 실패다."""
-    llm = _FakeLlm(summary_response=_parsed_summary(**{field: "   "}))
-
-    with pytest.raises(NarrationError):
-        LlmBlockNarrator(llm).narrate_summary(_summary_request())
-
-
-def test_narrate_summary_contract_violation_is_an_error() -> None:
-    """구조화 출력이 깨지면 실패로 알린다."""
-    llm = _FakeLlm(
-        summary_response={"parsed": None, "parsing_error": ValueError("깨졌다")}
-    )
-
-    with pytest.raises(NarrationError):
-        LlmBlockNarrator(llm).narrate_summary(_summary_request())
-
-
-def test_narrate_summary_call_error_is_an_error() -> None:
-    """호출이 터져도 같은 예외로 감싼다."""
-    llm = _FakeLlm(summary_error=RuntimeError("연결 실패"))
-
-    with pytest.raises(NarrationError):
-        LlmBlockNarrator(llm).narrate_summary(_summary_request())
-
-
-def test_narrate_summary_logs_carry_version_and_no_content() -> None:
-    """감사 로그에 판본과 길이만 남고 원문·머리말은 남지 않는다."""
-    llm = _FakeLlm(summary_response=_parsed_summary())
-
-    with capture_logs() as logs:
-        LlmBlockNarrator(llm).narrate_summary(_summary_request())
-
-    events = [entry["event"] for entry in logs]
-    assert "summary_narration_started" in events
-    assert "summary_narration_completed" in events
-    started = next(
-        entry for entry in logs if entry["event"] == "summary_narration_started"
-    )
-    assert started["prompt_version"] == SUMMARY_PROMPT_VERSION
-    assert started["statement_count"] == 1
-    completed = next(
-        entry
-        for entry in logs
-        if entry["event"] == "summary_narration_completed"
-    )
-    assert completed["one_line_summary_length"] > 0
-    assert completed["desired_outcome_length"] > 0
-    assert completed["background_length"] > 0
-    dumped = str(logs)
-    assert "A사가 CSV 내보내기를 원한다" not in dumped
-    assert "지금은 화면을 손으로 옮겨 적고 있다." not in dumped
-
-
-def test_narrate_summary_failure_logs_no_exception_message() -> None:
-    """실패 로그에 예외 메시지와 인용 원문이 남지 않는다."""
-    llm = _FakeLlm(
-        summary_error=RuntimeError("요청 거절: A사가 CSV 내보내기를 원한다")
-    )
-
-    with capture_logs() as logs:
-        with pytest.raises(NarrationError):
-            LlmBlockNarrator(llm).narrate_summary(_summary_request())
-
-    dumped = str(logs)
-    assert "A사가 CSV 내보내기를 원한다" not in dumped
-    assert "요청 거절" not in dumped
-    failed = next(
-        entry for entry in logs if entry["event"] == "summary_narration_failed"
-    )
-    assert failed["error_type"] == "RuntimeError"
-    assert failed["reason"] == "llm_call_error"
-
-
 def test_explain_change_returns_the_reason() -> None:
     """변경 이유를 그대로 돌려준다."""
     llm = _FakeLlm(
-        _parsed("문장이다."),
-        reason_response=_parsed_reason("C사 요청이 더해져 횟수가 늘었다."),
+        reason_response=_parsed_reason("C사 요청이 더해져 횟수가 늘었다.")
     )
 
     reason = LlmBlockNarrator(llm).explain_change(_change_request())
@@ -602,8 +580,7 @@ def test_explain_change_prompt_asks_for_the_polite_ending() -> None:
 
     LlmBlockNarrator(llm).explain_change(_change_request())
 
-    rendered = llm.reason_structured.prompts[0]
-    assert "-습니다" in rendered
+    assert "-습니다" in llm.reason_structured.prompts[0]
 
 
 def test_explain_change_prompt_carries_no_style_instruction() -> None:
@@ -612,8 +589,7 @@ def test_explain_change_prompt_carries_no_style_instruction() -> None:
 
     LlmBlockNarrator(llm).explain_change(_change_request())
 
-    rendered = llm.reason_structured.prompts[0]
-    assert "## Style" not in rendered
+    assert "## Style" not in llm.reason_structured.prompts[0]
 
 
 def test_explain_change_empty_reason_is_an_error() -> None:

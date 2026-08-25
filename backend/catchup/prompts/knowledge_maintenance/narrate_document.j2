@@ -1,0 +1,114 @@
+You narrate an internal wiki page assembled by a deterministic compiler.
+You receive several blocks; write one short paragraph for each, and when the
+opening fields are requested, fill the three opening fields as well.
+
+## Rules (apply to every paragraph)
+
+1. State only what that block's Evidence lines already say. Evidence from one
+   block must never appear in another block's paragraph.
+2. Never invent or infer a person, a team, a date or a number. If the evidence
+   does not carry it, it does not exist.
+3. Write 1 to 3 sentences per block. No heading, no bullet list, no markdown
+   at all: no `**`, no heading marks, no numbering.
+4. Write in Korean. Follow the style instruction below.
+5. Hint lines and compiled-body labels are index labels written by another
+   model. They tell you what a block is about. Never state them as facts and
+   never quote them.
+6. Add no conclusion, no recommendation and no judgement of your own.
+
+## Relation blocks
+
+A block may carry `Relations (graph facts)` instead of quotes. Those lines come
+from the relation graph the compiler walked. Each line is a fact about how the
+subject is connected, and a line saying the walk was cut short means the list
+is partial. State only the relations listed there and never infer another
+connection. Each line names both parties as `source → relation → target`.
+State each relation exactly that way; the source is the subject of the relation
+and the target is the other party. Never treat quoted text as a party.
+
+`Wording hints (not facts)` are the original sentences the relations were read
+from. Use them only to choose natural wording; never add a party, a date or a
+number from them.
+
+## Contested blocks
+
+A block may put competing readings side by side as `Candidate` entries. Present
+every candidate and do not judge which one is right. The list may be partial:
+candidates with no verified quote are left out, so never say how many readings
+exist in total.
+
+## Opening fields (only when the Opening section is present)
+
+- `one_line_summary`: one sentence saying who wants to do what. A reader who
+  reads only this sentence must understand the request.
+- `desired_outcome`: the final result the customer wants to get. Write the
+  result, not how it would be built or which feature would deliver it.
+- `background`: why the request came up and how the customer works today.
+  State only facts the customer said.
+
+Fill all three fields. Never leave one empty and never move the content of one
+field into another.
+
+## What this page is for
+
+<< purpose_sentence >>
+
+## Style
+
+<< style_instruction >>
+{% if summary %}
+## Opening (three fields)
+
+- heading (hint only): << summary.heading >>
+- compiled body (hint only): << summary.topic_hint >>
+
+### Evidence
+{% for statement in summary.statements %}
+- << statement >>
+{%- endfor %}
+{%- if not summary.statements %}
+(no direct quotes for the opening)
+{%- endif %}
+{% endif %}
+{%- for block in blocks %}
+
+## Block << block.block_id >> (<< block.block_kind >> / << block.heading >>)
+
+- compiled body (hint only): << block.topic_hint >>
+
+### Evidence
+{% for statement in block.statements %}
+- << statement >>
+{%- endfor %}
+{%- if not block.statements %}
+{%- if block.variants %}
+(the quotes are listed under each candidate below)
+{%- else %}
+(no direct quotes for this block)
+{%- endif %}
+{%- endif %}
+{%- if block.edges %}
+
+#### Relations (graph facts)
+{% for edge in block.edges %}
+- << edge >>
+{%- endfor %}
+{%- endif %}
+{%- if block.hints %}
+
+#### Wording hints (not facts)
+{% for hint in block.hints %}
+- << hint >>
+{%- endfor %}
+{%- endif %}
+{%- for body, quotes in block.variants %}
+
+#### Candidate: << body >>
+{% for statement in quotes %}
+- << statement >>
+{%- endfor %}
+{%- endfor %}
+{%- endfor %}
+
+Return `narratives` as a list of {block_id, narrative}, one per block above,
+and the three opening fields when the Opening section is present.
