@@ -698,12 +698,76 @@ def test_missing_summary_is_retried() -> None:
     assert result.narratives == {0: "이 요구는 아직 검토 중이다."}
 
 
+def _unparsed(raw: str = '{"narratives": "[]"}') -> dict[str, Any]:
+    """계약으로 옮기지 못한 구조화 출력 응답을 만든다."""
+    return {
+        "parsed": None,
+        "parsing_error": ValueError("깨졌다"),
+        "raw": raw,
+    }
+
+
+def test_parse_failure_is_retried_once() -> None:
+    """1차가 파싱 실패면 같은 프롬프트로 한 번 더 묻는다."""
+    llm = _FakeLlm([_unparsed(), _doc(((0, "이 요구는 아직 검토 중이다."),))])
+
+    with capture_logs() as logs:
+        result = LlmBlockNarrator(llm).narrate_document(_request((_block(0),)))
+
+    assert len(llm.document_structured.prompts) == 2
+    assert llm.document_structured.prompts[0] == llm.document_structured.prompts[1]
+    assert result.narratives == {0: "이 요구는 아직 검토 중이다."}
+    retry = next(
+        entry for entry in logs if entry["event"] == "document_narration_parse_retry"
+    )
+    assert retry["prompt_version"] == DOCUMENT_PROMPT_VERSION
+    assert retry["reason"] == "contract_violation"
+
+
 def test_contract_violation_is_an_error() -> None:
-    """구조화 출력이 깨지면 실패로 알린다."""
-    llm = _FakeLlm([{"parsed": None, "parsing_error": ValueError("깨졌다")}])
+    """두 번 잇달아 파싱이 실패하면 실패로 알린다."""
+    llm = _FakeLlm([_unparsed(), _unparsed()])
 
     with pytest.raises(NarrationError):
         LlmBlockNarrator(llm).narrate_document(_request((_block(0),)))
+
+    assert len(llm.document_structured.prompts) == 2
+
+
+def test_retry_call_parse_failure_is_retried_once() -> None:
+    """검증기 재시도 호출이 파싱 실패해도 한 번 더 묻는다."""
+    llm = _FakeLlm(
+        [
+            _doc(((0, "담당자 3명이 붙었다."),)),
+            _unparsed(),
+            _doc(((0, "담당은 아직 정해지지 않았다."),)),
+        ]
+    )
+    request = _request((_block(0, statements=("담당이 정해지지 않았다",)),))
+
+    with capture_logs() as logs:
+        result = LlmBlockNarrator(llm).narrate_document(request)
+
+    assert len(llm.document_structured.prompts) == 3
+    assert result.narratives == {0: "담당은 아직 정해지지 않았다."}
+    retry = next(
+        entry for entry in logs if entry["event"] == "document_narration_parse_retry"
+    )
+    assert retry["prompt_version"] == RETRY_PROMPT_VERSION
+
+
+def test_templates_forbid_narratives_as_a_string() -> None:
+    """두 산문 템플릿이 narratives를 문자열로 돌려주지 말라고 시킨다."""
+    instruction = "Return narratives as a JSON array of objects, never as a string."
+
+    for path in (
+        block_narrator.DOCUMENT_TEMPLATE_PATH,
+        block_narrator.RETRY_TEMPLATE_PATH,
+    ):
+        source = (block_narrator.prompt_loader.template_dir / path).read_text(
+            encoding="utf-8"
+        )
+        assert instruction in source
 
 
 def test_call_error_is_an_error() -> None:

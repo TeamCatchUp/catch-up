@@ -41,6 +41,17 @@ _SUMMARY_FIELDS = ("one_line_summary", "desired_outcome", "background")
 logger = get_logger(__name__)
 
 
+class _ContractParseError(NarrationError):
+    """구조화 출력을 계약 객체로 옮기지 못했을 때만 던진다.
+
+    호출은 성공했는데 돌아온 값이 계약 모양이 아닌 경우다. 모델이
+    narratives를 목록 대신 문자열로 돌려주는 것처럼, 같은 프롬프트로 다시
+    물으면 풀릴 때가 있다. 부르는 쪽이 이 부류만 골라 다시 부를 수 있도록
+    NarrationError 아래에 따로 둔다. 밖에서 보면 여전히 NarrationError라
+    이 예외를 모르는 호출부의 동작은 바뀌지 않는다.
+    """
+
+
 class _BlockNarrativeOut(BaseModel):
     """블록 하나에 붙일 산문을 블록 번호와 함께 담는다.
 
@@ -85,6 +96,11 @@ class LlmBlockNarrator:
 
     재시도를 한 번만 둔다. 실패한 노드는 이번 실행에서 접히고 다음 실행이
     같은 자리를 다시 컴파일하므로, 한 호출 안에서 더 조를 이유가 없다.
+
+    재시도 층이 둘이라는 점에 주의한다. 위의 검증기 위반 재시도는 위반
+    블록만 사유와 함께 다시 묻는 층이고, 그 아래에 구조화 출력 파싱 실패를
+    같은 프롬프트로 다시 묻는 층이 따로 있다. 아래층은 본 호출과 검증기
+    재시도 호출에 각각 한 번씩 붙는다.
     """
 
     def __init__(self, llm: BaseChatModel) -> None:
@@ -112,9 +128,14 @@ class LlmBlockNarrator:
         묻지 않은 블록 번호로 온 산문은 버리고 로그로만 알린다. 결과에
         담기지 않는 값이라 문서 전체를 접을 이유가 없다.
 
+        구조화 출력 파싱이 실패하면 같은 프롬프트로 한 번 더 부른다. 본
+        호출과 검증기 재시도 호출에 각각 한 번씩이다. 자세한 근거는
+        _invoke_with_parse_retry에 적어 두었다.
+
         Raises:
             NarrationError: 프롬프트를 만들지 못했거나 호출이 터졌거나
-                계약이 깨졌거나, 다시 물어도 위반이 남았을 때 던진다.
+                다시 물어도 계약이 깨졌거나, 다시 물어도 위반이 남았을 때
+                던진다.
         """
         if request.summary is None and not request.blocks:
             return DocumentNarration(summary=None, narratives={})
@@ -124,7 +145,7 @@ class LlmBlockNarrator:
             "block_count": len(request.blocks),
             "with_summary": request.summary is not None,
         }
-        parsed, elapsed = _invoke_contract(
+        parsed, elapsed = _invoke_with_parse_retry(
             structured=self._document_structured,
             template_path=DOCUMENT_TEMPLATE_PATH,
             render_kwargs={
@@ -240,7 +261,7 @@ class LlmBlockNarrator:
             "prompt_version": RETRY_PROMPT_VERSION,
             "block_count": len(retry_blocks),
         }
-        parsed, elapsed = _invoke_contract(
+        parsed, elapsed = _invoke_with_parse_retry(
             structured=self._document_structured,
             template_path=RETRY_TEMPLATE_PATH,
             render_kwargs={
@@ -524,8 +545,10 @@ def _invoke_contract(
         완료·실패 로그에 그대로 싣는다.
 
     Raises:
-        NarrationError: 프롬프트를 만들지 못했거나 호출이 터졌거나 계약을
-            어겼을 때 던진다.
+        NarrationError: 프롬프트를 만들지 못했거나 호출이 터졌을 때 던진다.
+        _ContractParseError: 호출은 됐는데 받아 온 값을 계약 객체로 옮기지
+            못했을 때 던진다. NarrationError의 하위 예외라, 이 부류를
+            가리지 않는 호출부에는 위와 같아 보인다.
     """
     logger.info(f"{event_prefix}_started", **call_context)
 
@@ -564,6 +587,65 @@ def _invoke_contract(
             elapsed=elapsed,
             **call_context,
         )
-        raise NarrationError(f"{subject} 계약이 깨졌다.")
+        raise _ContractParseError(f"{subject} 계약이 깨졌다.")
 
     return parsed, elapsed
+
+
+def _invoke_with_parse_retry(
+    *,
+    structured: Any,
+    template_path: str,
+    render_kwargs: dict[str, Any],
+    event_prefix: str,
+    call_context: dict[str, Any],
+    subject: str,
+) -> tuple[Any, float]:
+    """계약 파싱이 실패하면 같은 프롬프트로 한 번만 더 부른다.
+
+    파싱 실패는 비결정적이다. 실측에서 모델이 narratives를 목록이 아니라
+    JSON 문자열로 돌려주는 일이 있었고, 같은 프롬프트를 다시 물으면 제
+    모양으로 온다. 피드백을 붙이지 않고 그대로 다시 묻는 이유가 여기에
+    있다. 고칠 거리를 알려 줄 것이 없고, 프롬프트를 바꾸면 첫 호출과 다른
+    조건이 되어 무엇이 통한 것인지 알 수 없다.
+
+    다시 부르는 것은 파싱 실패뿐이다. 프롬프트 렌더 실패와 호출 실패는
+    같은 조건에서 같은 결과가 나올 쪽이 크다. 인증이나 요청 길이처럼 다시
+    불러도 똑같이 터지는 사유가 섞여 있어, 실패를 두 배로 늦출 뿐이다.
+
+    예산은 이 함수 한 번에 한 번이다. 본 호출과 검증기 재시도 호출이 각각
+    이 함수를 지나므로, 한 문서를 서술하는 동안 모델을 부르는 횟수는 최대
+    네 번이다.
+
+    Returns:
+        _invoke_contract가 돌려주는 계약 객체와 마지막 호출에 걸린 초를
+        그대로 돌려준다.
+
+    Raises:
+        NarrationError: 다시 물어도 파싱이 실패했거나, 다시 부르지 않는
+            부류의 실패가 났을 때 던진다.
+    """
+    try:
+        return _invoke_contract(
+            structured=structured,
+            template_path=template_path,
+            render_kwargs=render_kwargs,
+            event_prefix=event_prefix,
+            call_context=call_context,
+            subject=subject,
+        )
+    except _ContractParseError:
+        logger.info(
+            "document_narration_parse_retry",
+            reason="contract_violation",
+            **call_context,
+        )
+
+    return _invoke_contract(
+        structured=structured,
+        template_path=template_path,
+        render_kwargs=render_kwargs,
+        event_prefix=event_prefix,
+        call_context=call_context,
+        subject=subject,
+    )
