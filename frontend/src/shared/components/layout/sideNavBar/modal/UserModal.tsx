@@ -65,7 +65,7 @@ export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
     >
       {/* 프로필 헤더 */}
       <DropdownMenuLabel className="flex h-12 items-center gap-4 px-1 py-0">
-        <DefaultProfile className="h-10 w-10 shrink-0" />
+        <DefaultProfile className="h-10 w-10 shrink-0 rounded-full" />
         <div className="relative top-px flex min-w-0 flex-col">
           <span className="text-heading-small text-text-normal-normal truncate">{userName ?? '이름없음'}</span>
           <span className="text-body-small text-text-normal-alternative truncate">{userEmail ?? ''}</span>

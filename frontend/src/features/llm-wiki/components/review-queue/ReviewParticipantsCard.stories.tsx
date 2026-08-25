@@ -102,7 +102,7 @@ export const NoOwnerAsMember: Story = {
 /** 내가 담당자 — 내 행(나)만 서고 배너가 없다. 담당자 본인은 지정만 열린다(해제는 관리자만). */
 export const MeAsOwner: Story = {
   args: {
-    participants: [{ id: '6', userId: 6, name: '팀원G', isMe: true, roles: ['담당자'] }],
+    participants: [{ id: '6', userId: 6, name: '팀원G', description: '검토 전', isMe: true, roles: ['담당자'] }],
     canAssign: true,
     canRemove: false,
     candidates: CANDIDATES.filter((candidate) => candidate.id !== '6'),
@@ -112,6 +112,13 @@ export const MeAsOwner: Story = {
 
     await expect(canvas.getByText('팀원G')).toBeInTheDocument();
     await expect(canvas.getByText('(나)')).toBeInTheDocument();
+    // 판정 이력이 없는 담당자의 활동 줄 — 이름 아래 보조 톤·xsmall로 선다
+    const activity = canvas.getByText('검토 전');
+    await expect(activity).toHaveClass('text-body-xsmall', 'text-text-normal-assistive');
+    // 기본 아바타의 모서리는 컨테이너가 정한다 — 사각(rounded-xl)이고 원형이 아니다
+    const avatar = canvasElement.querySelector('.overflow-hidden');
+    await expect(avatar).toHaveClass('rounded-xl');
+    await expect(avatar).not.toHaveClass('rounded-full');
     // 배지는 담당자 하나다 — 제목까지 더해 '담당자'가 둘이고 관리자 배지는 없다
     await expect(canvas.getAllByText('담당자')).toHaveLength(2);
     await expect(canvas.queryByText('채널 관리자')).toBeNull();
@@ -126,7 +133,9 @@ export const MeAsOwner: Story = {
 /** 내가 담당자이자 채널 관리자 — 배지 둘(담당자 + 채널 관리자)이 나란히 서고 지정·해제가 다 열린다. */
 export const MeAsOwnerAndAdmin: Story = {
   args: {
-    participants: [{ id: '6', userId: 6, name: '팀원G', isMe: true, roles: ['담당자', '채널 관리자'] }],
+    participants: [
+      { id: '6', userId: 6, name: '팀원G', description: '3시간 전 검토', isMe: true, roles: ['담당자', '채널 관리자'] },
+    ],
     canAssign: true,
     canRemove: true,
     candidates: CANDIDATES.filter((candidate) => candidate.id !== '6'),
@@ -134,6 +143,8 @@ export const MeAsOwnerAndAdmin: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
+    // 판정 이력이 있는 담당자의 활동 줄 — 상대시각 + 검토
+    await expect(canvas.getByText('3시간 전 검토')).toBeInTheDocument();
     // 담당자 배지 행이라 해제 팝오버 트리거다 — 그 안에 배지 둘이 나란히 선다
     const row = canvas.getByRole('button', { name: /팀원G/ });
     const ownerBadge = within(row).getByText('담당자');
@@ -150,7 +161,7 @@ export const MeAsOwnerAndAdmin: Story = {
 /** 남이 담당자 · 내가 관리자 — 그 사람 행 + 배너, 지정·해제 진입점이 모두 선다. */
 export const OtherOwnerAsAdmin: Story = {
   args: {
-    participants: [{ id: '1', userId: 1, name: '팀원F', roles: ['담당자'] }],
+    participants: [{ id: '1', userId: 1, name: '팀원F', description: '어제 검토', roles: ['담당자'] }],
     notice: 'other-owner',
     canAssign: true,
     canRemove: true,
@@ -160,6 +171,7 @@ export const OtherOwnerAsAdmin: Story = {
     const portal = within(document.body);
 
     await expect(canvas.getByText('담당자가 검토할 문서입니다')).toBeInTheDocument();
+    await expect(canvas.getByText('어제 검토')).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: '담당자 추가하기' })).toBeInTheDocument();
     // 내가 관리자여도 남의 행에는 관리자 배지가 없다 — 서버가 남의 관리자 여부를 주지 않는다
     await expect(canvas.getAllByText('담당자')).toHaveLength(2);
@@ -176,7 +188,7 @@ export const OtherOwnerAsAdmin: Story = {
 /** 남이 담당자 · 일반 구성원 — 그 사람 행과 배너만 남고 관리 진입점이 없다. */
 export const OtherOwnerAsMember: Story = {
   args: {
-    participants: [{ id: '1', userId: 1, name: '팀원F', roles: ['담당자'] }],
+    participants: [{ id: '1', userId: 1, name: '팀원F', description: '검토 전', roles: ['담당자'] }],
     notice: 'other-owner',
   },
   play: async ({ canvasElement }) => {
@@ -184,6 +196,7 @@ export const OtherOwnerAsMember: Story = {
 
     await expect(canvas.getByText('담당자가 검토할 문서입니다')).toBeInTheDocument();
     await expect(canvas.getByText('팀원F')).toBeInTheDocument();
+    await expect(canvas.getByText('검토 전')).toBeInTheDocument();
     await expect(canvas.queryByRole('button')).toBeNull();
     // 배지는 담당자 하나다 — 제목까지 더해 둘, 관리자 배지는 없다
     await expect(canvas.getAllByText('담당자')).toHaveLength(2);
@@ -195,9 +208,9 @@ export const OtherOwnerAsMember: Story = {
 export const MultipleOwners: Story = {
   args: {
     participants: [
-      { id: '1', userId: 1, name: '팀원F', roles: ['담당자'] },
-      { id: '3', userId: 3, name: '이진수', roles: ['담당자'] },
-      { id: '6', userId: 6, name: '팀원G', isMe: true, roles: ['담당자', '채널 관리자'] },
+      { id: '1', userId: 1, name: '팀원F', description: '3시간 전 검토', roles: ['담당자'] },
+      { id: '3', userId: 3, name: '이진수', description: '검토 전', roles: ['담당자'] },
+      { id: '6', userId: 6, name: '팀원G', description: '방금 전 검토', isMe: true, roles: ['담당자', '채널 관리자'] },
     ],
     canAssign: true,
     canRemove: true,
@@ -208,6 +221,10 @@ export const MultipleOwners: Story = {
 
     // 담당자 태그가 행 수만큼 선다 — 카드 제목까지 더해 4다
     await expect(canvas.getAllByText('담당자')).toHaveLength(4);
+    // 활동 줄은 행마다 — 판정 이력이 있으면 상대시각 검토, 없으면 검토 전
+    await expect(canvas.getByText('3시간 전 검토')).toBeInTheDocument();
+    await expect(canvas.getByText('방금 전 검토')).toBeInTheDocument();
+    await expect(canvas.getByText('검토 전')).toBeInTheDocument();
     // 겹친 역할은 스택 안에서도 배지 둘이다 — 관리자 배지는 내 행 하나뿐이다
     await expect(canvas.getAllByText('채널 관리자')).toHaveLength(1);
     const myRow = canvas.getByRole('button', { name: /팀원G/ });

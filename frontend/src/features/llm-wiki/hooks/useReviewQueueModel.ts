@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 
 import { toast } from '@/shared/components/ui/toast';
 import { authQueries } from '@/shared/queries/auth.queries';
+import { formatRelativeTime } from '@/shared/utils/formatDate';
 
 import { mapReviewProposalDetail } from '../api/knowledgeReviewDetailMappers';
 import { mapReviewQueueItem, type ReviewQueueRowData } from '../api/knowledgeReviewMappers';
@@ -30,7 +31,7 @@ import {
   useAssignWikiArtifactOwnersMutation,
   useRemoveWikiArtifactOwnerMutation,
 } from '../queries/wikiArtifactOwners.mutations';
-import type { BlockDiffEntry } from '../types/llmWikiDiff';
+import type { BlockDiffEntry, WikiBlock } from '../types/llmWikiDiff';
 import type { DocumentBreadcrumb } from '../types/llmWikiModel';
 import { buildBlockDiff } from '../utils/diff/buildBlockDiff';
 import { useQueryErrorToast } from './useQueryErrorToast';
@@ -74,6 +75,22 @@ function collectVerdictTargets(entries: readonly BlockDiffEntry[]): BlockVerdict
 /** 서버의 미결정 검사와 같은 집합 — 변경 없는 블록은 카드가 없어 여기 들지 않는다 */
 function hasUndecidedBlock(entries: readonly BlockDiffEntry[]): boolean {
   return entries.some((entry) => hasVerdictPath(entry) && !entry.approved && !entry.rejected);
+}
+
+/** verdict.reviewer("user:{id}")에서 담당자 매칭용 숫자 id를 캔다. 형식이 다르면 null(매칭 실패)이다 */
+function parseReviewerUserId(reviewer: string): number | null {
+  const match = /^user:(\d+)$/.exec(reviewer);
+  return match === null ? null : Number(match[1]);
+}
+
+/** 이 담당자가 이 안건에서 내린 블록 판정 중 가장 최근 시각. 이력이 없으면 null */
+function latestReviewedAt(blocks: readonly WikiBlock[], userId: number): string | null {
+  let latest: string | null = null;
+  for (const { verdict } of blocks) {
+    if (verdict === null || parseReviewerUserId(verdict.reviewer) !== userId) continue;
+    if (latest === null || new Date(verdict.reviewedAt) > new Date(latest)) latest = verdict.reviewedAt;
+  }
+  return latest;
 }
 
 /** 카드 반려 다이얼로그가 든 것 — 연 시점의 안건을 함께 물어 제출이 그 안건으로 나간다 */
@@ -198,14 +215,19 @@ export function useReviewQueueModel({
   const canRemoveOwners = isArtifactAdmin;
 
   // 채널 관리자 배지는 내 행에만 — 서버는 내 관리자 여부(is_admin)만 주고 남의 것은 주지 않는다
-  const participants: ReviewParticipant[] = owners.map((owner) => ({
-    id: String(owner.userId),
-    userId: owner.userId,
-    name: owner.displayName,
-    isMe: owner.userId === myUserId,
-    roles: owner.userId === myUserId && isArtifactAdmin ? ['담당자', '채널 관리자'] : ['담당자'],
-    avatarSrc: owner.profileImageUrl,
-  }));
+  const participants: ReviewParticipant[] = owners.map((owner) => {
+    // 활동 줄은 그 사람이 이 안건에서 내린 판정 중 가장 최근 것이다
+    const reviewedAt = latestReviewedAt(detail?.blocks ?? [], owner.userId);
+    return {
+      id: String(owner.userId),
+      userId: owner.userId,
+      name: owner.displayName,
+      description: reviewedAt === null ? '검토 전' : `${formatRelativeTime(reviewedAt)} 검토`,
+      isMe: owner.userId === myUserId,
+      roles: owner.userId === myUserId && isArtifactAdmin ? ['담당자', '채널 관리자'] : ['담당자'],
+      avatarSrc: owner.profileImageUrl,
+    };
+  });
 
   const ownerNotice = detail === null ? null : owners.length === 0 ? 'no-owner' : isMeOwner ? null : 'other-owner';
 

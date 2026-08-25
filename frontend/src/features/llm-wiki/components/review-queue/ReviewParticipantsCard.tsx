@@ -14,7 +14,7 @@ export interface ReviewParticipant {
   /** [BE] user_id. 해제 요청 경로에 그대로 실린다 */
   userId: number;
   name: string;
-  /** 활동 설명(예: "1일 전 수정"). 담당자별 활동 시각 API가 없어(B18) 지금은 비워 온다 */
+  /** 활동 줄 — 최근 판정의 상대시각(예: "3시간 전 검토") 또는 "검토 전" */
   description?: string;
   /** 내 계정 여부 — 이름 뒤 "(나)" 표기 */
   isMe?: boolean;
@@ -55,7 +55,7 @@ function ParticipantRow({ participant }: { participant: ReviewParticipant }) {
           ))}
         </span>
         {participant.description && (
-          <span className="text-body-small text-text-normal-assistive truncate">{participant.description}</span>
+          <span className="text-body-xsmall text-text-normal-assistive truncate">{participant.description}</span>
         )}
       </span>
     </span>

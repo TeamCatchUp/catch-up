@@ -699,4 +699,58 @@ describe('useReviewQueueModel', () => {
     // 이미 담당자인 사람은 추가 후보에서 빠진다 — 멤버 목록이 비어 있어 후보도 빈다
     expect(result.current.ownerCandidates).toEqual([]);
   });
+
+  it('담당자 활동 줄 — 그 사람의 가장 최근 판정이 상대시각 검토로 나오고, 이력이 없으면 검토 전이다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    server.use(
+      http.get('*/api/v1/knowledge-review/queue/:proposalId', ({ params }) =>
+        HttpResponse.json({
+          ...detail(String(params.proposalId), false),
+          owners: [
+            { user_id: 7, display_name: '팀원F', profile_image_url: null },
+            { user_id: 8, display_name: '직원10', profile_image_url: null },
+          ],
+          blocks: [
+            {
+              ...proposedBlock(0, '재시도 정책'),
+              verdict: { ...blockVerdict(FIRST, 0), reviewer: 'user:7', reviewed_at: twoDaysAgo },
+            },
+            {
+              ...proposedBlock(1, 'PG 점검 시간 예외'),
+              verdict: { ...blockVerdict(FIRST, 1), reviewer: 'user:7', reviewed_at: threeHoursAgo },
+            },
+          ],
+        }),
+      ),
+    );
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.participants).toHaveLength(2));
+    // 두 판정 중 최근 것이 이긴다
+    expect(result.current.participants[0].description).toBe('3시간 전 검토');
+    // 판정 이력이 없는 담당자
+    expect(result.current.participants[1].description).toBe('검토 전');
+  });
+
+  it('reviewer가 user:{id} 형식이 아니면 매칭 실패로 보고 검토 전으로 남긴다 — 예외를 던지지 않는다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    server.use(
+      http.get('*/api/v1/knowledge-review/queue/:proposalId', ({ params }) =>
+        HttpResponse.json({
+          ...detail(String(params.proposalId), false),
+          owners: [{ user_id: 7, display_name: '팀원F', profile_image_url: null }],
+          blocks: [
+            // 이름 문자열 reviewer — 숫자 id를 캘 수 없어 어느 담당자와도 맞지 않는다
+            { ...proposedBlock(0, '재시도 정책'), verdict: { ...blockVerdict(FIRST, 0), reviewer: '팀원F' } },
+          ],
+        }),
+      ),
+    );
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.participants).toHaveLength(1));
+    expect(result.current.participants[0].description).toBe('검토 전');
+  });
 });
