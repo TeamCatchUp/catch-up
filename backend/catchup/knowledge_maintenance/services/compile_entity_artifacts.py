@@ -95,11 +95,11 @@ from catchup.knowledge_maintenance.ports.mutation_proposals import (
     MutationProposalRepository,
 )
 from catchup.knowledge_maintenance.ports.mutation_proposals import StoredPendingProposal
+from catchup.knowledge_maintenance.ports.narrator import BlockNarrationInput
 from catchup.knowledge_maintenance.ports.narrator import BlockNarrator
 from catchup.knowledge_maintenance.ports.narrator import ChangeExplanationRequest
+from catchup.knowledge_maintenance.ports.narrator import DocumentNarrationRequest
 from catchup.knowledge_maintenance.ports.narrator import NarrationError
-from catchup.knowledge_maintenance.ports.narrator import NarrationRequest
-from catchup.knowledge_maintenance.ports.narrator import SummaryNarrative
 from catchup.knowledge_maintenance.ports.relations import RelationRepository
 from catchup.knowledge_maintenance.ports.relations import StoredRelationEdge
 from catchup.knowledge_maintenance.services.traverse_relations import (
@@ -119,6 +119,11 @@ logger = get_logger(__name__)
 
 # 값이 갈렸음을 알리는 계류 안건의 종류다.
 PROPOSAL_KIND_CONTRADICTION = "contradiction"
+
+# 머리말 재료에 붙이는 블록 번호다. 머리말은 요청의 blocks에 서지 않고
+# summary 한 칸으로 실려 응답도 번호로 오지 않으므로, 본문 블록의 연번과
+# 섞이지 않도록 음수를 쓴다.
+_SUMMARY_BLOCK_ID = -1
 
 
 class ArtifactCompileUnitOfWork(Protocol):
@@ -809,7 +814,7 @@ def _propose_node_blocks(
 
     # 지문 비교를 지나 "이번에 새로 올린다"가 정해진 뒤에만 서술한다.
     # 앞에 두면 무변경 재컴파일에서도 LLM이 돈다. 산문이 붙어도 위에서
-    # 구한 content_hash는 그대로다 — 지문 계산이 산문을 빼고 세므로 다시
+    # 구한 content_hash는 그대로다. 지문 계산이 산문을 빼고 세므로 다시
     # 계산하지 않는다.
     narrated = 0
     reused = 0
@@ -817,56 +822,51 @@ def _propose_node_blocks(
         reusable = uow.artifacts.list_reusable_narratives(
             artifact_id=artifact_id,
         )
-        # 머리말 세 블록은 한 번의 서술로 함께 채운다. 세 섹션은 같은
-        # 집계 한 줄을 딛고 선 한 벌이라, 블록마다 따로 물으면 같은 질문을
-        # 세 번 하는 셈이고 세 섹션이 서로 어긋난 문장을 받을 수도 있다.
-        # 요청은 언제나 첫 머리말 블록으로 만들어, 어느 블록에서 재사용이
-        # 걸리든 같은 재료를 묻게 한다.
-        summary_request = _summary_narration_request(
+        # 문서 하나의 산문을 한 번에 묻는다. 블록마다 따로 물으면 문체
+        # 지시와 문서 목적이 블록 수만큼 되풀이되고, 같은 문서의 블록들이
+        # 서로 어긋난 문장을 받을 수도 있다. 머리말 세 블록도 같은 요청에
+        # 함께 실린다.
+        request, block_indices = _document_narration_request(
             blocks,
+            reusable=reusable,
             style_instruction=style_instruction,
             purpose_sentence=purpose_sentence,
         )
-        summary_narrative: SummaryNarrative | None = None
+        # 물을 것이 없으면 부르지 않는다. 모두 재사용에 걸렸거나 근거가
+        # 하나도 없는 문서라, 불러도 빈 응답이 돌아온다.
+        empty = request.summary is None and not request.blocks
+        narration = None if empty else narrator.narrate_document(request)
+        narratives_by_index = (
+            {}
+            if narration is None
+            else {
+                index: narration.narratives[block_id]
+                for block_id, index in block_indices.items()
+                if block_id in narration.narratives
+            }
+        )
+        summary_narrative = None if narration is None else narration.summary
         narrated_blocks: list[ArtifactBlock] = []
-        for block in blocks:
+        for index, block in enumerate(blocks):
             found = reusable.get(block_content_hash(block))
             if found is not None:
                 narrated_blocks.append(replace(block, narrative=found))
                 reused += 1
                 continue
-            if block.block_kind == BLOCK_KIND_SUMMARY:
-                if (
-                    summary_request is None
-                    or block.heading not in SUMMARY_SECTION_KEYS
-                ):
-                    narrated_blocks.append(block)
-                    continue
-                if summary_narrative is None:
-                    summary_narrative = narrator.narrate_summary(
-                        summary_request
-                    )
+            text = narratives_by_index.get(index)
+            if (
+                text is None
+                and summary_narrative is not None
+                and block.block_kind == BLOCK_KIND_SUMMARY
+                and block.heading in SUMMARY_SECTION_KEYS
+            ):
                 # heading이 SummaryNarrative의 필드 이름과 같은 기계 키라
                 # 그대로 골라 담는다.
-                narrated_blocks.append(
-                    replace(
-                        block,
-                        narrative=getattr(summary_narrative, block.heading),
-                    )
-                )
-                narrated += 1
-                continue
-            request = _narration_request(
-                block,
-                style_instruction=style_instruction,
-                purpose_sentence=purpose_sentence,
-            )
-            if request is None:
+                text = getattr(summary_narrative, block.heading)
+            if text is None:
                 narrated_blocks.append(block)
                 continue
-            narrated_blocks.append(
-                replace(block, narrative=narrator.narrate(request))
-            )
+            narrated_blocks.append(replace(block, narrative=text))
             narrated += 1
         blocks = tuple(narrated_blocks)
 
@@ -1122,45 +1122,78 @@ def _verified_statements(block: ArtifactBlock) -> tuple[str, ...]:
     )
 
 
-def _summary_narration_request(
+def _document_narration_request(
     blocks: Sequence[ArtifactBlock],
     *,
+    reusable: Mapping[str, str],
     style_instruction: str,
     purpose_sentence: str,
-) -> NarrationRequest | None:
-    """머리말 세 블록을 대표하는 서술 요청 하나를 만든다.
+) -> tuple[DocumentNarrationRequest, dict[int, int]]:
+    """산문이 필요한 블록만 모아 문서 하나의 서술 요청을 만든다.
 
-    첫 머리말 블록으로 만든다. 세 블록은 heading만 다르고 본문과 근거가
-    같아 어느 블록으로 만들어도 사실 입력은 같지만, 만드는 자리를 첫
-    블록으로 못박아야 지난 산문 재사용이 어느 블록에서 걸리든 같은 요청이
-    나간다.
+    지난 산문을 그대로 쓸 수 있는 블록은 요청에 싣지 않는다. 이미 답이
+    있는 것을 다시 물으면 값을 치르고 문장이 흔들리기만 한다. 근거가 없어
+    서술하지 않는 블록도 싣지 않는다.
 
-    머리말 블록이 없거나 검증된 인용이 하나도 없으면 None이다.
+    머리말 세 블록은 요청에 따로 서지 않고 summary 한 칸으로 함께 실린다.
+    세 블록은 같은 집계 한 줄을 딛고 선 한 벌이라 따로 물으면 서로 어긋난
+    문장을 받을 수 있다. summary의 재료는 언제나 첫 머리말 블록으로
+    만든다. 세 블록은 heading만 다르고 본문과 근거가 같아 어느 블록으로
+    만들어도 사실 입력은 같지만, 만드는 자리를 못박아야 재사용이 어느
+    블록에서 걸리든 같은 재료가 나간다. 세 블록이 모두 재사용에 걸리면
+    summary는 None이다.
+
+    Args:
+        blocks: 이번 판에 실릴 블록을 차례대로 받는다.
+        reusable: 블록 내용 지문을 지난 산문에 짝지은 사전을 받는다.
+        style_instruction: 문서 전체에 한 번 실을 문체 지시를 받는다.
+        purpose_sentence: 문서 전체에 한 번 실을 목적 문장을 받는다.
+
+    Returns:
+        서술 요청과, 요청 안의 블록 번호를 blocks 안의 자리 번호로 잇는
+        사전을 함께 돌려준다. 응답이 블록 번호로 오므로 그 산문을 다시
+        블록에 얹으려면 이 사전이 필요하다.
     """
-    summary = next(
-        (
-            block
-            for block in blocks
-            if block.block_kind == BLOCK_KIND_SUMMARY
+    summary_input: BlockNarrationInput | None = None
+    summary_wanted = False
+    section_inputs: list[BlockNarrationInput] = []
+    indices: dict[int, int] = {}
+    for index, block in enumerate(blocks):
+        is_reusable = block_content_hash(block) in reusable
+        if block.block_kind == BLOCK_KIND_SUMMARY:
+            if summary_input is None:
+                summary_input = _block_narration_input(
+                    block, block_id=_SUMMARY_BLOCK_ID
+                )
+            if not is_reusable and block.heading in SUMMARY_SECTION_KEYS:
+                summary_wanted = True
+            continue
+        if is_reusable:
+            continue
+        block_input = _block_narration_input(
+            block, block_id=len(section_inputs)
+        )
+        if block_input is None:
+            continue
+        indices[block_input.block_id] = index
+        section_inputs.append(block_input)
+    return (
+        DocumentNarrationRequest(
+            style_instruction=style_instruction,
+            purpose_sentence=purpose_sentence,
+            summary=summary_input if summary_wanted else None,
+            blocks=tuple(section_inputs),
         ),
-        None,
-    )
-    if summary is None:
-        return None
-    return _narration_request(
-        summary,
-        style_instruction=style_instruction,
-        purpose_sentence=purpose_sentence,
+        indices,
     )
 
 
-def _narration_request(
+def _block_narration_input(
     block: ArtifactBlock,
     *,
-    style_instruction: str,
-    purpose_sentence: str,
-) -> NarrationRequest | None:
-    """블록 하나를 서술 요청으로 옮긴다. 근거가 없으면 None이다.
+    block_id: int,
+) -> BlockNarrationInput | None:
+    """블록 하나를 서술 재료로 옮긴다. 근거가 없으면 None이다.
 
     관계 절은 사실 입력이 다르다. 그 블록은 인용을 갖지 않고 근거를
     관계 장부로 남기며, 본문 줄이 곧 사실 입력이다. 그래서 관계 절만 본문
@@ -1184,6 +1217,11 @@ def _narration_request(
 
     검증된 인용이 하나도 없으면 서술하지 않는다. 근거 없는 문장을 만들지
     않는 것이지 오류가 아니므로 예외가 아니라 None으로 알린다.
+
+    Args:
+        block: 재료로 옮길 블록을 받는다.
+        block_id: 요청 안에서 이 블록을 가리킬 번호를 받는다. 응답이 이
+            번호로 오므로 부르는 쪽이 정해서 준다.
     """
     if block.block_kind == BLOCK_KIND_RELATION_SECTION:
         edges = _relation_edge_lines(block)
@@ -1194,16 +1232,15 @@ def _narration_request(
         )
         if not edges and not hints:
             return None
-        return NarrationRequest(
+        return BlockNarrationInput(
+            block_id=block_id,
             block_kind=block.block_kind,
             heading=block.heading,
             topic_hint=block.heading,
             statements=(),
             edges=edges,
-            variants=(),
-            style_instruction=style_instruction,
-            purpose_sentence=purpose_sentence,
             hints=hints,
+            variants=(),
         )
     statements = _verified_statements(block)
     variants = tuple(
@@ -1223,15 +1260,15 @@ def _narration_request(
     )
     if not statements and not variants:
         return None
-    return NarrationRequest(
+    return BlockNarrationInput(
+        block_id=block_id,
         block_kind=block.block_kind,
         heading=block.heading,
         topic_hint=block.body,
         statements=statements,
         edges=(),
+        hints=(),
         variants=variants,
-        style_instruction=style_instruction,
-        purpose_sentence=purpose_sentence,
     )
 
 

@@ -110,11 +110,11 @@ def test_summary_is_narrated_with_all_statements() -> None:
 
     _run(uow, narrator)
 
-    request = narrator.requests[0]
-    assert request.block_kind == BLOCK_KIND_SUMMARY
-    assert set(request.statements) == {first.statement, second.statement}
-    assert request.topic_hint == _blocks(uow)[0].body
-    assert request.edges == ()
+    summary_input = narrator.requests[0].summary
+    assert summary_input.block_kind == BLOCK_KIND_SUMMARY
+    assert set(summary_input.statements) == {first.statement, second.statement}
+    assert summary_input.topic_hint == _blocks(uow)[0].body
+    assert summary_input.edges == ()
     assert _blocks(uow)[0].narrative
 
 
