@@ -226,8 +226,8 @@ def main() -> None:
         print("=== 자동 병합 적용 결과 ===")
         print(f"  적용된 안건 {applied.proposals_applied}")
         print(f"  실패한 안건 {applied.proposals_failed}")
+        print(f"  stale로 끝낸 안건 {applied.proposals_stale}")
         print(f"  새로 해소된 후보 {applied.candidates_resolved}")
-        print(f"  기해소 스킵 {applied.candidates_already_resolved}")
     else:
         print(
             "자동 병합이 꺼져 있다(KNOWLEDGE_AUTO_MERGE_ENABLED=false). "

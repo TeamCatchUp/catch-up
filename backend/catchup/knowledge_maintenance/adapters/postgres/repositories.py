@@ -99,7 +99,6 @@ from catchup.knowledge_maintenance.domain.artifact_definition import (
 )
 from catchup.knowledge_maintenance.domain.claim_conflict import StoredClaimCandidate
 from catchup.knowledge_maintenance.domain.entity_resolution import anchor_excerpt
-from catchup.knowledge_maintenance.domain.entity_resolution import normalize_name
 from catchup.knowledge_maintenance.domain.evidence import Locator
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     AssertionResolutionStatus,
@@ -1801,54 +1800,6 @@ class SqlAlchemyKnowledgeCandidateRepository:
             .order_by(KnowledgeEntityCandidateRow.id)
         ).all()
         return tuple(rows)
-
-    def count_entities_resolved_to(
-        self,
-        *,
-        workspace_id: int,
-        node_id: uuid.UUID,
-        normalized_name: str | None = None,
-        exclude_candidate_ids: Sequence[uuid.UUID] = (),
-    ) -> int:
-        """어떤 노드를 지금 가리키고 있는 entity 후보 수를 센다.
-
-        normalized_name을 주면 이름을 정규화한 값이 같은 후보만 센다.
-        이름 정규화 규칙은 Python 함수 normalize_name에만 있고 DB에는
-        같은 함수가 없다. 그래서 이름으로 거를 때는 SQL로 세지 않고 노드를
-        가리키는 후보 행을 읽어 와 Python에서 센다. 두 곳에 정규화 규칙을
-        따로 적으면 한쪽만 고쳐졌을 때 같은 이름을 다르게 보게 된다.
-        """
-        excluded = set(exclude_candidate_ids)
-        if normalized_name is None:
-            statement = (
-                select(func.count())
-                .select_from(KnowledgeEntityCandidateRow)
-                .where(
-                    KnowledgeEntityCandidateRow.workspace_id == workspace_id,
-                    KnowledgeEntityCandidateRow.resolved_node_id == node_id,
-                )
-            )
-            if excluded:
-                statement = statement.where(
-                    KnowledgeEntityCandidateRow.id.not_in(excluded)
-                )
-            return int(self._session.scalar(statement) or 0)
-
-        rows = self._session.execute(
-            select(
-                KnowledgeEntityCandidateRow.id,
-                KnowledgeEntityCandidateRow.proposed_name,
-            ).where(
-                KnowledgeEntityCandidateRow.workspace_id == workspace_id,
-                KnowledgeEntityCandidateRow.resolved_node_id == node_id,
-            )
-        ).all()
-        return sum(
-            1
-            for candidate_id, proposed_name in rows
-            if candidate_id not in excluded
-            and normalize_name(proposed_name) == normalized_name
-        )
 
     def get_claim_validity(
         self,

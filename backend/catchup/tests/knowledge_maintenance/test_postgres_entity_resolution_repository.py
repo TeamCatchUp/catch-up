@@ -33,7 +33,6 @@ from catchup.knowledge_maintenance.adapters.postgres.unit_of_work import (
 from catchup.knowledge_maintenance.contracts.extraction import ClaimCandidateDraft
 from catchup.knowledge_maintenance.contracts.extraction import EntityCandidateDraft
 from catchup.knowledge_maintenance.contracts.extraction import KnowledgeCandidateBatch
-from catchup.knowledge_maintenance.domain.entity_resolution import normalize_name
 from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
 )
@@ -181,66 +180,6 @@ def test_mark_entity_resolved_excludes_from_pending(
             )
         }
     assert target not in pending_ids
-
-
-def test_count_entities_resolved_to_filters_by_name_and_exclusion(
-    workspace_id: int,
-    session_factory: Callable[[], Session],
-    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
-) -> None:
-    """노드를 가리키는 후보 수를 이름과 제외 목록으로 좁혀 센다.
-
-    되돌림이 별칭을 지우기 전에 "이 이름으로 이 노드에 아직 붙어 있는
-    다른 후보가 있는가"를 이 조회로 묻는다.
-    """
-    stored = _stored_candidates(workspace_id, session_factory, uow_factory)
-    payment = stored.entity_ids["e1"]
-    auth = stored.entity_ids["e2"]
-
-    with uow_factory() as uow:
-        node = uow.knowledge_nodes.create_entity_node(
-            workspace_id=workspace_id,
-            entity_type="feature",
-            canonical_key=None,
-            display_name="결제 기능",
-        )
-        for candidate_id in (payment, auth):
-            uow.knowledge_candidates.mark_entity_resolved(
-                candidate_id=candidate_id,
-                status=EntityResolutionStatus.MERGED,
-                resolved_node_id=node.id,
-            )
-        uow.commit()
-
-    with uow_factory() as uow:
-        count = uow.knowledge_candidates.count_entities_resolved_to
-        assert count(workspace_id=workspace_id, node_id=node.id) == 2
-        assert (
-            count(
-                workspace_id=workspace_id,
-                node_id=node.id,
-                normalized_name=normalize_name("결제 기능"),
-            )
-            == 1
-        )
-        # 이름이 같아도 제외 목록에 든 후보는 남은 참조로 세지 않는다.
-        assert (
-            count(
-                workspace_id=workspace_id,
-                node_id=node.id,
-                normalized_name=normalize_name("결제 기능"),
-                exclude_candidate_ids=(payment,),
-            )
-            == 0
-        )
-        assert (
-            count(
-                workspace_id=workspace_id,
-                node_id=node.id,
-                exclude_candidate_ids=(payment, auth),
-            )
-            == 0
-        )
 
 
 def test_list_entity_candidate_ids_resolved_to_returns_sorted_ids(

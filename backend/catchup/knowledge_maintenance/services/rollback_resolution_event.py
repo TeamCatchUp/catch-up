@@ -170,7 +170,7 @@ def rollback_resolution_event(
                 f"event에 entity 종류가 없다: {event_id}"
             )
 
-        _require_unchanged_since_event(
+        require_unchanged_since_event(
             uow,
             workspace_id=workspace_id,
             event=event,
@@ -454,7 +454,7 @@ def _is_duplicate_reversal(error: IntegrityError) -> bool:
     return REVERSAL_UNIQUE_CONSTRAINT in str(error)
 
 
-def _require_unchanged_since_event(
+def require_unchanged_since_event(
     uow: RollbackUnitOfWork,
     *,
     workspace_id: int,

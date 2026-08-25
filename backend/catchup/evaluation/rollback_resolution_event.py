@@ -33,6 +33,9 @@ from catchup.knowledge_maintenance.services.rollback_resolution_event import (
     RollbackError,
 )
 from catchup.knowledge_maintenance.services.rollback_resolution_event import (
+    require_unchanged_since_event,
+)
+from catchup.knowledge_maintenance.services.rollback_resolution_event import (
     rollback_resolution_event,
 )
 
@@ -45,7 +48,9 @@ def _describe(
 ) -> bool:
     """되돌릴 event를 읽어 무엇이 바뀔지 보여 준다.
 
-    아무것도 바꾸지 않는다. commit 없이 나가므로 읽기만 남는다.
+    아무것도 바꾸지 않는다. commit 없이 나가므로 읽기만 남는다. 실제
+    되돌림과 같은 함수로 되돌릴 수 있는지도 미리 물어 본다. 그때 잡는 노드
+    잠금은 이 트랜잭션이 끝나면 풀린다.
 
     Returns:
         되돌릴 수 있는 event면 참을 준다.
@@ -62,6 +67,16 @@ def _describe(
             workspace_id=workspace_id,
             event_id=event_id,
         )
+        unchanged_error: RollbackError | None = None
+        if event.event_type != "unmerge":
+            try:
+                require_unchanged_since_event(
+                    uow,
+                    workspace_id=workspace_id,
+                    event=event,
+                )
+            except RollbackError as error:
+                unchanged_error = error
 
     snapshot = event.member_snapshot
     # 되돌림이 되감는 것은 그 병합이 실제로 옮긴 후보다. 판정 당시 구성인
@@ -88,6 +103,10 @@ def _describe(
     if reversal is not None:
         print(f"이미 되돌려진 event다: 되돌림 {reversal.id}")
         return False
+    if unchanged_error is not None:
+        print(f"  되돌릴 수 없음: {unchanged_error}")
+        return False
+    print("  되돌릴 수 있음 (event 이후 노드에 변화 없음)")
     return True
 
 

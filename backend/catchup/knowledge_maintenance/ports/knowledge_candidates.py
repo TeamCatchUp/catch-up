@@ -293,25 +293,6 @@ class KnowledgeCandidateRepository(Protocol):
         """
         ...
 
-    def count_entities_resolved_to(
-        self,
-        *,
-        workspace_id: int,
-        node_id: uuid.UUID,
-        normalized_name: str | None = None,
-        exclude_candidate_ids: Sequence[uuid.UUID] = (),
-    ) -> int:
-        """어떤 노드를 지금 가리키고 있는 entity 후보 수를 센다.
-
-        normalized_name을 주면 후보 이름을 정규화한 값이 그 값과 같은
-        후보만 센다. 되돌림이 별칭을 지우기 전에 "이 이름으로 이 노드에
-        붙어 있는 다른 후보가 있는가"를 물을 때 쓴다.
-
-        exclude_candidate_ids에 넣은 후보는 세지 않는다. 되돌림이 이번에
-        옮기는 멤버는 곧 이 노드를 떠나므로 남은 참조로 볼 수 없다.
-        """
-        ...
-
     def get_claim_validity(
         self,
         *,

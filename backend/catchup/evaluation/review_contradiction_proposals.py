@@ -133,6 +133,7 @@ def main() -> int:
         print(
             f"적용: 안건 {outcome.proposals_applied}건"
             f" · 실패 {outcome.proposals_failed}건"
+            f" · stale {outcome.proposals_stale}건"
             f" · 구간 닫힘 {outcome.claims_superseded}건"
             f" · 탈락 {outcome.claims_invalidated}건"
             f" · 이미 닫힘 {outcome.claims_already_closed}건"

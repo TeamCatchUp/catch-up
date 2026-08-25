@@ -198,6 +198,9 @@ async def run_pre_review_pipeline(
         auto_merge_failed_count=(
             result.auto_merge.proposals_failed if result.auto_merge is not None else 0
         ),
+        auto_merge_stale_count=(
+            result.auto_merge.proposals_stale if result.auto_merge is not None else 0
+        ),
     )
     return result
 
@@ -755,6 +758,9 @@ def _derive_status(
 
     자동 병합의 ``proposals_failed``도 부분 실패로 센다. 승인은 끝났는데
     적용이 남은 안건이므로 다음 회차가 다시 집어야 한다.
+
+    자동 병합의 ``proposals_stale``은 세지 않는다. 승인 뒤 세계가 바뀐 안건은
+    종결됐고 남은 후보는 다음 회차가 새 구성으로 판정한다.
 
     해소의 ``blocks_failed``도 부분 실패로 센다. 판정 실패로 격리한 블록의
     후보는 pending으로 남아 다음 회차가 다시 집어야 한다.

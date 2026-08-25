@@ -145,8 +145,8 @@ def main() -> int:
         print(
             f"적용: 안건 {outcome.proposals_applied}건"
             f" · 실패 {outcome.proposals_failed}건"
+            f" · stale {outcome.proposals_stale}건"
             f" · 후보 해소 {outcome.candidates_resolved}건"
-            f" · 기해소 스킵 {outcome.candidates_already_resolved}건"
         )
     return 0
 

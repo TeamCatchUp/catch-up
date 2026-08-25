@@ -362,6 +362,31 @@ def test_status_counts_unapplied_auto_merge_as_incomplete_work(
     assert status is expected
 
 
+def test_status_stays_completed_when_proposals_went_stale() -> None:
+    """stale은 다시 시도할 것이 없으므로 부분 실패가 아니다.
+
+    승인 뒤 세계가 바뀐 안건은 stale로 종결됐고, 남은 후보는 다음 회차가
+    새 구성으로 다시 판정한다.
+    """
+    status = pipeline._derive_status(
+        skipped_item_count=0,
+        held_back_item_count=0,
+        intake_failure=None,
+        extraction=pipeline.ExtractionStageResult(),
+        resolution=ResolutionResult(),
+        artifacts=ArtifactCompileResult(),
+        auto_merge=ApplyResult(
+            proposals_applied=0,
+            proposals_failed=0,
+            proposals_stale=2,
+            candidates_resolved=0,
+            candidates_already_resolved=0,
+        ),
+    )
+
+    assert status is pipeline.PreReviewPipelineStatus.COMPLETED
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("auto_merge_enabled", [True, False])
 async def test_auto_merge_flag_drives_resolution_and_apply(
