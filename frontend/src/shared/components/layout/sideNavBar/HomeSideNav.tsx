@@ -14,6 +14,7 @@ import { UserMenuContent } from '@/shared/components/layout/sideNavBar/modal/Use
 import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { useUserStore } from '@/shared/store/userStore';
 
+import SideNavMotionFrame from './SideNavMotionFrame';
 import SideNavRail from './SideNavRail';
 import SideNavShell from './SideNavShell';
 import SnbFooter from './SnbFooter';
@@ -57,86 +58,92 @@ export default function HomeSideNav() {
 
   if (!isSidebarOpen) {
     return (
-      <SideNavRail
-        onExpand={() => setSidebarOpen(true)}
-        spaceSwitcher={
-          <>
-            <SnbSpaceSwitcher variant="closed" Icon={SPACE_HOME_ICON} label="홈" selected />
-            <SnbSpaceSwitcher variant="closed" Icon={SPACE_WIKI_ICON} label="LLM Wiki" onClick={go('/llm-wiki')} />
-          </>
-        }
-        footer={<SnbRailFooter userName={user?.name ?? '이름없음'} onSettingsClick={goSettings} profileMenu={profileMenu} />}
-      >
-        <SnbRailItem Icon={IconAdd400} label="새 채팅" selected={isHome} onClick={go('/')} />
-        <SnbRailItem Icon={IconUpdate} label="요청됨" onClick={go('/llm-wiki/review')} />
-        <SnbRailItem Icon={IconAgent} label="문의 대응" selected={isAgentStudio} onClick={go('/agent-studio')} />
-        <SnbRailItem
-          Icon={IconHistory}
-          label="최근 채팅"
-          selected={activePanel === 'questionsHistory'}
-          onClick={() => togglePanel('questionsHistory')}
-        />
-      </SideNavRail>
+      <SideNavMotionFrame open={false}>
+        <SideNavRail
+          onExpand={() => setSidebarOpen(true)}
+          spaceSwitcher={
+            <>
+              <SnbSpaceSwitcher variant="closed" Icon={SPACE_HOME_ICON} label="홈" selected />
+              <SnbSpaceSwitcher variant="closed" Icon={SPACE_WIKI_ICON} label="LLM Wiki" onClick={go('/llm-wiki')} />
+            </>
+          }
+          footer={
+            <SnbRailFooter userName={user?.name ?? '이름없음'} onSettingsClick={goSettings} profileMenu={profileMenu} />
+          }
+        >
+          <SnbRailItem Icon={IconAdd400} label="새 채팅" selected={isHome} onClick={go('/')} />
+          <SnbRailItem Icon={IconUpdate} label="요청됨" onClick={go('/llm-wiki/review')} />
+          <SnbRailItem Icon={IconAgent} label="문의 대응" selected={isAgentStudio} onClick={go('/agent-studio')} />
+          <SnbRailItem
+            Icon={IconHistory}
+            label="최근 채팅"
+            selected={activePanel === 'questionsHistory'}
+            onClick={() => togglePanel('questionsHistory')}
+          />
+        </SideNavRail>
+      </SideNavMotionFrame>
     );
   }
 
   return (
-    <SideNavShell
-      onCollapse={() => setSidebarOpen(false)}
-      showScrollFade
-      spaceSwitcher={
-        <>
-          <SnbSpaceSwitcher Icon={SPACE_HOME_ICON} label="홈" selected />
-          <SnbSpaceSwitcher Icon={SPACE_WIKI_ICON} label="LLM Wiki" onClick={go('/llm-wiki')} />
-        </>
-      }
-      primaryItems={
-        <div className="flex flex-col">
-          <SnbNavRow Icon={IconAdd400} label="새 채팅" iconOnDisc selected={isHome} onClick={go('/')} />
-          <SnbNavRow
-            Icon={IconDocumentSearch}
-            label="문서 탐색"
-            trailing={<SnbBetaBadge />}
-            selected={isDocsMode}
-            onClick={go('/?mode=docs')}
-          />
-          <SnbNavRow Icon={IconUpdate} label="요청됨" onClick={go('/llm-wiki/review')} />
-        </div>
-      }
-      footer={
-        <SnbFooter
-          userName={user?.name ?? '이름없음'}
-          userRole={user?.email ?? ''}
-          onSettingsClick={goSettings}
-          profileMenu={profileMenu}
-        />
-      }
-    >
-      <div className="flex flex-col gap-1">
-        <SnbSectionHeader label="에이전트" badge={<SnbBetaBadge />} />
-        <SnbNavRow Icon={IconAgent} label="문의 대응" selected={isAgentStudio} onClick={go('/agent-studio')} />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        {/* 시안의 정렬(↑↓)은 메뉴 세 항목이 모두 같은 placeholder라 넣지 않는다 */}
-        <SnbSectionHeader
-          label="최근 채팅"
-          expanded={recentOpen}
-          onToggleCollapse={() => setRecentOpen((open) => !open)}
-          actions={
-            <>
-              <SnbSectionAction label="전체 보기" Icon={IconList} onClick={() => togglePanel('questionsHistory')} />
-              <SnbSectionAction label="새 채팅" Icon={IconAdd400} onClick={go('/')} />
-            </>
-          }
-        />
-        {/* 목록 끝의 더 보기가 구 "내 질문" 진입점을 잇는다 — 목록과 붙어야 해서 한 칸에 담는다 */}
-        {recentOpen && (
-          <div className="flex min-w-0 flex-col">
-            <SnbRecentQuestionList />
-            <SnbNavRow Icon={IconMore} label="더 보기" onClick={() => togglePanel('questionsHistory')} />
+    <SideNavMotionFrame open>
+      <SideNavShell
+        onCollapse={() => setSidebarOpen(false)}
+        showScrollFade
+        spaceSwitcher={
+          <>
+            <SnbSpaceSwitcher Icon={SPACE_HOME_ICON} label="홈" selected />
+            <SnbSpaceSwitcher Icon={SPACE_WIKI_ICON} label="LLM Wiki" onClick={go('/llm-wiki')} />
+          </>
+        }
+        primaryItems={
+          <div className="flex flex-col">
+            <SnbNavRow Icon={IconAdd400} label="새 채팅" iconOnDisc selected={isHome} onClick={go('/')} />
+            <SnbNavRow
+              Icon={IconDocumentSearch}
+              label="문서 탐색"
+              trailing={<SnbBetaBadge />}
+              selected={isDocsMode}
+              onClick={go('/?mode=docs')}
+            />
+            <SnbNavRow Icon={IconUpdate} label="요청됨" onClick={go('/llm-wiki/review')} />
           </div>
-        )}
-      </div>
-    </SideNavShell>
+        }
+        footer={
+          <SnbFooter
+            userName={user?.name ?? '이름없음'}
+            userRole={user?.email ?? ''}
+            onSettingsClick={goSettings}
+            profileMenu={profileMenu}
+          />
+        }
+      >
+        <div className="flex flex-col gap-1">
+          <SnbSectionHeader label="에이전트" badge={<SnbBetaBadge />} />
+          <SnbNavRow Icon={IconAgent} label="문의 대응" selected={isAgentStudio} onClick={go('/agent-studio')} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          {/* 시안의 정렬(↑↓)은 메뉴 세 항목이 모두 같은 placeholder라 넣지 않는다 */}
+          <SnbSectionHeader
+            label="최근 채팅"
+            expanded={recentOpen}
+            onToggleCollapse={() => setRecentOpen((open) => !open)}
+            actions={
+              <>
+                <SnbSectionAction label="전체 보기" Icon={IconList} onClick={() => togglePanel('questionsHistory')} />
+                <SnbSectionAction label="새 채팅" Icon={IconAdd400} onClick={go('/')} />
+              </>
+            }
+          />
+          {/* 목록 끝의 더 보기가 구 "내 질문" 진입점을 잇는다 — 목록과 붙어야 해서 한 칸에 담는다 */}
+          {recentOpen && (
+            <div className="flex min-w-0 flex-col">
+              <SnbRecentQuestionList />
+              <SnbNavRow Icon={IconMore} label="더 보기" onClick={() => togglePanel('questionsHistory')} />
+            </div>
+          )}
+        </div>
+      </SideNavShell>
+    </SideNavMotionFrame>
   );
 }

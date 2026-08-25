@@ -1,6 +1,7 @@
 export {
   collapseExpand,
   crossfade,
+  crossfadeReduced,
   disclosureExpand,
   disclosureExpandReduced,
   fadeInUp,

@@ -26,6 +26,7 @@ import { disclosureExpand, disclosureExpandReduced, MotionState } from '@/shared
 import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { useUserStore } from '@/shared/store/userStore';
 
+import SideNavMotionFrame from './SideNavMotionFrame';
 import SideNavRail from './SideNavRail';
 import SideNavShell from './SideNavShell';
 import SnbBoxButton from './SnbBoxButton';
@@ -337,8 +338,65 @@ export default function WikiSideNav({
    */
   if (isOnboarding && isSidebarOpen) {
     return (
+      <SideNavMotionFrame open>
+        <SideNavShell
+          onCollapse={() => setSidebarOpen(false)}
+          spaceSwitcher={
+            <>
+              <SnbSpaceSwitcher Icon={SPACE_HOME_ICON} label="홈" onClick={go('/')} />
+              <SnbSpaceSwitcher Icon={SPACE_WIKI_ICON} label="LLM Wiki" selected />
+            </>
+          }
+          primaryItems={
+            <>
+              <SnbTeamspaceCard name="Acme의 지식 허브" Icon={TEAMSPACE_ICON} />
+              <SnbBoxButton accentPrefix="Wiki" label="온보딩 중" onClick={go('/llm-wiki/onboarding')} />
+            </>
+          }
+          footer={
+            <SnbFooter
+              userName={user?.name ?? '이름없음'}
+              userRole={user?.email ?? ''}
+              onSettingsClick={goSettings}
+              profileMenu={profileMenu}
+              hideNewButton
+            />
+          }
+        >
+          {null}
+        </SideNavShell>
+      </SideNavMotionFrame>
+    );
+  }
+
+  if (!isSidebarOpen) {
+    return (
+      <SideNavMotionFrame open={false}>
+        <SideNavRail
+          onExpand={() => setSidebarOpen(true)}
+          spaceSwitcher={
+            <>
+              <SnbSpaceSwitcher variant="closed" Icon={SPACE_HOME_ICON} label="홈" onClick={go('/')} />
+              <SnbSpaceSwitcher variant="closed" Icon={SPACE_WIKI_ICON} label="LLM Wiki" selected />
+            </>
+          }
+          footer={
+            <SnbRailFooter userName={user?.name ?? '이름없음'} onSettingsClick={goSettings} profileMenu={profileMenu} />
+          }
+        >
+          <SnbRailItem Icon={IconAdd400} label="새 채팅" onClick={go('/')} />
+          <SnbRailItem Icon={IconUpdate} label="요청됨" selected={isReview} onClick={go('/llm-wiki/review')} />
+          <SnbRailItem Icon={IconGrid} label="대시보드" selected={isDashboard} onClick={go('/llm-wiki')} />
+        </SideNavRail>
+      </SideNavMotionFrame>
+    );
+  }
+
+  return (
+    <SideNavMotionFrame open>
       <SideNavShell
         onCollapse={() => setSidebarOpen(false)}
+        showScrollFade
         spaceSwitcher={
           <>
             <SnbSpaceSwitcher Icon={SPACE_HOME_ICON} label="홈" onClick={go('/')} />
@@ -347,8 +405,14 @@ export default function WikiSideNav({
         }
         primaryItems={
           <>
+            <div className="flex flex-col">
+              <SnbNavRow Icon={IconAdd400} label="새 채팅" iconOnDisc onClick={go('/')} />
+              <SnbNavRow Icon={IconUpdate} label="요청됨" selected={isReview} onClick={go('/llm-wiki/review')} />
+            </div>
             <SnbTeamspaceCard name="Acme의 지식 허브" Icon={TEAMSPACE_ICON} />
-            <SnbBoxButton accentPrefix="Wiki" label="온보딩 중" onClick={go('/llm-wiki/onboarding')} />
+            <div className="flex flex-col">
+              <SnbNavRow Icon={IconGrid} label="대시보드" selected={isDashboard} onClick={go('/llm-wiki')} />
+            </div>
           </>
         }
         footer={
@@ -357,185 +421,125 @@ export default function WikiSideNav({
             userRole={user?.email ?? ''}
             onSettingsClick={goSettings}
             profileMenu={profileMenu}
-            hideNewButton
+            onNewClick={go('/llm-wiki/onboarding')}
+            hideNewButton={!canCreateWiki}
           />
         }
       >
-        {null}
-      </SideNavShell>
-    );
-  }
-
-  if (!isSidebarOpen) {
-    return (
-      <SideNavRail
-        onExpand={() => setSidebarOpen(true)}
-        spaceSwitcher={
-          <>
-            <SnbSpaceSwitcher variant="closed" Icon={SPACE_HOME_ICON} label="홈" onClick={go('/')} />
-            <SnbSpaceSwitcher variant="closed" Icon={SPACE_WIKI_ICON} label="LLM Wiki" selected />
-          </>
-        }
-        footer={
-          <SnbRailFooter userName={user?.name ?? '이름없음'} onSettingsClick={goSettings} profileMenu={profileMenu} />
-        }
-      >
-        <SnbRailItem Icon={IconAdd400} label="새 채팅" onClick={go('/')} />
-        <SnbRailItem Icon={IconUpdate} label="요청됨" selected={isReview} onClick={go('/llm-wiki/review')} />
-        <SnbRailItem Icon={IconGrid} label="위키 대시보드" selected={isDashboard} onClick={go('/llm-wiki')} />
-        {/* 즐겨찾기·최근 위키는 갈 곳이 없다 */}
-        <SnbRailItem Icon={IconStar} label="즐겨찾기" />
-        <SnbRailItem Icon={IconFolder} label="최근 위키" />
-      </SideNavRail>
-    );
-  }
-
-  return (
-    <SideNavShell
-      onCollapse={() => setSidebarOpen(false)}
-      showScrollFade
-      spaceSwitcher={
-        <>
-          <SnbSpaceSwitcher Icon={SPACE_HOME_ICON} label="홈" onClick={go('/')} />
-          <SnbSpaceSwitcher Icon={SPACE_WIKI_ICON} label="LLM Wiki" selected />
-        </>
-      }
-      primaryItems={
-        <>
-          <div className="flex flex-col">
-            <SnbNavRow Icon={IconAdd400} label="새 채팅" iconOnDisc onClick={go('/')} />
-            <SnbNavRow Icon={IconUpdate} label="요청됨" selected={isReview} onClick={go('/llm-wiki/review')} />
-          </div>
-          <SnbTeamspaceCard name="Acme의 지식 허브" Icon={TEAMSPACE_ICON} />
-          <div className="flex flex-col">
-            <SnbNavRow Icon={IconGrid} label="위키 대시보드" selected={isDashboard} onClick={go('/llm-wiki')} />
-          </div>
-        </>
-      }
-      footer={
-        <SnbFooter
-          userName={user?.name ?? '이름없음'}
-          userRole={user?.email ?? ''}
-          onSettingsClick={goSettings}
-          profileMenu={profileMenu}
-          onNewClick={go('/llm-wiki/onboarding')}
-          hideNewButton={!canCreateWiki}
-        />
-      }
-    >
-      <div className="flex flex-col">
-        <SnbSectionHeader
-          label="즐겨찾기"
-          expanded={favoritesOpen}
-          onToggleCollapse={() => setFavoritesOpen((open) => !open)}
-        />
-        {/* 행이 하나도 없으면 본문 자체를 열지 않는다 — 빈 상자만큼 머리글이 밀린다 */}
-        <SnbSectionBody open={favoritesOpen && favorites.length > 0}>
-          {favorites.map((item) => {
-            const menuOpen = menu?.kind === 'favorite-more' && menu.nodeId === item.id;
-            return (
-              <SnbNavRow
-                key={item.id}
-                Icon={IconFile}
-                label={item.label}
-                selected={item.href !== undefined && item.href === pathname}
-                disabled={item.href === undefined}
-                onClick={item.href === undefined ? undefined : go(item.href)}
-                actionsOpen={menuOpen || moveOpenNodeId === item.id}
-                actions={
-                  <RowActionButton
-                    label={`${item.label} 추가 작업`}
-                    tooltip="추가 작업"
-                    Icon={IconMore}
-                    active={menuOpen}
-                    onClick={(trigger) => setMenu({ kind: 'favorite-more', nodeId: item.id, anchor: trigger })}
-                  />
-                }
-              />
-            );
-          })}
-        </SnbSectionBody>
-      </div>
-      <div className="flex flex-col">
-        <SnbSectionHeader
-          label="위키"
-          expanded={wikiOpen}
-          onToggleCollapse={() => setWikiOpen((open) => !open)}
-          actionsOpen={menu?.kind === 'section-add'}
-          actions={
-            canCreateWiki ? (
-              <SnbSectionAction
-                label="추가하기"
-                Icon={IconAdd400}
-                active={menu?.kind === 'section-add'}
-                onClick={(anchor) => setMenu({ kind: 'section-add', anchor })}
-              />
-            ) : undefined
-          }
-        />
-        <SnbSectionBody open={wikiOpen}>
-          <NavTree
-            nodes={treeNodes}
-            activeId={activeTreeId}
-            openActionMenu={openRowMenu}
-            onNodeClick={(id) => {
-              const node = findTreeNode(nodes, id);
-              if (node) go(node.href)();
-            }}
-            onNodeToggle={onNodeToggle}
-            onNodeMore={(nodeId, anchor) => setMenu({ kind: 'row-more', nodeId, anchor })}
-            onNodeAdd={(nodeId, anchor) => setMenu({ kind: 'row-add', nodeId, anchor })}
+        <div className="flex flex-col">
+          <SnbSectionHeader
+            label="즐겨찾기"
+            expanded={favoritesOpen}
+            onToggleCollapse={() => setFavoritesOpen((open) => !open)}
           />
-        </SnbSectionBody>
-      </div>
-
-      {/* 앵커가 트리·머리글 안의 버튼이라 virtualRef로 붙인다 — 팝오버 껍데기는 메뉴가 직접 그린다 */}
-      {menu && (
-        <Popover open onOpenChange={(open) => !open && closeMenu()}>
-          <PopoverAnchor virtualRef={{ current: menu.anchor }} />
-          <PopoverContent
-            align="start"
-            side="right"
-            className={SNB_POPOVER_SHELL_CLASS}
-            onCloseAutoFocus={(event) => event.preventDefault()}
-          >
-            <SnbDropdownMenu {...menuProps()} />
-          </PopoverContent>
-        </Popover>
-      )}
-
-      {/* 이름 입력도 케밥과 같은 앵커에 같은 방식으로 붙는다. 생성은 빈 값으로 여는 같은 입력이다 */}
-      {nameInput && (
-        <Popover open onOpenChange={(open) => !open && setNameInput(null)}>
-          <PopoverAnchor virtualRef={{ current: nameInput.anchor }} />
-          <PopoverContent align="start" side="right" className={SNB_POPOVER_SHELL_CLASS}>
-            <SnbRenamePopover
-              kind={nameInput.mode === 'create-folder' ? 'folder' : nameInput.node.kind}
-              defaultValue={nameInput.mode === 'create-folder' ? '' : nameInput.node.label}
-              aria-label={nameInput.mode === 'create-folder' ? '폴더 이름' : undefined}
-              onSubmit={(name) => {
-                if (nameInput.mode === 'create-folder') onFolderCreateSubmit?.(nameInput.node, name);
-                else onRenameSubmit?.(nameInput.node, name);
-                setNameInput(null);
+          {/* 행이 하나도 없으면 본문 자체를 열지 않는다 — 빈 상자만큼 머리글이 밀린다 */}
+          <SnbSectionBody open={favoritesOpen && favorites.length > 0}>
+            {favorites.map((item) => {
+              const menuOpen = menu?.kind === 'favorite-more' && menu.nodeId === item.id;
+              return (
+                <SnbNavRow
+                  key={item.id}
+                  Icon={IconFile}
+                  label={item.label}
+                  selected={item.href !== undefined && item.href === pathname}
+                  disabled={item.href === undefined}
+                  onClick={item.href === undefined ? undefined : go(item.href)}
+                  actionsOpen={menuOpen || moveOpenNodeId === item.id}
+                  actions={
+                    <RowActionButton
+                      label={`${item.label} 추가 작업`}
+                      tooltip="추가 작업"
+                      Icon={IconMore}
+                      active={menuOpen}
+                      onClick={(trigger) => setMenu({ kind: 'favorite-more', nodeId: item.id, anchor: trigger })}
+                    />
+                  }
+                />
+              );
+            })}
+          </SnbSectionBody>
+        </div>
+        <div className="flex flex-col">
+          <SnbSectionHeader
+            label="위키"
+            expanded={wikiOpen}
+            onToggleCollapse={() => setWikiOpen((open) => !open)}
+            actionsOpen={menu?.kind === 'section-add'}
+            actions={
+              canCreateWiki ? (
+                <SnbSectionAction
+                  label="추가하기"
+                  Icon={IconAdd400}
+                  active={menu?.kind === 'section-add'}
+                  onClick={(anchor) => setMenu({ kind: 'section-add', anchor })}
+                />
+              ) : undefined
+            }
+          />
+          <SnbSectionBody open={wikiOpen}>
+            <NavTree
+              nodes={treeNodes}
+              activeId={activeTreeId}
+              openActionMenu={openRowMenu}
+              onNodeClick={(id) => {
+                const node = findTreeNode(nodes, id);
+                if (node) go(node.href)();
               }}
-              onCancel={() => setNameInput(null)}
+              onNodeToggle={onNodeToggle}
+              onNodeMore={(nodeId, anchor) => setMenu({ kind: 'row-more', nodeId, anchor })}
+              onNodeAdd={(nodeId, anchor) => setMenu({ kind: 'row-add', nodeId, anchor })}
             />
-          </PopoverContent>
-        </Popover>
-      )}
+          </SnbSectionBody>
+        </div>
 
-      {/* 확인 문구는 서버 계약을 그대로 말한다 — 폴더 안 문서는 삭제되지 않고 채널 루트로 옮겨진다 */}
-      <ConfirmDialog
-        open={deleteConfirm !== null}
-        onOpenChange={(open) => !open && setDeleteConfirm(null)}
-        title="폴더를 삭제할까요?"
-        description="폴더만 사라지고, 안에 있던 문서는 채널 바로 아래로 옮겨집니다."
-        confirmLabel="삭제하기"
-        variant="danger"
-        onConfirm={() => {
-          if (deleteConfirm) onFolderDeleteSubmit?.(deleteConfirm);
-        }}
-      />
-    </SideNavShell>
+        {/* 앵커가 트리·머리글 안의 버튼이라 virtualRef로 붙인다 — 팝오버 껍데기는 메뉴가 직접 그린다 */}
+        {menu && (
+          <Popover open onOpenChange={(open) => !open && closeMenu()}>
+            <PopoverAnchor virtualRef={{ current: menu.anchor }} />
+            <PopoverContent
+              align="start"
+              side="right"
+              className={SNB_POPOVER_SHELL_CLASS}
+              onCloseAutoFocus={(event) => event.preventDefault()}
+            >
+              <SnbDropdownMenu {...menuProps()} />
+            </PopoverContent>
+          </Popover>
+        )}
+
+        {/* 이름 입력도 케밥과 같은 앵커에 같은 방식으로 붙는다. 생성은 빈 값으로 여는 같은 입력이다 */}
+        {nameInput && (
+          <Popover open onOpenChange={(open) => !open && setNameInput(null)}>
+            <PopoverAnchor virtualRef={{ current: nameInput.anchor }} />
+            <PopoverContent align="start" side="right" className={SNB_POPOVER_SHELL_CLASS}>
+              <SnbRenamePopover
+                kind={nameInput.mode === 'create-folder' ? 'folder' : nameInput.node.kind}
+                defaultValue={nameInput.mode === 'create-folder' ? '' : nameInput.node.label}
+                aria-label={nameInput.mode === 'create-folder' ? '폴더 이름' : undefined}
+                onSubmit={(name) => {
+                  if (nameInput.mode === 'create-folder') onFolderCreateSubmit?.(nameInput.node, name);
+                  else onRenameSubmit?.(nameInput.node, name);
+                  setNameInput(null);
+                }}
+                onCancel={() => setNameInput(null)}
+              />
+            </PopoverContent>
+          </Popover>
+        )}
+
+        {/* 확인 문구는 서버 계약을 그대로 말한다 — 폴더 안 문서는 삭제되지 않고 채널 루트로 옮겨진다 */}
+        <ConfirmDialog
+          open={deleteConfirm !== null}
+          onOpenChange={(open) => !open && setDeleteConfirm(null)}
+          title="폴더를 삭제할까요?"
+          description="폴더만 사라지고, 안에 있던 문서는 채널 바로 아래로 옮겨집니다."
+          confirmLabel="삭제하기"
+          variant="danger"
+          onConfirm={() => {
+            if (deleteConfirm) onFolderDeleteSubmit?.(deleteConfirm);
+          }}
+        />
+      </SideNavShell>
+    </SideNavMotionFrame>
   );
 }

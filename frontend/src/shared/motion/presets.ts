@@ -152,5 +152,8 @@ const reducedReplaceFade: Variants = {
 /** stepReplace의 reduced-motion 변형. usePrefersReducedMotion()이 true일 때 호출부가 이쪽으로 교체한다. */
 export const stepReplaceReduced: Variants = reducedReplaceFade;
 
+/** crossfade의 reduced-motion 변형. 위와 같은 이유로 짧은 fade만 남긴다. */
+export const crossfadeReduced: Variants = reducedReplaceFade;
+
 /** panelStateFadeIn의 reduced-motion 변형. 위와 같은 이유로 y를 뺀다. */
 export const panelStateFadeInReduced: Variants = reducedReplaceFade;

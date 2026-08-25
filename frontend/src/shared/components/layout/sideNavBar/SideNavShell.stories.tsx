@@ -221,7 +221,7 @@ export const WikiExpanded: Story = {
     const canvas = within(canvasElement);
 
     await expect(canvas.getByText('Acme의 지식 허브')).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: '위키 대시보드' })).toHaveAttribute('aria-current', 'page');
+    await expect(canvas.getByRole('button', { name: '대시보드' })).toHaveAttribute('aria-current', 'page');
     // 홈에만 있는 섹션은 위키에 없다
     await expect(canvas.queryByText('최근 질문')).toBeNull();
     await expect(canvas.queryByText('에이전트')).toBeNull();
