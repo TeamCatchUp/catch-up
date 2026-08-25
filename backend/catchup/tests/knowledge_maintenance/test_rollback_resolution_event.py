@@ -238,11 +238,20 @@ class FakeNodeRepo:
             )
         ]
 
-    def retire_entity_node(
-        self, *, workspace_id: int, node_id: uuid.UUID
-    ) -> None:
+    def retire_entity_node(self, *, workspace_id: int, node_id: uuid.UUID) -> bool:
+        # 실 어댑터처럼 남은 후보 확인을 이 안에서 한다. 부르는 쪽이 먼저
+        # 세어 보지 않는다.
         for index, node in enumerate(self.state.nodes):
             if node.workspace_id == workspace_id and node.id == node_id:
+                if node.lifecycle_state is NodeLifecycleState.RETIRED:
+                    return True
+                remaining = sum(
+                    1
+                    for row in self.state.candidates.values()
+                    if row["resolved_node_id"] == node_id
+                )
+                if remaining:
+                    return False
                 self.state.nodes[index] = KnowledgeNode(
                     id=node.id,
                     workspace_id=node.workspace_id,
@@ -252,7 +261,7 @@ class FakeNodeRepo:
                     display_name=node.display_name,
                     lifecycle_state=NodeLifecycleState.RETIRED,
                 )
-                return
+                return True
         raise AssertionError(f"노드가 없다: {node_id}")
 
 
@@ -718,7 +727,8 @@ def test_rollback_keeps_the_node_when_a_later_candidate_still_points_to_it() -> 
     """event 이후 같은 노드로 해소된 후보가 있으면 노드를 물리지 않는다.
 
     노드를 조건 없이 물리면 그 후보와 그 후보로 읽히는 지식이 살아 있는
-    graph에서 사라진다.
+    graph에서 사라진다. 남은 후보 확인은 저장소의 retire_entity_node 안에
+    있고, 서비스는 그 반환값으로 저널의 node_retired를 정한다.
     """
     state = FakeState()
     event_id, created, candidate_ids = _seed_merge_create_node(state)

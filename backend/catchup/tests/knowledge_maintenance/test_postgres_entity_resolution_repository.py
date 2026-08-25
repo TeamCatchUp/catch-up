@@ -431,11 +431,12 @@ def test_retire_entity_node_clears_merge_target(
         session.commit()
 
     with uow_factory() as uow:
-        uow.knowledge_nodes.retire_entity_node(
+        retired = uow.knowledge_nodes.retire_entity_node(
             workspace_id=workspace_id,
             node_id=absorbed.id,
         )
         uow.commit()
+    assert retired is True
 
     with session_factory() as session:
         row = session.get(NodeRow, absorbed.id)
@@ -450,6 +451,100 @@ def test_retire_entity_node_clears_merge_target(
         )
     assert found is not None
     assert found.lifecycle_state is NodeLifecycleState.RETIRED
+
+
+def test_retire_entity_node_keeps_a_node_a_candidate_still_points_to(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """가리키는 후보가 남아 있는 노드는 물리지 않고 거짓을 돌려준다.
+
+    남은 후보 확인은 저장소가 노드 행을 잠근 채로 한다. 부르는 쪽이 먼저
+    세어 보고 그 뒤에 물리면 그 사이에 붙은 후보가 퇴역한 노드를 가리키게
+    된다.
+    """
+    stored = _stored_candidates(workspace_id, session_factory, uow_factory)
+
+    with uow_factory() as uow:
+        node = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=None,
+            display_name="결제 기능",
+        )
+        uow.knowledge_candidates.mark_entity_resolved(
+            candidate_id=stored.entity_ids["e1"],
+            status=EntityResolutionStatus.MERGED,
+            resolved_node_id=node.id,
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        retired = uow.knowledge_nodes.retire_entity_node(
+            workspace_id=workspace_id,
+            node_id=node.id,
+        )
+        uow.commit()
+    assert retired is False
+
+    with uow_factory() as uow:
+        found = uow.knowledge_nodes.get_entity_by_id(
+            workspace_id=workspace_id,
+            node_id=node.id,
+        )
+    assert found is not None
+    assert found.lifecycle_state is NodeLifecycleState.ACTIVE
+
+
+def test_mark_entity_resolved_rejects_a_retired_node(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """퇴역한 노드에는 후보를 붙이지 않는다.
+
+    붙이면 그 후보와 그 후보로 읽히는 지식이 살아 있는 graph에서 사라진다.
+    """
+    stored = _stored_candidates(workspace_id, session_factory, uow_factory)
+
+    with uow_factory() as uow:
+        node = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=None,
+            display_name="결제 기능",
+        )
+        assert uow.knowledge_nodes.retire_entity_node(
+            workspace_id=workspace_id,
+            node_id=node.id,
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        with pytest.raises(ValueError):
+            uow.knowledge_candidates.mark_entity_resolved(
+                candidate_id=stored.entity_ids["e1"],
+                status=EntityResolutionStatus.MERGED,
+                resolved_node_id=node.id,
+            )
+
+
+def test_mark_entity_resolved_rejects_an_unknown_node(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """없는 노드로 해소했다고 적을 수 없다."""
+    stored = _stored_candidates(workspace_id, session_factory, uow_factory)
+
+    with uow_factory() as uow:
+        with pytest.raises(ValueError):
+            uow.knowledge_candidates.mark_entity_resolved(
+                candidate_id=stored.entity_ids["e1"],
+                status=EntityResolutionStatus.MERGED,
+                resolved_node_id=uuid.uuid4(),
+            )
 
 
 def test_retire_unknown_entity_node_is_rejected(

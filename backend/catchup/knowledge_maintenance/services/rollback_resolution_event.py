@@ -210,22 +210,20 @@ def rollback_resolution_event(
             # 다른 후보가 같은 노드로 해소됐을 수 있고, 그 상태로 물리면
             # 남은 후보와 그 후보로 읽히는 지식이 살아 있는 graph에서
             # 사라진다.
-            remaining = uow.knowledge_candidates.count_entities_resolved_to(
+            #
+            # 남은 후보를 여기서 미리 세지 않는다. 세는 것과 물리는 것이
+            # 두 번의 호출로 갈라지면 그 사이에 다른 트랜잭션이 같은 노드로
+            # 후보를 붙일 수 있다. 저장소가 노드 행을 잠근 채로 확인하고
+            # 물리며, 물렸는지를 돌려준다.
+            node_retired = uow.knowledge_nodes.retire_entity_node(
                 workspace_id=workspace_id,
                 node_id=event.node_id,
             )
-            if remaining == 0:
-                uow.knowledge_nodes.retire_entity_node(
-                    workspace_id=workspace_id,
-                    node_id=event.node_id,
-                )
-                node_retired = True
-            else:
+            if not node_retired:
                 logger.info(
                     "rollback_retire_skipped",
                     workspace_id=workspace_id,
                     node_id=str(event.node_id),
-                    remaining=remaining,
                 )
             removed = ()
 

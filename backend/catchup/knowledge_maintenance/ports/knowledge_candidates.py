@@ -255,7 +255,17 @@ class KnowledgeCandidateRepository(Protocol):
         status: EntityResolutionStatus,
         resolved_node_id: uuid.UUID,
     ) -> None:
-        """후보가 어느 canonical 노드로 해소됐는지 기록한다."""
+        """후보가 어느 canonical 노드로 해소됐는지 기록한다.
+
+        구현은 후보를 고치기 전에 붙일 노드 행을 잠근다. 노드를 퇴역시키는
+        경로가 같은 행을 잠그므로, 두 경로가 겹치면 한쪽이 끝날 때까지
+        기다렸다가 상대의 결과를 보고 판단하게 된다.
+
+        Raises:
+            ValueError: 붙일 노드가 없거나 이미 퇴역한 노드일 때 던진다.
+                퇴역한 노드에 후보를 붙이면 그 후보와 그 후보로 읽히는
+                지식이 살아 있는 graph에서 사라진다.
+        """
         ...
 
     def get_entity_resolution(

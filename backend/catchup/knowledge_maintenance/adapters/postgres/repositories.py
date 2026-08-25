@@ -842,28 +842,57 @@ class SqlAlchemyKnowledgeNodeRepository:
         *,
         workspace_id: int,
         node_id: uuid.UUID,
-    ) -> None:
-        """entity 노드를 퇴역 상태로 물린다.
+    ) -> bool:
+        """가리키는 후보가 없는 entity 노드를 퇴역 상태로 물린다.
 
         행을 지우지 않는다. 저널과 지난 기록이 이 노드를 계속 가리키므로
         노드는 남되 살아 있는 노드를 보는 경로에서만 빠져야 한다.
+
+        노드 행을 SELECT ... FOR UPDATE로 먼저 잠그고, 그 잠금을 쥔 채로
+        이 노드를 가리키는 후보가 있는지 센다. 후보를 붙이는
+        mark_entity_resolved도 같은 행을 잠그므로, 두 트랜잭션이 겹치면
+        먼저 잠근 쪽이 commit할 때까지 뒤의 쪽이 기다린다. 잠금을 얻은 뒤
+        다시 읽으므로 READ COMMITTED에서도 상대가 방금 commit한 결과가
+        보인다.
+
+        Returns:
+            퇴역시켰으면 참, 아직 이 노드를 가리키는 후보가 있어 그대로
+            두었으면 거짓을 준다. 이미 퇴역한 노드는 참이다.
 
         Raises:
             ValueError: 노드가 없을 때 던진다.
         """
         row = self._session.scalar(
-            select(KnowledgeNodeRow).where(
+            select(KnowledgeNodeRow)
+            .where(
                 KnowledgeNodeRow.workspace_id == workspace_id,
                 KnowledgeNodeRow.id == node_id,
             )
+            .with_for_update()
+            # 이 세션이 앞서 읽어 둔 노드가 있으면 잠금을 얻고도 예전 값을
+            # 그대로 볼 수 있다. 잠근 뒤의 값으로 다시 채운다.
+            .execution_options(populate_existing=True)
         )
         if row is None:
             raise ValueError(f"unknown knowledge node: {node_id}")
+        if row.lifecycle_state == NodeLifecycleState.RETIRED.value:
+            return True
+        remaining = self._session.scalar(
+            select(func.count())
+            .select_from(KnowledgeEntityCandidateRow)
+            .where(
+                KnowledgeEntityCandidateRow.workspace_id == workspace_id,
+                KnowledgeEntityCandidateRow.resolved_node_id == node_id,
+            )
+        )
+        if remaining:
+            return False
         row.lifecycle_state = NodeLifecycleState.RETIRED.value
         # merged_into_node_id는 비운다. lifecycle이 merged가 아닌 행에
         # 흡수처가 남아 있으면 DB CHECK가 막는다.
         row.merged_into_node_id = None
         self._session.flush()
+        return True
 
 
 class SqlAlchemyKnowledgeCandidateRepository:
@@ -1682,7 +1711,27 @@ class SqlAlchemyKnowledgeCandidateRepository:
         status: EntityResolutionStatus,
         resolved_node_id: uuid.UUID,
     ) -> None:
-        """후보가 어느 canonical 노드로 해소됐는지 기록한다."""
+        """후보가 어느 canonical 노드로 해소됐는지 기록한다.
+
+        붙일 노드 행을 SELECT ... FOR UPDATE로 먼저 잠근다. 노드를
+        퇴역시키는 retire_entity_node도 같은 행을 잠그고 남은 후보를 세므로,
+        잠금이 두 경로를 한 줄로 세운다. 잠금을 얻은 뒤 lifecycle을 읽으니
+        상대가 방금 물린 결과도 보인다.
+
+        Raises:
+            ValueError: 붙일 노드가 없거나 이미 퇴역한 노드일 때 던진다.
+                퇴역한 노드에 후보를 붙이면 그 후보와 그 후보로 읽히는
+                지식이 살아 있는 graph에서 사라진다.
+        """
+        lifecycle_state = self._session.scalar(
+            select(KnowledgeNodeRow.lifecycle_state)
+            .where(KnowledgeNodeRow.id == resolved_node_id)
+            .with_for_update()
+        )
+        if lifecycle_state is None:
+            raise ValueError(f"unknown knowledge node: {resolved_node_id}")
+        if lifecycle_state == NodeLifecycleState.RETIRED.value:
+            raise ValueError(f"retired knowledge node: {resolved_node_id}")
         self._session.execute(
             update(KnowledgeEntityCandidateRow)
             .where(KnowledgeEntityCandidateRow.id == candidate_id)
