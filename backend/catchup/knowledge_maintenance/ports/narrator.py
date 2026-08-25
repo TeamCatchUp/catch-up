@@ -58,6 +58,64 @@ class NarrationRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class BlockNarrationInput:
+    """문서 서술 요청에 실리는 블록 하나의 재료를 담는다.
+
+    블록 하나만 담는다는 점에서 NarrationRequest와 같지만, 문체 지시와
+    문서 목적은 담지 않는다. 그 둘은 문서 전체에 한 번만 실리므로
+    DocumentNarrationRequest가 가진다.
+
+    Attributes:
+        block_id: 요청 안에서의 위치 번호를 담는다. 응답은 이 번호로
+            산문을 돌려주므로, 어느 산문이 어느 블록의 것인지 이 번호로만
+            정해진다.
+        block_kind: 블록 종류를 나타낸다.
+        heading: 블록 제목을 담는다. 무엇에 관한 블록인지 알리는 힌트다.
+        topic_hint: 컴파일이 만든 본문을 담는다. 색인용 라벨에서 온
+            문장이라 근거가 아니라 주제 힌트다.
+        statements: 검증된 인용 원문을 담는다.
+        edges: 관계 절의 간선 줄을 담는다. 관계 절이 아닌 블록에서는
+            비어 있다.
+        hints: 관계에 붙은 원문 유래 문장을 담는다. 사실 입력이 아니라
+            표현 힌트다.
+        variants: 대조 후보를 (후보 본문, 그 후보의 인용들)로 담는다.
+    """
+
+    block_id: int
+    block_kind: str
+    heading: str
+    topic_hint: str
+    statements: tuple[str, ...]
+    edges: tuple[str, ...]
+    hints: tuple[str, ...]
+    variants: tuple[tuple[str, tuple[str, ...]], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentNarrationRequest:
+    """문서 하나의 산문을 한 번에 받아 오는 데 필요한 재료를 담는다.
+
+    블록마다 따로 묻지 않고 문서 단위로 한 번만 묻는다. 문체 지시와 문서
+    목적이 블록 수만큼 되풀이되지 않고, 같은 문서의 블록들이 서로의 문장을
+    보고 쓸 수 있다.
+
+    Attributes:
+        style_instruction: 어떤 문체로 쓸지 알리는 지시 한 문단이다.
+        purpose_sentence: 이 문서가 무엇에 쓰이는지 알리는 한 줄이다.
+        summary: 머리말 세 칸을 쓰는 데 필요한 재료를 담는다. 머리말이
+            필요 없으면 None이다. 머리말의 근거는 문서 전체의 검증된
+            인용이다.
+        blocks: 산문이 필요한 섹션 블록만 담는다. 앞 버전의 산문을 그대로
+            쓰는 블록은 담지 않는다.
+    """
+
+    style_instruction: str
+    purpose_sentence: str
+    summary: BlockNarrationInput | None
+    blocks: tuple[BlockNarrationInput, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class SummaryNarrative:
     """문서 머리말을 이루는 세 칸을 담는다.
 
