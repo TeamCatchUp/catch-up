@@ -26,7 +26,7 @@ const meta = {
         nodeId: '413:2139',
       },
       viewport: { width: 200, height: 200 },
-      states: ['default', 'selected', 'with-notification', 'long-label'],
+      states: ['default', 'selected', 'with-notification', 'long-label', 'icon-on-disc'],
       layoutNotes: ['선택 배경은 아이콘 프레임 36×36에만 들어간다 — 라벨까지 덮지 않는다.'],
       tokenNotes: [
         '라벨 11px는 타이포 스케일에 없어 arbitrary value를 쓴다.',
@@ -78,6 +78,24 @@ export const Selected: Story = {
     // 선택 배경은 아이콘 칸에만 들어간다 — 버튼 전체를 덮지 않는다
     await expect(item).not.toHaveClass('bg-fill-primary-normal-neutral');
     await expect(item.querySelector('span')).toHaveClass('bg-fill-primary-normal-neutral');
+  },
+};
+
+/** 만들기 행 — 아이콘이 원형 배경 위에 얹혀 다른 메뉴와 구분된다. */
+export const IconOnDisc: Story = {
+  args: { label: '새 채팅', iconOnDisc: true },
+  render: (args) => (
+    <Frame>
+      <SnbRailItem {...args} />
+    </Frame>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const disc = canvas.getByRole('button', { name: '새 채팅' }).querySelector('span > span');
+
+    await expect(disc).toHaveClass('bg-fill-normal-interaction-disable', 'rounded-full');
+    // 디스크는 아이콘 칸 36 안에 26으로 앉는다
+    await expect(disc?.getBoundingClientRect().width).toBe(26);
   },
 };
 

@@ -6,6 +6,8 @@ export interface SnbRailItemProps {
   selected?: boolean;
   /** 아이콘 우상단 점. 발화 조건은 미정이라 표시 여부만 받는다 */
   hasNotification?: boolean;
+  /** 아이콘을 원형 배경 위에 얹는다 — 펼친 SNB의 만들기 행과 같은 구분이다 */
+  iconOnDisc?: boolean;
   onClick?: () => void;
   className?: string;
 }
@@ -19,6 +21,7 @@ export default function SnbRailItem({
   label,
   selected = false,
   hasNotification = false,
+  iconOnDisc = false,
   onClick,
   className,
 }: SnbRailItemProps) {
@@ -37,7 +40,17 @@ export default function SnbRailItem({
             : 'hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed',
         )}
       >
-        <Icon aria-hidden className={cn('size-6', selected ? 'text-icon-primary-normal' : 'text-icon-normal-neutral')} />
+        <span
+          className={cn(
+            'flex size-6.5 items-center justify-center',
+            iconOnDisc && 'bg-fill-normal-interaction-disable rounded-full',
+          )}
+        >
+          <Icon
+            aria-hidden
+            className={cn('size-6', selected ? 'text-icon-primary-normal' : 'text-icon-normal-neutral')}
+          />
+        </span>
         {hasNotification && (
           <span
             data-testid="snb-rail-item-dot"

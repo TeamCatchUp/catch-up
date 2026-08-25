@@ -71,7 +71,7 @@ export default function HomeSideNav() {
             <SnbRailFooter userName={user?.name ?? '이름없음'} onSettingsClick={goSettings} profileMenu={profileMenu} />
           }
         >
-          <SnbRailItem Icon={IconAdd400} label="새 채팅" selected={isHome} onClick={go('/')} />
+          <SnbRailItem Icon={IconAdd400} label="새 채팅" iconOnDisc selected={isHome} onClick={go('/')} />
           <SnbRailItem Icon={IconUpdate} label="요청됨" onClick={go('/llm-wiki/review')} />
           <SnbRailItem Icon={IconAgent} label="문의 대응" selected={isAgentStudio} onClick={go('/agent-studio')} />
           <SnbRailItem
