@@ -756,17 +756,44 @@ def test_retry_call_parse_failure_is_retried_once() -> None:
     assert retry["prompt_version"] == RETRY_PROMPT_VERSION
 
 
+def _narration_template_sources() -> list[str]:
+    """두 산문 템플릿 원문을 한 줄로 편 채로 읽는다.
+
+    지시문이 폭에 맞춰 여러 줄로 접혀 있어, 줄바꿈과 들여쓰기를 공백
+    하나로 눌러야 문장 그대로 찾을 수 있다.
+    """
+    return [
+        " ".join(
+            (block_narrator.prompt_loader.template_dir / path)
+            .read_text(encoding="utf-8")
+            .split()
+        )
+        for path in (
+            block_narrator.DOCUMENT_TEMPLATE_PATH,
+            block_narrator.RETRY_TEMPLATE_PATH,
+        )
+    ]
+
+
 def test_templates_forbid_narratives_as_a_string() -> None:
     """두 산문 템플릿이 narratives를 문자열로 돌려주지 말라고 시킨다."""
     instruction = "Return narratives as a JSON array of objects, never as a string."
 
-    for path in (
-        block_narrator.DOCUMENT_TEMPLATE_PATH,
-        block_narrator.RETRY_TEMPLATE_PATH,
-    ):
-        source = (block_narrator.prompt_loader.template_dir / path).read_text(
-            encoding="utf-8"
-        )
+    for source in _narration_template_sources():
+        assert instruction in source
+
+
+def test_templates_ask_for_single_quotes_inside_narratives() -> None:
+    """두 산문 템플릿이 산문 안의 인용을 작은따옴표로 쓰라고 시킨다.
+
+    산문에 큰따옴표가 실리면 tool call JSON이 깨져 계약 파싱이 실패한다.
+    """
+    instruction = (
+        "When quoting text inside a narrative, use single quotes ('), "
+        'never double quotes (").'
+    )
+
+    for source in _narration_template_sources():
         assert instruction in source
 
 
