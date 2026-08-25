@@ -503,3 +503,50 @@ async def test_auto_merge_stays_off_when_caller_omits_flag(
 
     assert resolve_kwargs[0]["auto_merge_enabled"] is False
     assert result.auto_merge is None
+
+
+@pytest.mark.asyncio
+async def test_pipeline_passes_narrator_to_artifact_compile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    compile_kwargs: list[dict] = []
+    narrator = object()
+
+    async def run_extraction(**_: object) -> pipeline.ExtractionStageResult:
+        return pipeline.ExtractionStageResult()
+
+    def compile_artifacts(*_args: object, **kwargs: object) -> ArtifactCompileResult:
+        compile_kwargs.append(dict(kwargs))
+        return ArtifactCompileResult()
+
+    monkeypatch.setattr(pipeline, "_run_extraction", run_extraction)
+    monkeypatch.setattr(
+        pipeline,
+        "resolve_entity_candidates",
+        lambda **_: ResolutionResult(),
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "resolve_claim_conflicts",
+        lambda **_: ClaimConflictResult(),
+    )
+    monkeypatch.setattr(pipeline, "compile_definition_artifacts", compile_artifacts)
+
+    await pipeline.run_pre_review_pipeline(
+        SourcePollResult(),
+        workspace_id=1,
+        normalizer=object(),  # type: ignore[arg-type]
+        extractor=object(),  # type: ignore[arg-type]
+        extraction_spec=ExtractionRunSpec(
+            provider="test",
+            extractor_version="1",
+            ontology_id="wiki",
+            vocabulary=ExtractionVocabulary(snapshot_id="v1"),
+        ),
+        extraction_contract_version="1",
+        judge=None,
+        uow_factory=_WorkspaceBoundUow,  # type: ignore[arg-type]
+        narrator=narrator,  # type: ignore[arg-type]
+    )
+
+    assert compile_kwargs[0]["narrator"] is narrator

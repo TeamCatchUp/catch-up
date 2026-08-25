@@ -153,3 +153,26 @@ async def test_job_passes_auto_merge_kill_switch_to_pipeline(
     await job.run_channel_talk_pre_review_job(3)
 
     assert pipeline_calls[0]["auto_merge_enabled"] is auto_merge_enabled
+
+
+@pytest.mark.asyncio
+async def test_job_passes_narrator_to_pipeline(monkeypatch) -> None:
+    _patch_dependencies(monkeypatch)
+    llm_service_kwargs: list[dict] = []
+    monkeypatch.setattr(
+        job,
+        "get_llm_service",
+        lambda **kwargs: llm_service_kwargs.append(kwargs) or _FakeLlmService(),
+    )
+    pipeline_calls = []
+
+    async def _run_pipeline(poll_result, **kwargs):
+        pipeline_calls.append(kwargs)
+        return SimpleNamespace(status=PreReviewPipelineStatus.COMPLETED)
+
+    monkeypatch.setattr(job, "run_pre_review_pipeline", _run_pipeline)
+
+    await job.run_channel_talk_pre_review_job(3)
+
+    assert isinstance(pipeline_calls[0]["narrator"], job.LlmBlockNarrator)
+    assert llm_service_kwargs[0]["read_timeout"] == 120
