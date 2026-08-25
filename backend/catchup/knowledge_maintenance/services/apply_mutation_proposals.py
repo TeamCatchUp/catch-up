@@ -57,6 +57,16 @@ class ApplyOperationError(Exception):
     """적용할 수 없는 명령을 만났음을 알린다."""
 
 
+class StaleProposal(Exception):
+    """승인 뒤 세계가 바뀌어 실행할 수 없게 된 안건을 알린다.
+
+    ApplyOperationError와 다르다. 그것은 안건 자체가 잘못된 경우이고 사람이
+    고쳐야 한다. 이것은 안건은 맞았으나 그 사이 후보나 노드가 다른 결정으로
+    옮겨 간 경우이고, 안건을 stale로 끝내면 남은 후보는 다음 회차가 새
+    구성으로 다시 판정한다.
+    """
+
+
 class ApplyUnitOfWork(Protocol):
     """적용이 쓰는 transaction 경계를 정의한다."""
 
@@ -84,9 +94,11 @@ class ApplyResult:
     Attributes:
         proposals_applied: 끝까지 적용된 안건 수를 나타낸다.
         proposals_failed: 실패해 approved로 남은 안건 수를 나타낸다.
+        proposals_stale: 승인 뒤 세계가 바뀌어 stale로 끝낸 안건 수를
+            나타낸다. 실패가 아니다. 다시 시도할 것이 없다.
         candidates_resolved: 이번에 새로 해소된 후보 수를 나타낸다.
-        candidates_already_resolved: 이미 해소돼 있어 건너뛴 후보
-            수를 나타낸다.
+        candidates_already_resolved: 이 값은 더 쓰지 않는다. 이미 해소된
+            멤버가 있는 안건은 stale로 끝난다.
         claims_superseded: 구간을 닫은 claim 수를 나타낸다. 한때
             참이었던 주장이다.
         claims_invalidated: 지식이 되기 전에 탈락한 claim 수를
@@ -102,6 +114,7 @@ class ApplyResult:
     proposals_failed: int
     candidates_resolved: int
     candidates_already_resolved: int
+    proposals_stale: int = 0
     claims_superseded: int = 0
     claims_invalidated: int = 0
     claims_already_closed: int = 0
@@ -117,12 +130,10 @@ class _Tally:
     있으므로, 별칭을 남긴 자리에서 직접 채운다.
 
     `applied_members`도 같은 이유로 둔다. 이번 적용이 실제로 해소 상태를
-    바꾼 후보와 그 후보의 병합 전 이름을 담는다. 이미 다른 노드로 해소돼
-    건너뛴 후보는 이 병합이 옮긴 것이 아니므로 넣지 않는다.
+    바꾼 후보와 그 후보의 병합 전 이름을 담는다.
     """
 
     resolved: int = 0
-    already: int = 0
     superseded: int = 0
     invalidated: int = 0
     closed_already: int = 0
@@ -159,8 +170,8 @@ def apply_mutation_proposals(
 
     applied = 0
     failed = 0
+    stale = 0
     resolved = 0
-    already = 0
     superseded = 0
     invalidated = 0
     closed_already = 0
@@ -176,6 +187,21 @@ def apply_mutation_proposals(
                 workspace_id=workspace_id,
                 proposal=item,
             )
+        except StaleProposal as error:
+            stale += 1
+            with uow_factory() as uow:
+                uow.mutation_proposals.mark_stale(
+                    workspace_id=workspace_id,
+                    proposal_id=approved_id,
+                )
+                uow.commit()
+            logger.info(
+                "mutation_proposal_stale",
+                workspace_id=workspace_id,
+                proposal_id=str(approved_id),
+                reason=str(error),
+            )
+            continue
         except ApplyOperationError as error:
             failed += 1
             logger.error(
@@ -187,7 +213,6 @@ def apply_mutation_proposals(
             continue
         applied += 1
         resolved += tally.resolved
-        already += tally.already
         superseded += tally.superseded
         invalidated += tally.invalidated
         closed_already += tally.closed_already
@@ -197,14 +222,14 @@ def apply_mutation_proposals(
             workspace_id=workspace_id,
             proposal_id=str(approved_id),
             candidates_resolved=tally.resolved,
-            candidates_already_resolved=tally.already,
         )
 
     result = ApplyResult(
         proposals_applied=applied,
         proposals_failed=failed,
         candidates_resolved=resolved,
-        candidates_already_resolved=already,
+        candidates_already_resolved=0,
+        proposals_stale=stale,
         claims_superseded=superseded,
         claims_invalidated=invalidated,
         claims_already_closed=closed_already,
@@ -217,8 +242,8 @@ def apply_mutation_proposals(
         scoped_proposal_id=None if proposal_id is None else str(proposal_id),
         proposals_applied=result.proposals_applied,
         proposals_failed=result.proposals_failed,
+        proposals_stale=result.proposals_stale,
         candidates_resolved=result.candidates_resolved,
-        candidates_already_resolved=result.candidates_already_resolved,
         claims_superseded=result.claims_superseded,
         claims_invalidated=result.claims_invalidated,
         claims_already_closed=result.claims_already_closed,
@@ -238,6 +263,11 @@ def _apply_one(
     병합 안건은 명령이 전부 성공한 뒤 적용 완료 표시 직전에 해소 event를
     같은 트랜잭션으로 남긴다. 판정 당시의 멤버 구성과 근거는 그 순간에만
     있으므로, 적용만 살아남고 저널이 빠지는 경우를 만들지 않는다.
+
+    Raises:
+        ApplyOperationError: 안건 자체가 잘못돼 적용할 수 없을 때 던진다.
+        StaleProposal: 승인 뒤 후보나 대상 노드가 바뀌어 승인된 구성을
+            그대로 실행할 수 없을 때 던진다.
     """
     proposal_id = proposal.proposal_id
     operations = proposal.operations
@@ -254,18 +284,21 @@ def _apply_one(
     tally = _Tally()
     names_by_candidate = _names_by_candidate(proposal)
     with uow_factory() as uow:
+        _require_members_unresolved(
+            uow,
+            workspace_id=workspace_id,
+            proposal=proposal,
+        )
         nodes_by_sequence: dict[int, uuid.UUID] = {}
         for operation in sorted(operations, key=lambda item: item.sequence):
             if operation.operation_type == "create_entity":
-                created = _apply_create(
+                nodes_by_sequence[operation.sequence] = _apply_create(
                     uow,
                     workspace_id=workspace_id,
                     operation=operation,
                     names_by_candidate=names_by_candidate,
                     tally=tally,
                 )
-                if created is not None:
-                    nodes_by_sequence[operation.sequence] = created
             elif operation.operation_type == "merge_entity":
                 _apply_merge(
                     uow,
@@ -289,6 +322,89 @@ def _apply_one(
         )
         uow.commit()
     return tally
+
+
+def _require_members_unresolved(
+    uow: ApplyUnitOfWork,
+    *,
+    workspace_id: int,
+    proposal: ApprovedProposal,
+) -> None:
+    """병합 안건의 후보 전원이 아직 미해소인지, 대상 노드가 살아 있는지 본다.
+
+    판정은 pending 후보끼리 묶어 내려진다. 그래서 적용 시점에 한 명이라도
+    해소돼 있거나 은퇴(superseded)했으면 승인된 구성은 이미 없는 것이다.
+    한 명만 건너뛰고 나머지를 붙이면 승인과 다른 병합이 된다. 모순 안건은
+    후보를 붙이지 않으므로 보지 않는다.
+
+    Raises:
+        StaleProposal: 후보 하나라도 pending이 아니거나 이미 노드를
+            가리키거나, merge_into_node_id의 노드가 없거나 active가
+            아닐 때 던진다.
+        ApplyOperationError: 후보 행이 없을 때 던진다. 안건 자체의 결함이다.
+    """
+    if proposal.proposal_kind != DUPLICATE_KIND:
+        return
+    for operation in sorted(proposal.operations, key=lambda item: item.sequence):
+        if operation.operation_type not in ("create_entity", "merge_entity"):
+            continue
+        candidate_id = operation.entity_candidate_id
+        if candidate_id is None:
+            # 명령별 적용이 같은 결함을 ApplyOperationError로 알린다.
+            continue
+        current = uow.knowledge_candidates.get_entity_resolution(
+            candidate_id=candidate_id,
+        )
+        if current is None:
+            raise ApplyOperationError(f"후보가 없다: {candidate_id}")
+        status, resolved_node_id = current
+        if (
+            resolved_node_id is not None
+            or status != EntityResolutionStatus.PENDING
+        ):
+            raise StaleProposal(
+                f"후보가 더는 미해소가 아니다: {candidate_id} "
+                f"(상태 {status}, 노드 {resolved_node_id})"
+            )
+        if operation.operation_type == "create_entity":
+            target_raw = operation.operation_data.get("merge_into_node_id")
+            if target_raw is not None:
+                _require_active_target(
+                    uow,
+                    workspace_id=workspace_id,
+                    node_id_raw=target_raw,
+                )
+
+
+def _require_active_target(
+    uow: ApplyUnitOfWork,
+    *,
+    workspace_id: int,
+    node_id_raw: object,
+) -> None:
+    """병합 대상으로 지목된 노드가 아직 살아 있는지 본다.
+
+    Raises:
+        ApplyOperationError: 노드 id를 읽을 수 없을 때 던진다. 안건 자체의
+            결함이다.
+        StaleProposal: 노드가 없거나 active가 아닐 때 던진다. 승인 이후
+            그 노드가 흡수·퇴역했다는 뜻이고, 그때 노드를 새로 만들면
+            사람이 승인한 "저 노드와 같다"와 다른 일을 하게 된다.
+    """
+    try:
+        node_id = uuid.UUID(str(node_id_raw))
+    except ValueError as error:
+        raise ApplyOperationError(
+            f"병합 대상 노드 id를 읽을 수 없다: {node_id_raw}"
+        ) from error
+    node = uow.knowledge_nodes.get_entity_by_id(
+        workspace_id=workspace_id,
+        node_id=node_id,
+    )
+    if node is None:
+        raise StaleProposal(f"병합 대상 노드가 없다: {node_id}")
+    if node.lifecycle_state is not NodeLifecycleState.ACTIVE:
+        raise StaleProposal(f"병합 대상 노드가 살아 있지 않다: {node_id}")
 
 
 def _names_by_candidate(proposal: ApprovedProposal) -> dict[uuid.UUID, str]:
@@ -346,13 +462,6 @@ def _record_resolution_event(
     병합 안건에만 쓴다. 모순 안건은 노드를 세우지도 붙이지도 않아 저널에
     남길 확정이 없다.
 
-    member_hash 검사를 노드 유무보다 먼저 한다. 순서가 반대면 대표가
-    은퇴해 노드가 서지 않은 안건은 검사를 건너뛰고 적용 완료로 끝나,
-    member_hash 없는 병합 안건이 조용히 결정 저널에서 사라진다.
-
-    검사를 지난 뒤 대표가 재추출로 은퇴해 노드가 서지 않았으면 남기지
-    않는다. 합쳐진 것이 없으므로 되돌릴 것도 없다.
-
     Raises:
         ApplyOperationError: 병합 안건인데 판정 근거에 member_hash가
             없을 때 던진다. member_hash가 없으면 되돌림이 같은 구성을
@@ -377,9 +486,7 @@ def _record_resolution_event(
             f"병합 안건에 member_hash가 없다: {proposal.proposal_id}"
         )
 
-    node_id = nodes_by_sequence.get(create.sequence)
-    if node_id is None:
-        return
+    node_id = nodes_by_sequence[create.sequence]
 
     merge_into_raw = create.operation_data.get("merge_into_node_id")
     merge_into = None if merge_into_raw is None else str(merge_into_raw)
@@ -422,6 +529,15 @@ def _record_resolution_event(
             {"candidate_id": str(candidate_id), "name": name}
             for candidate_id, name in tally.applied_members
         ],
+        # 같은 트랜잭션 안이고 노드에 붙은 후보 행은 mark_entity_resolved가
+        # 잠근 채이므로, commit 전에 다른 트랜잭션이 끼어들 수 없다.
+        "node_candidate_ids_after": [
+            str(candidate_id)
+            for candidate_id in uow.knowledge_candidates.list_entity_candidate_ids_resolved_to(
+                workspace_id=workspace_id,
+                node_id=node_id,
+            )
+        ],
     }
     basis = {
         "detector": proposal.detector,
@@ -448,13 +564,8 @@ def _apply_create(
     operation: StoredOperation,
     names_by_candidate: Mapping[uuid.UUID, str],
     tally: _Tally,
-) -> uuid.UUID | None:
-    """대표 후보로 canonical 노드를 만들거나 기존 노드를 재사용한다.
-
-    대표가 재추출로 은퇴(`superseded`)했으면 노드를 만들지 않고 None을
-    낸다. 이 대표를 가리키던 병합 명령은 대상 노드를 못 찾아 그 안건만
-    실패로 남는데, 은퇴한 대표로 새 노드를 세우는 것보다 사람이 다시 보게
-    두는 편이 안전하다.
+) -> uuid.UUID:
+    """대표 후보로 canonical 노드를 만들거나 기존 노드로 붙인다.
 
     명령 재료에 `merge_into_node_id`가 있으면 노드를 만들지 않고 그 노드로
     대표를 붙인다. 이미 서 있는 노드와 같은 대상이라는 판정을 사람이
@@ -467,42 +578,12 @@ def _apply_create(
     외부 ID가 없어 canonical_key가 비므로, alias가 없으면 읽기 경로가
     (canonical_key -> normalized_alias 순으로 찾는다) 방금 만든 노드를
     어떤 이름으로도 못 찾는다. 노드를 만들면 그 이름으로 부를 수
-    있어야 한다는 계약을 쓰기 쪽에서 지킨다. 기존 노드를 재사용하는
-    분기는 이전 적용이나 다른 경로가 이미 그 계약을 지켰으므로 여기서
-    alias를 더하지 않는다.
-
-    `merge_into_node_id`가 있는데 대표가 이미 해소돼 있으면, 지금 붙어 있는
-    노드가 승인 대상과 같을 때만 그대로 둔다. 다르면 이 안건만 실패로 남긴다.
-    사람이 승인한 내용은 "이 노드에 붙여라"인데, 승인 이후 대표가 다른 경로로
-    다른 노드에 붙었다면 나머지 멤버를 그 노드로 끌고 가는 일은 승인받지 않은
-    결정이다. 그대로 진행하면 event도 다른 노드로 남고 안건은 applied가 되어
-    사람이 뒤늦게 알아차릴 방법이 없다.
+    있어야 한다는 계약을 쓰기 쪽에서 지킨다.
     """
     candidate_id = operation.entity_candidate_id
     if candidate_id is None:
         raise ApplyOperationError("create_entity에 후보가 없다")
-    current = uow.knowledge_candidates.get_entity_resolution(
-        candidate_id=candidate_id,
-    )
-    if current is None:
-        raise ApplyOperationError(f"후보가 없다: {candidate_id}")
-    status, resolved_node_id = current
     target_raw = operation.operation_data.get("merge_into_node_id")
-    if resolved_node_id is not None:
-        if target_raw is not None:
-            _require_same_node(
-                approved_node_id_raw=target_raw,
-                current_node_id=resolved_node_id,
-            )
-        # 대표가 이미 해소됐으면 그 노드가 곧 병합 대상이다. 새 노드를
-        # 만들면 같은 대상이 둘로 갈라진다.
-        tally.already += 1
-        return resolved_node_id
-    if status == EntityResolutionStatus.SUPERSEDED:
-        # 승인 이후 재추출이 대표를 은퇴시켰다. 은퇴한 후보를 accepted로
-        # 되돌리면 사람 결정이 아닌 상태 변화를 결정처럼 남긴다.
-        tally.already += 1
-        return None
 
     proposed_name = str(operation.operation_data["proposed_name"])
     if target_raw is not None:
@@ -546,34 +627,6 @@ def _apply_create(
     return node.id
 
 
-def _require_same_node(
-    *,
-    approved_node_id_raw: object,
-    current_node_id: uuid.UUID,
-) -> None:
-    """이미 해소된 대표가 승인 대상 노드에 붙어 있는지 확인한다.
-
-    다른 노드에 붙어 있으면 이 안건만 실패로 남기고, 승인 대상 노드와 지금
-    붙어 있는 노드를 메시지에 함께 적어 사람이 무엇이 어긋났는지 볼 수 있게
-    한다.
-
-    Raises:
-        ApplyOperationError: 승인 대상 노드 id를 읽을 수 없거나, 대표가
-            승인 대상과 다른 노드에 붙어 있을 때 던진다.
-    """
-    try:
-        approved_node_id = uuid.UUID(str(approved_node_id_raw))
-    except ValueError as error:
-        raise ApplyOperationError(
-            f"병합 대상 노드 id를 읽을 수 없다: {approved_node_id_raw}"
-        ) from error
-    if approved_node_id != current_node_id:
-        raise ApplyOperationError(
-            "대표 후보가 승인 대상과 다른 노드에 이미 해소됐다: "
-            f"승인 대상 {approved_node_id}, 현재 {current_node_id}"
-        )
-
-
 def _merge_into_existing_node(
     uow: ApplyUnitOfWork,
     *,
@@ -586,13 +639,12 @@ def _merge_into_existing_node(
 ) -> uuid.UUID:
     """대표 후보를 이미 서 있는 노드로 붙인다.
 
-    노드가 없거나 살아 있지 않으면 이 안건만 실패로 남긴다. 승인 이후
-    노드가 흡수·퇴역했다는 뜻이고, 그때 노드를 새로 만들면 사람이 승인한
-    "저 노드와 같다"는 결정과 다른 일을 하게 된다.
+    노드가 있고 살아 있다는 것은 _require_active_target이 같은 트랜잭션
+    앞머리에서 이미 확인했다. 여기서는 별칭을 남기고 후보를 그 노드로
+    해소하는 일만 한다.
 
     Raises:
-        ApplyOperationError: 노드 id를 읽을 수 없거나, 노드가 없거나,
-            살아 있지 않을 때 던진다.
+        ApplyOperationError: 노드 id를 읽을 수 없을 때 던진다.
     """
     try:
         node_id = uuid.UUID(str(node_id_raw))
@@ -600,17 +652,6 @@ def _merge_into_existing_node(
         raise ApplyOperationError(
             f"병합 대상 노드 id를 읽을 수 없다: {node_id_raw}"
         ) from error
-
-    node = uow.knowledge_nodes.get_entity_by_id(
-        workspace_id=workspace_id,
-        node_id=node_id,
-    )
-    if node is None:
-        raise ApplyOperationError(f"병합 대상 노드가 없다: {node_id}")
-    if node.lifecycle_state is not NodeLifecycleState.ACTIVE:
-        raise ApplyOperationError(
-            f"병합 대상 노드가 살아 있지 않다: {node_id}"
-        )
 
     # 저널에는 이번 병합이 실제로 넣은 이름만 적는다. 같은 이름이 이미
     # 붙어 있던 노드라면 이 병합이 붙인 이름이 아니므로, 적어 두면 되돌림이
@@ -653,20 +694,6 @@ def _apply_merge(
             f"병합 대상 sequence가 없다: {target_sequence}"
         )
 
-    current = uow.knowledge_candidates.get_entity_resolution(
-        candidate_id=candidate_id,
-    )
-    if current is None:
-        raise ApplyOperationError(f"후보가 없다: {candidate_id}")
-    status, resolved_node_id = current
-    if resolved_node_id is not None:
-        tally.already += 1
-        return
-    if status == EntityResolutionStatus.SUPERSEDED:
-        # 재추출이 은퇴시킨 멤버는 병합하지 않는다. 은퇴한 후보를 merged로
-        # 표시하면 사라진 후보가 지식에 붙은 것처럼 보인다.
-        tally.already += 1
-        return
     uow.knowledge_candidates.mark_entity_resolved(
         candidate_id=candidate_id,
         status=EntityResolutionStatus.MERGED,

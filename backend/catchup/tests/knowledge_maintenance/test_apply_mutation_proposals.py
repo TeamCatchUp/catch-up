@@ -183,6 +183,12 @@ class FakeMutationRepo:
         row["status"] = "applied"
         row["applied_at"] = "now"
 
+    def mark_stale(self, *, workspace_id: int, proposal_id: uuid.UUID) -> None:
+        row = self.state.proposals[proposal_id]
+        if row["status"] != "approved":
+            raise AssertionError("approved만 stale이 될 수 있다")
+        row["status"] = "stale"
+
 
 @dataclass
 class FakeCandidateRepo:
@@ -241,6 +247,17 @@ class FakeCandidateRepo:
             raise AssertionError("이미 해소된 후보를 다시 해소하면 안 된다")
         row["resolution_status"] = status.value
         row["resolved_node_id"] = resolved_node_id
+
+    def list_entity_candidate_ids_resolved_to(
+        self, *, workspace_id: int, node_id: uuid.UUID
+    ) -> tuple[uuid.UUID, ...]:
+        return tuple(
+            sorted(
+                candidate_id
+                for candidate_id, row in self.state.candidates.items()
+                if row["resolved_node_id"] == node_id
+            )
+        )
 
 
 @dataclass
@@ -474,53 +491,6 @@ def test_alias_is_not_duplicated_on_rerun() -> None:
     _run(state)
 
     assert len(state.aliases) == 1
-
-
-def test_reused_node_gets_no_alias() -> None:
-    """이미 해소된 대표의 노드에는 alias를 더하지 않는다."""
-    state = FakeState()
-    representative = state.add_candidate(
-        status="merged", resolved_node_id=uuid.uuid4()
-    )
-    state.add_approved_merge(representative=representative, members=())
-
-    _run(state)
-
-    assert state.aliases == []
-
-
-def test_resolved_representative_is_reused() -> None:
-    state = FakeState()
-    existing_node = uuid.uuid4()
-    representative = state.add_candidate(
-        status="merged", resolved_node_id=existing_node
-    )
-    member = state.add_candidate()
-    state.add_approved_merge(representative=representative, members=(member,))
-
-    result, _ = _run(state)
-
-    assert result.candidates_already_resolved == 1
-    assert result.candidates_resolved == 1
-    assert len(state.nodes) == 0
-    assert state.candidates[member]["resolved_node_id"] == existing_node
-
-
-def test_resolved_member_is_skipped() -> None:
-    state = FakeState()
-    representative = state.add_candidate()
-    already = state.add_candidate(
-        status="merged", resolved_node_id=uuid.uuid4()
-    )
-    state.add_approved_merge(
-        representative=representative, members=(already,)
-    )
-
-    result, _ = _run(state)
-
-    assert result.candidates_already_resolved == 1
-    assert result.candidates_resolved == 1
-    assert len(state.nodes) == 1
 
 
 def test_unknown_operation_fails_only_that_proposal() -> None:
@@ -812,38 +782,6 @@ def test_supersede_skips_superseded_loser() -> None:
     assert row["valid_to"] is None
 
 
-def test_superseded_member_is_not_merged() -> None:
-    """은퇴한 멤버 후보는 merged로 다시 표시되지 않는다."""
-    state = FakeState()
-    representative = state.add_candidate()
-    retired = state.add_candidate(status="superseded")
-    state.add_approved_merge(
-        representative=representative, members=(retired,)
-    )
-
-    result, _ = _run(state)
-
-    assert result.candidates_already_resolved == 1
-    assert result.candidates_resolved == 1
-    row = state.candidates[retired]
-    assert row["resolution_status"] == "superseded"
-    assert row["resolved_node_id"] is None
-
-
-def test_superseded_representative_creates_no_node() -> None:
-    """은퇴한 대표로는 새 노드를 세우지 않는다."""
-    state = FakeState()
-    representative = state.add_candidate(status="superseded")
-    state.add_approved_merge(representative=representative, members=())
-
-    result, _ = _run(state)
-
-    assert result.candidates_already_resolved == 1
-    assert result.candidates_resolved == 0
-    assert state.nodes == []
-    assert state.candidates[representative]["resolution_status"] == "superseded"
-
-
 def test_supersede_without_claim_fails_that_proposal() -> None:
     """대상 claim이 없는 명령은 그 판정만 실패시킨다."""
     state = FakeState()
@@ -935,44 +873,6 @@ def test_merge_into_node_records_human_resolution_event() -> None:
     assert event["basis"]["detector"] == "catchup.entity_duplicate"
     assert event["basis"]["detector_version"] == "1"
     assert event["basis"]["reason"] == "같은 대상이다"
-
-
-def test_resolution_event_records_only_the_members_it_applied() -> None:
-    """저널의 실적용 목록에는 이번 적용이 실제로 옮긴 후보만 들어간다.
-
-    승인과 적용 사이에 다른 노드로 먼저 해소된 멤버는 적용이 건너뛴다.
-    되돌림은 이 목록만 되감으므로, 건너뛴 멤버가 섞이면 이 병합과 무관한
-    선행 해소를 지운다. 판정 당시 구성인 member_candidate_ids는 근거로
-    그대로 남는다.
-    """
-    state = FakeState()
-    foreign = state.add_node()
-    representative = state.add_candidate()
-    member = state.add_candidate()
-    already = state.add_candidate(
-        status="merged",
-        resolved_node_id=foreign.id,
-    )
-    state.add_approved_merge(
-        representative=representative,
-        members=(member, already),
-        resolver_metadata={
-            "member_hash": "hash-merge",
-            "member_names": ["결제", "결제 기능", "페이먼트"],
-        },
-    )
-
-    result, _ = _run(state)
-
-    assert result.proposals_applied == 1
-    assert result.candidates_already_resolved == 1
-    snapshot = state.events[0]["member_snapshot"]
-    assert snapshot["member_candidate_ids"] == [str(member), str(already)]
-    assert snapshot["applied_members"] == [
-        {"candidate_id": str(representative), "name": "결제"},
-        {"candidate_id": str(member), "name": "결제 기능"},
-    ]
-    assert state.candidates[already]["resolved_node_id"] == foreign.id
 
 
 def test_merge_into_node_with_existing_alias_records_no_alias() -> None:
@@ -1073,50 +973,6 @@ def test_merge_without_member_hash_fails_that_proposal() -> None:
     assert state.nodes == []
 
 
-def test_superseded_representative_without_member_hash_fails() -> None:
-    """노드가 서지 않아도 member_hash 없는 병합은 실패로 남는다.
-
-    검사가 노드 유무 뒤에 있으면 이 조합만 검사를 빠져나가 적용 완료로
-    끝난다. 저널 없는 결정이 조용히 닫히는 자리다.
-    """
-    state = FakeState()
-    representative = state.add_candidate(status="superseded")
-    proposal_id = state.add_approved_merge(
-        representative=representative,
-        members=(),
-        resolver_metadata={"reason": "같은 대상이다"},
-    )
-
-    result, _ = _run(state)
-
-    assert result.proposals_applied == 0
-    assert result.proposals_failed == 1
-    assert state.events == []
-    assert state.proposals[proposal_id]["status"] == "approved"
-
-
-def test_reused_node_event_records_no_alias() -> None:
-    """별칭을 더하지 않은 적용은 저널에도 더한 것으로 적지 않는다."""
-    state = FakeState()
-    existing_node = uuid.uuid4()
-    representative = state.add_candidate(
-        status="merged", resolved_node_id=existing_node
-    )
-    member = state.add_candidate()
-    state.add_approved_merge(
-        representative=representative, members=(member,)
-    )
-
-    result, _ = _run(state)
-
-    assert result.proposals_applied == 1
-    assert state.aliases == []
-    assert len(state.events) == 1
-    event = state.events[0]
-    assert event["node_id"] == existing_node
-    assert event["member_snapshot"]["aliases_added"] == []
-
-
 def test_contradiction_apply_records_no_resolution_event() -> None:
     """모순 판정의 적용은 해소 저널을 건드리지 않는다."""
     state = FakeState()
@@ -1130,75 +986,144 @@ def test_contradiction_apply_records_no_resolution_event() -> None:
     assert state.events == []
 
 
-def test_merge_into_merged_node_fails_that_proposal() -> None:
-    """붙일 노드가 흡수됐으면 그 안건만 실패로 남는다."""
-    state = FakeState()
-    gone = state.add_node(lifecycle_state=NodeLifecycleState.MERGED)
-    representative = state.add_candidate()
-    proposal_id = state.add_approved_merge(
-        representative=representative,
-        members=(),
-        merge_into_node_id=gone.id,
-    )
 
-    result, _ = _run(state)
 
+def _assert_stale_and_untouched(
+    state: FakeState, proposal_id: uuid.UUID, result
+) -> None:
+    """stale 안건은 아무것도 바꾸지 않는다. 노드도 event도 생기지 않고 후보도 그대로다."""
+    assert result.proposals_stale == 1
     assert result.proposals_applied == 0
-    assert result.proposals_failed == 1
-    assert state.proposals[proposal_id]["status"] == "approved"
-    assert state.candidates[representative]["resolved_node_id"] is None
-
-
-def test_merge_into_node_fails_when_representative_moved_elsewhere() -> None:
-    """대표가 승인 대상과 다른 노드로 해소됐으면 그 안건만 실패로 남는다.
-
-    승인 내용은 "노드 A에 붙여라"인데 적용 전에 대표가 다른 경로로 노드 B에
-    붙었다면, 그대로 진행하면 나머지 멤버와 event가 승인받지 않은 노드 B로
-    간다.
-    """
-    state = FakeState()
-    approved = state.add_node()
-    elsewhere = state.add_node()
-    representative = state.add_candidate(
-        status="merged",
-        resolved_node_id=elsewhere.id,
-    )
-    member = state.add_candidate()
-    proposal_id = state.add_approved_merge(
-        representative=representative,
-        members=(member,),
-        merge_into_node_id=approved.id,
-    )
-
-    result, _ = _run(state)
-
-    assert result.proposals_applied == 0
-    assert result.proposals_failed == 1
-    assert state.proposals[proposal_id]["status"] == "approved"
-    assert state.candidates[representative]["resolved_node_id"] == elsewhere.id
-    assert state.candidates[member]["resolved_node_id"] is None
+    assert result.proposals_failed == 0
+    assert state.proposals[proposal_id]["status"] == "stale"
     assert state.events == []
 
 
-def test_merge_into_node_applies_when_representative_already_there() -> None:
-    """대표가 이미 승인 대상 노드에 붙어 있으면 그대로 적용한다."""
+def test_resolved_representative_makes_the_proposal_stale() -> None:
+    """대표가 승인 뒤 다른 노드에 해소돼 있으면 안건 전체가 stale이다.
+
+    대표만 건너뛰고 나머지를 그 노드로 붙이면 사람이나 judge가 승인한
+    "이 구성끼리 같다"가 "저 노드와 같다"로 바뀐다.
+    """
     state = FakeState()
-    approved = state.add_node()
+    existing = state.add_node()
     representative = state.add_candidate(
-        status="merged",
-        resolved_node_id=approved.id,
+        status="merged", resolved_node_id=existing.id
     )
     member = state.add_candidate()
     proposal_id = state.add_approved_merge(
+        representative=representative, members=(member,)
+    )
+
+    result, _ = _run(state)
+
+    _assert_stale_and_untouched(state, proposal_id, result)
+    assert state.candidates[member]["resolved_node_id"] is None
+    assert len(state.nodes) == 1
+
+
+def test_resolved_member_makes_the_proposal_stale() -> None:
+    state = FakeState()
+    foreign = state.add_node()
+    representative = state.add_candidate()
+    member = state.add_candidate(status="merged", resolved_node_id=foreign.id)
+    proposal_id = state.add_approved_merge(
+        representative=representative, members=(member,)
+    )
+
+    result, _ = _run(state)
+
+    _assert_stale_and_untouched(state, proposal_id, result)
+    assert state.candidates[representative]["resolved_node_id"] is None
+    assert len(state.nodes) == 1
+
+
+def test_superseded_member_makes_the_proposal_stale() -> None:
+    """재추출이 멤버를 은퇴시켰으면 그 구성은 더 이상 존재하지 않는다."""
+    state = FakeState()
+    representative = state.add_candidate()
+    member = state.add_candidate(status="superseded")
+    proposal_id = state.add_approved_merge(
+        representative=representative, members=(member,)
+    )
+
+    result, _ = _run(state)
+
+    _assert_stale_and_untouched(state, proposal_id, result)
+
+
+def test_merge_into_inactive_node_makes_the_proposal_stale() -> None:
+    """승인 뒤 대상 노드가 흡수·퇴역했으면 실행할 수 없다. 노드를 새로 만들지 않는다."""
+    state = FakeState()
+    target = state.add_node(lifecycle_state=NodeLifecycleState.MERGED)
+    representative = state.add_candidate()
+    proposal_id = state.add_approved_merge(
+        representative=representative, members=(), merge_into_node_id=target.id
+    )
+
+    result, _ = _run(state)
+
+    _assert_stale_and_untouched(state, proposal_id, result)
+    assert state.candidates[representative]["resolved_node_id"] is None
+    assert [node.id for node in state.nodes] == [target.id]
+
+
+def test_stale_proposal_does_not_block_the_next_one() -> None:
+    """stale 안건은 자기 트랜잭션에서 끝나고 다음 안건은 정상 적용된다."""
+    state = FakeState()
+    foreign = state.add_node()
+    stale_rep = state.add_candidate(
+        status="merged", resolved_node_id=foreign.id
+    )
+    stale_member = state.add_candidate()
+    stale_id = state.add_approved_merge(
+        representative=stale_rep, members=(stale_member,)
+    )
+    representative = state.add_candidate()
+    member = state.add_candidate()
+    state.add_approved_merge(
         representative=representative,
         members=(member,),
-        merge_into_node_id=approved.id,
+        resolver_metadata={
+            "member_hash": "hash-2",
+            "member_names": ["결제", "결제 기능"],
+        },
+    )
+
+    result, _ = _run(state)
+
+    assert result.proposals_stale == 1
+    assert result.proposals_applied == 1
+    assert state.proposals[stale_id]["status"] == "stale"
+    assert len(state.events) == 1
+
+
+def test_resolution_event_records_node_candidate_ids_after() -> None:
+    """event에는 적용 직후 그 노드를 가리키는 후보 전부가 적힌다.
+
+    기존 노드에 붙이는 병합이면 원래 붙어 있던 후보도 함께 들어간다.
+    되돌림은 이 목록과 현재를 견줘 그 뒤 노드에 아무 일도 없었는지 본다.
+    """
+    state = FakeState()
+    target = state.add_node()
+    earlier = state.add_candidate(status="merged", resolved_node_id=target.id)
+    representative = state.add_candidate()
+    member = state.add_candidate()
+    state.add_approved_merge(
+        representative=representative,
+        members=(member,),
+        merge_into_node_id=target.id,
     )
 
     result, _ = _run(state)
 
     assert result.proposals_applied == 1
-    assert result.proposals_failed == 0
-    assert state.proposals[proposal_id]["status"] == "applied"
-    assert state.candidates[member]["resolved_node_id"] == approved.id
-    assert [node.id for node in state.nodes] == [approved.id]
+    snapshot = state.events[0]["member_snapshot"]
+    assert snapshot["node_candidate_ids_after"] == sorted(
+        str(candidate_id)
+        for candidate_id in (earlier, representative, member)
+    )
+    assert snapshot["applied_members"] == [
+        {"candidate_id": str(representative), "name": "결제"},
+        {"candidate_id": str(member), "name": "결제 기능"},
+    ]
