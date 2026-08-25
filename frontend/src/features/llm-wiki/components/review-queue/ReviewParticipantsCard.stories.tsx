@@ -57,8 +57,7 @@ const meta = {
         '판정(can_review)과 담당자 관리(can_manage_owners)는 다른 규칙이다 — 판정은 담당자가 있으면 담당자 본인만이고 없으면 구성원 누구나, 관리는 지정=관리자∨담당자 본인·해제=관리자만이다.',
         '이 카드는 그 판정을 재계산하지 않는다 — canAssign·canRemove·notice 전부 소비처(라우트)가 실어 준다.',
         '역할 배지는 배열이다 — 담당자이면서 채널 관리자면 배지 둘이 나란히 선다. 채널 관리자 배지는 내 행에만 붙는다 — 서버가 내 관리자 여부(is_admin)만 주고 남의 관리자 여부는 주지 않는다.',
-        '담당자 0명 + 내가 관리자면 라우트가 내 행을 채널 관리자 배지만 달아 세운다. 배너는 그대로 판정 규칙(구성원 누구나)을 말한다 — 배지는 역할 표시일 뿐 검토자 지정이 아니다. 배너 문구는 시안 실측("채널 관리자가 검토")이 서버 규칙과 어긋나 사용자 확정 문구로 교체했다.',
-        '해제 팝오버는 담당자 배지 행에만 붙는다 — 관리자 폴백 행은 지울 지정이 없다.',
+        '이 카드에는 담당자만 선다 — 관리자여도 담당자가 아니면 행이 없고, 담당자 0명이면 목록이 빈다. 배너 문구는 시안 실측("채널 관리자가 검토")이 서버 규칙과 어긋나 사용자 확정 문구로 교체했다.',
       ],
       layoutNotes: ['폭은 우측 패널(350)이 준다 — 스토리 데코레이터가 그 슬롯을 흉내낸다.'],
     }),
@@ -68,14 +67,9 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof ReviewParticipantsCard>;
 
-/** 담당자 0명 · 내가 관리자 — 내 행이 채널 관리자 배지로 서고 "구성원 누구나" 배너는 그대로다. */
+/** 담당자 0명 · 내가 관리자 — 목록은 비고 지정 진입점만 선다. 관리자는 담당자가 아니라 행이 없다. */
 export const NoOwnerAsAdmin: Story = {
-  args: {
-    participants: [{ id: '6', userId: 6, name: '팀원G', isMe: true, roles: ['채널 관리자'] }],
-    notice: 'no-owner',
-    canAssign: true,
-    canRemove: true,
-  },
+  args: { notice: 'no-owner', canAssign: true, canRemove: true },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
@@ -83,12 +77,10 @@ export const NoOwnerAsAdmin: Story = {
     // 좁은 패널에서 2줄이 될 수 있는 문구다 — 한국어가 단어 중간에서 잘리지 않아야 한다
     await expect(banner).toHaveClass('break-keep', 'wrap-break-word');
     await expect(canvas.getByRole('button', { name: '담당자 추가하기' })).toBeInTheDocument();
-    // 배지는 채널 관리자 하나다 — '담당자' 텍스트는 카드 제목뿐이라 담당자 행으로 오독되지 않는다
-    await expect(canvas.getByText('채널 관리자')).toBeInTheDocument();
+    // 관리자라도 담당자가 아니면 카드에 서지 않는다 — '담당자' 텍스트는 카드 제목뿐이다
+    await expect(canvas.queryByText('채널 관리자')).toBeNull();
     await expect(canvas.getAllByText('담당자')).toHaveLength(1);
-    await expect(canvas.getByText('(나)')).toBeInTheDocument();
-    // 해제 권한이 있어도 폴백 행은 팝오버 트리거가 아니다 — 지울 지정이 없다
-    await expect(canvas.queryByRole('button', { name: /팀원G/ })).toBeNull();
+    await expect(canvas.queryByText('(나)')).toBeNull();
   },
 };
 

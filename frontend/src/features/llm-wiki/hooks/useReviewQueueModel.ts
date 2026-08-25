@@ -206,17 +206,6 @@ export function useReviewQueueModel({
     roles: owner.userId === myUserId && isArtifactAdmin ? ['담당자', '채널 관리자'] : ['담당자'],
     avatarSrc: owner.profileImageUrl,
   }));
-  // 담당자 0명 + 내가 관리자면 내 행이 채널 관리자 배지로 선다 — 판정 폴백(구성원 전체)은 배너 몫이다
-  if (detail !== null && participants.length === 0 && isArtifactAdmin && me && myUserId !== null) {
-    participants.push({
-      id: String(myUserId),
-      userId: myUserId,
-      name: me.name,
-      isMe: true,
-      roles: ['채널 관리자'],
-      avatarSrc: me.picture ?? null,
-    });
-  }
 
   const ownerNotice = detail === null ? null : owners.length === 0 ? 'no-owner' : isMeOwner ? null : 'other-owner';
 

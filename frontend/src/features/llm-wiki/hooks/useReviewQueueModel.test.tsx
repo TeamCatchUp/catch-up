@@ -598,18 +598,16 @@ describe('useReviewQueueModel', () => {
       ],
     });
 
-  it('담당자 없는 문서 — 관리자는 지정·해제가 열리고 내 행이 채널 관리자 배지로 선다', async () => {
+  it('담당자 없는 문서 — 관리자는 지정·해제가 열리지만 담당자가 아니라 목록에는 서지 않는다', async () => {
     stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
     server.use(http.get('*/api/v1/wiki/channels', adminChannels));
     const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
 
     await waitFor(() => expect(result.current.canAssignOwners).toBe(true));
     expect(result.current.canRemoveOwners).toBe(true);
-    // 배너는 그대로 선다 — 배지는 내 역할을 말할 뿐 판정 폴백(구성원 전체)을 좁히지 않는다
     expect(result.current.ownerNotice).toBe('no-owner');
-    expect(result.current.participants).toEqual([
-      { id: '99', userId: 99, name: '검토자', isMe: true, roles: ['채널 관리자'], avatarSrc: null },
-    ]);
+    // 카드에는 담당자만 선다 — 관리자 역할은 배너가 아니라 담당자 행의 배지로만 드러난다
+    expect(result.current.participants).toEqual([]);
   });
 
   it('담당자이면서 관리자면 내 행에 배지가 둘 선다 — 담당자 + 채널 관리자', async () => {
@@ -648,7 +646,7 @@ describe('useReviewQueueModel', () => {
     const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
 
     await waitFor(() => expect(result.current.participants).toHaveLength(1));
-    // 담당자가 있으니 내 행(관리자 폴백)도 서지 않는다
+    // 남의 관리자 여부는 서버가 주지 않아 배지가 붙지 않는다
     expect(result.current.participants[0]).toMatchObject({ userId: 7, isMe: false, roles: ['담당자'] });
   });
 

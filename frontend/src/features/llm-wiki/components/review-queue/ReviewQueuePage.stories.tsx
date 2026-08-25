@@ -340,10 +340,10 @@ export const OtherOwnerAsAdmin: Story = {
   },
 };
 
-/** 담당자 0명 · 내가 관리자 — 판정은 구성원 자격으로 열리고, 내 행이 채널 관리자 배지로 선다. */
+/** 담당자 0명 · 내가 관리자 — 판정은 구성원 자격으로 열리고, 카드는 비되 지정 진입점이 선다. */
 export const NoOwnerAsAdmin: Story = {
   args: {
-    participants: [{ id: '6', userId: 6, name: '팀원G', isMe: true, roles: ['채널 관리자'] }],
+    participants: [],
     ownerNotice: 'no-owner',
     canAssignOwners: true,
     canRemoveOwners: true,
@@ -357,15 +357,11 @@ export const NoOwnerAsAdmin: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // 배너는 그대로 선다 — 배지는 내 역할을 말할 뿐 검토자 지정이 아니다
     await expect(canvas.getByText('담당자가 지정되지 않아 구성원 누구나 검토할 수 있습니다.')).toBeInTheDocument();
     const card = canvas.getByRole('heading', { name: '담당자' }).closest('section')!;
-    // 내 행은 채널 관리자 배지만 단다 — '담당자' 텍스트는 제목 하나뿐이라 담당자 행으로 오독되지 않는다
-    await expect(within(card).getByText('채널 관리자')).toBeInTheDocument();
+    // 관리자라도 담당자가 아니면 카드에 서지 않는다 — '담당자' 텍스트는 제목 하나뿐이다
+    await expect(within(card).queryByText('채널 관리자')).toBeNull();
     await expect(within(card).getAllByText('담당자')).toHaveLength(1);
-    await expect(within(card).getByText('(나)')).toBeInTheDocument();
-    // 폴백 행은 해제 팝오버 트리거가 아니다 — 지울 지정이 없다
-    await expect(within(card).queryByRole('button', { name: /팀원G/ })).toBeNull();
     await expect(within(card).getByRole('button', { name: '담당자 추가하기' })).toBeInTheDocument();
     // 판정·발행 진입점은 열린 채다
     await expect(canvas.getAllByRole('button', { name: '승인' }).length).toBeGreaterThan(0);
