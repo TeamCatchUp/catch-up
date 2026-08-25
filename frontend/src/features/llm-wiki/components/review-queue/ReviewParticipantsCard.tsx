@@ -1,7 +1,6 @@
 import IconAssignmentFilled from '@/public/icons/icon/assignment_filled.svg';
 import IconInfoFilled from '@/public/icons/icon/info_filled.svg';
 import { Avatar } from '@/shared/components/ui/avatar';
-import { cn } from '@/shared/utils/cn';
 
 import OwnerAddPopover from './OwnerAddPopover';
 import OwnerDetailPopover from './OwnerDetailPopover';
@@ -16,19 +15,18 @@ export interface ReviewParticipant {
   description?: string;
   /** 내 계정 여부 — 이름 뒤 "(나)" 표기 */
   isMe?: boolean;
-  role: '담당자' | '채널 관리자';
   avatarSrc?: string | null;
 }
 
 export type OwnerNotice = 'no-owner' | 'other-owner';
 
-/** 안내 배너 2종 — 실측 문구. 내가 담당자면 배너 자체가 없다 */
+/** 안내 배너 2종 — 내가 담당자면 배너 자체가 없다 */
 const NOTICE_CONTENT = {
-  'no-owner': { Icon: IconInfoFilled, message: '담당자가 없어 채널 관리자가 검토합니다.' },
+  'no-owner': { Icon: IconInfoFilled, message: '담당자가 지정되지 않아 구성원 누구나 검토할 수 있습니다.' },
   'other-owner': { Icon: IconAssignmentFilled, message: '담당자가 검토할 문서입니다' },
 } as const;
 
-/** 행 하나 — 아바타 40 + 이름·(나)·역할 태그, 아래줄은 활동 설명. 버튼 안에서도 쓰여 span으로만 짠다. */
+/** 행 하나 — 아바타 40 + 이름·(나)·담당자 태그, 아래줄은 활동 설명. 버튼 안에서도 쓰여 span으로만 짠다. */
 function ParticipantRow({ participant }: { participant: ReviewParticipant }) {
   return (
     <span className="flex w-full items-center gap-4">
@@ -37,15 +35,8 @@ function ParticipantRow({ participant }: { participant: ReviewParticipant }) {
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="text-body-small text-text-normal-neutral min-w-0 truncate">{participant.name}</span>
           {participant.isMe && <span className="text-body-small text-text-normal-assistive shrink-0">(나)</span>}
-          <span
-            className={cn(
-              'rounded-md2 text-body-xsmall flex shrink-0 items-center px-1.5 py-0.5',
-              participant.role === '채널 관리자'
-                ? 'bg-fill-primary-normal-neutral text-text-primary-normal'
-                : 'bg-fill-normal-strong text-text-normal-alternative',
-            )}
-          >
-            {participant.role}
+          <span className="rounded-md2 text-body-xsmall bg-fill-normal-strong text-text-normal-alternative flex shrink-0 items-center px-1.5 py-0.5">
+            담당자
           </span>
         </span>
         {participant.description && (
@@ -90,16 +81,19 @@ export default function ReviewParticipantsCard({
       </div>
 
       {noticeContent && (
-        <div className="bg-fill-normal-strong flex items-center gap-2 rounded-lg px-2 py-1.5">
+        // 문구가 2줄이 될 수 있어 아이콘은 첫 줄에 맞춘다 — 줄바꿈은 어절 단위로만 끊는다
+        <div className="bg-fill-normal-strong flex items-start gap-2 rounded-lg px-2 py-1.5">
           <noticeContent.Icon aria-hidden className="text-icon-normal-neutral size-4.5 shrink-0" />
-          <span className="text-body-xsmall text-text-normal-neutral min-w-0">{noticeContent.message}</span>
+          <span className="text-body-xsmall text-text-normal-neutral min-w-0 wrap-break-word break-keep">
+            {noticeContent.message}
+          </span>
         </div>
       )}
 
       {/* 행 목록 — 행마다 패딩 4를 갖고 행 사이는 2가 남는다 */}
       <div className="flex flex-col gap-0.5">
         {participants.map((participant) =>
-          canRemove && participant.role === '담당자' ? (
+          canRemove ? (
             <OwnerDetailPopover
               key={participant.id}
               name={participant.name}
