@@ -384,6 +384,10 @@ def _require_active_target(
 ) -> None:
     """병합 대상으로 지목된 노드가 아직 살아 있는지 본다.
 
+    노드 행을 lock_entity_node로 잠근 채 확인하므로 검사와 부착 사이에
+    노드가 물릴 수 없다. 잠금은 같은 트랜잭션이 commit할 때까지 남고,
+    뒤따르는 mark_entity_resolved는 같은 행을 다시 잠글 뿐이다.
+
     Raises:
         ApplyOperationError: 노드 id를 읽을 수 없을 때 던진다. 안건 자체의
             결함이다.
@@ -397,14 +401,17 @@ def _require_active_target(
         raise ApplyOperationError(
             f"병합 대상 노드 id를 읽을 수 없다: {node_id_raw}"
         ) from error
-    node = uow.knowledge_nodes.get_entity_by_id(
+    node = uow.knowledge_nodes.lock_entity_node(
         workspace_id=workspace_id,
         node_id=node_id,
     )
     if node is None:
         raise StaleProposal(f"병합 대상 노드가 없다: {node_id}")
     if node.lifecycle_state is not NodeLifecycleState.ACTIVE:
-        raise StaleProposal(f"병합 대상 노드가 살아 있지 않다: {node_id}")
+        raise StaleProposal(
+            f"병합 대상 노드가 살아 있지 않다: {node_id} "
+            f"({node.lifecycle_state})"
+        )
 
 
 def _names_by_candidate(proposal: ApprovedProposal) -> dict[uuid.UUID, str]:
@@ -529,8 +536,9 @@ def _record_resolution_event(
             {"candidate_id": str(candidate_id), "name": name}
             for candidate_id, name in tally.applied_members
         ],
-        # 같은 트랜잭션 안이고 노드에 붙은 후보 행은 mark_entity_resolved가
-        # 잠근 채이므로, commit 전에 다른 트랜잭션이 끼어들 수 없다.
+        # 노드 행은 mark_entity_resolved가 FOR UPDATE로 잠근 채이고, 후보를
+        # 붙이는 모든 경로가 같은 행을 잠그므로 commit 전에 다른 트랜잭션이
+        # 이 집합을 바꿀 수 없다.
         "node_candidate_ids_after": [
             str(candidate_id)
             for candidate_id in uow.knowledge_candidates.list_entity_candidate_ids_resolved_to(

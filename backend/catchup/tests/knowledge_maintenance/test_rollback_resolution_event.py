@@ -538,6 +538,8 @@ def test_merge_into_node_rollback_repoints_candidates_to_one_new_node() -> None:
     assert unmerge["member_hash"] == MEMBER_HASH
     assert unmerge["node_id"] == new_node_id
     assert unmerge["member_snapshot"]["reversed_event_id"] == str(event_id)
+    # 기존 노드로 붙였던 병합이라 되돌려도 그 노드는 물러나지 않는다.
+    assert unmerge["member_snapshot"]["node_retired"] is False
     assert state.node_by_id(target.id).lifecycle_state is NodeLifecycleState.ACTIVE
 
 

@@ -296,6 +296,16 @@ class FakeNodeRepo:
                 return node
         return None
 
+    def lock_entity_node(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+    ) -> KnowledgeNode | None:
+        # 가짜 저장소에는 잠금이 없으므로 읽기와 같다. 실 어댑터는 같은
+        # 행을 FOR UPDATE로 잠근 채 돌려준다.
+        return self.get_entity_by_id(workspace_id=workspace_id, node_id=node_id)
+
     def add_alias(
         self,
         *,
@@ -1066,6 +1076,42 @@ def test_merge_into_inactive_node_makes_the_proposal_stale() -> None:
     _assert_stale_and_untouched(state, proposal_id, result)
     assert state.candidates[representative]["resolved_node_id"] is None
     assert [node.id for node in state.nodes] == [target.id]
+
+
+def test_merge_into_missing_node_makes_the_proposal_stale() -> None:
+    """대상 노드가 아예 없으면 안건은 stale이다. 노드를 새로 만들지 않는다."""
+    state = FakeState()
+    representative = state.add_candidate()
+    proposal_id = state.add_approved_merge(
+        representative=representative,
+        members=(),
+        merge_into_node_id=uuid.uuid4(),
+    )
+
+    result, _ = _run(state)
+
+    _assert_stale_and_untouched(state, proposal_id, result)
+    assert state.candidates[representative]["resolved_node_id"] is None
+    assert state.nodes == []
+
+
+def test_missing_candidate_row_fails_that_proposal() -> None:
+    """후보 행이 없는 안건은 결함이라 stale이 아니라 실패로 남는다."""
+    state = FakeState()
+    representative = state.add_candidate()
+    proposal_id = state.add_approved_merge(
+        representative=representative, members=()
+    )
+    del state.candidates[representative]
+
+    result, _ = _run(state)
+
+    assert result.proposals_failed == 1
+    assert result.proposals_applied == 0
+    assert result.proposals_stale == 0
+    assert state.proposals[proposal_id]["status"] == "approved"
+    assert state.nodes == []
+    assert state.events == []
 
 
 def test_stale_proposal_does_not_block_the_next_one() -> None:
