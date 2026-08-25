@@ -105,6 +105,20 @@ class KnowledgeNodeRepository(Protocol):
         """
         ...
 
+    def lock_entity_node(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+    ) -> KnowledgeNode | None:
+        """노드 행을 이 트랜잭션이 끝날 때까지 잠그고 현재 값을 준다.
+
+        후보를 붙이는 mark_entity_resolved와 노드를 물리는
+        retire_entity_node가 같은 행을 잠그므로, 먼저 잠근 쪽이 끝날 때까지
+        나머지는 기다린다. 되돌림이 노드 상태를 견주기 전에 부른다.
+        """
+        ...
+
     def find_entity_candidates_by_similarity(
         self,
         *,

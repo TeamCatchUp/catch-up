@@ -601,6 +601,33 @@ class SqlAlchemyKnowledgeNodeRepository:
         )
         return knowledge_node_to_domain(row) if row is not None else None
 
+    def lock_entity_node(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+    ) -> KnowledgeNode | None:
+        """노드 행을 SELECT ... FOR UPDATE로 잠그고 현재 값을 준다.
+
+        후보를 붙이는 mark_entity_resolved와 노드를 물리는
+        retire_entity_node가 같은 행을 잠그므로, 먼저 잠근 쪽이 commit할
+        때까지 나머지는 기다린다. 없는 노드에는 None을 준다.
+        """
+        row = self._session.scalar(
+            select(KnowledgeNodeRow)
+            .where(
+                KnowledgeNodeRow.workspace_id == workspace_id,
+                KnowledgeNodeRow.id == node_id,
+            )
+            .with_for_update()
+            # 이 세션이 앞서 읽어 둔 노드가 있으면 잠금을 얻고도 예전 값을
+            # 그대로 볼 수 있다. 잠근 뒤의 값으로 다시 채운다.
+            .execution_options(populate_existing=True)
+        )
+        if row is None:
+            return None
+        return knowledge_node_to_domain(row)
+
     def find_entity_candidates_by_similarity(
         self,
         *,
@@ -1758,6 +1785,23 @@ class SqlAlchemyKnowledgeCandidateRepository:
             return None
         return (row[0], row[1])
 
+    def list_entity_candidate_ids_resolved_to(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+    ) -> tuple[uuid.UUID, ...]:
+        """어떤 노드를 지금 가리키는 entity 후보 id를 오름차순으로 준다."""
+        rows = self._session.scalars(
+            select(KnowledgeEntityCandidateRow.id)
+            .where(
+                KnowledgeEntityCandidateRow.workspace_id == workspace_id,
+                KnowledgeEntityCandidateRow.resolved_node_id == node_id,
+            )
+            .order_by(KnowledgeEntityCandidateRow.id)
+        ).all()
+        return tuple(rows)
+
     def count_entities_resolved_to(
         self,
         *,
@@ -2271,6 +2315,33 @@ class SqlAlchemyMutationProposalRepository:
                 KnowledgeMutationProposalRow.status == "approved",
             )
             .values(status="applied", applied_at=func.now())
+        )
+        if result.rowcount != 1:
+            raise MergeProposalAlreadyDecided(str(proposal_id))
+        self._session.flush()
+
+    def mark_stale(
+        self,
+        *,
+        workspace_id: int,
+        proposal_id: uuid.UUID,
+    ) -> None:
+        """승인 뒤 실행할 수 없게 된 안건을 stale로 끝맺는다.
+
+        결정(reviewer·reviewed_at)은 그대로 둔다. 사람이 승인했다는 사실은
+        남아야 한다.
+
+        Raises:
+            MergeProposalAlreadyDecided: approved 상태가 아니다.
+        """
+        result = self._session.execute(
+            update(KnowledgeMutationProposalRow)
+            .where(
+                KnowledgeMutationProposalRow.workspace_id == workspace_id,
+                KnowledgeMutationProposalRow.id == proposal_id,
+                KnowledgeMutationProposalRow.status == "approved",
+            )
+            .values(status="stale")
         )
         if result.rowcount != 1:
             raise MergeProposalAlreadyDecided(str(proposal_id))

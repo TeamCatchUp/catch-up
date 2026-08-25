@@ -378,6 +378,23 @@ class MutationProposalRepository(Protocol):
         """
         ...
 
+    def mark_stale(
+        self,
+        *,
+        workspace_id: int,
+        proposal_id: uuid.UUID,
+    ) -> None:
+        """승인 뒤 세계가 바뀌어 실행할 수 없게 된 안건을 stale로 끝맺는다.
+
+        approved 행 하나만 갱신한다. 결정(reviewer·reviewed_at)은 지우지
+        않는다. 사람이 승인했다는 사실은 남고, 그 승인이 실행되지 못한
+        이유는 로그에 남는다.
+
+        Raises:
+            MergeProposalAlreadyDecided: approved 상태가 아니다.
+        """
+        ...
+
     def add_duplicate_proposal(
         self,
         *,

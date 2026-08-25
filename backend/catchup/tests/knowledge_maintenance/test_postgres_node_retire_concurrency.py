@@ -289,3 +289,67 @@ def test_retire_gives_up_when_a_candidate_was_attached_first(
         node = session.get(NodeRow, seeded.node_id)
         assert node is not None
         assert node.lifecycle_state == NodeLifecycleState.ACTIVE.value
+
+
+def test_attach_waits_for_lock_entity_node(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    seeded: _Fixture,
+) -> None:
+    """lock_entity_node가 잡은 잠금 동안 부착은 기다렸다가 풀린 뒤 끝난다.
+
+    되돌림은 노드 상태를 견주기 전에 이 잠금을 잡는다. 잠금이 실제로
+    걸리지 않으면 견주는 사이에 후보가 붙어, 되돌림이 본 것과 다른 노드를
+    두고 판단하게 된다. 노드는 물리지 않았으므로 잠금이 풀린 뒤의 부착은
+    성공한다.
+    """
+    attach_error: list[BaseException | None] = []
+    attach_started = threading.Event()
+
+    def attach() -> None:
+        with session_factory() as session:
+            repository = SqlAlchemyKnowledgeCandidateRepository(session)
+            attach_started.set()
+            try:
+                repository.mark_entity_resolved(
+                    candidate_id=seeded.candidate_id,
+                    status=EntityResolutionStatus.MERGED,
+                    resolved_node_id=seeded.node_id,
+                )
+                session.commit()
+                attach_error.append(None)
+            except BaseException as error:  # noqa: BLE001
+                session.rollback()
+                attach_error.append(error)
+
+    lock_session = session_factory()
+    try:
+        locked = SqlAlchemyKnowledgeNodeRepository(lock_session).lock_entity_node(
+            workspace_id=workspace_id,
+            node_id=seeded.node_id,
+        )
+        assert locked is not None
+        assert locked.id == seeded.node_id
+
+        worker = threading.Thread(target=attach, daemon=True)
+        worker.start()
+        assert attach_started.wait(timeout=RELEASED_SECONDS)
+        # 아직 commit하지 않았으므로 노드 행 잠금은 이쪽이 쥐고 있다.
+        worker.join(timeout=BLOCKED_SECONDS)
+        assert worker.is_alive(), "부착이 노드 행 잠금을 기다리지 않았다"
+
+        lock_session.commit()
+    finally:
+        lock_session.close()
+
+    worker.join(timeout=RELEASED_SECONDS)
+    assert not worker.is_alive()
+    assert attach_error == [None]
+
+    with session_factory() as session:
+        candidate = session.get(EntityCandidateRow, seeded.candidate_id)
+        assert candidate is not None
+        assert candidate.resolved_node_id == seeded.node_id
+        node = session.get(NodeRow, seeded.node_id)
+        assert node is not None
+        assert node.lifecycle_state == NodeLifecycleState.ACTIVE.value

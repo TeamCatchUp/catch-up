@@ -280,6 +280,19 @@ class KnowledgeCandidateRepository(Protocol):
         """
         ...
 
+    def list_entity_candidate_ids_resolved_to(
+        self,
+        *,
+        workspace_id: int,
+        node_id: uuid.UUID,
+    ) -> tuple[uuid.UUID, ...]:
+        """어떤 노드를 지금 가리키는 entity 후보 id를 오름차순으로 준다.
+
+        적용은 이 값을 event에 적고, 되돌림은 같은 값을 다시 읽어 견준다.
+        두 값이 같아야 그 event 뒤에 노드에 아무 일도 없었다고 볼 수 있다.
+        """
+        ...
+
     def count_entities_resolved_to(
         self,
         *,

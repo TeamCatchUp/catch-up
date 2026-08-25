@@ -38,6 +38,9 @@ from catchup.knowledge_maintenance.domain.knowledge_candidate import (
     EntityResolutionStatus,
 )
 from catchup.knowledge_maintenance.domain.knowledge_node import NodeLifecycleState
+from catchup.knowledge_maintenance.ports.mutation_proposals import (
+    MergeProposalAlreadyDecided,
+)
 from catchup.knowledge_maintenance.services.query_knowledge_as_of import (
     query_claims_as_of,
 )
@@ -238,6 +241,84 @@ def test_count_entities_resolved_to_filters_by_name_and_exclusion(
             )
             == 0
         )
+
+
+def test_list_entity_candidate_ids_resolved_to_returns_sorted_ids(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """노드를 가리키는 후보 id를 오름차순으로 돌려준다.
+
+    다른 노드에 붙은 후보는 빠진다. 적용은 이 값을 event에 적고, 되돌림은
+    같은 값을 다시 읽어 견준다.
+    """
+    stored = _stored_candidates(workspace_id, session_factory, uow_factory)
+    payment = stored.entity_ids["e1"]
+    auth = stored.entity_ids["e2"]
+    elsewhere = stored.entity_ids["m1"]
+
+    with uow_factory() as uow:
+        node = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=None,
+            display_name="결제 기능",
+        )
+        other = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=None,
+            display_name="다른 기능",
+        )
+        for candidate_id, target in (
+            (payment, node.id),
+            (auth, node.id),
+            (elsewhere, other.id),
+        ):
+            uow.knowledge_candidates.mark_entity_resolved(
+                candidate_id=candidate_id,
+                status=EntityResolutionStatus.MERGED,
+                resolved_node_id=target,
+            )
+        uow.commit()
+
+    with uow_factory() as uow:
+        found = uow.knowledge_candidates.list_entity_candidate_ids_resolved_to(
+            workspace_id=workspace_id,
+            node_id=node.id,
+        )
+    assert found == tuple(sorted((payment, auth)))
+
+
+def test_lock_entity_node_returns_node_or_none(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """잠근 노드를 도메인 값으로 돌려주고, 없는 노드에는 None을 준다."""
+    with uow_factory() as uow:
+        node = uow.knowledge_nodes.create_entity_node(
+            workspace_id=workspace_id,
+            entity_type="feature",
+            canonical_key=None,
+            display_name="결제 기능",
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        locked = uow.knowledge_nodes.lock_entity_node(
+            workspace_id=workspace_id,
+            node_id=node.id,
+        )
+        missing = uow.knowledge_nodes.lock_entity_node(
+            workspace_id=workspace_id,
+            node_id=uuid.uuid4(),
+        )
+    assert locked is not None
+    assert locked.id == node.id
+    assert locked.lifecycle_state is NodeLifecycleState.ACTIVE
+    assert missing is None
 
 
 def test_entity_node_roundtrip_by_canonical_key(
@@ -686,6 +767,64 @@ def test_replacing_proposal_reuses_key_row(
         ).all()
     assert operations[0].entity_candidate_id == other
     assert operations[1].entity_candidate_id == representative
+
+
+def test_mark_stale_moves_only_an_approved_proposal(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+    uow_factory: Callable[[], KnowledgeMaintenanceUnitOfWork],
+) -> None:
+    """approved 안건만 stale이 되고 결정 저널은 그대로 남는다.
+
+    승인 뒤 세계가 바뀌어 실행할 수 없게 된 안건을 끝맺는 자리다. 사람이
+    승인했다는 사실을 지우면 안 되므로 reviewer와 reviewed_at은 건드리지
+    않는다. 이미 끝난 안건을 다시 끝맺으려 하면 거부한다.
+    """
+    stored = _stored_candidates(workspace_id, session_factory, uow_factory)
+    representative = stored.entity_ids["e1"]
+    other = stored.entity_ids["e2"]
+
+    with uow_factory() as uow:
+        proposal_id = uow.mutation_proposals.add_duplicate_proposal(
+            workspace_id=workspace_id,
+            idempotency_key=f"stale-{uuid.uuid4().hex[:8]}",
+            trigger_entity_candidate_id=representative,
+            detector="catchup.name_group_judge",
+            detector_version="1",
+            summary="같은 이름 후보 병합",
+            resolver_metadata={"member_hash": "abc"},
+            representative_candidate_id=representative,
+            merge_candidate_ids=(other,),
+            proposed_type="feature",
+            proposed_name="결제 기능",
+        )
+        uow.mutation_proposals.mark_merge_approved(
+            workspace_id=workspace_id,
+            proposal_id=proposal_id,
+            reviewer="tester",
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        uow.mutation_proposals.mark_stale(
+            workspace_id=workspace_id,
+            proposal_id=proposal_id,
+        )
+        uow.commit()
+
+    with session_factory() as session:
+        row = session.get(ProposalRow, proposal_id)
+        assert row is not None
+        assert row.status == "stale"
+        assert row.reviewer == "tester"
+        assert row.reviewed_at is not None
+
+    with uow_factory() as uow:
+        with pytest.raises(MergeProposalAlreadyDecided):
+            uow.mutation_proposals.mark_stale(
+                workspace_id=workspace_id,
+                proposal_id=proposal_id,
+            )
 
 
 class _UnusedJudge:
