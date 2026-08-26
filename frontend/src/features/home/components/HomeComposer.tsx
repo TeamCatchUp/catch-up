@@ -12,6 +12,7 @@ import IconCancel from '@/public/icons/icon/cancel.svg';
 import DocumentSearchFilterRow from '@/shared/components/query/filter/DocumentSearchFilterRow';
 import TemplateInput from '@/shared/components/query/TemplateInput';
 import SourceChipsRow from '@/shared/components/SourceChipsRow';
+import { Button } from '@/shared/components/ui/button';
 import type { UseSearchFiltersReturn } from '@/shared/hooks/query/useSearchFilters';
 import type { UseSearchInputReturn } from '@/shared/hooks/query/useSearchInput';
 import type { DocsSource } from '@/shared/types/source';
@@ -181,14 +182,16 @@ export default function HomeComposer({
                 <span className="rounded-rounded bg-fill-primary-normal-neutral flex h-9 shrink-0 items-center gap-0.5 p-1.5">
                   {TemplateIcon && <TemplateIcon aria-hidden className="text-icon-primary-normal size-5 shrink-0" />}
                   <span className="text-body-small text-text-primary-normal truncate px-1">{selectedTemplateLabel}</span>
-                  <button
+                  <Button
+                    variant="icon-only-blue"
+                    size="xs"
                     type="button"
                     aria-label="템플릿 해제"
                     onClick={onTemplateRemove}
-                    className="rounded-rounded flex size-5.5 shrink-0 cursor-pointer items-center justify-center p-0.5"
+                    className="shrink-0 p-0.5"
                   >
-                    <IconCancel className="text-icon-primary-normal size-full" />
-                  </button>
+                    <IconCancel className="size-4.5" />
+                  </Button>
                 </span>
               </>
             )}
