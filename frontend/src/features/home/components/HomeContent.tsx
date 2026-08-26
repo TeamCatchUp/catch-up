@@ -110,7 +110,7 @@ export default function HomeContent() {
 
   return (
     <div className="bg-home-gradient flex min-h-full flex-col overflow-y-auto">
-      <TopNavbar pageType={mode === 'docs' ? 'docs' : 'home'} />
+      <TopNavbar pageType="home" />
 
       <div className="flex flex-col items-center gap-9 px-16 pt-30 pb-30">
         <AnimatePresence mode="wait" initial={false}>

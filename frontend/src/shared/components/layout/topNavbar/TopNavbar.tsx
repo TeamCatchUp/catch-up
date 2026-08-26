@@ -3,7 +3,6 @@
 import Link from 'next/link';
 
 import Settings from '@/public/icons/icon/admin_panel_settings.svg';
-import DocumentSearch from '@/public/icons/icon/document_search.svg';
 import Home from '@/public/icons/icon/home.svg';
 import KebabHorizontalIcon from '@/public/icons/icon/kebab_horizontal.svg';
 import MyPage from '@/public/icons/icon/person.svg';
@@ -12,7 +11,7 @@ import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdo
 
 import { MoreButtonContent } from './MoreButtonModal';
 
-type PageType = 'home' | 'docs' | 'mypage' | 'settings';
+type PageType = 'home' | 'mypage' | 'settings';
 
 interface PageConfig {
   icon: React.ComponentType<{ className?: string }>;
@@ -28,11 +27,6 @@ const pageConfigs: Record<PageType, PageConfig> = {
     icon: Home,
     label: '홈',
     href: '/',
-  },
-  docs: {
-    icon: DocumentSearch,
-    label: '문서 탐색',
-    href: '/?mode=docs',
   },
   mypage: {
     icon: MyPage,

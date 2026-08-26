@@ -13,7 +13,7 @@ import TopNavbar from './TopNavbar';
 type TopNavbarStoryArgs = ComponentProps<typeof TopNavbar>;
 type PageType = TopNavbarStoryArgs['pageType'];
 
-const pageTypeOptions: readonly PageType[] = ['home', 'docs', 'mypage', 'settings'];
+const pageTypeOptions: readonly PageType[] = ['home', 'mypage', 'settings'];
 const versionHandler = http.get(API.version, () => HttpResponse.text('2026.7.9-local'));
 
 const meta = {
@@ -48,7 +48,7 @@ const meta = {
       dataProfile: 'msw',
       designSource: 'dev-preview',
       viewport: { width: 1440, height: 160 },
-      states: ['home', 'docs', 'mypage', 'settings', 'more-menu'],
+      states: ['home', 'mypage', 'settings', 'more-menu'],
       usedBy: ['home-docs', 'agent-studio', 'hybrid-search'],
       dataNotes: ['MSW supplies the app version for the more-menu dropdown.'],
       reuseNotes: ['The app shell and home/docs surfaces reuse TopNavbar pageType variants.'],
@@ -78,12 +78,6 @@ export const Home: Story = {
       await expect(await portal.findByRole('menuitem', { name: '도움말' })).toBeInTheDocument();
       await expect(await portal.findByText('v2026.7.9-local')).toBeInTheDocument();
     });
-  },
-};
-
-export const Docs: Story = {
-  args: {
-    pageType: 'docs',
   },
 };
 

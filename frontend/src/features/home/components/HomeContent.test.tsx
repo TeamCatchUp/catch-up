@@ -127,14 +127,14 @@ describe('HomeContent', () => {
     expect(screen.queryByTestId('template-list')).not.toBeInTheDocument();
   });
 
-  it('mode에 따라 TopNavbar pageType이 home/docs로만 갈린다', () => {
+  it('문서 탐색 모드에서도 헤더는 홈 그대로다', () => {
     const { unmount } = render(<HomeContent />);
     expect(screen.getByTestId('top-navbar')).toHaveTextContent('home');
     unmount();
 
     searchParams = new URLSearchParams('mode=docs');
     render(<HomeContent />);
-    expect(screen.getByTestId('top-navbar')).toHaveTextContent('docs');
+    expect(screen.getByTestId('top-navbar')).toHaveTextContent('home');
   });
 
   it('컴포저의 모드 전환은 q 같은 다른 파라미터를 남긴 채 mode만 붙인다', async () => {
