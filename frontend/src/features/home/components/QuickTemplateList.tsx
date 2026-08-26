@@ -4,26 +4,8 @@
 // 화살표는 hover에서만 나타난다 — 그때 라벨 칸이 그만큼 줄어든다.
 
 import IconArrowOutward from '@/public/icons/icon/arrow_outward.svg';
-import IconBugError from '@/public/icons/icon/bug_error.svg';
-import IconCopyCheck from '@/public/icons/icon/copy_check.svg';
-import IconFolderOpen from '@/public/icons/icon/folder_open.svg';
-import IconHistory from '@/public/icons/icon/history.svg';
-import IconPerson from '@/public/icons/icon/person2.svg';
-import IconSearchFile from '@/public/icons/icon/search_file.svg';
 
-import { tipData } from '../constants/questionTips';
-
-type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
-
-// tipData 순서와 1:1로 맞춘다.
-const TEMPLATE_ICONS: readonly IconComponent[] = [
-  IconPerson,
-  IconHistory,
-  IconBugError,
-  IconCopyCheck,
-  IconFolderOpen,
-  IconSearchFile,
-];
+import { TEMPLATE_ICONS, tipData } from '../constants/questionTips';
 
 const COLUMNS = 2;
 

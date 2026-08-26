@@ -10,6 +10,7 @@ import type { UseSearchInputReturn } from '@/shared/hooks/query/useSearchInput';
 import type { DocsSource } from '@/shared/types/source';
 
 import { catchupParameters } from '../../../../.storybook/catchupStoryParameters';
+import { TEMPLATE_ICONS, tipData } from '../constants/questionTips';
 import type { HomeMode } from './ComposerModeToggle';
 import HomeComposer from './HomeComposer';
 
@@ -140,6 +141,9 @@ function HomeComposerCanvas(args: HomeComposerStoryArgs) {
         onAiSubmit={args.onAiSubmit}
         onDocsSubmit={args.onDocsSubmit}
         selectedTemplateLabel={state.templateLabel}
+        TemplateIcon={
+          state.templateLabel ? (TEMPLATE_ICONS[tipData.findIndex((t) => t.chipLabel === state.templateLabel)] ?? null) : null
+        }
         onTemplateRemove={state.onTemplateRemove}
       />
     </div>
@@ -201,7 +205,7 @@ const meta = {
       usedBy: ['home-docs'],
       layoutNotes: [
         '카드 폭 760은 w-190, 라운드 24는 rounded-[24px]로 고정한다.',
-        'AI 모드는 입력·컨트롤 사이 gap-8, 하단 행 py-2.5. docs 모드는 gap-6, py-3.',
+        '두 모드 모두 입력·컨트롤 사이 gap-8, 하단 부착 행 py-2.5로 같은 리듬을 쓴다.',
         '입력 상한 360px은 max-h-90이고, 넘으면 textarea 안에서 스크롤한다.',
       ],
       dataNotes: [

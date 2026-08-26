@@ -1,3 +1,9 @@
+import IconBugError from '@/public/icons/icon/bug_error.svg';
+import IconCopyCheck from '@/public/icons/icon/copy_check.svg';
+import IconFolderOpen from '@/public/icons/icon/folder_open.svg';
+import IconHistory from '@/public/icons/icon/history.svg';
+import IconPerson from '@/public/icons/icon/person2.svg';
+import IconSearchFile from '@/public/icons/icon/search_file.svg';
 import type { TipData } from '@/shared/types/template';
 
 export type { TemplateField, TemplateSegment, TipData } from '@/shared/types/template';
@@ -99,4 +105,16 @@ export const tipData: TipData[] = [
       { key: 'content', placeholder: '문의 내용/에러로그' },
     ],
   },
+];
+
+type TemplateIcon = React.ComponentType<React.SVGProps<SVGSVGElement>>;
+
+// tipData와 인덱스가 1:1이다 — 목록과 삽입된 템플릿 칩이 같은 글리프를 쓴다.
+export const TEMPLATE_ICONS: readonly TemplateIcon[] = [
+  IconPerson,
+  IconHistory,
+  IconBugError,
+  IconCopyCheck,
+  IconFolderOpen,
+  IconSearchFile,
 ];

@@ -10,7 +10,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import { ADMIN_GUIDE_STORAGE_KEY } from '@/features/home/constants/adminGuide';
 import { FEATURE_UPDATE_NOTICE, FEATURE_UPDATE_NOTICE_ID } from '@/features/home/constants/featureUpdateNotice';
-import { tipData } from '@/features/home/constants/questionTips';
+import { TEMPLATE_ICONS, tipData } from '@/features/home/constants/questionTips';
 import { USER_GUIDE_STORAGE_KEY } from '@/features/home/constants/userGuide';
 import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import { useSearchFilters } from '@/shared/hooks/query/useSearchFilters';
@@ -98,8 +98,9 @@ export default function HomeContent() {
     inputRef.current?.focus();
   };
 
-  const selectedTemplateLabel =
-    input.isFromTemplate && input.selectedTipIndex !== null ? (tipData[input.selectedTipIndex]?.chipLabel ?? null) : null;
+  const selectedTipIndex = input.isFromTemplate ? input.selectedTipIndex : null;
+  const selectedTemplateLabel = selectedTipIndex !== null ? (tipData[selectedTipIndex]?.chipLabel ?? null) : null;
+  const SelectedTemplateIcon = selectedTipIndex !== null ? (TEMPLATE_ICONS[selectedTipIndex] ?? null) : null;
 
   const handleTemplateRemove = () => {
     input.resetTemplateFields();
@@ -138,7 +139,9 @@ export default function HomeContent() {
           onSmartFilterChange={setSmartFilter}
           onAiSubmit={input.handleSubmit}
           onDocsSubmit={handleDocsSubmit}
+          tipData={tipData}
           selectedTemplateLabel={selectedTemplateLabel}
+          TemplateIcon={SelectedTemplateIcon}
           onTemplateRemove={handleTemplateRemove}
         />
 
