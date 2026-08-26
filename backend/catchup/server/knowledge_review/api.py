@@ -10,6 +10,12 @@ debug 라우터와 달리 인증과 검토자 권한을 요구하고, 결정 저
 판단의 재료이기 때문이다. 병합 결정은 이 표면에 없다 — 문서 검토와 다른
 화면의 일이라 debug 라우터에 남겨 둔다.
 
+변경안 전체를 한 번에 승인·반려하는 경로는 없다. 블록마다 판정을 남기고
+발행(publish)으로 마감하는 경로 하나가 그 일을 대신하고, 아직 판정하지 않은
+블록은 발행 요청의 undecided로 한꺼번에 승인하거나 반려한다. 통짜 결정을
+함께 두면 같은 확정에 규칙이 다른 길이 둘 생기고, 통짜 승인은 블록 판정을
+읽지 않아 사람이 반려한 블록까지 판에 실린다.
+
 모순 직접 판정(resolve)과 적용(apply)도 이 표면에 없다. 기획 UX에 없는
 운영 도구를 인증 표면에 노출하지 않으려는 것이며, 그 경로는 debug 라우터와
 `catchup/evaluation/`의 CLI 러너가 담당한다.
@@ -76,24 +82,6 @@ from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
 from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
     publish_artifact_proposal,
 )
-from catchup.knowledge_maintenance.services.review_artifact_proposal import (
-    CODE_NOT_DOCUMENT_OWNER as REVIEW_CODE_NOT_DOCUMENT_OWNER,
-)
-from catchup.knowledge_maintenance.services.review_artifact_proposal import (
-    PROPOSAL_STATUS_PENDING,
-)
-from catchup.knowledge_maintenance.services.review_artifact_proposal import (
-    VERDICT_APPROVED,
-)
-from catchup.knowledge_maintenance.services.review_artifact_proposal import (
-    VERDICT_REJECTED,
-)
-from catchup.knowledge_maintenance.services.review_artifact_proposal import (
-    ProposalReviewError,
-)
-from catchup.knowledge_maintenance.services.review_artifact_proposal import (
-    review_artifact_proposal,
-)
 from catchup.knowledge_maintenance.services.review_block_verdict import (
     CODE_NOT_DOCUMENT_OWNER as BLOCK_CODE_NOT_DOCUMENT_OWNER,
 )
@@ -118,14 +106,12 @@ from catchup.server.knowledge_review.schemas import BlockVerdictRequest
 from catchup.server.knowledge_review.schemas import BlockVerdictResponse
 from catchup.server.knowledge_review.schemas import ConflictResponse
 from catchup.server.knowledge_review.schemas import ConflictValueResponse
-from catchup.server.knowledge_review.schemas import DecisionResponse
 from catchup.server.knowledge_review.schemas import ProposalDetailResponse
 from catchup.server.knowledge_review.schemas import PublishRequest
 from catchup.server.knowledge_review.schemas import PublishResponse
 from catchup.server.knowledge_review.schemas import QueueItemResponse
 from catchup.server.knowledge_review.schemas import QueuePageResponse
 from catchup.server.knowledge_review.schemas import ReadSetResponse
-from catchup.server.knowledge_review.schemas import RejectRequest
 from catchup.server.knowledge_review.schemas import VariantResponse
 from catchup.server.wiki.dependencies import review_error
 from catchup.server.wiki.layout import layout_items
@@ -146,20 +132,6 @@ _BLOCK_VERDICT_ERRORS: dict[str, tuple[int, str]] = {
     "ALREADY_DECIDED": (409, "이미 결정된 변경안입니다."),
     "STALE_BLOCK": (409, "블록 본문이 바뀌었습니다. 다시 읽어 주세요."),
     "INVALID": (422, "블록 결정 요청이 올바르지 않습니다."),
-}
-
-# 통짜 승인이 닿지 못하는 자리를 서비스가 코드로 알린다. 여기는 그 코드를
-# 상태 코드와 문구로 옮기기만 한다 — 같은 검사를 라우터가 또 하면 정식
-# API·debug·CLI 세 표면의 규칙이 갈라진다.
-_ARTIFACT_REVIEW_ERRORS: dict[str, tuple[int, str]] = {
-    "CONTESTED_REQUIRES_BLOCK_REVIEW": (
-        409,
-        "다툼 블록이 있어 블록 검토를 거쳐야 합니다.",
-    ),
-    "BLOCK_REVIEW_IN_PROGRESS": (
-        409,
-        "블록 검토가 시작된 변경안은 발행으로 끝내야 합니다.",
-    ),
 }
 
 _PUBLISH_ERRORS: dict[str, tuple[int, str]] = {
@@ -512,132 +484,6 @@ def get_queue_item(
     )
 
 
-@router.post(
-    path="/artifacts/{proposal_id}/approve",
-    response_model=DecisionResponse,
-    description=(
-        "문서 변경안 전체를 승인해 새 revision을 발행한다. "
-        "블록 판정이 시작된 변경안에는 쓸 수 없다. "
-        "문서 담당자만 할 수 있고, 담당자가 없는 문서는 워크스페이스 "
-        "구성원 누구나 할 수 있다."
-    ),
-)
-@audit_log(
-    action=KnowledgeReviewAction.APPROVE,
-    metadata_factory=KnowledgeReviewAuditMetadata.from_audit,
-)
-def approve_artifact(
-    proposal_id: uuid.UUID,
-    context: ReviewerContext = Depends(resolve_reviewer_workspace),
-    uow_factory: ReviewUowFactory = Depends(get_review_uow_factory),
-    db: Session = Depends(get_db),
-) -> DecisionResponse:
-    """승인을 확정하고 그 결과를 돌려준다.
-
-    다툼 블록이 있거나 블록 결정이 이미 적혀 있는 안건은 서비스가 막고,
-    여기서는 그 코드를 409로 옮긴다. 다툼 블록에는 통짜 승인이 승자를
-    고를 자리가 없고, 적힌 블록 결정은 통짜 승인이 읽지 않아 반려된
-    블록까지 판에 실리기 때문이다.
-
-    담당자 규칙의 강제와 담당자 부여는 서비스가 자기 transaction 안에서
-    한다. 여기 사전 검사는 서비스에 닿기 전에 빠르게 돌려보내는 자리일
-    뿐이고, 확정을 가르는 것은 서비스의 재확인이다.
-
-    Raises:
-        HTTPException: 변경안이 없으면 404, 이 문서의 검수 권한이 없으면
-            403, 다툼 블록이 있거나 블록 결정이 시작됐거나 결정을 받아들일
-            수 없으면 409를 던진다.
-    """
-    proposal = _require_decidable_proposal(
-        uow_factory, db, context, proposal_id
-    )
-    try:
-        result = review_artifact_proposal(
-            uow_factory(),
-            proposal_id=proposal_id,
-            verdict=VERDICT_APPROVED,
-            reviewer=context.reviewer,
-            decider_user_id=context.user.id,
-        )
-    except ProposalReviewError as error:
-        raise _artifact_review_error(
-            uow_factory, proposal_id, code=error.code
-        ) from error
-    return DecisionResponse(
-        proposal_id=str(result.proposal_id),
-        verdict=result.verdict,
-        revision_id=(
-            None if result.revision_id is None else str(result.revision_id)
-        ),
-        revision_number=result.revision_number,
-        claims_accepted=result.claims_accepted,
-        owners=_owners_after_decision(db, proposal.artifact_id),
-    )
-
-
-@router.post(
-    path="/artifacts/{proposal_id}/reject",
-    response_model=DecisionResponse,
-    description=(
-        "문서 변경안 전체를 사유와 함께 반려한다. "
-        "문서 담당자만 할 수 있고, 담당자가 없는 문서는 워크스페이스 "
-        "구성원 누구나 할 수 있다."
-    ),
-)
-@audit_log(
-    action=KnowledgeReviewAction.REJECT,
-    metadata_factory=KnowledgeReviewAuditMetadata.from_audit,
-)
-def reject_artifact(
-    proposal_id: uuid.UUID,
-    payload: RejectRequest,
-    context: ReviewerContext = Depends(resolve_reviewer_workspace),
-    uow_factory: ReviewUowFactory = Depends(get_review_uow_factory),
-    db: Session = Depends(get_db),
-) -> DecisionResponse:
-    """반려를 확정하고 그 결과를 돌려준다.
-
-    사유 없는 반려는 서비스에 닿기 전에 막는다. 서비스와 DB도 같은 것을
-    막지만, 그때는 "받아들일 수 없는 결정"과 구별되지 않는 409가 되어
-    소비자가 입력을 고치면 되는 상황임을 알 수 없다.
-
-    사유 검사를 인가보다 먼저 두는 이유도 같다. 보낸 값의 모양이 틀린 것은
-    권한과 무관하고, 순서를 뒤집으면 소비자가 400을 받을 상황에서 404·403을
-    받아 무엇을 고쳐야 하는지 알 수 없다.
-
-    Raises:
-        HTTPException: 사유가 비면 400, 변경안이 없으면 404, 이 문서의 검수
-            권한이 없으면 403, 결정을 받아들일 수 없으면 409를 던진다.
-    """
-    if not payload.reason.strip():
-        raise review_error(
-            400,
-            code="REASON_REQUIRED",
-            message="반려는 사유가 있어야 합니다.",
-        )
-    proposal = _require_decidable_proposal(
-        uow_factory, db, context, proposal_id
-    )
-    try:
-        result = review_artifact_proposal(
-            uow_factory(),
-            proposal_id=proposal_id,
-            verdict=VERDICT_REJECTED,
-            reviewer=context.reviewer,
-            reason=payload.reason,
-            decider_user_id=context.user.id,
-        )
-    except ProposalReviewError as error:
-        raise _artifact_review_error(
-            uow_factory, proposal_id, code=error.code
-        ) from error
-    return DecisionResponse(
-        proposal_id=str(result.proposal_id),
-        verdict=result.verdict,
-        owners=_owners_after_decision(db, proposal.artifact_id),
-    )
-
-
 @router.put(
     path="/queue/{proposal_id}/blocks/{block_index}/verdict",
     response_model=BlockVerdictResponse,
@@ -794,62 +640,6 @@ def publish_proposal(
         contradictions_resolved=result.contradictions_resolved,
         claims_accepted=result.claims_accepted,
         owners=_owners_after_decision(db, proposal.artifact_id),
-    )
-
-
-def _artifact_review_error(
-    uow_factory: ReviewUowFactory,
-    proposal_id: uuid.UUID,
-    *,
-    code: str | None = None,
-) -> HTTPException:
-    """문서 변경안 결정 실패를 상태 코드와 오류 코드로 옮긴다.
-
-    서비스가 코드를 실어 보낸 거절은 그 코드로 바로 옮긴다. 무엇이
-    막았는지 예외 자체가 말해 주므로 저장소를 다시 읽을 이유가 없다.
-
-    코드가 없는 거절은 종류를 예외에서 읽을 수 없다. 그래서 실패한 뒤에
-    저장소를 한 번 더 읽어 지금 상태로 코드를 정한다. 읽기 전용이고 결정
-    규칙을 다시 판정하지 않는다 — 소비자가 무엇을 고쳐야 하는지 알려 주는
-    진단일 뿐이다.
-    """
-    if code == REVIEW_CODE_NOT_DOCUMENT_OWNER:
-        # 사전 검사를 지난 뒤 담당자가 지정된 경우다. 상태가 아니라 권한
-        # 문제이므로 409 묶음에 섞지 않는다.
-        return _document_permission_error()
-    if code is not None:
-        status_code, message = _ARTIFACT_REVIEW_ERRORS.get(
-            code, _UNMAPPED_ERROR
-        )
-        return review_error(status_code, code=code, message=message)
-    with uow_factory() as uow:
-        proposal = uow.artifacts.get_proposal(proposal_id=proposal_id)
-        if proposal is None:
-            return review_error(
-                404,
-                code="PROPOSAL_NOT_FOUND",
-                message="변경안을 찾을 수 없습니다.",
-            )
-        if proposal.status != PROPOSAL_STATUS_PENDING:
-            return review_error(
-                409,
-                code="ALREADY_DECIDED",
-                message="이미 결정된 변경안입니다.",
-            )
-        latest = uow.artifacts.find_latest_revision_id_and_number(
-            artifact_id=proposal.artifact_id,
-        )
-    latest_revision_id = None if latest is None else latest[0]
-    if latest_revision_id != proposal.base_revision_id:
-        return review_error(
-            409,
-            code="STALE_BASE_REVISION",
-            message="문서가 새 판으로 넘어가 이 변경안은 낡았습니다.",
-        )
-    return review_error(
-        409,
-        code="PROPOSAL_NOT_REVIEWABLE",
-        message="지금 이 변경안에 결정을 확정할 수 없습니다.",
     )
 
 

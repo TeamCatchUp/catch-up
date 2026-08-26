@@ -265,18 +265,50 @@ def _make_artifact(
 
 
 def _add_pending_proposal(
+    db: Session,
+    *,
+    workspace_id: int,
+    artifact_id: uuid.UUID,
+    created_at: datetime | None = None,
+) -> None:
+    """그 문서에 계류 중인 변경안 한 건을 심는다.
+
+    created_at을 주면 도착 시각을 그 값으로 맞춘다. 기본값은 지금이라
+    한 트랜잭션 안에서 만든 제안은 시각이 전부 같아진다.
+    """
+    proposal = KnowledgeArtifactChangeProposal(
+        id=uuid.uuid4(),
+        workspace_id=workspace_id,
+        artifact_id=artifact_id,
+        blocks=[],
+        status="pending",
+        content_hash=uuid.uuid4().hex,
+        idempotency_key=uuid.uuid4().hex,
+    )
+    db.add(proposal)
+    db.flush()
+    if created_at is not None:
+        proposal.created_at = created_at
+        db.flush()
+
+
+def _add_rejected_proposal(
     db: Session, *, workspace_id: int, artifact_id: uuid.UUID
 ) -> None:
-    """그 문서에 계류 중인 변경안 한 건을 심는다."""
+    """그 문서에 반려로 끝난 변경안 한 건을 심는다."""
     db.add(
         KnowledgeArtifactChangeProposal(
             id=uuid.uuid4(),
             workspace_id=workspace_id,
             artifact_id=artifact_id,
             blocks=[],
-            status="pending",
+            status="rejected",
             content_hash=uuid.uuid4().hex,
             idempotency_key=uuid.uuid4().hex,
+            # 반려에는 결정자와 시각이 반드시 남아야 한다는 DB 제약이 있다.
+            reviewer="test",
+            reviewed_at=datetime(2026, 8, 15, tzinfo=timezone.utc),
+            rejection_reason="사유",
         )
     )
     db.flush()
@@ -394,7 +426,11 @@ def test_list_artifacts_without_revision_has_no_last_editor(
     client, member, db, workspace_id
 ):
     """발행판이 없는 문서는 최종 편집자도 시각도 없다."""
-    _make_artifact(db, workspace_id=workspace_id, title="판없음")
+    artifact_id = _make_artifact(db, workspace_id=workspace_id, title="판없음")
+    # 계류 제안이 없으면 목록에서 아예 빠지므로 한 건 붙여 준다.
+    _add_pending_proposal(
+        db, workspace_id=workspace_id, artifact_id=artifact_id
+    )
 
     body = client.get("/api/v1/wiki/artifacts").json()
     item = {row["title"]: row for row in body["items"]}["판없음"]
@@ -469,10 +505,41 @@ def test_list_artifacts_status_filter_and_pagination(
 
 
 def test_list_artifacts_rejects_unknown_status(client, member):
-    """모르는 상태 값은 422다."""
+    """모르는 상태 값은 422다. no_revision도 고를 수 없는 값이다."""
     response = client.get("/api/v1/wiki/artifacts?status=whatever")
 
     assert response.status_code == 422
+
+    hidden = client.get("/api/v1/wiki/artifacts?status=no_revision")
+
+    assert hidden.status_code == 422
+
+
+def test_list_artifacts_hides_documents_without_revision(
+    client, member, db, workspace_id, two_artifacts
+):
+    """계류 제안도 발행판도 없는 문서는 줄에도 total에도 나오지 않는다.
+
+    제안이 전부 반려된 문서가 이 상태가 된다. 발행된 판이 없으므로 읽는
+    사람에게는 아직 없는 문서다.
+    """
+    bare_id = _make_artifact(db, workspace_id=workspace_id, title="빈문서")
+    rejected_id = _make_artifact(db, workspace_id=workspace_id, title="전부반려")
+    _add_rejected_proposal(
+        db, workspace_id=workspace_id, artifact_id=rejected_id
+    )
+    db.flush()
+
+    response = client.get("/api/v1/wiki/artifacts")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2
+    assert sorted(_titles(response)) == ["A", "B"]
+    assert str(bare_id) not in {item["artifact_id"] for item in body["items"]}
+    assert str(rejected_id) not in {
+        item["artifact_id"] for item in body["items"]
+    }
 
 
 def test_list_artifacts_hides_other_workspace(
@@ -741,6 +808,7 @@ def test_list_artifacts_owner_filter_accepts_multiple_values(
     other = _make_user(db, prefix="other")
     _join(db, user=other, workspace_id=workspace_id)
     c_id = _make_artifact(db, workspace_id=workspace_id, title="C")
+    _publish(db, workspace_id=workspace_id, artifact_id=c_id)
     db.add(ArtifactOwner(artifact_id=c_id, user_id=other.id))
     db.flush()
 
@@ -796,7 +864,8 @@ def test_list_artifacts_searches_title(
     client, member, db, workspace_id, two_artifacts
 ):
     """q는 제목 부분일치로 거르고, 공백뿐이면 거르지 않는다."""
-    _make_artifact(db, workspace_id=workspace_id, title="결제 오류")
+    hit_id = _make_artifact(db, workspace_id=workspace_id, title="결제 오류")
+    _publish(db, workspace_id=workspace_id, artifact_id=hit_id)
     db.flush()
 
     hit = client.get("/api/v1/wiki/artifacts?q=오류")
@@ -821,6 +890,7 @@ def test_list_artifacts_sorts_by_created_at_ascending(
         db.get(KnowledgeArtifact, artifact_id).created_at = base + timedelta(
             days=index
         )
+        _publish(db, workspace_id=workspace_id, artifact_id=artifact_id)
     db.flush()
 
     response = client.get("/api/v1/wiki/artifacts?sort=created_at&order=asc")
@@ -839,10 +909,14 @@ def test_list_artifacts_rejects_unknown_sort(client, member):
 def test_list_artifacts_carries_last_activity_at(
     client, member, db, workspace_id
 ):
-    """마지막 활동 시각은 항상 실리고, 활동이 없으면 생성 시각과 같다."""
+    """마지막 활동 시각은 줄마다 실리고, 늦게 움직인 문서가 앞에 선다."""
     base = datetime(2026, 4, 1, tzinfo=timezone.utc)
     quiet_id = _make_artifact(db, workspace_id=workspace_id, title="조용함")
     db.get(KnowledgeArtifact, quiet_id).created_at = base
+    # 문서를 만든 그때에 제안이 도착한 문서다. 마지막 활동이 생성 시각과 같다.
+    _add_pending_proposal(
+        db, workspace_id=workspace_id, artifact_id=quiet_id, created_at=base
+    )
     busy_id = _make_artifact(db, workspace_id=workspace_id, title="바쁨")
     db.get(KnowledgeArtifact, busy_id).created_at = base
     _add_pending_proposal(db, workspace_id=workspace_id, artifact_id=busy_id)

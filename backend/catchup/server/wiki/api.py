@@ -987,14 +987,10 @@ def list_artifacts(
         None, description="해당 폴더의 문서만 조회한다."
     ),
     kind: str | None = Query(None, description="해당 문서 종류만 조회한다."),
-    status_filter: (
-        Literal["pending_review", "published", "no_revision"] | None
-    ) = Query(
+    status_filter: Literal["pending_review", "published"] | None = Query(
         None,
         alias="status",
-        description=(
-            "파생 상태로 거른다(pending_review·published·no_revision)."
-        ),
+        description="파생 상태로 거른다(pending_review·published).",
     ),
     owner_user_id: list[int] | None = Query(
         None,
@@ -1046,6 +1042,10 @@ def list_artifacts(
 
     기본 정렬은 마지막 활동 시각 내림차순이다. 대시보드를 여는 사람이 가장
     먼저 찾는 것이 최근에 움직인 문서이기 때문이다.
+
+    계류 제안도 발행판도 없는 문서는 목록에 나오지 않는다. 제안이 전부
+    반려된 문서가 그런 상태인데, 발행된 판이 없어 읽는 사람에게는 아직
+    없는 문서다. total에서도 함께 빠진다.
 
     Raises:
         HTTPException: owner_user_id를 한 명 이상 주면서 unassigned까지 켜면

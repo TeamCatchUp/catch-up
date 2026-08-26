@@ -255,7 +255,7 @@ def test_list_owners_by_artifact_joins_user_display(db, workspace_id) -> None:
 
 
 def test_list_artifacts_status_is_derived(db, workspace_id) -> None:
-    """계류 제안이 있으면 pending_review, 없고 발행판 있으면 published, 둘 다 없으면 no_revision이다."""
+    """계류 제안이 있으면 pending_review, 없고 발행판 있으면 published다."""
     user = _user(db, "a@x.com")
     channel = _channel(db, workspace_id, created_by=user.id)
     pending = _artifact(db, workspace_id, channel, "feature_request_status", "A")
@@ -264,20 +264,39 @@ def test_list_artifacts_status_is_derived(db, workspace_id) -> None:
     published = _artifact(db, workspace_id, channel, "feature_request_status", "B")
     _revision(db, published, 1)
     _revision(db, published, 2)
-    bare = _artifact(db, workspace_id, channel, "faq_answer", "C")
     db.flush()
 
     rows, total = wiki_queries.list_artifacts(db, workspace_id=workspace_id)
     by_title = {row.title: row for row in rows}
 
-    assert total == 3
-    assert bare.id in {row.artifact_id for row in rows}
+    assert total == 2
     assert wiki_queries.artifact_status(by_title["A"]) == "pending_review"
     assert by_title["A"].pending_proposal_count == 1
     assert wiki_queries.artifact_status(by_title["B"]) == "published"
     assert by_title["B"].latest_revision_number == 2
-    assert wiki_queries.artifact_status(by_title["C"]) == "no_revision"
-    assert by_title["C"].latest_revision_id is None
+
+
+def test_list_artifacts_hides_documents_without_revision(db, workspace_id) -> None:
+    """계류 제안도 발행판도 없는 문서는 줄에도 total에도 나오지 않는다.
+
+    제안이 전부 반려된 문서가 이 상태가 된다. 발행된 판이 없으므로 읽는
+    사람에게는 아직 없는 문서다.
+    """
+    user = _user(db, "hidden@x.com")
+    channel = _channel(db, workspace_id, created_by=user.id)
+    published = _artifact(db, workspace_id, channel, "feature_request_status", "A")
+    _revision(db, published, 1)
+    bare = _artifact(db, workspace_id, channel, "faq_answer", "B")
+    all_rejected = _artifact(db, workspace_id, channel, "faq_answer", "C")
+    _proposal(db, all_rejected, "rejected")
+    db.flush()
+
+    rows, total = wiki_queries.list_artifacts(db, workspace_id=workspace_id)
+
+    assert total == 1
+    assert [row.artifact_id for row in rows] == [published.id]
+    assert bare.id not in {row.artifact_id for row in rows}
+    assert all_rejected.id not in {row.artifact_id for row in rows}
 
 
 def test_list_artifacts_filters(db, workspace_id) -> None:
@@ -295,6 +314,9 @@ def test_list_artifacts_filters(db, workspace_id) -> None:
     elsewhere = _artifact(
         db, workspace_id, other_channel, "feature_request_status", "C"
     )
+    # 발행판이 없으면 목록에서 아예 빠지므로, 담당자 필터로 확인하려면
+    # 판을 하나 세워 둬야 한다.
+    _revision(db, elsewhere, 1)
     wiki_queries.add_artifact_owner(
         db, artifact_id=elsewhere.id, user_id=user.id, granted_by=user.id
     )
@@ -325,14 +347,8 @@ def test_list_artifacts_filters(db, workspace_id) -> None:
     rows, total = wiki_queries.list_artifacts(
         db, workspace_id=workspace_id, status="published"
     )
-    assert total == 1
-    assert rows[0].artifact_id == in_folder.id
-
-    rows, total = wiki_queries.list_artifacts(
-        db, workspace_id=workspace_id, status="no_revision"
-    )
-    assert total == 1
-    assert rows[0].artifact_id == elsewhere.id
+    assert total == 2
+    assert {row.artifact_id for row in rows} == {in_folder.id, elsewhere.id}
 
     rows, total = wiki_queries.list_artifacts(
         db, workspace_id=workspace_id, owner_user_ids=[user.id]
@@ -360,7 +376,7 @@ def test_list_artifacts_paginates(db, workspace_id) -> None:
     user = _user(db, "p@x.com")
     channel = _channel(db, workspace_id, created_by=user.id)
     for title in ("A", "B", "C"):
-        _artifact(db, workspace_id, channel, "faq_answer", title)
+        _revision(db, _artifact(db, workspace_id, channel, "faq_answer", title), 1)
     db.flush()
 
     first, total = wiki_queries.list_artifacts(db, workspace_id=workspace_id, limit=2)
@@ -626,6 +642,9 @@ def test_list_artifacts_unassigned_filter(db, workspace_id) -> None:
     channel = _channel(db, workspace_id, created_by=user.id)
     assigned = _artifact(db, workspace_id, channel, "faq_answer", "담당 있음")
     orphan = _artifact(db, workspace_id, channel, "faq_answer", "담당 없음")
+    # 발행판이 없는 문서는 목록에서 빠지므로 둘 다 판을 세워 둔다.
+    _revision(db, assigned, 1)
+    _revision(db, orphan, 1)
     wiki_queries.add_artifact_owner(
         db, artifact_id=assigned.id, user_id=user.id, granted_by=user.id
     )
@@ -646,7 +665,9 @@ def test_list_artifacts_owner_filter_is_or_over_users(db, workspace_id) -> None:
     channel = _channel(db, workspace_id, created_by=first.id)
     mine = _artifact(db, workspace_id, channel, "faq_answer", "내 담당")
     yours = _artifact(db, workspace_id, channel, "faq_answer", "네 담당")
-    _artifact(db, workspace_id, channel, "faq_answer", "담당 없음")
+    nobody = _artifact(db, workspace_id, channel, "faq_answer", "담당 없음")
+    for artifact in (mine, yours, nobody):
+        _revision(db, artifact, 1)
     wiki_queries.add_artifact_owner(
         db, artifact_id=mine.id, user_id=first.id, granted_by=first.id
     )
@@ -671,6 +692,7 @@ def test_list_artifacts_owner_filter_does_not_duplicate_rows(
     second = _user(db, "owner-dup-2@x.com")
     channel = _channel(db, workspace_id, created_by=first.id)
     shared = _artifact(db, workspace_id, channel, "faq_answer", "공동 담당")
+    _revision(db, shared, 1)
     wiki_queries.add_artifact_owner(
         db, artifact_id=shared.id, user_id=first.id, granted_by=first.id
     )
@@ -692,7 +714,7 @@ def test_list_artifacts_empty_owner_filter_keeps_all(db, workspace_id) -> None:
     """owner_user_ids가 비어 있으면 담당자 조건을 걸지 않은 것과 같다."""
     user = _user(db, "owner-empty@x.com")
     channel = _channel(db, workspace_id, created_by=user.id)
-    _artifact(db, workspace_id, channel, "faq_answer", "아무거나")
+    _revision(db, _artifact(db, workspace_id, channel, "faq_answer", "아무거나"), 1)
     db.flush()
 
     _, total = wiki_queries.list_artifacts(
@@ -707,7 +729,7 @@ def test_list_artifacts_searches_title(db, workspace_id) -> None:
     user = _user(db, "search@x.com")
     channel = _channel(db, workspace_id, created_by=user.id)
     for title in ("결제 오류", "배송 지연", "50% 할인", "5012 정산", "a_b", "axb"):
-        _artifact(db, workspace_id, channel, "faq_answer", title)
+        _revision(db, _artifact(db, workspace_id, channel, "faq_answer", title), 1)
     db.flush()
 
     rows, total = wiki_queries.list_artifacts(db, workspace_id=workspace_id, q="오류")
@@ -734,6 +756,10 @@ def test_list_artifacts_sorts_by_activity_or_creation(db, workspace_id) -> None:
     old = _artifact_at(db, workspace_id, channel, "old", base)
     mid = _artifact_at(db, workspace_id, channel, "mid", base + timedelta(days=1))
     new = _artifact_at(db, workspace_id, channel, "new", base + timedelta(days=2))
+    # 발행판이 없으면 목록에서 빠지므로, 생성 시각과 같은 때에 판을 세워
+    # 마지막 활동이 생성 시각 그대로 남게 한다.
+    _revision_at(db, mid, 1, base + timedelta(days=1))
+    _revision_at(db, new, 1, base + timedelta(days=2))
     # 가장 먼저 만들어진 문서에 가장 늦은 활동을 붙인다. 두 정렬 키가
     # 서로 다른 순서를 내야 무엇으로 정렬했는지 구분된다.
     _proposal_at(db, old, "pending", base + timedelta(days=3))
@@ -754,11 +780,13 @@ def test_list_artifacts_sorts_by_activity_or_creation(db, workspace_id) -> None:
 
 
 def test_list_artifacts_last_activity_at(db, workspace_id) -> None:
-    """마지막 활동 시각은 발행·제안 중 늦은 쪽이고, 둘 다 없으면 생성 시각이다."""
+    """마지막 활동 시각은 발행과 제안 중 늦은 쪽이다."""
     user = _user(db, "activity@x.com")
     channel = _channel(db, workspace_id, created_by=user.id)
     base = datetime(2026, 2, 1, tzinfo=UTC)
-    quiet = _artifact_at(db, workspace_id, channel, "조용함", base)
+    # 발행판 없이 계류 제안만 있는 문서다. 활동 시각이 그 제안 도착 시각이다.
+    pending_only = _artifact_at(db, workspace_id, channel, "제안만", base)
+    _proposal_at(db, pending_only, "pending", base + timedelta(days=2))
     published = _artifact_at(db, workspace_id, channel, "발행됨", base)
     _revision_at(db, published, 1, base + timedelta(days=5))
     proposed = _artifact_at(db, workspace_id, channel, "제안됨", base)
@@ -770,7 +798,7 @@ def test_list_artifacts_last_activity_at(db, workspace_id) -> None:
     rows, _ = wiki_queries.list_artifacts(db, workspace_id=workspace_id)
     activity = {row.title: row.last_activity_at for row in rows}
 
-    assert activity["조용함"] == base
+    assert activity["제안만"] == base + timedelta(days=2)
     assert activity["발행됨"] == base + timedelta(days=5)
     assert activity["제안됨"] == base + timedelta(days=9)
 
@@ -779,7 +807,8 @@ def test_list_artifacts_carries_latest_revision_approval(db, workspace_id) -> No
     """목록 줄에 최신 발행판을 승인한 사람과 승인 시각이 실린다.
 
     판을 여러 번 발행한 문서는 번호가 가장 큰 판의 승인 기록만 실어야 한다.
-    발행판이 없는 문서는 승인 기록도 없으므로 둘 다 None이다.
+    계류 제안만 있어 아직 발행판이 없는 문서는 승인 기록이 없으므로 둘 다
+    None이다.
     """
     user = _user(db, "approval@x.com")
     channel = _channel(db, workspace_id, created_by=user.id)
@@ -787,6 +816,7 @@ def test_list_artifacts_carries_latest_revision_approval(db, workspace_id) -> No
     _revision(db, published, 1, reviewer="user:11")
     latest = _revision(db, published, 2, reviewer="user:22")
     bare = _artifact(db, workspace_id, channel, "faq_answer", "판없음")
+    _proposal(db, bare, "pending")
     db.flush()
 
     rows, _ = wiki_queries.list_artifacts(db, workspace_id=workspace_id)

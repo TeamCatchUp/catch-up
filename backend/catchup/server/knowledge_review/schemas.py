@@ -279,12 +279,6 @@ class ProposalDetailResponse(BaseModel):
     conflicts: list[ConflictResponse]
 
 
-class RejectRequest(BaseModel):
-    """반려 사유를 담는다. 사유 없는 반려는 서비스와 DB가 모두 거부한다."""
-
-    reason: str
-
-
 class BlockVerdictRequest(BaseModel):
     """블록 하나에 내리는 결정을 담는다.
 
@@ -341,24 +335,4 @@ class PublishResponse(BaseModel):
     blocks_rejected: int
     contradictions_resolved: int
     claims_accepted: int
-    owners: list[OwnerResponse] = []
-
-
-class DecisionResponse(BaseModel):
-    """문서 변경안 결정 한 번의 결과를 담는다.
-
-    승인이면 새로 쌓인 판과 확정된 claim 수가 실리고, 반려면 판이 없어
-    비어 있다.
-
-    owners는 이 결정이 끝난 시점의 담당자 명단이다. 담당자가 없던 문서를
-    승인하면 승인한 사람이 담당자가 되므로, 명단을 함께 실어야 화면이
-    문서를 다시 읽지 않고 담당자 표시를 고칠 수 있다. 반려는 담당자를
-    만들지 않으므로 있던 명단이 그대로 실린다.
-    """
-
-    proposal_id: str
-    verdict: str
-    revision_id: str | None = None
-    revision_number: int | None = None
-    claims_accepted: int = 0
     owners: list[OwnerResponse] = []

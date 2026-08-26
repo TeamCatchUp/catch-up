@@ -121,8 +121,6 @@ class KnowledgeReviewAction(BaseAuditAction):
     AUTHORIZE = "authorize"
     LIST = "list"
     DETAIL = "detail"
-    APPROVE = "approve"
-    REJECT = "reject"
     RESOLVE = "resolve"
     APPLY = "apply"
     BLOCK_VERDICT = "block_verdict"

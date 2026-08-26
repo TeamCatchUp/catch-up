@@ -414,7 +414,7 @@ class ArtifactListItemResponse(BaseModel):
     folder_id: str | None
     created_at: datetime
     last_activity_at: datetime
-    status: Literal["pending_review", "published", "no_revision"]
+    status: Literal["pending_review", "published"]
     pending_proposal_count: int
     latest_revision: LatestRevisionResponse | None
     owners: list[OwnerResponse]

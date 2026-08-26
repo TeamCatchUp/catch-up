@@ -45,10 +45,11 @@ from catchup.db.models import WikiArtifactFavorite
 ARTIFACT_STATUS_PENDING_REVIEW = "pending_review"
 ARTIFACT_STATUS_PUBLISHED = "published"
 ARTIFACT_STATUS_NO_REVISION = "no_revision"
+# 목록이 내보내는 상태는 둘뿐이다. no_revision은 목록에서 빠지는 문서를
+# 가리키는 이름이라 필터로 고를 수 있는 값이 아니다.
 ARTIFACT_STATUSES = (
     ARTIFACT_STATUS_PENDING_REVIEW,
     ARTIFACT_STATUS_PUBLISHED,
-    ARTIFACT_STATUS_NO_REVISION,
 )
 
 
@@ -849,7 +850,13 @@ class ArtifactListRow:
 
 
 def artifact_status(row: ArtifactListRow) -> str:
-    """문서 목록 한 줄의 상태를 계산한다. 계류 제안이 있으면 검토 대기가 우선이다."""
+    """문서 목록 한 줄의 상태를 계산한다. 계류 제안이 있으면 검토 대기가 우선이다.
+
+    list_artifacts가 no_revision인 문서를 이미 걸러 내므로 마지막 갈래는
+    목록 응답에 나오지 않는다. 그래도 남겨 둔다. 이 함수는 행 하나만 받아
+    계산하는 순수 함수라 그 행이 목록에서 왔다고 보장할 수 없고, 갈래를
+    지우면 발행판 없는 행이 published로 잘못 읽힌다.
+    """
     if row.pending_proposal_count > 0:
         return ARTIFACT_STATUS_PENDING_REVIEW
     if row.latest_revision_id is not None:
@@ -879,6 +886,10 @@ def list_artifacts(
 
     계류 제안 수와 최신 판은 상관 서브쿼리로 붙인다. 상태 필터는 그 두 값
     위에서 계산한 CASE 식에 건다.
+
+    계류 제안도 발행판도 없는 문서는 다른 필터와 상관없이 언제나 뺀다.
+    제안이 전부 반려된 문서가 그런 상태가 되는데, 발행된 판이 없으므로
+    읽는 사람에게는 아직 없는 문서다. total도 같은 조건 뒤에 센다.
 
     정렬 키는 last_activity(마지막 활동 시각)와 created_at 둘 중 하나이고
     방향은 asc·desc다. 값이 같은 문서끼리는 언제나 id 오름차순으로 세운다.
@@ -971,6 +982,11 @@ def list_artifacts(
         statement = statement.where(KnowledgeArtifact.folder_id == folder_id)
     if kind is not None:
         statement = statement.where(KnowledgeArtifact.kind == kind)
+    # 계류 제안도 발행판도 없는 문서는 목록에서 아예 뺀다. 제안이 전부
+    # 반려된 문서가 여기에 해당하는데, 발행된 판이 하나도 없으므로 읽는
+    # 사람 입장에서는 아직 없는 문서다. 페이지 줄과 total 둘 다에서
+    # 빠지도록 필터 단계에서 건다.
+    statement = statement.where(status_expr != ARTIFACT_STATUS_NO_REVISION)
     if status is not None:
         statement = statement.where(status_expr == status)
     if owner_user_ids:
