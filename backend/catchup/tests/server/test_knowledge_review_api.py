@@ -96,13 +96,6 @@ from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
 from catchup.knowledge_maintenance.services.publish_artifact_proposal import (
     PublishResult,
 )
-from catchup.knowledge_maintenance.services.review_artifact_proposal import (
-    CODE_NOT_DOCUMENT_OWNER,
-)
-from catchup.knowledge_maintenance.services.review_artifact_proposal import (
-    ProposalReviewError,
-)
-from catchup.knowledge_maintenance.services.review_artifact_proposal import ReviewResult
 from catchup.knowledge_maintenance.services.review_block_verdict import (
     CODE_NOT_DOCUMENT_OWNER as BLOCK_CODE_NOT_DOCUMENT_OWNER,
 )
@@ -1982,41 +1975,6 @@ def test_detail_hides_other_workspace_proposal(
     assert response.json()["detail"]["code"] == "PROPOSAL_NOT_FOUND"
 
 
-def test_approve_rejects_other_workspace_proposal(
-    app: FastAPI,
-    client: TestClient,
-    db: Session,
-    session_factory: Callable[[], Session],
-    workspace_ids: tuple[int, int],
-    as_user: Callable[[User], None],
-) -> None:
-    """다른 workspace의 변경안은 승인할 수도 없다.
-
-    결정은 되돌릴 수 없으므로, 404를 받는 것만으로는 부족하다. 뒤에 그
-    변경안이 여전히 계류 상태인지도 확인해 아무것도 쓰이지 않았음을 본다.
-    """
-    first, second = workspace_ids
-    proposal_id = _seed_pending_proposal(session_factory, workspace_id=second)
-    outsider = _make_user(db, email="ws-approve@example.com")
-    _join(db, user=outsider, workspace_id=first)
-    _grant(db, user=outsider, workspace_id=first)
-    as_user(outsider)
-
-    with _real_session_local(session_factory):
-        response = client.post(
-            f"/api/v1/knowledge-review/artifacts/{proposal_id}/approve"
-        )
-
-    assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "PROPOSAL_NOT_FOUND"
-    with KnowledgeMaintenanceUnitOfWork(
-        session_factory, workspace_id=second
-    ) as uow:
-        untouched = uow.artifacts.get_proposal(proposal_id=proposal_id)
-    assert untouched is not None
-    assert untouched.status == "pending"
-
-
 # ======================= 대상 판정: 담당자·관리자 =======================
 #
 # 여기가 확정 기획 5.3 매트릭스의 검수 축이다. 담당자는 자기 문서만, 관리자는
@@ -2025,14 +1983,15 @@ def test_approve_rejects_other_workspace_proposal(
 # 행(artifact_owners·channel_admins·users.role)에서 그 판정을 세우는지 본다.
 
 
-def _approve(client: TestClient, proposal_id: uuid.UUID):
-    """승인 엔드포인트를 부른다."""
+def _publish(client: TestClient, proposal_id: uuid.UUID):
+    """발행 엔드포인트를 부른다. 확정 경로가 이것 하나뿐이라 여기로 본다."""
     return client.post(
-        f"/api/v1/knowledge-review/artifacts/{proposal_id}/approve"
+        f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+        json={"base_revision_id": None},
     )
 
 
-def test_owner_can_approve_own_artifact_proposal(
+def test_owner_can_decide_own_artifact_proposal(
     app: FastAPI,
     client: TestClient,
     db: Session,
@@ -2064,19 +2023,22 @@ def test_owner_can_approve_own_artifact_proposal(
             )
         )
     )
-    result = ReviewResult(
+    result = PublishResult(
         proposal_id=proposal_id,
         verdict="approved",
         revision_id=uuid.uuid4(),
         revision_number=1,
+        blocks_published=1,
+        blocks_rejected=0,
+        contradictions_resolved=0,
         claims_accepted=1,
     )
 
     with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal",
+        "catchup.server.knowledge_review.api.publish_artifact_proposal",
         return_value=result,
     ) as service:
-        response = _approve(client, proposal_id)
+        response = _publish(client, proposal_id)
 
     assert response.status_code == 200
     assert service.call_args.kwargs["reviewer"] == f"user:{owner.id}"
@@ -2118,9 +2080,9 @@ def test_admin_cannot_decide_when_owner_exists(
     )
 
     with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal"
+        "catchup.server.knowledge_review.api.publish_artifact_proposal"
     ) as service:
-        response = _approve(client, proposal_id)
+        response = _publish(client, proposal_id)
 
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "NOT_DOCUMENT_REVIEWER"
@@ -2155,19 +2117,22 @@ def test_channel_admin_decides_unowned_artifact(
             )
         )
     )
-    result = ReviewResult(
+    result = PublishResult(
         proposal_id=proposal_id,
         verdict="approved",
         revision_id=uuid.uuid4(),
         revision_number=1,
+        blocks_published=1,
+        blocks_rejected=0,
+        contradictions_resolved=0,
         claims_accepted=1,
     )
 
     with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal",
+        "catchup.server.knowledge_review.api.publish_artifact_proposal",
         return_value=result,
     ):
-        response = _approve(client, proposal_id)
+        response = _publish(client, proposal_id)
 
     assert response.status_code == 200
 
@@ -2222,27 +2187,30 @@ def test_global_admin_decides_unassigned_artifact(
         )
 
     app.dependency_overrides[get_review_uow_factory] = override
-    result = ReviewResult(
+    result = PublishResult(
         proposal_id=unassigned_proposal,
         verdict="approved",
         revision_id=uuid.uuid4(),
         revision_number=1,
+        blocks_published=1,
+        blocks_rejected=0,
+        contradictions_resolved=0,
         claims_accepted=1,
     )
 
     with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal",
+        "catchup.server.knowledge_review.api.publish_artifact_proposal",
         return_value=result,
     ):
-        allowed = _approve(client, unassigned_proposal)
+        allowed = _publish(client, unassigned_proposal)
 
     assert allowed.status_code == 200
 
     current[0] = channel_proposal
     with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal"
+        "catchup.server.knowledge_review.api.publish_artifact_proposal"
     ) as service:
-        blocked = _approve(client, channel_proposal)
+        blocked = _publish(client, channel_proposal)
 
     assert blocked.status_code == 403
     assert blocked.json()["detail"]["code"] == "NOT_DOCUMENT_REVIEWER"
@@ -2266,102 +2234,6 @@ def _owner_ids(db: Session, artifact_id: uuid.UUID) -> set[int]:
             )
         ).all()
     )
-
-
-def test_member_approves_artifact_without_owner(
-    app: FastAPI,
-    client: TestClient,
-    db: Session,
-    workspace_ids: tuple[int, int],
-    as_user: Callable[[User], None],
-) -> None:
-    """역할 없는 구성원이 담당자 없는 문서의 승인 경로를 지난다.
-
-    담당자 규칙을 다시 보고 담당자를 세우는 일은 서비스가 자기 transaction
-    안에서 한다. 라우터가 볼 것은 결정자를 실어 보내는지 하나다. 부여를
-    라우터가 별도 세션으로 하면 결정만 확정되고 담당자는 없는 상태가
-    남는다.
-    """
-    workspace_id, _ = workspace_ids
-    member = _make_user(db, email="plain-member@example.com")
-    _join(db, user=member, workspace_id=workspace_id)
-    artifact_id = _make_artifact(db, workspace_id=workspace_id)
-    as_user(member)
-
-    proposal_id = uuid.uuid4()
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        artifacts=_FakeArtifacts(
-            proposal=_proposal(
-                proposal_id=proposal_id, artifact_id=artifact_id
-            )
-        )
-    )
-    result = ReviewResult(
-        proposal_id=proposal_id,
-        verdict="approved",
-        revision_id=uuid.uuid4(),
-        revision_number=1,
-        claims_accepted=1,
-    )
-
-    with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal",
-        return_value=result,
-    ) as service:
-        response = _approve(client, proposal_id)
-
-    assert response.status_code == 200
-    assert service.call_args.kwargs["reviewer"] == f"user:{member.id}"
-    assert service.call_args.kwargs["decider_user_id"] == member.id
-
-
-def test_reject_passes_decider_to_service(
-    app: FastAPI,
-    client: TestClient,
-    db: Session,
-    workspace_ids: tuple[int, int],
-    as_user: Callable[[User], None],
-) -> None:
-    """반려도 결정자를 실어 보낸다.
-
-    담당자 규칙은 반려에도 걸린다. 반려만 결정자를 빼면 남이 담당하는
-    문서를 반려로 밀어 버릴 자리가 열린다. 부여는 서비스가 승인 계열에만
-    하므로 반려로 담당자가 생기지는 않는다.
-    """
-    workspace_id, _ = workspace_ids
-    member = _make_user(db, email="reject-member@example.com")
-    _join(db, user=member, workspace_id=workspace_id)
-    artifact_id = _make_artifact(db, workspace_id=workspace_id)
-    as_user(member)
-
-    proposal_id = uuid.uuid4()
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        artifacts=_FakeArtifacts(
-            proposal=_proposal(
-                proposal_id=proposal_id, artifact_id=artifact_id
-            )
-        )
-    )
-    result = ReviewResult(
-        proposal_id=proposal_id,
-        verdict="rejected",
-        revision_id=None,
-        revision_number=None,
-        claims_accepted=0,
-    )
-
-    with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal",
-        return_value=result,
-    ) as service:
-        response = client.post(
-            f"/api/v1/knowledge-review/artifacts/{proposal_id}/reject",
-            json={"reason": "근거가 부족하다"},
-        )
-
-    assert response.status_code == 200
-    assert service.call_args.kwargs["decider_user_id"] == member.id
-    assert _owner_ids(db, artifact_id) == set()
 
 
 def test_member_publishes_artifact_without_owner(
@@ -2410,45 +2282,6 @@ def test_member_publishes_artifact_without_owner(
     assert service.call_args.kwargs["decider_user_id"] == member.id
 
 
-def test_service_owner_refusal_becomes_document_reviewer_403(
-    app: FastAPI,
-    client: TestClient,
-    db: Session,
-    workspace_ids: tuple[int, int],
-    as_user: Callable[[User], None],
-) -> None:
-    """서비스가 담당자 규칙으로 거부하면 403 NOT_DOCUMENT_REVIEWER다.
-
-    라우터의 사전 검사를 지난 뒤 담당자가 지정되면 서비스만 그것을 본다.
-    그 거부가 409로 나가면 소비자는 권한 문제를 상태 문제로 읽는다.
-    """
-    workspace_id, _ = workspace_ids
-    member = _make_user(db, email="race-member@example.com")
-    _join(db, user=member, workspace_id=workspace_id)
-    artifact_id = _make_artifact(db, workspace_id=workspace_id)
-    as_user(member)
-
-    proposal_id = uuid.uuid4()
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        artifacts=_FakeArtifacts(
-            proposal=_proposal(
-                proposal_id=proposal_id, artifact_id=artifact_id
-            )
-        )
-    )
-
-    with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal",
-        side_effect=ProposalReviewError(
-            "담당자가 아니다", code=CODE_NOT_DOCUMENT_OWNER
-        ),
-    ):
-        response = _approve(client, proposal_id)
-
-    assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "NOT_DOCUMENT_REVIEWER"
-
-
 def test_publish_owner_refusal_becomes_document_reviewer_403(
     app: FastAPI,
     client: TestClient,
@@ -2487,43 +2320,7 @@ def test_publish_owner_refusal_becomes_document_reviewer_403(
     assert response.json()["detail"]["code"] == "NOT_DOCUMENT_REVIEWER"
 
 
-def test_member_cannot_approve_artifact_with_owner(
-    app: FastAPI,
-    client: TestClient,
-    db: Session,
-    workspace_ids: tuple[int, int],
-    as_user: Callable[[User], None],
-) -> None:
-    """담당자가 정해진 문서에는 구성원 폴백이 서지 않는다."""
-    workspace_id, _ = workspace_ids
-    member = _make_user(db, email="late-member@example.com")
-    owner = _make_user(db, email="first-owner@example.com")
-    _join(db, user=member, workspace_id=workspace_id)
-    artifact_id = _make_artifact(db, workspace_id=workspace_id)
-    _make_owner(db, artifact_id=artifact_id, user=owner)
-    as_user(member)
-
-    proposal_id = uuid.uuid4()
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        artifacts=_FakeArtifacts(
-            proposal=_proposal(
-                proposal_id=proposal_id, artifact_id=artifact_id
-            )
-        )
-    )
-
-    with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal"
-    ) as service:
-        response = _approve(client, proposal_id)
-
-    assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "NOT_DOCUMENT_REVIEWER"
-    service.assert_not_called()
-    assert _owner_ids(db, artifact_id) == {owner.id}
-
-
-def test_non_member_cannot_approve(
+def test_non_member_cannot_decide(
     app: FastAPI,
     client: TestClient,
     db: Session,
@@ -2551,11 +2348,12 @@ def test_non_member_cannot_approve(
     )
 
     with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal"
+        "catchup.server.knowledge_review.api.publish_artifact_proposal"
     ) as service:
         response = client.post(
-            f"/api/v1/knowledge-review/artifacts/{proposal_id}/approve",
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
             params={"workspace_id": second},
+            json={"base_revision_id": None},
         )
 
     assert response.status_code == 403
@@ -2565,7 +2363,7 @@ def test_non_member_cannot_approve(
 
 # ======================= 결정 응답의 담당자 명단 =======================
 #
-# 승인이 담당자를 세우는데 응답이 그 사실을 담지 않으면, 화면은 결정
+# 발행이 담당자를 세우는데 응답이 그 사실을 담지 않으면, 화면은 결정
 # 직후의 담당자 표시를 고치려고 문서를 다시 읽어야 한다. 확정 뒤 시점의
 # 명단을 결정 응답에 함께 실어 그 왕복을 없앤다.
 #
@@ -2588,89 +2386,6 @@ def _grants_owner(db: Session, artifact_id: uuid.UUID, user: User, result):
 def _response_owner_ids(body: dict) -> list[int]:
     """응답에 실린 담당자 사용자 id를 읽는다."""
     return [owner["user_id"] for owner in body["owners"]]
-
-
-def test_approve_response_carries_owners_after_grant(
-    app: FastAPI,
-    client: TestClient,
-    db: Session,
-    workspace_ids: tuple[int, int],
-    as_user: Callable[[User], None],
-) -> None:
-    """승인 응답은 확정으로 세워진 담당자까지 담은 명단을 싣는다."""
-    workspace_id, _ = workspace_ids
-    member = _make_user(db, email="owners-approve@example.com")
-    _join(db, user=member, workspace_id=workspace_id)
-    artifact_id = _make_artifact(db, workspace_id=workspace_id)
-    as_user(member)
-
-    proposal_id = uuid.uuid4()
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        artifacts=_FakeArtifacts(
-            proposal=_proposal(
-                proposal_id=proposal_id, artifact_id=artifact_id
-            )
-        )
-    )
-    result = ReviewResult(
-        proposal_id=proposal_id,
-        verdict="approved",
-        revision_id=uuid.uuid4(),
-        revision_number=1,
-        claims_accepted=1,
-    )
-
-    with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal",
-        side_effect=_grants_owner(db, artifact_id, member, result),
-    ):
-        response = _approve(client, proposal_id)
-
-    assert response.status_code == 200
-    assert _response_owner_ids(response.json()) == [member.id]
-
-
-def test_reject_response_carries_unchanged_owners(
-    app: FastAPI,
-    client: TestClient,
-    db: Session,
-    workspace_ids: tuple[int, int],
-    as_user: Callable[[User], None],
-) -> None:
-    """반려 응답의 명단은 그대로다. 반려는 담당자를 만들지 않는다."""
-    workspace_id, _ = workspace_ids
-    member = _make_user(db, email="owners-reject@example.com")
-    _join(db, user=member, workspace_id=workspace_id)
-    artifact_id = _make_artifact(db, workspace_id=workspace_id)
-    as_user(member)
-
-    proposal_id = uuid.uuid4()
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        artifacts=_FakeArtifacts(
-            proposal=_proposal(
-                proposal_id=proposal_id, artifact_id=artifact_id
-            )
-        )
-    )
-    result = ReviewResult(
-        proposal_id=proposal_id,
-        verdict="rejected",
-        revision_id=None,
-        revision_number=None,
-        claims_accepted=0,
-    )
-
-    with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal",
-        return_value=result,
-    ):
-        response = client.post(
-            f"/api/v1/knowledge-review/artifacts/{proposal_id}/reject",
-            json={"reason": "근거가 부족하다"},
-        )
-
-    assert response.status_code == 200
-    assert response.json()["owners"] == []
 
 
 def test_publish_response_carries_owners_after_grant(
@@ -2719,60 +2434,15 @@ def test_publish_response_carries_owners_after_grant(
     assert _response_owner_ids(response.json()) == [member.id]
 
 
-def test_approve_response_keeps_existing_owners(
-    app: FastAPI,
-    client: TestClient,
-    db: Session,
-    workspace_ids: tuple[int, int],
-    as_user: Callable[[User], None],
-) -> None:
-    """담당자가 있던 문서의 승인 응답은 그 명단을 그대로 싣는다.
-
-    부여는 담당자가 없던 문서에만 도므로 명단이 늘지 않는다. 사람 표시는
-    큐 목록·상세와 같은 조립을 거치므로 이름도 함께 실린다.
-    """
-    workspace_id, _ = workspace_ids
-    owner = _make_user(db, email="owners-existing@example.com")
-    _join(db, user=owner, workspace_id=workspace_id)
-    artifact_id = _make_artifact(db, workspace_id=workspace_id)
-    _make_owner(db, artifact_id=artifact_id, user=owner)
-    as_user(owner)
-
-    proposal_id = uuid.uuid4()
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        artifacts=_FakeArtifacts(
-            proposal=_proposal(
-                proposal_id=proposal_id, artifact_id=artifact_id
-            )
-        )
-    )
-    result = ReviewResult(
-        proposal_id=proposal_id,
-        verdict="approved",
-        revision_id=uuid.uuid4(),
-        revision_number=1,
-        claims_accepted=1,
-    )
-
-    with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal",
-        return_value=result,
-    ):
-        response = _approve(client, proposal_id)
-
-    assert response.status_code == 200
-    owners = response.json()["owners"]
-    assert [item["user_id"] for item in owners] == [owner.id]
-    assert owners[0]["display_name"] == owner.name
-
-
-
-# ======================= 표면에 없는 운영 경로 =======================
+# ======================= 표면에 없는 경로 =======================
 #
 # 모순 직접 판정(resolve)과 적용(apply)은 기획 UX에 없는 운영 도구라
-# 정식 API에서 뺐다. 그 경로는 debug 라우터와 evaluation CLI 러너가
-# 담당한다. 아래 둘은 "다시 붙지 않았다"를 고정한다 — 서비스는 그대로
-# 남아 있어 라우터 한 줄이면 표면이 되살아난다.
+# 정식 API에서 뺐다. 변경안을 통짜로 승인·반려하던 경로도 뺐다. 확정은
+# 블록 판정을 모아 마감하는 발행 하나로 모았다.
+#
+# 그 경로들은 debug 라우터와 evaluation CLI 러너가 담당한다. 아래 테스트는
+# "다시 붙지 않았다"를 고정한다. 서비스는 그대로 남아 있어 라우터 한 줄이면
+# 표면이 되살아난다.
 
 
 def test_operator_routes_are_absent_from_router() -> None:
@@ -2787,6 +2457,36 @@ def test_operator_routes_are_absent_from_router() -> None:
         and (path.endswith("/resolve") or "/apply/" in path)
         for path in paths
     )
+
+
+def test_whole_proposal_decision_routes_are_absent_from_router() -> None:
+    """정식 라우터에 변경안 통짜 승인·반려 경로가 없다."""
+    paths = {getattr(route, "path", None) for route in router.routes}
+
+    assert (
+        "/api/v1/knowledge-review/artifacts/{proposal_id}/approve" not in paths
+    )
+    assert (
+        "/api/v1/knowledge-review/artifacts/{proposal_id}/reject" not in paths
+    )
+
+
+def test_whole_proposal_decision_routes_return_404_when_called(
+    client: TestClient, reviewer: User
+) -> None:
+    """인증을 붙여 불러도 404다. 게이트가 닫힌 것이 아니라 경로가 없다."""
+    proposal_id = uuid.uuid4()
+
+    approve = client.post(
+        f"/api/v1/knowledge-review/artifacts/{proposal_id}/approve"
+    )
+    reject = client.post(
+        f"/api/v1/knowledge-review/artifacts/{proposal_id}/reject",
+        json={"reason": "사유"},
+    )
+
+    assert approve.status_code == 404
+    assert reject.status_code == 404
 
 
 def test_operator_routes_return_404_when_called(
@@ -2811,319 +2511,6 @@ def test_operator_routes_return_404_when_called(
     assert resolve.status_code == 404
     assert apply_all.status_code == 404
     assert apply_one.status_code == 404
-
-
-# ======================= 엔드포인트: 결정 =======================
-
-
-def test_approve_records_current_user_as_reviewer(
-    app: FastAPI, client: TestClient, reviewer: User
-) -> None:
-    """승인은 판정자로 지금 로그인한 사용자를 넘긴다."""
-    proposal_id = uuid.uuid4()
-    revision_id = uuid.uuid4()
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        artifacts=_FakeArtifacts(proposal=_proposal(proposal_id=proposal_id))
-    )
-    result = ReviewResult(
-        proposal_id=proposal_id,
-        verdict="approved",
-        revision_id=revision_id,
-        revision_number=3,
-        claims_accepted=2,
-    )
-
-    with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal",
-        return_value=result,
-    ) as service:
-        response = client.post(
-            f"/api/v1/knowledge-review/artifacts/{proposal_id}/approve"
-        )
-
-    assert response.status_code == 200
-    assert response.json() == {
-        "proposal_id": str(proposal_id),
-        "verdict": "approved",
-        "revision_id": str(revision_id),
-        "revision_number": 3,
-        "claims_accepted": 2,
-        # 대역 서비스는 담당자를 세우지 않으므로 명단은 비어 있다. 필드
-        # 자체가 늘 실린다는 것을 이 자리에서 함께 고정한다.
-        "owners": [],
-    }
-    assert service.call_args.kwargs["reviewer"] == f"user:{reviewer.id}"
-    assert service.call_args.kwargs["verdict"] == "approved"
-
-
-def test_approve_audit_records_proposal_id(
-    app: FastAPI,
-    client: TestClient,
-    reviewer: User,
-    workspace_ids: tuple[int, int],
-) -> None:
-    """승인 감사 기록에는 어느 안건을 결정했는지가 남는다.
-
-    무엇을 승인했는지 없는 기록은 "누가 언제"만 남아 결정을 되짚을 수
-    없다.
-    """
-    workspace_id, _ = workspace_ids
-    proposal_id = uuid.uuid4()
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        artifacts=_FakeArtifacts(proposal=_proposal(proposal_id=proposal_id))
-    )
-    result = ReviewResult(
-        proposal_id=proposal_id,
-        verdict="approved",
-        revision_id=uuid.uuid4(),
-        revision_number=1,
-        claims_accepted=1,
-    )
-
-    with (
-        patch(
-            "catchup.server.knowledge_review.api.review_artifact_proposal",
-            return_value=result,
-        ),
-        patch("catchup.audit.utils.emit_audit_event") as emit,
-    ):
-        response = client.post(
-            f"/api/v1/knowledge-review/artifacts/{proposal_id}/approve"
-        )
-
-    assert response.status_code == 200
-    recorded = emit.call_args.kwargs
-    assert recorded["action"] == KnowledgeReviewAction.APPROVE
-    assert recorded["status"] == AuditStatus.SUCCESS
-    assert recorded["metadata"].proposal_id == str(proposal_id)
-    assert recorded["metadata"].workspace_id == workspace_id
-
-
-@pytest.mark.parametrize(
-    ("code", "message"),
-    [
-        (
-            "CONTESTED_REQUIRES_BLOCK_REVIEW",
-            "다툼 블록이 있어 블록 검토를 거쳐야 합니다.",
-        ),
-        (
-            "BLOCK_REVIEW_IN_PROGRESS",
-            "블록 검토가 시작된 변경안은 발행으로 끝내야 합니다.",
-        ),
-    ],
-)
-def test_approve_relays_service_block_review_codes(
-    app: FastAPI,
-    client: TestClient,
-    reviewer: User,
-    code: str,
-    message: str,
-) -> None:
-    """통짜 승인 가드는 서비스가 갖고, 라우터는 코드를 409로 옮긴다.
-
-    같은 검사를 라우터가 또 하면 정식 API·debug·CLI 세 표면의 규칙이
-    갈라진다. 그래서 여기서 확인하는 것은 옮기기뿐이다. 예외 문구는
-    내부 사정을 담고 있어 응답에 새어 나오지 않아야 한다.
-    """
-    proposal_id = uuid.uuid4()
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        artifacts=_FakeArtifacts(proposal=_proposal(proposal_id=proposal_id))
-    )
-
-    with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal",
-        side_effect=ProposalReviewError(
-            f"변경안 {proposal_id}는 확정할 수 없다", code=code
-        ),
-    ):
-        response = client.post(
-            f"/api/v1/knowledge-review/artifacts/{proposal_id}/approve"
-        )
-
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == code
-    assert response.json()["detail"]["message"] == message
-    assert "확정할 수 없다" not in response.text
-
-
-def test_approve_with_contested_block_requires_block_review(
-    app: FastAPI, client: TestClient, reviewer: User
-) -> None:
-    """다툼 블록이 있는 변경안은 통짜 승인으로 확정할 수 없다.
-
-    통짜 승인은 승자를 고르는 자리가 없다. 그대로 태우면 사람이 고르지
-    않은 값이 문서에 실리므로, 블록 검토를 거치라고 돌려보낸다. 막는 것은
-    서비스이고, 이 테스트는 라우터를 거친 응답까지 그대로 나오는지 본다.
-    """
-    proposal_id = uuid.uuid4()
-    stored = _contested_proposal(
-        proposal_id=proposal_id,
-        contradiction_id=uuid.uuid4(),
-        winner_claim_id=uuid.uuid4(),
-        loser_claim_id=uuid.uuid4(),
-    )
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        artifacts=_FakeArtifacts(proposal=stored)
-    )
-
-    response = client.post(
-        f"/api/v1/knowledge-review/artifacts/{proposal_id}/approve"
-    )
-
-    assert response.status_code == 409
-    assert (
-        response.json()["detail"]["code"] == "CONTESTED_REQUIRES_BLOCK_REVIEW"
-    )
-
-
-def test_reject_passes_reason(
-    app: FastAPI, client: TestClient, reviewer: User
-) -> None:
-    """반려는 사유를 그대로 서비스에 넘긴다."""
-    proposal_id = uuid.uuid4()
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        artifacts=_FakeArtifacts(proposal=_proposal(proposal_id=proposal_id))
-    )
-    result = ReviewResult(
-        proposal_id=proposal_id,
-        verdict="rejected",
-        revision_id=None,
-        revision_number=None,
-    )
-
-    with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal",
-        return_value=result,
-    ) as service:
-        response = client.post(
-            f"/api/v1/knowledge-review/artifacts/{proposal_id}/reject",
-            json={"reason": "근거가 부족하다"},
-        )
-
-    assert response.status_code == 200
-    assert response.json()["verdict"] == "rejected"
-    assert service.call_args.kwargs["reason"] == "근거가 부족하다"
-
-
-def test_reject_without_reason_is_400(
-    app: FastAPI, client: TestClient, reviewer: User
-) -> None:
-    """공백뿐인 사유는 서비스에 닿기 전에 막는다."""
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
-
-    with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal"
-    ) as service:
-        response = client.post(
-            f"/api/v1/knowledge-review/artifacts/{uuid.uuid4()}/reject",
-            json={"reason": "   "},
-        )
-
-    assert response.status_code == 400
-    assert response.json()["detail"]["code"] == "REASON_REQUIRED"
-    service.assert_not_called()
-
-
-def test_already_decided_returns_409_with_code(
-    app: FastAPI, client: TestClient, reviewer: User
-) -> None:
-    """이미 결정된 변경안은 409 ALREADY_DECIDED다.
-
-    실패 감사 기록에도 그 code가 남는지 함께 본다. `audit_log`는 예외의
-    `code` 속성만 읽으므로, detail에만 코드가 있으면 감사 스트림에는
-    "승인이 실패했다"만 남고 이유가 사라진다.
-    """
-    proposal_id = uuid.uuid4()
-    stored = _proposal(proposal_id=proposal_id, status="approved")
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        artifacts=_FakeArtifacts(proposal=stored)
-    )
-
-    with (
-        patch(
-            "catchup.server.knowledge_review.api.review_artifact_proposal",
-            side_effect=ProposalReviewError("변경안은 이미 approved 상태다"),
-        ),
-        patch("catchup.audit.utils.emit_audit_event") as emit,
-    ):
-        response = client.post(
-            f"/api/v1/knowledge-review/artifacts/{proposal_id}/approve"
-        )
-
-    assert response.status_code == 409
-    assert response.json()["detail"] == {
-        "code": "ALREADY_DECIDED",
-        "message": "이미 결정된 변경안입니다.",
-    }
-    recorded = emit.call_args.kwargs
-    assert recorded["status"] == AuditStatus.FAILURE
-    assert recorded["metadata"].context == "ALREADY_DECIDED"
-    assert recorded["metadata"].proposal_id == str(proposal_id)
-
-
-def test_stale_base_revision_returns_409_with_code(
-    app: FastAPI, client: TestClient, reviewer: User
-) -> None:
-    """딛고 선 판이 낡았으면 409 STALE_BASE_REVISION이다."""
-    proposal_id = uuid.uuid4()
-    stored = _proposal(proposal_id=proposal_id, base_revision_id=None)
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        artifacts=_FakeArtifacts(
-            proposal=stored, latest=(uuid.uuid4(), 4)
-        )
-    )
-
-    with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal",
-        side_effect=ProposalReviewError("딛고 선 판이 최신이 아니다"),
-    ):
-        response = client.post(
-            f"/api/v1/knowledge-review/artifacts/{proposal_id}/approve"
-        )
-
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "STALE_BASE_REVISION"
-
-
-def test_decision_error_hides_internal_message(
-    app: FastAPI, client: TestClient, reviewer: User
-) -> None:
-    """예외 문자열은 응답에 실리지 않는다."""
-    proposal_id = uuid.uuid4()
-    secret = "내부 사정: 저장소 제약 이름"
-    stored = _proposal(proposal_id=proposal_id, status="rejected")
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
-        artifacts=_FakeArtifacts(proposal=stored)
-    )
-
-    with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal",
-        side_effect=ProposalReviewError(secret),
-    ):
-        response = client.post(
-            f"/api/v1/knowledge-review/artifacts/{proposal_id}/approve"
-        )
-
-    assert response.status_code == 409
-    assert secret not in response.text
-
-
-def test_missing_proposal_decision_returns_404(
-    app: FastAPI, client: TestClient, reviewer: User
-) -> None:
-    """없는 변경안에 대한 결정은 409가 아니라 404다."""
-    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory()
-
-    with patch(
-        "catchup.server.knowledge_review.api.review_artifact_proposal",
-        side_effect=ProposalReviewError("찾을 수 없다"),
-    ):
-        response = client.post(
-            f"/api/v1/knowledge-review/artifacts/{uuid.uuid4()}/approve"
-        )
-
-    assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "PROPOSAL_NOT_FOUND"
 
 
 # ======================= 엔드포인트: 블록 결정·발행 =======================
@@ -3763,67 +3150,6 @@ def test_publish_undecided_reject_with_blank_reason_returns_400(
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "REASON_REQUIRED"
     service.assert_not_called()
-
-
-def test_approve_after_block_verdict_is_blocked_and_publish_works(
-    app: FastAPI,
-    client: TestClient,
-    reviewer: User,
-    session_factory: Callable[[], Session],
-    workspace_ids: tuple[int, int],
-) -> None:
-    """블록 결정이 시작된 뒤의 통짜 승인은 409로 막힌다.
-
-    통짜 승인은 블록 결정을 읽지 않으므로, 그대로 태우면 사람이 반려한
-    블록까지 판에 실린다. 사람의 결정을 덮어쓰는 셈이라 막아야 한다.
-    막기만 하고 끝나면 안건이 갇히므로, 같은 안건이 발행 경로로는 정상
-    확정되는 것까지 함께 본다.
-    """
-    workspace_id, _ = workspace_ids
-    proposal_id, blocks = _seed_two_block_proposal(
-        session_factory,
-        workspace_id=workspace_id,
-        admin_user_id=reviewer.id,
-    )
-
-    with _real_session_local(session_factory):
-        recorded = client.put(
-            _verdict_path(proposal_id, 1),
-            json={
-                "verdict": "rejected",
-                "rejection_reason": "담당이 확정되지 않았다",
-                "block_content_hash": block_content_hash(blocks[1]),
-            },
-        )
-        blocked = client.post(
-            f"/api/v1/knowledge-review/artifacts/{proposal_id}/approve"
-        )
-
-    assert recorded.status_code == 200
-    assert blocked.status_code == 409
-    assert blocked.json()["detail"]["code"] == "BLOCK_REVIEW_IN_PROGRESS"
-    with KnowledgeMaintenanceUnitOfWork(
-        session_factory, workspace_id=workspace_id
-    ) as uow:
-        untouched = uow.artifacts.get_proposal(proposal_id=proposal_id)
-    assert untouched.status == "pending"
-
-    with _real_session_local(session_factory):
-        client.put(
-            _verdict_path(proposal_id, 0),
-            json={
-                "verdict": "approved",
-                "block_content_hash": block_content_hash(blocks[0]),
-            },
-        )
-        published = client.post(
-            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
-            json={"base_revision_id": None},
-        )
-
-    assert published.status_code == 200
-    assert published.json()["blocks_published"] == 1
-    assert published.json()["blocks_rejected"] == 1
 
 
 def test_block_verdict_on_decided_proposal_returns_409(
