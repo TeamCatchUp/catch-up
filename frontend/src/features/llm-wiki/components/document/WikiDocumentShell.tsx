@@ -16,7 +16,7 @@ export function DocumentSection({ heading, text }: { heading: string; text: stri
   );
 }
 
-/** 여러 블록을 한 표로 묶은 항목. 표 타이포는 markdown.css의 표 규칙을 그대로 쓴다 */
+/** 여러 블록을 한 표로 묶은 항목. 표 타이포는 markdown-reading.css의 표 규칙을 그대로 쓴다 */
 export function DocumentTable({ heading, rows }: { heading: string; rows: readonly WikiLayoutRow[] }) {
   return (
     <article>
@@ -44,7 +44,7 @@ export interface WikiDocumentShellProps {
   /** 채널 > 폴더 > 문서. 이름 join 결과라 문서 응답이 아니라 밖에서 받는다 */
   breadcrumbs: readonly DocumentBreadcrumb[];
   onBreadcrumbClick?: (crumb: DocumentBreadcrumb, index: number) => void;
-  /** 본문 항목들. 공용 markdown.css 규격 안에 그대로 실린다 */
+  /** 본문 항목들. 공용 읽기 규격(markdown-reading.css) 안에 그대로 실린다 */
   children: ReactNode;
 }
 
@@ -67,8 +67,8 @@ export default function WikiDocumentShell({
       <div className="mx-auto flex w-full max-w-260 flex-1 flex-col gap-6 px-6 py-9">
         <WikiDocumentMeta title={title} caption={caption} />
 
-        {/* 본문 타이포그래피는 공용 markdown.css를 재사용한다 — 에디터와 같은 읽기 규격이다 */}
-        <div className="markdown-body">{children}</div>
+        {/* 본문 타이포그래피는 공용 markdown-reading.css 변형을 쓴다 — 에디터와 같은 읽기 규격이다 */}
+        <div className="markdown-body markdown-reading">{children}</div>
       </div>
     </section>
   );

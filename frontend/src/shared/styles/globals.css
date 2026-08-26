@@ -11,6 +11,7 @@
 @import './layout.css';
 @import './animation.css';
 @import './markdown.css';
+@import './markdown-reading.css';
 
 @custom-variant dark (&:is(.dark *));
 

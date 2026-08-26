@@ -1,3 +1,5 @@
+/* 챗·관리자 등 공용 마크다운 기본 규격. 위키 읽기 화면은 markdown-reading.css의
+   .markdown-reading 변형이 이 규칙들을 명시도로 덮는다 — 여기를 고칠 때 그쪽도 확인. */
 @layer base {
   .markdown-body {
     font-family:

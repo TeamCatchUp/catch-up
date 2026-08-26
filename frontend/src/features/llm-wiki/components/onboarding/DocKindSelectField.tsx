@@ -125,8 +125,8 @@ export default function DocKindSelectField({
               {sampleCaption}
             </span>
           </div>
-          {/* 양식은 마크다운이라 표·인용이 있다 — 공용 markdown.css 규격으로 렌더한다 */}
-          <div className="markdown-body custom-scrollbar min-h-0 flex-1 overflow-y-auto px-8 py-6 wrap-break-word">
+          {/* 양식은 마크다운이라 표·인용이 있다 — 공용 markdown.css의 읽기 변형으로 렌더한다 */}
+          <div className="markdown-body markdown-reading custom-scrollbar min-h-0 flex-1 overflow-y-auto px-8 py-6 wrap-break-word">
             <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{sampleText}</ReactMarkdown>
           </div>
         </div>

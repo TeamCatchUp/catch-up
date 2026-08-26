@@ -113,24 +113,24 @@ export default function WikiEditor({ initialContent, editable = true, onUpdate, 
 
   return (
     <>
-      {/* 본문 타이포그래피는 공용 markdown.css(`.markdown-body`)를 재사용한다 — 빼면 preflight가 제목 크기를 지운다.
-          아래 유틸은 markdown.css가 다루지 않는 것만 덮는다. */}
+      {/* 본문 타이포그래피는 공용 markdown-reading.css(읽기 규격)를 재사용한다 — 빼면 preflight가 제목 크기를 지운다.
+          아래 유틸은 두 마크다운 규격이 다루지 않는 것만 덮는다. */}
       <EditorContent
         editor={editor}
         className={[
           'markdown-body',
+          'markdown-reading',
           'min-h-40',
           '[&_.ProseMirror]:outline-none',
-          // 체크박스 목록: markdown.css의 ul 마커·들여쓰기를 무효화하고 가로 배치
+          // 체크박스 목록: 마크다운 규격의 ul 마커·들여쓰기를 무효화하고 가로 배치
           '[&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0',
           '[&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:items-start [&_ul[data-type=taskList]_li]:gap-2',
           '[&_ul[data-type=taskList]_li_>_label]:shrink-0 [&_ul[data-type=taskList]_li_>_div]:min-w-0 [&_ul[data-type=taskList]_li_>_div]:flex-1',
-          // 콜아웃 — markdown.css에 없는 블록
+          // 콜아웃 — 마크다운 규격에 없는 블록
           '[&_div[data-type=callout]_>_*+*]:mt-2 [&_div[data-type=callout]_>_*:last-child]:mb-0',
-          // 구분선·하이라이트 — markdown.css에 없다
-          '[&_hr]:border-line-normal-normal [&_hr]:my-4',
+          // 하이라이트 — 마크다운 규격에 없다 (구분선은 markdown-reading.css가 가진다)
           '[&_mark]:bg-fill-primary-normal-neutral [&_mark]:rounded-sm [&_mark]:px-0.5',
-          // 표 격자 — markdown.css의 표는 읽기용이라 행 구분선만 있다. 편집 중에는 셀 경계가 보여야 한다.
+          // 표 격자 — 읽기 규격의 표는 행 구분선만 있다. 편집 중에는 셀 경계가 보여야 한다.
           '[&_td]:border [&_th]:border [&_td]:border-line-normal-normal [&_th]:border-line-normal-normal',
           '[&_th]:bg-fill-normal-strong',
         ].join(' ')}

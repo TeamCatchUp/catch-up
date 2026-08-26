@@ -43,7 +43,7 @@ const meta = {
         'not-published',
       ],
       reuseNotes: [
-        'WikiPageHeader(detail)를 무수정 소비하고, 본문 타이포그래피는 공용 markdown.css(.markdown-body)를 쓴다 — 에디터와 같은 읽기 규격이라 새 타입 스케일을 만들지 않는다.',
+        'WikiPageHeader(detail)를 무수정 소비하고, 본문 타이포그래피는 공용 markdown-reading.css(.markdown-body.markdown-reading)를 쓴다 — 에디터와 같은 읽기 규격이라 새 타입 스케일을 만들지 않는다.',
         '경로 마디 조립·이름 join은 화면 밖(라우트 훅)에서 끝나고 이 화면은 받은 마디만 그린다.',
       ],
       dataNotes: [
@@ -61,7 +61,7 @@ const meta = {
       ],
       layoutNotes: [
         '본문 폭은 max-w-260, 패딩 px-6·py-9 — 헤더는 폭을 흡수하고 본문만 가운데로 모인다.',
-        '표 항목은 markdown.css의 표 규칙(.table-wrapper + table/th/td)을 그대로 쓴다 — 라벨이 행 머리(th scope="row")이고 값이 td다. 표 시안이 없어 새 시각을 만들지 않았다.',
+        '표 항목은 markdown-reading.css의 표 규칙(.table-wrapper + table/th/td)을 그대로 쓴다 — 라벨이 행 머리(th scope="row")이고 값이 td다. 표 시안이 없어 새 시각을 만들지 않았다.',
         '자리표시 항목은 제목 + 문구를 본문과 같은 타이포로 낸다 — 흐림·배지 같은 구분 표시는 시안이 없어 넣지 않았다.',
       ],
       interactionNotes: [
