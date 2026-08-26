@@ -131,7 +131,7 @@ export default function HomeComposer({
             <button
               type="button"
               aria-label="추가"
-              className="rounded-rounded flex size-9 shrink-0 items-center justify-center p-1.5"
+              className="rounded-rounded hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed flex size-9 shrink-0 cursor-pointer items-center justify-center p-1.5 transition-colors"
             >
               <IconAdd className="text-icon-normal-normal size-6" />
             </button>
@@ -144,14 +144,12 @@ export default function HomeComposer({
             aria-label="보내기"
             onClick={handleSubmit}
             className={cn(
-              'rounded-rounded flex size-9 shrink-0 cursor-pointer items-center justify-center border border-solid p-2',
-              input.hasText
-                ? 'border-fill-primary-normal-normal bg-fill-primary-normal-normal'
-                : 'bg-fill-normal-interaction-inactive border-line-normal-assistive',
+              'rounded-rounded border-line-normal-assistive flex size-9 shrink-0 cursor-pointer items-center justify-center border border-solid transition-colors',
+              input.hasText ? 'bg-fill-primary-normal-normal' : 'bg-fill-normal-interaction-inactive',
             )}
           >
             <IconArrowSend
-              className={cn('size-5', input.hasText ? 'brightness-0 invert' : 'text-icon-normal-alternative')}
+              className={cn('size-5', input.hasText ? 'text-static-white' : 'text-icon-normal-alternative')}
             />
           </button>
         </div>

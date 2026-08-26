@@ -19,7 +19,7 @@ export interface SnbFooterProps {
 }
 
 /**
- * 펼친 SNB 하단. 신규 버튼과 프로필 행을 담고, 설정 진입점이 프로필 행 안에 있다.
+ * 펼친 SNB 하단. 신규 버튼과 설정이 한 행에 서고, 그 아래가 프로필 행이다.
  * 닫힘에서는 형상이 달라 한 컴포넌트로 합치지 않았다.
  */
 export default function SnbFooter({
@@ -48,14 +48,25 @@ export default function SnbFooter({
 
   return (
     <div className={cn('border-line-normal-neutral flex flex-col gap-1 border-t px-2 pt-2.5', className)}>
-      <div className={cn('flex items-center justify-center px-1', hideNewButton && 'hidden')}>
+      <div className={cn('flex items-center gap-2 px-1', hideNewButton && 'justify-end')}>
         <button
           type="button"
           onClick={onNewClick}
-          className="border-line-normal-normal bg-fill-normal-normal hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed flex h-9 w-full cursor-pointer items-center justify-center gap-1.5 rounded-full border px-3 py-1.5 transition-colors"
+          className={cn(
+            'rounded-rounded border-line-normal-normal bg-fill-normal-assistive hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed flex h-9 min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 border px-3 py-1.5 transition-colors',
+            hideNewButton && 'hidden',
+          )}
         >
           <IconAdd aria-hidden className="text-icon-normal-normal size-5 shrink-0" />
           <span className="text-body-small text-text-normal-normal">새 위키</span>
+        </button>
+        <button
+          type="button"
+          aria-label="설정"
+          onClick={onSettingsClick}
+          className="rounded-rounded border-line-normal-normal bg-fill-normal-assistive hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed flex size-9 shrink-0 cursor-pointer items-center justify-center border p-1.5 transition-colors"
+        >
+          <IconSettings aria-hidden className="text-icon-normal-neutral size-6" />
         </button>
       </div>
 
@@ -68,14 +79,6 @@ export default function SnbFooter({
         ) : (
           profileButton
         )}
-        <button
-          type="button"
-          aria-label="설정"
-          onClick={onSettingsClick}
-          className="border-line-normal-neutral bg-fill-normal-normal hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed flex size-7.5 shrink-0 cursor-pointer items-center justify-center rounded-md border transition-colors"
-        >
-          <IconSettings aria-hidden className="text-icon-normal-normal size-5" />
-        </button>
       </div>
     </div>
   );

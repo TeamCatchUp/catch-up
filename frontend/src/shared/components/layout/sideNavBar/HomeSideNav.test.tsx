@@ -146,6 +146,21 @@ describe('HomeSideNav 펼침', () => {
     expect(mockSidebarState.setDocSearchOpen).toHaveBeenCalledWith(true);
   });
 
+  it('새 위키는 채널 만들기 온보딩으로 보낸다', async () => {
+    const user = userEvent.setup();
+    render(<HomeSideNav />);
+
+    await user.click(screen.getByRole('button', { name: '새 위키' }));
+    expect(mockPush).toHaveBeenCalledWith('/llm-wiki/onboarding');
+  });
+
+  it('설정은 새 위키와 같은 행에 선다', () => {
+    render(<HomeSideNav />);
+
+    const settings = screen.getByRole('button', { name: '설정' });
+    expect(settings.parentElement).toBe(screen.getByRole('button', { name: '새 위키' }).parentElement);
+  });
+
   it('로고가 홈으로 가는 링크다', () => {
     render(<HomeSideNav />);
 

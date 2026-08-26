@@ -115,6 +115,7 @@ export default function HomeSideNav() {
             userName={user?.name ?? '이름없음'}
             userRole={user?.email ?? ''}
             onSettingsClick={goSettings}
+            onNewClick={go('/llm-wiki/onboarding')}
             profileMenu={profileMenu}
           />
         }

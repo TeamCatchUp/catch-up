@@ -609,7 +609,9 @@ describe('WikiSideNav 펼침', () => {
 
     expect(screen.queryByRole('button', { name: '추가하기' })).toBeNull();
     // SnbFooter가 CSS로 감춘다. jsdom엔 Tailwind가 없어 클래스로 검사한다
-    expect(screen.getByRole('button', { name: '새 위키' }).parentElement).toHaveClass('hidden');
+    expect(screen.getByRole('button', { name: '새 위키' })).toHaveClass('hidden');
+    // 같은 행의 설정은 권한과 무관하게 남는다
+    expect(screen.getByRole('button', { name: '설정' })).not.toHaveClass('hidden');
   });
 
   it('플랫폼 관리자는 새 위키로 온보딩에 진입한다', async () => {
