@@ -13,6 +13,8 @@ import IconFolder from '@/public/icons/icon/folder.svg';
 import IconGrid from '@/public/icons/icon/grid.svg';
 import IconMore from '@/public/icons/icon/kebab_horizontal_400.svg';
 import IconLink from '@/public/icons/icon/link.svg';
+import IconSearch300 from '@/public/icons/icon/search_300.svg';
+import IconSearch400 from '@/public/icons/icon/search_400.svg';
 import IconStar from '@/public/icons/icon/star.svg';
 import IconStarOff from '@/public/icons/icon/star_off.svg';
 import IconUpdate from '@/public/icons/icon/update.svg';
@@ -173,12 +175,16 @@ export default function WikiSideNav({
 }: WikiSideNavProps = {}) {
   const router = useRouter();
   const pathname = usePathname();
-  const { isSidebarOpen, setSidebarOpen, setActivePanel } = useSidebarStore();
+  const { isSidebarOpen, setSidebarOpen, setActivePanel, setDocSearchOpen } = useSidebarStore();
   const user = useUserStore((state) => state.user);
 
   const go = (href: string) => () => {
     setActivePanel(null);
     router.push(href);
+  };
+  const openDocSearch = () => {
+    setActivePanel(null);
+    setDocSearchOpen(true);
   };
   const goSettings = () => {
     setActivePanel(null);
@@ -388,6 +394,7 @@ export default function WikiSideNav({
           }
         >
           <SnbRailItem Icon={IconAdd400} label="새 채팅" iconOnDisc onClick={go('/')} />
+          <SnbRailItem Icon={IconSearch400} label="검색" onClick={openDocSearch} />
           <SnbRailItem Icon={IconUpdate} label="요청됨" selected={isReview} onClick={go('/llm-wiki/review')} />
           <SnbRailItem Icon={IconGrid} label="대시보드" selected={isDashboard} onClick={go('/llm-wiki')} />
         </SideNavRail>
@@ -410,6 +417,7 @@ export default function WikiSideNav({
           <>
             <div className="flex flex-col">
               <SnbNavRow Icon={IconAdd400} label="새 채팅" iconOnDisc onClick={go('/')} />
+              <SnbNavRow Icon={IconSearch300} label="검색" onClick={openDocSearch} />
               <SnbNavRow Icon={IconUpdate} label="요청됨" selected={isReview} onClick={go('/llm-wiki/review')} />
             </div>
             <SnbTeamspaceCard name="Acme의 지식 허브" Icon={TEAMSPACE_ICON} />

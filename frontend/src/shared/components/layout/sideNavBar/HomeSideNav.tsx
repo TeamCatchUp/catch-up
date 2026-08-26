@@ -5,10 +5,11 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import IconAdd400 from '@/public/icons/icon/add_small_400.svg';
 import IconAgent from '@/public/icons/icon/agent.svg';
-import IconDocumentSearch from '@/public/icons/icon/document_search.svg';
 import IconHistory from '@/public/icons/icon/history.svg';
 import IconMore from '@/public/icons/icon/kebab_horizontal.svg';
 import IconList from '@/public/icons/icon/list.svg';
+import IconSearch300 from '@/public/icons/icon/search_300.svg';
+import IconSearch400 from '@/public/icons/icon/search_400.svg';
 import IconUpdate from '@/public/icons/icon/update.svg';
 import { UserMenuContent } from '@/shared/components/layout/sideNavBar/modal/UserModal';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
@@ -34,7 +35,8 @@ export default function HomeSideNav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { activePanel, isSidebarOpen, setActivePanel, setSidebarOpen, togglePanel } = useSidebarStore();
+  const { activePanel, isSidebarOpen, setActivePanel, setDocSearchOpen, setSidebarOpen, togglePanel } =
+    useSidebarStore();
   const user = useUserStore((state) => state.user);
 
   // 메뉴 이동은 열려 있던 패널을 닫고 나간다 — 구 사이드바 동작이다
@@ -50,6 +52,10 @@ export default function HomeSideNav() {
   const isDocsMode = pathname === '/' && searchParams.get('mode') === 'docs';
   const isHome = pathname === '/' && !isDocsMode;
   const isAgentStudio = pathname.startsWith('/agent-studio');
+  const openDocSearch = () => {
+    setActivePanel(null);
+    setDocSearchOpen(true);
+  };
 
   // 섹션 접기는 로컬 상태다 — 서버에 보존할 계약이 없다
   const [recentOpen, setRecentOpen] = useState(true);
@@ -72,6 +78,7 @@ export default function HomeSideNav() {
           }
         >
           <SnbRailItem Icon={IconAdd400} label="새 채팅" iconOnDisc selected={isHome} onClick={go('/')} />
+          <SnbRailItem Icon={IconSearch400} label="검색" onClick={openDocSearch} />
           <SnbRailItem Icon={IconUpdate} label="요청됨" onClick={go('/llm-wiki/review')} />
           <SnbRailItem Icon={IconAgent} label="문의 대응" selected={isAgentStudio} onClick={go('/agent-studio')} />
           <SnbRailItem
@@ -99,13 +106,7 @@ export default function HomeSideNav() {
         primaryItems={
           <div className="flex flex-col">
             <SnbNavRow Icon={IconAdd400} label="새 채팅" iconOnDisc selected={isHome} onClick={go('/')} />
-            <SnbNavRow
-              Icon={IconDocumentSearch}
-              label="문서 탐색"
-              trailing={<SnbBetaBadge />}
-              selected={isDocsMode}
-              onClick={go('/?mode=docs')}
-            />
+            <SnbNavRow Icon={IconSearch300} label="검색" onClick={openDocSearch} />
             <SnbNavRow Icon={IconUpdate} label="요청됨" onClick={go('/llm-wiki/review')} />
           </div>
         }

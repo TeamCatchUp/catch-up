@@ -8,7 +8,9 @@ vi.mock('next/navigation', () => ({
 }));
 
 const mockSidebarState = {
+  isDocSearchOpen: false,
   setSidebarOpen: vi.fn(),
+  setDocSearchOpen: vi.fn(),
 };
 
 vi.mock('@/shared/store/sidebarStore', () => ({
@@ -21,6 +23,9 @@ vi.mock('@/shared/store/sidebarStore', () => ({
 
 vi.mock('./HomeSideNav', () => ({ default: () => <div>home-snb</div> }));
 vi.mock('./WikiSideNav', () => ({ default: () => <div>wiki-snb</div> }));
+vi.mock('@/shared/components/search/DocSearchModal', () => ({
+  default: ({ open }: { open: boolean }) => (open ? <div>doc-search-modal</div> : null),
+}));
 
 import AppSideNav, { isWikiRoute } from './AppSideNav';
 

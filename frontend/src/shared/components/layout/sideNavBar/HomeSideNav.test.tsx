@@ -18,6 +18,7 @@ const mockSidebarState = {
   lastSettingsPath: '/mypage/profile',
   setActivePanel: vi.fn(),
   setSidebarOpen: vi.fn(),
+  setDocSearchOpen: vi.fn(),
   togglePanel: vi.fn(),
 };
 
@@ -69,9 +70,6 @@ describe('HomeSideNav 펼침', () => {
     await user.click(screen.getByRole('button', { name: '문의 대응' }));
     expect(mockPush).toHaveBeenCalledWith('/agent-studio');
 
-    // 구 사이드바는 문서 탐색을 펼침·닫힘 양쪽에 뒀다
-    await user.click(screen.getByRole('button', { name: /^문서 탐색/ }));
-    expect(mockPush).toHaveBeenCalledWith('/?mode=docs');
 
     await user.click(screen.getByRole('button', { name: '설정' }));
     expect(mockPush).toHaveBeenCalledWith('/mypage/profile');
@@ -139,10 +137,13 @@ describe('HomeSideNav 펼침', () => {
     expect(menuRow('새 채팅')).not.toHaveAttribute('aria-current');
   });
 
-  it('검색 메뉴를 렌더하지 않는다', () => {
+  it('검색 메뉴가 문서 탐색 모달을 연다', async () => {
+    const user = userEvent.setup();
     render(<HomeSideNav />);
 
-    expect(screen.queryByRole('button', { name: '검색' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '문서 탐색' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: '검색' }));
+    expect(mockSidebarState.setDocSearchOpen).toHaveBeenCalledWith(true);
   });
 
   it('로고가 홈으로 가는 링크다', () => {
@@ -171,14 +172,12 @@ describe('HomeSideNav 닫힘', () => {
     mockSidebarState.isSidebarOpen = false;
   });
 
-  it('Rail 4항목이 시안 순서대로 배치된다', () => {
+  it('Rail 5항목이 시안 순서대로 배치된다', () => {
     render(<HomeSideNav />);
 
-    const labels = ['새 채팅', '요청됨', '문의 대응', '최근 채팅'];
+    const labels = ['새 채팅', '검색', '요청됨', '문의 대응', '최근 채팅'];
     labels.forEach((label) => expect(screen.getByRole('button', { name: label })).toBeInTheDocument());
-    // 문서 탐색은 닫힘 시안에서 빠졌다 — 펼침에만 남는다
     expect(screen.queryByRole('button', { name: '문서 탐색' })).toBeNull();
-    expect(screen.queryByRole('button', { name: '검색' })).toBeNull();
   });
 
   it('Rail 항목이 펼침과 같은 목적지로 이동한다', async () => {
