@@ -49,6 +49,13 @@ export interface BulkVerdictResult {
   message: string | null;
 }
 
+interface PublishVariables extends ReviewPublishRequest {
+  /** 발행 대상 안건. 클릭 시점 값을 실어 비행 중 선택 교체가 경로·무효화를 흔들지 않는다 */
+  proposalId: string;
+  /** 발행되는 문서. 성공 시 이 문서의 발행판 캐시를 겨눈다 — 모르면 목록·채널만 되돌린다 */
+  artifactId?: string;
+}
+
 /**
  * 발행이 바꾸는 위키 캐시 — 문서 목록(상태·최근 활동), 그 문서의 발행판,
  * 그리고 폴더 last_activity_at을 실어 오는 채널 목록이다. 구성원·preset은 바뀌지 않는다.
@@ -117,16 +124,17 @@ export const useReviewBulkVerdictMutation = () => {
 };
 
 /** 발행. 큐에서 줄이 빠지고 문서 쪽 상태·최근 활동이 함께 바뀌어 큐 뿌리와 문서 캐시를 되돌린다. */
-export const useReviewPublishMutation = (proposalId: string, artifactId?: string) => {
+export const useReviewPublishMutation = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (body: ReviewPublishRequest): Promise<ReviewPublishDto> => publishReviewProposal(proposalId, body),
-    onSuccess: () => {
+    mutationFn: ({ proposalId, artifactId: _artifactId, ...body }: PublishVariables): Promise<ReviewPublishDto> =>
+      publishReviewProposal(proposalId, body),
+    onSuccess: (_data, { artifactId }) => {
       queryClient.invalidateQueries({ queryKey: knowledgeReviewQueries.all() });
       invalidateWikiArtifacts(queryClient, artifactId);
     },
-    onError: (error) => {
+    onError: (error, { proposalId }) => {
       const { code, message } = parseApiError(error);
       toast(message);
       if (PUBLISH_STALE_CODES.includes(code)) {

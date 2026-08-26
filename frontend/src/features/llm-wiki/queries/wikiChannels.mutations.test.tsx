@@ -162,10 +162,11 @@ describe('useDeleteWikiFolderMutation', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(wikiApi.deleteWikiFolder).toHaveBeenCalledWith('ch-1', 'fo-1');
-    // 폴더 안 문서가 채널 루트로 옮겨지는 대량 이동이다 — 문서 목록·즐겨찾기·검토큐 위치까지 되돌린다
+    // 어떤 문서가 옮겨졌는지 모른다 — 문서 상세는 단수 프리픽스로 전체를 되돌린다
     expect(invalidatedKeys()).toEqual([
       channelsKey,
       [...wikiQueries.all(), 'artifacts'],
+      wikiQueries.artifactRoot(),
       wikiQueries.favorites().queryKey,
       knowledgeReviewQueries.all(),
     ]);

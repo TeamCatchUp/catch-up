@@ -19,6 +19,8 @@ vi.mock('lottie-react', () => ({
  */
 if (typeof window !== 'undefined') {
   window.scrollTo = () => {};
+  // scrollIntoView도 jsdom에 없다 — 고른 행을 보이는 자리로 끄는 화면이 부른다
+  window.HTMLElement.prototype.scrollIntoView = () => {};
 }
 
 /*

@@ -66,7 +66,7 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
         )}
         <div
           className={cn(
-            'z-panel absolute top-0 h-full overflow-hidden transition-[width,left] duration-300 ease-out',
+            'z-panel absolute top-0 h-full overflow-hidden transition-[width,left] duration-300 ease-out motion-reduce:transition-none',
             'left-snb',
             activePanel === 'inbox' ? 'w-104.5' : 'w-0',
           )}
@@ -80,7 +80,7 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
         */}
         <div
           className={cn(
-            'h-full shrink-0 overflow-hidden transition-[width] duration-300 ease-out',
+            'h-full shrink-0 overflow-hidden transition-[width] duration-300 ease-out motion-reduce:transition-none',
             activePanel === 'settings' || isSettingsRoute ? 'w-60' : 'w-0',
           )}
         >
@@ -88,7 +88,7 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
         </div>
         <div
           className={cn(
-            'z-panel absolute top-0 h-full overflow-hidden transition-[width,left] duration-300 ease-out',
+            'z-panel absolute top-0 h-full overflow-hidden transition-[width,left] duration-300 ease-out motion-reduce:transition-none',
             'left-snb',
             activePanel === 'questionsHistory' ? 'w-95' : 'w-0',
           )}

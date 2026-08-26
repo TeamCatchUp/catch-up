@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
-import { expect, fn, within } from 'storybook/test';
+import { expect, fn, waitFor, within } from 'storybook/test';
 
 import IconHome from '@/public/icons/icon/home.svg';
 import IconStacks from '@/public/icons/icon/stacks.svg';
@@ -30,14 +31,19 @@ const meta = {
         nodeId: '17895:46180',
       },
       viewport: { width: 320, height: 200 },
-      states: ['expanded-selected', 'expanded-unselected', 'closed-selected', 'closed-unselected'],
-      layoutNotes: ['펼침은 선택된 쪽만 라벨을 노출하며 남은 폭을 채운다. 닫힘은 36×36 정사각이다.'],
+      states: ['expanded-selected', 'expanded-unselected', 'expanded-toggle', 'closed-selected', 'closed-unselected'],
+      layoutNotes: [
+        '펼침은 선택된 쪽만 라벨을 노출하며 남은 폭을 채운다. 닫힘은 36×36 정사각이다.',
+        '펼침에서 선택이 옮겨가면 두 버튼이 layout 전환으로 폭 비율을 주고받는다.',
+      ],
       reuseNotes: ['홈 ↔ LLM Wiki 두 모드 사이를 오가는 유일한 컨트롤이다.'],
       tokenNotes: [
         '펼침 선택은 Fill/Primary/Normal/Neutral, 미선택은 Fill/Normal/Strong이다.',
         '닫힘 선택 카드는 Fill/Normal/Assistive다 — 라이트에서는 fill-normal-normal과 같은 흰색이라 눈으로 구분되지 않지만 다크에서 갈린다(neutral-83 ↔ neutral-85). play가 클래스로 고정한다.',
       ],
-      dataNotes: ['아이콘은 Figma가 filled 변형(icon/home_filled·icon/stacks_filled)을 쓴다 — 자산 확보는 조립 단계 과제다.'],
+      dataNotes: [
+        '아이콘은 Figma가 filled 변형(icon/home_filled·icon/stacks_filled)을 쓴다 — 자산 확보는 조립 단계 과제다.',
+      ],
     }),
   },
 } satisfies Meta<typeof SnbSpaceSwitcher>;
@@ -91,6 +97,47 @@ export const ExpandedPairWikiSelected: Story = {
     const home = canvas.getByRole('button', { name: '홈' });
     const wiki = canvas.getByRole('button', { name: 'LLM Wiki' });
     await expect(wiki.getBoundingClientRect().width).toBeGreaterThan(home.getBoundingClientRect().width);
+  },
+};
+
+/** 선택 토글이 가능한 조립 — 폭 비율 전환과 라벨 등장·퇴장을 실제 상호작용으로 본다 */
+function ExpandedToggleDemo() {
+  const [space, setSpace] = useState<'home' | 'wiki'>('home');
+  return (
+    <div className="bg-fill-normal-normal w-56 p-2">
+      <div className="flex items-center gap-1.5">
+        <SnbSpaceSwitcher Icon={IconHome} label="홈" selected={space === 'home'} onClick={() => setSpace('home')} />
+        <SnbSpaceSwitcher
+          Icon={IconStacks}
+          label="LLM Wiki"
+          selected={space === 'wiki'}
+          onClick={() => setSpace('wiki')}
+        />
+      </div>
+    </div>
+  );
+}
+
+export const ExpandedToggle: Story = {
+  render: () => <ExpandedToggleDemo />,
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('홈')).toBeInTheDocument();
+
+    await userEvent.click(canvas.getByRole('button', { name: 'LLM Wiki' }));
+
+    // 선택이 옮겨가면 라벨·aria-current가 함께 옮겨간다. 나가는 라벨은 페이드가 끝나면 사라진다
+    await expect(await canvas.findByText('LLM Wiki')).toBeInTheDocument();
+    await waitFor(() => expect(canvas.queryByText('홈')).toBeNull());
+    await expect(canvas.getByRole('button', { name: 'LLM Wiki' })).toHaveAttribute('aria-current', 'page');
+    await expect(canvas.getByRole('button', { name: '홈' })).not.toHaveAttribute('aria-current');
+
+    // 전환이 안착하면 폭 비율도 반대로 넘어가 있다
+    await waitFor(() => {
+      const homeWidth = canvas.getByRole('button', { name: '홈' }).getBoundingClientRect().width;
+      const wikiWidth = canvas.getByRole('button', { name: 'LLM Wiki' }).getBoundingClientRect().width;
+      expect(wikiWidth).toBeGreaterThan(homeWidth);
+    });
   },
 };
 

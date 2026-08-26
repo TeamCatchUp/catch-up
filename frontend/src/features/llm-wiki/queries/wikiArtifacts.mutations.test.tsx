@@ -60,16 +60,18 @@ describe('useMoveWikiArtifactMutation', () => {
   });
 
   // 구성원·definition-presets는 이동으로 바뀌지 않는다 — 위키 뿌리째 무효화하지 않는다
-  it('성공하면 위치를 실은 캐시만 되돌린다 — 채널 트리·문서 목록·즐겨찾기·검토큐', async () => {
+  it('성공하면 위치를 실은 캐시만 되돌린다 — 채널 트리·문서 목록·그 문서 상세·즐겨찾기·검토큐', async () => {
     const { wrapper, invalidatedKeys } = createHarness();
     const { result } = renderHook(() => useMoveWikiArtifactMutation(), { wrapper });
 
     result.current.mutate({ artifactId: ARTIFACT_ID, folderId: 'fd-9' });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    // 열린 문서의 breadcrumb는 상세 응답에서 온다 — 옮긴 문서의 상세 키까지 표적 무효화한다
     expect(invalidatedKeys()).toEqual([
       wikiQueries.channels().queryKey,
       [...wikiQueries.all(), 'artifacts'],
+      wikiQueries.artifact(ARTIFACT_ID).queryKey,
       wikiQueries.favorites().queryKey,
       knowledgeReviewQueries.all(),
     ]);

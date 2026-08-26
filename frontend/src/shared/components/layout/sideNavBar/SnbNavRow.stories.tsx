@@ -30,7 +30,16 @@ const meta = {
         nodeId: '17895:46181',
       },
       viewport: { width: 320, height: 200 },
-      states: ['default', 'selected', 'with-count', 'count-zero', 'disabled', 'long-label', 'with-actions'],
+      states: [
+        'default',
+        'selected',
+        'with-count',
+        'count-zero',
+        'disabled',
+        'long-label',
+        'with-actions',
+        'disabled-with-actions',
+      ],
       reuseNotes: ['Figma SNB/menu type=Main menu에 대응한다. type=setting(SnbMenuItem)과 선택 색이 다르다.'],
       dataNotes: [
         'hover·pressed는 CSS 상태라 스토리로 고정하지 않는다.',
@@ -159,7 +168,7 @@ export const WithActions: Story = {
     await expect(label.contains(action)).toBe(false);
     await expect(action).toBeVisible();
 
-    // 액션 아이콘 색은 래퍼가 정한다 — NavTree 행 액션과 같은 neutral 상속(#6D7882)
+    // 액션 아이콘 색은 래퍼가 정한다 — NavTree 행 액션과 같은 neutral 상속이다
     await expect(getComputedStyle(action).color).toBe('rgb(109, 120, 130)');
 
     // 액션 클릭은 행 이동을 유발하지 않는다.
@@ -168,5 +177,43 @@ export const WithActions: Story = {
 
     await userEvent.click(label);
     await expect(args.onClick).toHaveBeenCalledTimes(1);
+  },
+};
+
+/** 액션이 붙은 행의 disabled — 배경·커서·액션 색이 button 분기와 같은 수준으로 잠긴다. */
+export const DisabledWithActions: Story = {
+  args: { label: '목적지 없는 문서', disabled: true, actionsOpen: true },
+  render: (args) => (
+    <Frame>
+      <SnbNavRow
+        {...args}
+        actions={
+          <button type="button" aria-label="목적지 없는 문서 추가 작업" className="size-5.5 shrink-0 rounded-full">
+            ⋯
+          </button>
+        }
+      />
+    </Frame>
+  ),
+  play: async ({ args, canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+    const label = canvas.getByRole('button', { name: '목적지 없는 문서' });
+    const action = canvas.getByRole('button', { name: '목적지 없는 문서 추가 작업' });
+    const row = label.parentElement!;
+
+    await expect(label).toBeDisabled();
+    await expect(getComputedStyle(label).cursor).toBe('not-allowed');
+
+    // 행 래퍼가 hover·pressed·열림 고정 배경을 걸지 않는다 — 눌리는 것처럼 보이면 안 된다
+    await expect(row.className).not.toContain('hover:bg-fill-normal-interaction-hover');
+    await expect(row.className).not.toContain('bg-fill-normal-interaction-pressed');
+    await expect(row.className).not.toContain('bg-fill-normal-interaction-hover');
+
+    // 액션은 남되(즐겨찾기 해제 등 유효한 작업이 있다) 색은 disabled 톤을 따른다
+    await expect(action).toBeVisible();
+    await expect(getComputedStyle(action).color).toBe('rgb(205, 209, 213)');
+
+    await userEvent.click(label);
+    await expect(args.onClick).not.toHaveBeenCalled();
   },
 };

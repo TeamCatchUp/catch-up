@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 import WikiSideNav, {
   findTreeNode,
@@ -24,7 +24,11 @@ import {
 } from '../../queries/wikiChannels.mutations';
 import { useWikiFavoriteToggleMutation } from '../../queries/wikiFavorites.mutations';
 import { wikiChannelHref, wikiFolderHref } from '../../utils/wikiNavTree';
-import MoveTargetPicker, { type MoveTarget, type MoveTargetChannel } from './MoveTargetPicker';
+import MoveTargetPicker, {
+  MOVE_PICKER_FOLDER_INPUT_ATTR,
+  type MoveTarget,
+  type MoveTargetChannel,
+} from './MoveTargetPicker';
 
 /** 액션 버튼이 붙은 토스트는 누를 시간이 필요해 기본 표시 시간보다 길게 둔다 */
 const ACTION_TOAST_DURATION = 6000;
@@ -32,6 +36,7 @@ const ACTION_TOAST_DURATION = 6000;
 /** 위키 SNB에 실 데이터를 물리는 자리. shared 층은 features를 import할 수 없어 여기서 잇는다. */
 export default function WikiSideNavContainer() {
   const router = useRouter();
+  const pathname = usePathname();
   const { treeNodes, favorites, channelAdmins, onNodeToggle } = useWikiSideNav();
   const { data: me } = useQuery(authQueries.me());
   const favoriteToggle = useWikiFavoriteToggleMutation();
@@ -111,9 +116,10 @@ export default function WikiSideNavContainer() {
   };
 
   // 패널에서 새 폴더 만들기 — 생성만 한다. 무효화로 목록에 새 폴더가 서고 이동은 사용자가 직접 고른다
-  const handlePickerFolderCreate = (name: string) => {
+  // reject는 입력 유지를 위해 패널로 그대로 돌려보낸다(패널이 catch) — 토스트는 뮤테이션이 띄운다
+  const handlePickerFolderCreate = async (name: string) => {
     if (!moveTarget) return;
-    createFolder.mutate({ channelId: moveTarget.channel.id, name });
+    await createFolder.mutateAsync({ channelId: moveTarget.channel.id, name });
   };
 
   return (
@@ -130,10 +136,20 @@ export default function WikiSideNavContainer() {
         onFolderDeleteSubmit={(node) =>
           deleteFolder.mutate(
             { channelId: node.channelId, folderId: node.id },
-            { onSuccess: () => toast('폴더를 삭제했습니다. 문서는 채널 바로 아래로 옮겨졌습니다.') },
+            {
+              onSuccess: () => {
+                toast('폴더를 삭제했습니다. 문서는 채널 바로 아래로 옮겨졌습니다.');
+                // 보고 있던 폴더 페이지가 사라지므로 문서들이 실제로 간 채널 페이지로 옮긴다
+                if (pathname === wikiFolderHref(node.id)) router.replace(wikiChannelHref(node.channelId));
+              },
+            },
           )
         }
-        onMoveRequest={(node, anchor) => setMovePicker({ node, anchor })}
+        onMoveRequest={(node, anchor) => {
+          // 대상 채널이 트리에 없으면(미분류 문서 포함) 빈 패널이 뜬다 — 진입 자체를 막는다
+          if (!treeNodes.some((channel) => channel.id === node.channelId)) return;
+          setMovePicker({ node, anchor });
+        }}
         moveOpenNodeId={movePicker?.node.id}
       />
 
@@ -141,7 +157,16 @@ export default function WikiSideNavContainer() {
       {movePicker && (
         <Popover open onOpenChange={(open) => !open && setMovePicker(null)}>
           <PopoverAnchor virtualRef={{ current: movePicker.anchor }} />
-          <PopoverContent align="start" side="right" className={SNB_POPOVER_SHELL_CLASS}>
+          <PopoverContent
+            align="start"
+            side="right"
+            className={SNB_POPOVER_SHELL_CLASS}
+            onEscapeKeyDown={(event) => {
+              // 폴더 이름 입력 중의 Escape는 인라인 입력만 닫는다 — 패널째 dismiss되면 입력이 증발한다
+              if (event.target instanceof Element && event.target.closest(`[${MOVE_PICKER_FOLDER_INPUT_ATTR}]`))
+                event.preventDefault();
+            }}
+          >
             <MoveTargetPicker
               channel={moveTarget?.channel}
               currentFolderId={moveTarget?.currentFolderId}

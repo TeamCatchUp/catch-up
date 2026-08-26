@@ -1,9 +1,13 @@
 export {
   collapseExpand,
   crossfade,
+  crossfadeReduced,
   disclosureExpand,
   disclosureExpandReduced,
   fadeInUp,
+  layoutLabelFade,
+  layoutLabelFadeReduced,
+  layoutShiftTransition,
   motionDuration,
   motionEase,
   MotionState,

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 
 import { toast } from '@/shared/components/ui/toast';
 import { authQueries } from '@/shared/queries/auth.queries';
+import { formatRelativeTime } from '@/shared/utils/formatDate';
 
 import { mapReviewProposalDetail } from '../api/knowledgeReviewDetailMappers';
 import { mapReviewQueueItem, type ReviewQueueRowData } from '../api/knowledgeReviewMappers';
@@ -30,7 +31,7 @@ import {
   useAssignWikiArtifactOwnersMutation,
   useRemoveWikiArtifactOwnerMutation,
 } from '../queries/wikiArtifactOwners.mutations';
-import type { BlockDiffEntry } from '../types/llmWikiDiff';
+import type { BlockDiffEntry, WikiBlock } from '../types/llmWikiDiff';
 import type { DocumentBreadcrumb } from '../types/llmWikiModel';
 import { buildBlockDiff } from '../utils/diff/buildBlockDiff';
 import { useQueryErrorToast } from './useQueryErrorToast';
@@ -64,7 +65,7 @@ function hasVerdictPath(
   return entry.blockIndex !== null && entry.blockContentHash !== null;
 }
 
-/** 일괄 판정(전체 승인·반려)이 보낼 카드. 이미 판정된 카드도 덮어쓰기 대상으로 함께 담는다 */
+/** 일괄 판정(전체 승인·반려)이 보낼 카드. 판정 경로가 있는 카드만 담는다 */
 function collectVerdictTargets(entries: readonly BlockDiffEntry[]): BlockVerdictTarget[] {
   return entries
     .filter(hasVerdictPath)
@@ -76,9 +77,31 @@ function hasUndecidedBlock(entries: readonly BlockDiffEntry[]): boolean {
   return entries.some((entry) => hasVerdictPath(entry) && !entry.approved && !entry.rejected);
 }
 
-/** 카드 반려 다이얼로그가 든 것 — 연 시점의 안건을 함께 물어 제출이 그 안건으로 나간다 */
+/** verdict.reviewer("user:{id}")에서 담당자 매칭용 숫자 id를 캔다. 형식이 다르면 null(매칭 실패)이다 */
+function parseReviewerUserId(reviewer: string): number | null {
+  const match = /^user:(\d+)$/.exec(reviewer);
+  return match === null ? null : Number(match[1]);
+}
+
+/** 담당자별 최근 판정 시각. blocks를 한 번 돌아 reviewer 숫자 id → 가장 최근 reviewedAt으로 모은다 */
+function collectLatestReviewedAt(blocks: readonly WikiBlock[]): Map<number, string> {
+  const latestByUserId = new Map<number, string>();
+  for (const { verdict } of blocks) {
+    if (verdict === null) continue;
+    const userId = parseReviewerUserId(verdict.reviewer);
+    if (userId === null) continue;
+    const latest = latestByUserId.get(userId);
+    if (latest === undefined || new Date(verdict.reviewedAt) > new Date(latest)) {
+      latestByUserId.set(userId, verdict.reviewedAt);
+    }
+  }
+  return latestByUserId;
+}
+
+/** 카드 반려 다이얼로그가 든 것 — 연 시점의 안건·블록을 함께 물어 제출이 그 안건으로 나간다 */
 interface RejectingBlock {
-  entry: BlockDiffEntry;
+  blockIndex: number;
+  blockContentHash: string;
   proposalId: string;
 }
 
@@ -164,7 +187,7 @@ export function useReviewQueueModel({
   });
 
   const verdictMutation = useReviewBlockVerdictMutation();
-  const publishMutation = useReviewPublishMutation(selectedRowId ?? '', detail?.artifactId);
+  const publishMutation = useReviewPublishMutation();
   const bulkVerdictMutation = useReviewBulkVerdictMutation();
   const assignOwnersMutation = useAssignWikiArtifactOwnersMutation();
   const removeOwnerMutation = useRemoveWikiArtifactOwnerMutation();
@@ -197,25 +220,24 @@ export function useReviewQueueModel({
   const canAssignOwners = isArtifactAdmin || isMeOwner;
   const canRemoveOwners = isArtifactAdmin;
 
-  const participants: ReviewParticipant[] = owners.map((owner) => ({
-    id: String(owner.userId),
-    userId: owner.userId,
-    name: owner.displayName,
-    isMe: owner.userId === myUserId,
-    role: '담당자',
-    avatarSrc: owner.profileImageUrl,
-  }));
-  // 담당자가 없으면 검수 폴백인 채널 관리자(나)가 행으로 선다
-  if (detail !== null && participants.length === 0 && isArtifactAdmin && me && myUserId !== null) {
-    participants.push({
-      id: String(myUserId),
-      userId: myUserId,
-      name: me.name,
-      isMe: true,
-      role: '채널 관리자',
-      avatarSrc: me.picture ?? null,
+  // 채널 관리자 배지는 내 행에만 — 서버는 내 관리자 여부(is_admin)만 주고 남의 것은 주지 않는다
+  const participants: ReviewParticipant[] = useMemo(() => {
+    if (detail === null) return [];
+    // 활동 줄은 그 사람이 이 안건에서 내린 판정 중 가장 최근 것이다
+    const latestByUserId = collectLatestReviewedAt(detail.blocks);
+    return detail.owners.map((owner) => {
+      const reviewedAt = latestByUserId.get(owner.userId) ?? null;
+      return {
+        id: String(owner.userId),
+        userId: owner.userId,
+        name: owner.displayName,
+        description: reviewedAt === null ? '검토 전' : `${formatRelativeTime(reviewedAt)} 검토`,
+        isMe: owner.userId === myUserId,
+        roles: owner.userId === myUserId && isArtifactAdmin ? ['담당자', '채널 관리자'] : ['담당자'],
+        avatarSrc: owner.profileImageUrl,
+      };
     });
-  }
+  }, [detail, myUserId, isArtifactAdmin]);
 
   const ownerNotice = detail === null ? null : owners.length === 0 ? 'no-owner' : isMeOwner ? null : 'other-owner';
 
@@ -246,7 +268,7 @@ export function useReviewQueueModel({
 
   const approveBlock = (entry: BlockDiffEntry) => {
     // 판정 경로가 없는 카드(발행판에서만 빠진 블록)는 요청 자체가 성립하지 않는다
-    if (selectedRowId === null || entry.blockIndex === null || entry.blockContentHash === null) return;
+    if (selectedRowId === null || !hasVerdictPath(entry)) return;
     verdictMutation.mutate({
       proposalId: selectedRowId,
       blockIndex: entry.blockIndex,
@@ -256,35 +278,33 @@ export function useReviewQueueModel({
   };
 
   const rejectBlock = (entry: BlockDiffEntry) => {
-    if (selectedRowId === null || entry.blockIndex === null || entry.blockContentHash === null) return;
+    if (selectedRowId === null || !hasVerdictPath(entry)) return;
     // 여는 순간의 안건을 고정한다 — 입력 중 목록이 갈려도 제출이 이 안건으로 나간다
     setSelectedId(selectedRowId);
-    setRejecting({ entry, proposalId: selectedRowId });
+    setRejecting({ blockIndex: entry.blockIndex, blockContentHash: entry.blockContentHash, proposalId: selectedRowId });
   };
 
   // 사유는 이미 트림돼 온다 — 빈 사유는 서버가 422로 막는 계약이라 다이얼로그가 먼저 잠근다
   const submitBlockReject = (reason: string) => {
-    if (rejecting === null || rejecting.entry.blockIndex === null || rejecting.entry.blockContentHash === null) {
-      return;
-    }
+    if (rejecting === null) return;
     verdictMutation.mutate(
       {
         proposalId: rejecting.proposalId,
-        blockIndex: rejecting.entry.blockIndex,
+        blockIndex: rejecting.blockIndex,
         verdict: 'rejected',
         rejection_reason: reason,
-        block_content_hash: rejecting.entry.blockContentHash,
+        block_content_hash: rejecting.blockContentHash,
       },
       { onSuccess: () => setRejecting(null) },
     );
   };
 
   /**
-   * 전체 승인은 판정 경로가 있는 전 카드를 승인으로 덮는다 — 발행은 별도 클릭으로 남는다.
-   * 보낼 카드가 없으면(빠진 블록만) 요청 자체가 성립하지 않는다.
+   * 전체 승인은 미승인 카드만 보낸다 — 이미 승인된 블록은 남의 판정 기록(검토자·시각)을 덮지 않게 빼고,
+   * 반려된 카드는 승인으로 뒤집는다. 보낼 카드가 없으면 요청 자체가 성립하지 않는다.
    */
   const approveAll = () => {
-    const targets = collectVerdictTargets(entries);
+    const targets = collectVerdictTargets(entries.filter((entry) => !entry.approved));
     if (selectedRowId === null || targets.length === 0) return;
 
     bulkVerdictMutation.mutate(
@@ -342,7 +362,7 @@ export function useReviewQueueModel({
     const publishedRowId = selectedRowId;
     const nextRowId = resolveNextRowId(rows, publishedRowId);
     publishMutation.mutate(
-      { base_revision_id: detail.baseRevisionId },
+      { proposalId: publishedRowId, artifactId, base_revision_id: detail.baseRevisionId },
       {
         onSuccess: (result) => {
           // 발행된 안건은 큐에서 빠진다 — 발행한 행을 그대로 보고 있을 때만 다음 안건으로 옮긴다
@@ -387,8 +407,8 @@ export function useReviewQueueModel({
     entries,
     canReview: detail?.canReview ?? false,
     canReject: detail?.canReview ?? false,
-    // 미판정 카드가 남으면 서버가 어차피 거절한다 — 보이는 카드만 세므로 변경 없는 블록에 막히지 않는다
-    publishDisabled: detail === null || hasUndecidedBlock(entries),
+    // 미판정 카드가 남으면 서버가 어차피 거절한다 — 발행이 비행 중이면 더블클릭이 두 번 나가지 않게 잠근다
+    publishDisabled: detail === null || hasUndecidedBlock(entries) || publishMutation.isPending,
     channelOptions: (channels?.channels ?? []).map((channel) => ({ id: channel.id, label: channel.name })),
     assigneeOptions: (members ? mapWikiMembers(members) : []).map((member) => ({
       id: String(member.userId),

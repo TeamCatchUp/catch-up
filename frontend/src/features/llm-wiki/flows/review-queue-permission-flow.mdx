@@ -2,6 +2,7 @@ import { Canvas, Meta } from '@storybook/addon-docs/blocks';
 
 import * as BlockDiffStories from '../components/review-queue/diff/BlockDiffSection.stories';
 import * as RejectDialogStories from '../components/review-queue/RejectReasonDialog.stories';
+import * as ParticipantsStories from '../components/review-queue/ReviewParticipantsCard.stories';
 import * as PublishBarStories from '../components/review-queue/ReviewPublishBar.stories';
 import * as QueueStories from '../components/review-queue/ReviewQueuePage.stories';
 
@@ -16,21 +17,63 @@ import * as QueueStories from '../components/review-queue/ReviewQueuePage.storie
 
 ## 1. 진입 — 목록과 상세는 모두에게 열린다
 
-검토큐는 팀이 함께 보는 목록이다. 역할이 하나도 없는 구성원도 무엇이 올라와 있는지, 무엇이 어떻게
-바뀌는지 다 본다. 사라지는 것은 판정 진입점뿐이다.
+검토큐는 팀이 함께 보는 목록이다. 담당자가 아닌 구성원도 무엇이 올라와 있는지, 무엇이 어떻게
+바뀌는지 다 본다. 사라지는 것은 판정 진입점뿐이고, 그것이 닫히는 경우는 하나 — **남이 담당자인
+문서**다.
 
 <Canvas of={QueueStories.NoReviewPermission} />
 
 목록·요약·diff 카드·미리보기는 그대로 남는다. 승인·반려, 전체 승인·전체 반려, 최종 내보내기가 빠진다.
 
-## 2. 판정 권한이 있을 때
+## 2. 판정 규칙 — 담당자가 있으면 담당자만, 없으면 구성원 누구나
 
-담당자(자기 문서)이거나 담당자 없는 문서의 채널 관리자면, 같은 화면에 판정 진입점이 세 층으로 붙는다 —
-블록마다 승인, 헤더에 전체 승인·전체 반려, 하단 바에 최종 내보내기.
+담당자가 있는 문서는 **담당자 본인만** 판정한다. 채널 관리자도 전역 관리자도 못 한다 — 관리자는
+상위 권한이 아니라 명단을 고치는 역할이어서, 판정까지 열어 두면 담당자의 결정 영역을 관리자가
+언제든 덮어쓸 수 있다. 담당자가 없는 문서는 **구성원 누구나** 판정한다 — 파이프라인이 만든 문서는
+담당자 0명으로 시작하는데, 관리자만 판정하게 두면 관리자가 없는 워크스페이스에서는 문서가 영영
+결정되지 않는다. 담당자 없던 문서를 승인·발행으로 확정하면 확정한 사람이 자동으로 그 문서의
+담당자로 등록되어, 그다음부터는 첫 규칙이 그 사람을 지킨다.
+
+판정이 열리면 같은 화면에 진입점이 세 층으로 붙는다 — 블록마다 승인, 헤더에 전체 승인·전체 반려,
+하단 바에 최종 내보내기.
 
 <Canvas of={QueueStories.Default} />
 
-## 3. 블록 층 — diff 섹션만 떼어 보기
+## 3. 담당자 카드 — 다섯 케이스
+
+우측 담당자 카드가 이 규칙을 그대로 비춘다. 담당자 지정·해제는 판정과 **다른 규칙**(지정=관리자
+또는 담당자 본인, 해제=관리자만)이라, 카드의 관리 진입점은 판정 진입점과 따로 갈린다.
+
+**카드에는 담당자만 선다.** 관리자여도 담당자가 아니면 행이 없고, 담당자가 0명이면 목록이 빈다 —
+검토 권한은 배너가 말하고, 카드는 "누가 이 문서를 맡았는가"만 답한다.
+
+행마다 역할 배지가 선다 — 담당자는 회색, 채널 관리자는 파랑 태그다. 역할이 겹치면 배지도 겹치는
+만큼 선다: 담당자이면서 채널 관리자면 **담당자 + 채널 관리자** 둘이 나란히다. 단 채널 관리자
+배지는 **내 행에만** 붙는다 — 서버가 내 관리자 여부(`is_admin`)만 주고 남의 관리자 여부는 주지
+않아, 남의 행에 추측으로 붙일 근거가 없다.
+
+| 케이스                    | 판정 진입점       | 담당자 카드                         | 배너                         | 화면 전체                                                                                 |
+| ------------------------- | ----------------- | ----------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------- |
+| 담당자 0명 · 내가 관리자  | 열림(구성원 자격) | 빈 목록 + 지정(+)                   | "구성원 누구나 검토"         | [NoOwnerAsAdmin](?path=/story/screens-llm-wiki-reviewqueuepage--no-owner-as-admin)        |
+| 담당자 0명 · 일반 구성원  | 열림              | 빈 목록, + 버튼 없음                | 같은 배너                    | [NoOwnerAsMember](?path=/story/screens-llm-wiki-reviewqueuepage--no-owner-as-member)      |
+| 내가 담당자               | 열림              | 내 행(담당자 배지)                  | 없음                         | [Default](?path=/story/screens-llm-wiki-reviewqueuepage--default)                         |
+| 남이 담당자 · 내가 관리자 | **닫힘**          | 그 사람 행(담당자 배지) + 지정·해제 | "담당자가 검토할 문서입니다" | [OtherOwnerAsAdmin](?path=/story/screens-llm-wiki-reviewqueuepage--other-owner-as-admin)  |
+| 남이 담당자 · 일반 구성원 | 닫힘              | 그 사람 행, 관리 버튼 없음          | 같은 배너                    | [NoReviewPermission](?path=/story/screens-llm-wiki-reviewqueuepage--no-review-permission) |
+
+카드만 떼어 보면 다섯 케이스가 이렇게 선다. 역할 중첩(배지 2개)은
+[MeAsOwnerAndAdmin](?path=/story/compositions-llm-wiki-reviewqueue-reviewparticipantscard--me-as-owner-and-admin),
+복수 담당자 스택은
+[MultipleOwners](?path=/story/compositions-llm-wiki-reviewqueue-reviewparticipantscard--multiple-owners)에
+따로 두었다.
+
+<Canvas of={ParticipantsStories.NoOwnerAsAdmin} />
+<Canvas of={ParticipantsStories.NoOwnerAsMember} />
+<Canvas of={ParticipantsStories.MeAsOwner} />
+<Canvas of={ParticipantsStories.MeAsOwnerAndAdmin} />
+<Canvas of={ParticipantsStories.OtherOwnerAsAdmin} />
+<Canvas of={ParticipantsStories.OtherOwnerAsMember} />
+
+## 4. 블록 층 — diff 섹션만 떼어 보기
 
 <Canvas of={BlockDiffStories.NoReviewPermission} />
 
@@ -42,14 +85,14 @@ import * as QueueStories from '../components/review-queue/ReviewQueuePage.storie
 전체 승인·반려는 판정 경로가 있는 전 카드에 블록 판정을 일괄로 보내는 것이라 판정이 시작된 뒤에도
 성립한다 — 이미 내린 판정도 덮어쓰므로 두 버튼 모두 잠그지 않는다.
 
-## 4. 반려는 사유를 거친다
+## 5. 반려는 사유를 거친다
 
 전체 반려는 곧바로 나가지 않는다. 사유가 필수라 입력 창을 먼저 열고, 사유가 비어 있는 동안 제출을 잠근다.
 제출 중에도 잠긴 채로 남아 같은 요청이 두 번 나가지 않는다.
 
 <Canvas of={RejectDialogStories.Playground} />
 
-## 5. 발행 층
+## 6. 발행 층
 
 <Canvas of={PublishBarStories.NoReviewPermission} />
 

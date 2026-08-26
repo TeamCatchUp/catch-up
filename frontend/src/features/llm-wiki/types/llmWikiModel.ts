@@ -120,8 +120,8 @@ export interface ReviewQueueItemData {
   /** 충돌(에러 아이콘) 행 — 상단 고정 여부는 미정 */
   hasConflictIcon: boolean;
   /**
-   * [BE] 결정 권한. 담당자·채널 관리자 폴백을 서버가 계산해 내려준다 —
-   * 프론트는 소비만 하고 재계산하지 않는다.
+   * [BE] 결정 권한(담당자 있으면 담당자만, 없으면 구성원 누구나) —
+   * 서버가 계산해 내려주고 프론트는 소비만 한다.
    */
   canReview: boolean;
 }

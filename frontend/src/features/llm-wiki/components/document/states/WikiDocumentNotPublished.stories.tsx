@@ -51,8 +51,9 @@ export const Default: Story = {
     // 빈 표 안내와 같은 일러스트 에셋·크기다 — 새로 그린 것이 아니다.
     const illustration = canvasElement.querySelector('svg') as SVGSVGElement;
     const box = illustration.getBoundingClientRect();
+    // 높이는 뷰포트에 따라 서브픽셀로 떨어져 반올림해 잰다
     await expect(box.width).toBe(64);
-    await expect(box.height).toBe(55);
+    await expect(Math.round(box.height)).toBe(55);
 
     // 경로 마디는 없고 헤더 셸만 남는다.
     await expect(canvasElement.querySelector('[aria-current="page"]')).toBeNull();

@@ -91,6 +91,16 @@ export const crossfade: Variants = {
   exit: { opacity: 0, transition: fastTransition },
 };
 
+/** 형제끼리 폭·자리를 주고받는 layout prop 전환의 공통 박자. */
+export const layoutShiftTransition: Transition = fastTransition;
+
+/** layout 전환 위에 얹는 라벨 등장·퇴장. 폭 이동(layoutShiftTransition)과 같은 박자로 페이드한다. */
+export const layoutLabelFade: Variants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: fastTransition },
+  exit: { opacity: 0, transition: fastTransition },
+};
+
 /** Typewriter — 텍스트를 word 단위 stagger로 등장. active step reasoning 등 토큰 흐름 표현용. */
 export const typewriterWordsContainer: Variants = {
   hidden: {},
@@ -151,6 +161,12 @@ const reducedReplaceFade: Variants = {
 
 /** stepReplace의 reduced-motion 변형. usePrefersReducedMotion()이 true일 때 호출부가 이쪽으로 교체한다. */
 export const stepReplaceReduced: Variants = reducedReplaceFade;
+
+/** crossfade의 reduced-motion 변형. 위와 같은 이유로 짧은 fade만 남긴다. */
+export const crossfadeReduced: Variants = reducedReplaceFade;
+
+/** layoutLabelFade의 reduced-motion 변형. 위와 같은 이유로 짧은 fade만 남긴다. */
+export const layoutLabelFadeReduced: Variants = reducedReplaceFade;
 
 /** panelStateFadeIn의 reduced-motion 변형. 위와 같은 이유로 y를 뺀다. */
 export const panelStateFadeInReduced: Variants = reducedReplaceFade;

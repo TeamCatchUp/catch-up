@@ -217,7 +217,7 @@ export const createReviewQueueItem = (overrides?: Partial<ReviewQueueItemData>):
 // 모순(contradiction) 행 표본은 두지 않는다 — MVP 제외 결정, 유형·필드 계약은 보존
 export const REVIEW_QUEUE_ITEM_FIXTURES: readonly ReviewQueueItemData[] = [
   createReviewQueueItem(),
-  // 권한 없는 행 표본 — 권한은 제안마다 갈리므로(담당자 우선, 없으면 채널 관리자) 목록에 섞여 온다
+  // 권한 없는 행 표본 — 담당자 있는 문서는 담당자만 판정하므로 목록에 섞여 온다
   createReviewQueueItem({
     id: 'proposal-merge-refund',
     type: 'merge',

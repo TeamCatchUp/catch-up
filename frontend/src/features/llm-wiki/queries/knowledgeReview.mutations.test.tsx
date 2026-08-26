@@ -237,11 +237,12 @@ describe('useReviewPublishMutation', () => {
   it('발행은 큐 뿌리와 문서 목록·채널 목록·그 문서 상세만 무효화한다', async () => {
     reviewApi.publishReviewProposal.mockResolvedValue(PUBLISH_RESPONSE);
     const { wrapper, invalidatedKeys } = createHarness();
-    const { result } = renderHook(() => useReviewPublishMutation(PROPOSAL_ID, ARTIFACT_ID), { wrapper });
+    const { result } = renderHook(() => useReviewPublishMutation(), { wrapper });
 
-    result.current.mutate({ base_revision_id: 'rv-8' });
+    result.current.mutate({ proposalId: PROPOSAL_ID, artifactId: ARTIFACT_ID, base_revision_id: 'rv-8' });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    // 안건·문서 id는 variables에서 갈라져 나가고 요청 본문에는 남지 않는다
     expect(reviewApi.publishReviewProposal).toHaveBeenCalledWith(PROPOSAL_ID, { base_revision_id: 'rv-8' });
     expect(invalidatedKeys()).toEqual([knowledgeReviewQueries.all(), artifactListKey, channelsKey, artifactDetailKey]);
   });
@@ -249,12 +250,25 @@ describe('useReviewPublishMutation', () => {
   it('문서 id를 모르면 목록·채널만 되돌린다 — 상세는 되돌릴 자리를 못 짚는다', async () => {
     reviewApi.publishReviewProposal.mockResolvedValue(PUBLISH_RESPONSE);
     const { wrapper, invalidatedKeys } = createHarness();
-    const { result } = renderHook(() => useReviewPublishMutation(PROPOSAL_ID), { wrapper });
+    const { result } = renderHook(() => useReviewPublishMutation(), { wrapper });
 
-    result.current.mutate({ base_revision_id: 'rv-8' });
+    result.current.mutate({ proposalId: PROPOSAL_ID, base_revision_id: 'rv-8' });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(invalidatedKeys()).toEqual([knowledgeReviewQueries.all(), artifactListKey, channelsKey]);
+  });
+
+  // 렌더가 다른 안건으로 바뀌어도 무효화는 mutate에 실린 문서를 겨눈다 — 비행 중 선택 교체 회귀 방지
+  it('무효화는 훅이 아니라 mutate 변수의 안건·문서를 따른다', async () => {
+    reviewApi.publishReviewProposal.mockResolvedValue(PUBLISH_RESPONSE);
+    const { wrapper, invalidatedKeys } = createHarness();
+    const { result } = renderHook(() => useReviewPublishMutation(), { wrapper });
+
+    result.current.mutate({ proposalId: 'pr-A', artifactId: 'ar-A', base_revision_id: 'rv-8' });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(reviewApi.publishReviewProposal).toHaveBeenCalledWith('pr-A', { base_revision_id: 'rv-8' });
+    expect(invalidatedKeys()).toContainEqual(wikiQueries.artifact('ar-A').queryKey);
   });
 
   it('낡은 상태로 막히면 상세만 다시 읽는다 — 뿌리까지 되돌리지 않는다', async () => {
@@ -262,9 +276,9 @@ describe('useReviewPublishMutation', () => {
       apiError('UNDECIDED_BLOCKS', '아직 판정하지 않은 블록이 있어요.'),
     );
     const { wrapper, invalidatedKeys } = createHarness();
-    const { result } = renderHook(() => useReviewPublishMutation(PROPOSAL_ID), { wrapper });
+    const { result } = renderHook(() => useReviewPublishMutation(), { wrapper });
 
-    result.current.mutate({ base_revision_id: 'rv-8' });
+    result.current.mutate({ proposalId: PROPOSAL_ID, base_revision_id: 'rv-8' });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(toastMock).toHaveBeenCalledWith('아직 판정하지 않은 블록이 있어요.');
@@ -274,9 +288,9 @@ describe('useReviewPublishMutation', () => {
   it('그 밖의 실패는 문구만 띄운다', async () => {
     reviewApi.publishReviewProposal.mockRejectedValue(apiError('FORBIDDEN', '발행 권한이 없어요.'));
     const { wrapper, invalidatedKeys } = createHarness();
-    const { result } = renderHook(() => useReviewPublishMutation(PROPOSAL_ID), { wrapper });
+    const { result } = renderHook(() => useReviewPublishMutation(), { wrapper });
 
-    result.current.mutate({ base_revision_id: 'rv-8' });
+    result.current.mutate({ proposalId: PROPOSAL_ID, base_revision_id: 'rv-8' });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(toastMock).toHaveBeenCalledWith('발행 권한이 없어요.');

@@ -67,7 +67,10 @@ export const Undecided: Story = {
     // 발행 시각 자리 — 아직 판이 아니라는 표기가 선다
     await expect(canvas.getByText('검토 중인 제안본 미리보기')).toBeInTheDocument();
     // 본문 위 안내 — 판정 반영본이고 내보내기 전에는 문서가 바뀌지 않는다는 계약
-    await expect(canvas.getByText(PREVIEW_GUIDE)).toBeInTheDocument();
+    const guide = canvas.getByText(PREVIEW_GUIDE);
+    // 2줄이 될 수 있는 문구다 — 어절 단위 줄바꿈과 아이콘 첫 줄 정렬은 담당자 카드 배너와 같다
+    await expect(guide).toHaveClass('break-keep', 'wrap-break-word');
+    await expect(guide.parentElement).toHaveClass('items-start');
 
     // 양식 순서(PG → 재시도)가 저장 순서(재시도 → PG)를 이긴다
     const headings = canvas.getAllByRole('heading', { level: 2 }).map((node) => node.textContent);

@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from '@/shared/components/ui/toast';
 import { server } from '@/test/msw/server';
 
+import { wikiQueries } from '../queries/wiki.queries';
 import { useReviewQueueModel } from './useReviewQueueModel';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
@@ -218,6 +219,27 @@ describe('useReviewQueueModel', () => {
     expect(result.current.entries.filter((entry) => entry.approved)).toHaveLength(0);
   });
 
+  it('전체 승인은 이미 승인된 카드를 빼고 보낸다 — 반려된 카드만 승인으로 뒤집힌다', async () => {
+    const { verdictCalls } = stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.entries).toHaveLength(3));
+
+    // 블록 0은 미리 승인, 블록 1은 미리 반려해 둔다
+    act(() => result.current.onApproveBlock(result.current.entries[0]));
+    await waitFor(() => expect(result.current.entries.filter((entry) => entry.approved)).toHaveLength(1));
+    act(() => result.current.onRejectBlock?.(result.current.entries[1]));
+    act(() => result.current.onRejectBlockSubmit?.('근거 문서가 없습니다'));
+    await waitFor(() => expect(result.current.entries.filter((entry) => entry.rejected)).toHaveLength(1));
+
+    act(() => result.current.onApproveAll());
+
+    // 반려됐던 블록 1만 다시 나간다 — 이미 승인된 블록 0의 판정 기록(검토자·시각)은 덮이지 않는다
+    await waitFor(() => expect(result.current.entries.filter((entry) => entry.approved)).toHaveLength(2));
+    expect(verdictCalls).toHaveLength(3);
+    expect(verdictCalls[2]).toMatchObject({ blockIndex: '1', verdict: 'approved' });
+  });
+
   it('미판정 카드가 남으면 발행이 잠기고 전 카드를 판정하면 열린다', async () => {
     stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
     const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
@@ -412,6 +434,82 @@ describe('useReviewQueueModel', () => {
     expect(publishToast?.[1]).not.toHaveProperty('classNames');
   });
 
+  it('발행 대기 중 선택을 옮겨도 발행된 문서의 발행판 캐시가 무효화된다', async () => {
+    let releasePublish!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releasePublish = resolve;
+    });
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책'), queueItem(SECOND, '환불 문서 병합')]);
+    server.use(
+      http.post('*/api/v1/knowledge-review/queue/:proposalId/publish', async ({ params }) => {
+        await gate;
+        return HttpResponse.json({
+          proposal_id: String(params.proposalId),
+          verdict: 'published',
+          revision_id: 'rev-2',
+          revision_number: 2,
+          blocks_published: 2,
+          blocks_rejected: 0,
+          contradictions_resolved: 0,
+          claims_accepted: 2,
+        });
+      }),
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper });
+
+    await waitFor(() => expect(result.current.entries).toHaveLength(3));
+    expect(result.current.selectedId).toBe(FIRST);
+    act(() => result.current.onPublish());
+    act(() => result.current.onSelectItem(SECOND));
+
+    // 완료 시점의 선택이 아니라 발행을 누른 시점의 문서 키가 무효화된다
+    releasePublish();
+    await waitFor(() =>
+      expect(invalidateSpy.mock.calls.map(([filters]) => filters?.queryKey)).toContainEqual(
+        wikiQueries.artifact(`art-${FIRST}`).queryKey,
+      ),
+    );
+  });
+
+  it('발행 요청이 비행 중이면 발행이 잠긴다 — 더블클릭이 두 번 나가지 않는다', async () => {
+    let releasePublish!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releasePublish = resolve;
+    });
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    server.use(
+      http.post('*/api/v1/knowledge-review/queue/:proposalId/publish', async ({ params }) => {
+        await gate;
+        return HttpResponse.json({
+          proposal_id: String(params.proposalId),
+          verdict: 'published',
+          revision_id: 'rev-2',
+          revision_number: 2,
+          blocks_published: 2,
+          blocks_rejected: 0,
+          contradictions_resolved: 0,
+          claims_accepted: 2,
+        });
+      }),
+    );
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.entries).toHaveLength(3));
+    act(() => result.current.onApproveAll());
+    await waitFor(() => expect(result.current.publishDisabled).toBe(false));
+
+    act(() => result.current.onPublish());
+    await waitFor(() => expect(result.current.publishDisabled).toBe(true));
+
+    releasePublish();
+    await waitFor(() => expect(toastMock).toHaveBeenCalledWith('내보내기를 완료했습니다', expect.anything()));
+  });
+
   it('전체 반려가 전량 실패하면 다이얼로그를 닫지 않는다 — 사유가 보존된다', async () => {
     stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
     server.use(
@@ -581,34 +679,83 @@ describe('useReviewQueueModel', () => {
     expect(result.current.selectedId).toBeNull();
   });
 
-  it('담당자 없는 문서 — 채널 관리자는 지정·해제가 열리고 배너와 자기 행(채널 관리자)이 선다', async () => {
+  /** ch-1을 내가 관리하는 채널로 돌려주는 응답 */
+  const adminChannels = () =>
+    HttpResponse.json({
+      channels: [
+        {
+          id: 'ch-1',
+          name: '결제',
+          workspace_id: 1,
+          is_admin: true,
+          document_count: 0,
+          folders: [],
+          purpose_presets: [],
+          definitions: [],
+        },
+      ],
+    });
+
+  it('담당자 없는 문서 — 관리자는 지정·해제가 열리지만 담당자가 아니라 목록에는 서지 않는다', async () => {
     stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
-    server.use(
-      http.get('*/api/v1/wiki/channels', () =>
-        HttpResponse.json({
-          channels: [
-            {
-              id: 'ch-1',
-              name: '결제',
-              workspace_id: 1,
-              is_admin: true,
-              document_count: 0,
-              folders: [],
-              purpose_presets: [],
-              definitions: [],
-            },
-          ],
-        }),
-      ),
-    );
+    server.use(http.get('*/api/v1/wiki/channels', adminChannels));
     const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
 
     await waitFor(() => expect(result.current.canAssignOwners).toBe(true));
     expect(result.current.canRemoveOwners).toBe(true);
     expect(result.current.ownerNotice).toBe('no-owner');
-    expect(result.current.participants).toEqual([
-      { id: '99', userId: 99, name: '검토자', isMe: true, role: '채널 관리자', avatarSrc: null },
-    ]);
+    // 카드에는 담당자만 선다 — 관리자 역할은 배너가 아니라 담당자 행의 배지로만 드러난다
+    expect(result.current.participants).toEqual([]);
+  });
+
+  it('담당자이면서 관리자면 내 행에 배지가 둘 선다 — 담당자 + 채널 관리자', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    server.use(
+      http.get('*/api/v1/wiki/channels', adminChannels),
+      http.get('*/api/v1/knowledge-review/queue/:proposalId', ({ params }) =>
+        HttpResponse.json({
+          ...detail(String(params.proposalId), false),
+          owners: [{ user_id: 99, display_name: '검토자', profile_image_url: null }],
+        }),
+      ),
+    );
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.participants).toHaveLength(1));
+    expect(result.current.participants[0]).toMatchObject({
+      userId: 99,
+      isMe: true,
+      roles: ['담당자', '채널 관리자'],
+    });
+    expect(result.current.ownerNotice).toBeNull();
+  });
+
+  it('남의 담당자 행에는 관리자 배지를 붙이지 않는다 — 서버가 남의 관리자 여부를 주지 않는다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    server.use(
+      http.get('*/api/v1/wiki/channels', adminChannels),
+      http.get('*/api/v1/knowledge-review/queue/:proposalId', ({ params }) =>
+        HttpResponse.json({
+          ...detail(String(params.proposalId), false),
+          owners: [{ user_id: 7, display_name: '팀원F', profile_image_url: null }],
+        }),
+      ),
+    );
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.participants).toHaveLength(1));
+    // 남의 관리자 여부는 서버가 주지 않아 배지가 붙지 않는다
+    expect(result.current.participants[0]).toMatchObject({ userId: 7, isMe: false, roles: ['담당자'] });
+  });
+
+  it('담당자 없는 문서 — 일반 구성원도 배너는 서고 지정·해제는 닫힌다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.ownerNotice).toBe('no-owner'));
+    expect(result.current.participants).toEqual([]);
+    expect(result.current.canAssignOwners).toBe(false);
+    expect(result.current.canRemoveOwners).toBe(false);
   });
 
   it('타 담당자가 있는 문서 — 관리자가 아니면 지정·해제가 닫히고 배너만 선다', async () => {
@@ -624,7 +771,7 @@ describe('useReviewQueueModel', () => {
     const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
 
     await waitFor(() => expect(result.current.participants).toHaveLength(1));
-    expect(result.current.participants[0]).toMatchObject({ userId: 7, role: '담당자', isMe: false });
+    expect(result.current.participants[0]).toMatchObject({ userId: 7, isMe: false, roles: ['담당자'] });
     expect(result.current.ownerNotice).toBe('other-owner');
     expect(result.current.canAssignOwners).toBe(false);
     expect(result.current.canRemoveOwners).toBe(false);
@@ -645,8 +792,63 @@ describe('useReviewQueueModel', () => {
     await waitFor(() => expect(result.current.canAssignOwners).toBe(true));
     expect(result.current.canRemoveOwners).toBe(false);
     expect(result.current.ownerNotice).toBeNull();
-    expect(result.current.participants[0]).toMatchObject({ userId: 99, role: '담당자', isMe: true });
+    // 관리자가 아니라 배지는 담당자 하나다
+    expect(result.current.participants[0]).toMatchObject({ userId: 99, isMe: true, roles: ['담당자'] });
     // 이미 담당자인 사람은 추가 후보에서 빠진다 — 멤버 목록이 비어 있어 후보도 빈다
     expect(result.current.ownerCandidates).toEqual([]);
+  });
+
+  it('담당자 활동 줄 — 그 사람의 가장 최근 판정이 상대시각 검토로 나오고, 이력이 없으면 검토 전이다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    server.use(
+      http.get('*/api/v1/knowledge-review/queue/:proposalId', ({ params }) =>
+        HttpResponse.json({
+          ...detail(String(params.proposalId), false),
+          owners: [
+            { user_id: 7, display_name: '팀원F', profile_image_url: null },
+            { user_id: 8, display_name: '직원10', profile_image_url: null },
+          ],
+          blocks: [
+            {
+              ...proposedBlock(0, '재시도 정책'),
+              verdict: { ...blockVerdict(FIRST, 0), reviewer: 'user:7', reviewed_at: twoDaysAgo },
+            },
+            {
+              ...proposedBlock(1, 'PG 점검 시간 예외'),
+              verdict: { ...blockVerdict(FIRST, 1), reviewer: 'user:7', reviewed_at: threeHoursAgo },
+            },
+          ],
+        }),
+      ),
+    );
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.participants).toHaveLength(2));
+    // 두 판정 중 최근 것이 이긴다
+    expect(result.current.participants[0].description).toBe('3시간 전 검토');
+    // 판정 이력이 없는 담당자
+    expect(result.current.participants[1].description).toBe('검토 전');
+  });
+
+  it('reviewer가 user:{id} 형식이 아니면 매칭 실패로 보고 검토 전으로 남긴다 — 예외를 던지지 않는다', async () => {
+    stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    server.use(
+      http.get('*/api/v1/knowledge-review/queue/:proposalId', ({ params }) =>
+        HttpResponse.json({
+          ...detail(String(params.proposalId), false),
+          owners: [{ user_id: 7, display_name: '팀원F', profile_image_url: null }],
+          blocks: [
+            // 이름 문자열 reviewer — 숫자 id를 캘 수 없어 어느 담당자와도 맞지 않는다
+            { ...proposedBlock(0, '재시도 정책'), verdict: { ...blockVerdict(FIRST, 0), reviewer: '팀원F' } },
+          ],
+        }),
+      ),
+    );
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.participants).toHaveLength(1));
+    expect(result.current.participants[0].description).toBe('검토 전');
   });
 });
