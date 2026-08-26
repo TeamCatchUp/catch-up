@@ -51,7 +51,7 @@ export default function DocSearchModal({ open, onOpenChange, historyEntries, his
       <DialogContent
         hideClose
         aria-describedby={undefined}
-        className="top-[67px] left-1/2 flex h-176.5 max-h-[calc(100dvh-134px)] w-250 max-w-[calc(100vw-2rem)] translate-x-[-50%] translate-y-0 flex-col gap-2.5 rounded-[28px] pt-2 pr-2 pb-4 pl-3"
+        className="top-[67px] flex h-176.5 max-h-[calc(100dvh-134px)] w-250 max-w-[calc(100vw-2rem)] translate-y-0 flex-col gap-2.5 rounded-[28px] pt-2 pr-2 pb-4 pl-3"
       >
         <DialogTitle className="sr-only">문서 탐색</DialogTitle>
 

@@ -34,11 +34,11 @@ function makeStorybookQueryClient() {
   });
 }
 
-function StorybookProviders({ children }: { children: ReactNode }) {
+function StorybookProviders({ children, theme }: { children: ReactNode; theme: 'light' | 'dark' }) {
   const [queryClient] = useState(makeStorybookQueryClient);
 
   return (
-    <ThemeProvider>
+    <ThemeProvider forcedTheme={theme}>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider delayDuration={200}>
           <div className="bg-fill-normal-normal text-text-normal-normal min-h-screen">{children}</div>
@@ -49,14 +49,29 @@ function StorybookProviders({ children }: { children: ReactNode }) {
   );
 }
 
-const withCatchupProviders: Decorator = (Story) => (
-  <StorybookProviders>
+const withCatchupProviders: Decorator = (Story, context) => (
+  <StorybookProviders theme={context.globals.theme === 'dark' ? 'dark' : 'light'}>
     <Story />
   </StorybookProviders>
 );
 
 const preview: Preview = {
   decorators: [withCatchupProviders],
+  globalTypes: {
+    theme: {
+      description: '화면 모드',
+      toolbar: {
+        title: '화면 모드',
+        icon: 'contrast',
+        items: [
+          { value: 'light', title: '라이트 모드' },
+          { value: 'dark', title: '다크 모드' },
+        ],
+        dynamicTitle: true,
+      },
+    },
+  },
+  initialGlobals: { theme: 'light' },
   loaders: [mswLoader],
   parameters: {
     layout: 'fullscreen',
