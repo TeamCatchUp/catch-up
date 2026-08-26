@@ -619,11 +619,19 @@ describe('WikiSideNav 펼침', () => {
     renderWikiNav({ canCreateWiki: true });
 
     const newWiki = screen.getByRole('button', { name: '새 위키' });
-    expect(newWiki.parentElement).not.toHaveClass('hidden');
+    expect(newWiki).not.toHaveClass('hidden');
     expect(screen.getByRole('button', { name: '추가하기' })).toBeInTheDocument();
 
     await user.click(newWiki);
     expect(mockPush).toHaveBeenCalledWith('/llm-wiki/onboarding');
+  });
+
+  it('온보딩 중에도 새 위키 버튼은 그대로 보인다', () => {
+    mockUsePathname.mockReturnValue('/llm-wiki/onboarding');
+    renderWikiNav({ canCreateWiki: true });
+
+    expect(screen.getByRole('button', { name: '새 위키' })).not.toHaveClass('hidden');
+    expect(screen.getByRole('button', { name: '설정' })).toBeInTheDocument();
   });
 
   it('로딩·빈 목록·에러 문구를 만들지 않는다', () => {

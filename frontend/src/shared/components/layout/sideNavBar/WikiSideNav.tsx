@@ -343,7 +343,7 @@ export default function WikiSideNav({
 
   /*
    * 온보딩 중에는 메뉴도 트리도 없다 — 아직 볼 것이 없기 때문이다.
-   * 스위처·팀스페이스·진행 버튼만 두고 하단 신규 버튼도 내린다(시안 18046:99122).
+   * 스위처·팀스페이스·진행 버튼만 남긴다. 하단 신규 버튼은 그대로 둔다.
    */
   if (isOnboarding && isSidebarOpen) {
     return (
@@ -367,8 +367,8 @@ export default function WikiSideNav({
               userName={user?.name ?? '이름없음'}
               userRole={user?.email ?? ''}
               onSettingsClick={goSettings}
+              onNewClick={go('/llm-wiki/onboarding')}
               profileMenu={profileMenu}
-              hideNewButton
             />
           }
         >

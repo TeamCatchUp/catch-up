@@ -25,7 +25,7 @@ export default function SnbTeamspaceCard({
     <>
       <span className="text-body-xsmall text-text-normal-alternative block text-left">팀스페이스</span>
       <span className="flex items-center gap-3">
-        <span className="relative flex size-6 shrink-0 items-center justify-center">
+        <span className="bg-fill-normal-interaction-hover rounded-md2 relative flex size-6 shrink-0 items-center justify-center">
           <Icon aria-hidden className="text-icon-normal-normal size-5.5" />
           {hasNotification && (
             <span
