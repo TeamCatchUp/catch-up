@@ -60,7 +60,8 @@ export default function QueryInput({ input, inputRef, tipData }: QueryInputProps
             value={input.value}
             onFocus={() => input.setIsFocused(true)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              // IME 조합 중 Enter (한/중/일 마지막 글자 확정)는 submit을 트리거하지 않음.
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 input.handleSubmit();
               }
