@@ -102,7 +102,7 @@ export default function PurposeSelectField({
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           <div className="flex items-center gap-2">
             <IconAddCircleFilled className="text-icon-normal-neutral size-5 shrink-0" />
-            <OnboardingFieldLabel label={purposeLabel} required size="body" />
+            <OnboardingFieldLabel label={purposeLabel} required />
           </div>
 
           <div role="radiogroup" aria-label={purposeLabel} className="grid grid-cols-3 gap-4">

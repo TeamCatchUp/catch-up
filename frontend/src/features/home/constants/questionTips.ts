@@ -1,50 +1,46 @@
+import IconBugError from '@/public/icons/icon/bug_error.svg';
+import IconCopyCheck from '@/public/icons/icon/copy_check.svg';
+import IconFolderOpen from '@/public/icons/icon/folder_open.svg';
+import IconHistory from '@/public/icons/icon/history.svg';
+import IconPerson from '@/public/icons/icon/person2.svg';
+import IconSearchFile from '@/public/icons/icon/search_file.svg';
 import type { TipData } from '@/shared/types/template';
 
 export type { TemplateField, TemplateSegment, TipData } from '@/shared/types/template';
 export { buildQueryFromTemplate } from '@/shared/types/template';
 
+// 배열 순서가 곧 홈 템플릿 목록의 노출 순서다 — selectedTipIndex가 이 인덱스를 가리킨다.
 export const tipData: TipData[] = [
   {
-    title: '과거 문의 대응 사례 찾기',
-    chipLabel: '과거 문의 대응 사례 찾기',
-    description: '비슷한 문의를 찾아\n원인부터 결론까지 바로 가져와요.',
-    image: '/image/home/light/past-inquiry.png',
+    title: '담당자 & 대리인 찾기',
+    chipLabel: '담당자 & 대리인 찾기',
+    description: '가장 가까이 작업한 사람을 찾아\n연결해야 할 담당자를 추천해요.',
+    image: '/image/home/light/find-assignee.png',
     template: [
-      { field: 'channel' },
-      '에서 ',
-      { field: 'content' },
-      ' 관련 해결 사례를 찾아 원인, 해결 방법, 담당자, 출처 링크를 답하세요. 사례가 없으면 관련 담당자 1~3명을 추천하세요.',
+      { field: 'teamRole' },
+      ' 내 ',
+      { field: 'target' },
+      '의 원 담당자를 찾고, 부재 시 대리인 1~3명을 작업 근거, 연락 가능 여부, 출처 링크와 함께 추천하세요.',
     ],
     fields: [
-      { key: 'channel', placeholder: '채널' },
-      { key: 'content', placeholder: '문의 내용/에러로그' },
+      { key: 'target', placeholder: '기능/모듈/에러' },
+      { key: 'teamRole', placeholder: '팀/직군' },
     ],
   },
   {
-    title: '업무 진행 상황 확인',
-    chipLabel: '업무 진행 상황 확인',
-    description: '지라, PR, 커밋, 슬랙 등을 묶어\n실제 진행상황을 한 번에 파악해요.',
-    image: '/image/home/light/work-progress.jpg',
+    title: '히스토리 따라잡기',
+    chipLabel: '히스토리 따라잡기',
+    description: '주요 변경과 논의를 묶어 참고해야\n할 자료를 한 번에 정리해요.',
+    image: '/image/home/light/history-catchup.jpg',
     template: [
-      { field: 'ticket' },
-      '의 현재 상태를 Jira, GitHub, Slack을 교차 확인해 실제 진행 상황, 담당자, 마지막 작업 시각, 잔여 작업, 출처 링크를 답하세요.',
-    ],
-    fields: [{ key: 'ticket', placeholder: '기능명/티켓번호' }],
-  },
-  {
-    title: '중복 논의 여부 확인',
-    chipLabel: '중복 논의 여부 확인',
-    description: '이전에 결정한 내용이 있는지,\n그때 기준과 이유를 바로 보여줘요.',
-    image: '/image/home/light/duplicate-discussion.jpg',
-    template: [
-      { field: 'team' },
-      ' 관련, ',
-      { field: 'topic' },
-      '의 과거 논의 여부를 확인해 결론, 결정 근거, 참여자, 출처 링크를 답하세요. 기록이 없으면 신규 안건으로 표시하고 다음 확인 사항 2가지를 제안하세요.',
+      { field: 'project' },
+      '의 히스토리를 핵심 타임라인, 주요 결정 배경, 관련 담당자, 참고 자료 링크로 정리하세요. ',
+      { field: 'role' },
+      ' 신규 입사자 기준으로 설명하세요.',
     ],
     fields: [
-      { key: 'topic', placeholder: '논의/요구사항' },
-      { key: 'team', placeholder: '관련 팀' },
+      { key: 'project', placeholder: '프로젝트/모듈' },
+      { key: 'role', placeholder: '직군' },
     ],
   },
   {
@@ -67,35 +63,58 @@ export const tipData: TipData[] = [
     ],
   },
   {
-    title: '히스토리 따라잡기',
-    chipLabel: '히스토리 따라잡기',
-    description: '주요 변경과 논의를 묶어 참고해야\n할 자료를 한 번에 정리해요.',
-    image: '/image/home/light/history-catchup.jpg',
+    title: '중복 논의 여부 확인',
+    chipLabel: '중복 논의 여부 확인',
+    description: '이전에 결정한 내용이 있는지,\n그때 기준과 이유를 바로 보여줘요.',
+    image: '/image/home/light/duplicate-discussion.jpg',
     template: [
-      { field: 'project' },
-      '의 히스토리를 핵심 타임라인, 주요 결정 배경, 관련 담당자, 참고 자료 링크로 정리하세요. ',
-      { field: 'role' },
-      ' 신규 입사자 기준으로 설명하세요.',
+      { field: 'team' },
+      ' 관련, ',
+      { field: 'topic' },
+      '의 과거 논의 여부를 확인해 결론, 결정 근거, 참여자, 출처 링크를 답하세요. 기록이 없으면 신규 안건으로 표시하고 다음 확인 사항 2가지를 제안하세요.',
     ],
     fields: [
-      { key: 'project', placeholder: '프로젝트/모듈' },
-      { key: 'role', placeholder: '직군' },
+      { key: 'topic', placeholder: '논의/요구사항' },
+      { key: 'team', placeholder: '관련 팀' },
     ],
   },
   {
-    title: '담당자&대리인 찾기',
-    chipLabel: '담당자&대리인 찾기',
-    description: '가장 가까이 작업한 사람을 찾아\n연결해야 할 담당자를 추천해요.',
-    image: '/image/home/light/find-assignee.png',
+    title: '업무 진행 상황 확인',
+    chipLabel: '업무 진행 상황 확인',
+    description: '지라, PR, 커밋, 슬랙 등을 묶어\n실제 진행상황을 한 번에 파악해요.',
+    image: '/image/home/light/work-progress.jpg',
     template: [
-      { field: 'teamRole' },
-      ' 내 ',
-      { field: 'target' },
-      '의 원 담당자를 찾고, 부재 시 대리인 1~3명을 작업 근거, 연락 가능 여부, 출처 링크와 함께 추천하세요.',
+      { field: 'ticket' },
+      '의 현재 상태를 Jira, GitHub, Slack을 교차 확인해 실제 진행 상황, 담당자, 마지막 작업 시각, 잔여 작업, 출처 링크를 답하세요.',
+    ],
+    fields: [{ key: 'ticket', placeholder: '기능명/티켓번호' }],
+  },
+  {
+    title: '과거 문의 대응 사례 찾기',
+    chipLabel: '과거 문의 대응 사례 찾기',
+    description: '비슷한 문의를 찾아\n원인부터 결론까지 바로 가져와요.',
+    image: '/image/home/light/past-inquiry.png',
+    template: [
+      { field: 'channel' },
+      '에서 ',
+      { field: 'content' },
+      ' 관련 해결 사례를 찾아 원인, 해결 방법, 담당자, 출처 링크를 답하세요. 사례가 없으면 관련 담당자 1~3명을 추천하세요.',
     ],
     fields: [
-      { key: 'target', placeholder: '기능/모듈/에러' },
-      { key: 'teamRole', placeholder: '팀/직군' },
+      { key: 'channel', placeholder: '채널' },
+      { key: 'content', placeholder: '문의 내용/에러로그' },
     ],
   },
+];
+
+type TemplateIcon = React.ComponentType<React.SVGProps<SVGSVGElement>>;
+
+// tipData와 인덱스가 1:1이다 — 목록과 삽입된 템플릿 칩이 같은 글리프를 쓴다.
+export const TEMPLATE_ICONS: readonly TemplateIcon[] = [
+  IconPerson,
+  IconHistory,
+  IconBugError,
+  IconCopyCheck,
+  IconFolderOpen,
+  IconSearchFile,
 ];

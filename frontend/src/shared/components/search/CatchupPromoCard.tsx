@@ -1,7 +1,7 @@
 'use client';
 
 // "동료에게 묻기 전, Catch Up에게 물어보세요" promo 카드.
-// 하단 "질문하기" 버튼 클릭 시 /search (캐치스턴트 AI 채팅 페이지)로 이동.
+// 하단 "질문하기" 버튼 클릭 시 홈(/) 캐치스턴트 AI 입력으로 이동.
 
 import { useRouter } from 'next/navigation';
 
@@ -69,7 +69,7 @@ export default function CatchupPromoCard({ className }: CatchupPromoCardProps) {
         variant="capsule-outline-mono"
         size="sm"
         type="button"
-        onClick={() => router.push('/search')}
+        onClick={() => router.push('/')}
         className="text-text-normal-normal w-full"
       >
         질문하기

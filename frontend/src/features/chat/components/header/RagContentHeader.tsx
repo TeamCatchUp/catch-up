@@ -28,7 +28,7 @@ export default function RagHeader({ title, sessionId }: RagHeaderProps) {
   const [isSessionQuestionsOpen, setIsSessionQuestionsOpen] = useState(false);
 
   const handleNewQuestion = () => {
-    router.push(`/search`);
+    router.push('/');
 
     setActivePanel(null);
   };

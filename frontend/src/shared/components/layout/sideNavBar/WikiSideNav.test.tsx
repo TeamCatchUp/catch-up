@@ -16,6 +16,7 @@ const mockSidebarState = {
   lastSettingsPath: '/mypage/profile',
   setActivePanel: vi.fn(),
   setSidebarOpen: vi.fn(),
+  setDocSearchOpen: vi.fn(),
 };
 
 vi.mock('@/shared/store/sidebarStore', () => ({
@@ -79,8 +80,7 @@ describe('WikiSideNav 펼침', () => {
     renderWikiNav();
 
     expect(screen.getByRole('button', { name: '새 채팅' })).toBeInTheDocument();
-    // 검색은 목적지가 없어 항목째 내렸다
-    expect(screen.queryByRole('button', { name: '검색' })).toBeNull();
+    expect(screen.getByRole('button', { name: '검색' })).toBeInTheDocument();
     // 접근 이름에 배지 건수가 붙는다
     expect(screen.getByRole('button', { name: /^요청됨/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '대시보드' })).toBeInTheDocument();
@@ -609,7 +609,9 @@ describe('WikiSideNav 펼침', () => {
 
     expect(screen.queryByRole('button', { name: '추가하기' })).toBeNull();
     // SnbFooter가 CSS로 감춘다. jsdom엔 Tailwind가 없어 클래스로 검사한다
-    expect(screen.getByRole('button', { name: '새 위키' }).parentElement).toHaveClass('hidden');
+    expect(screen.getByRole('button', { name: '새 위키' })).toHaveClass('hidden');
+    // 같은 행의 설정은 권한과 무관하게 남는다
+    expect(screen.getByRole('button', { name: '설정' })).not.toHaveClass('hidden');
   });
 
   it('플랫폼 관리자는 새 위키로 온보딩에 진입한다', async () => {
@@ -617,11 +619,32 @@ describe('WikiSideNav 펼침', () => {
     renderWikiNav({ canCreateWiki: true });
 
     const newWiki = screen.getByRole('button', { name: '새 위키' });
-    expect(newWiki.parentElement).not.toHaveClass('hidden');
+    expect(newWiki).not.toHaveClass('hidden');
     expect(screen.getByRole('button', { name: '추가하기' })).toBeInTheDocument();
 
     await user.click(newWiki);
     expect(mockPush).toHaveBeenCalledWith('/llm-wiki/onboarding');
+  });
+
+  it('선택돼 있어도 스페이스 스위처는 목적지로 보낸다', async () => {
+    // 채널·문서 화면에서 대시보드로 돌아올 길이 스위처뿐이다
+    mockUsePathname.mockReturnValue('/llm-wiki/channel/channel-2');
+    const user = userEvent.setup();
+    renderWikiNav();
+
+    await user.click(screen.getByRole('button', { name: 'LLM Wiki' }));
+    expect(mockPush).toHaveBeenCalledWith('/llm-wiki');
+
+    await user.click(screen.getByRole('button', { name: '홈' }));
+    expect(mockPush).toHaveBeenCalledWith('/');
+  });
+
+  it('온보딩 중에도 새 위키 버튼은 그대로 보인다', () => {
+    mockUsePathname.mockReturnValue('/llm-wiki/onboarding');
+    renderWikiNav({ canCreateWiki: true });
+
+    expect(screen.getByRole('button', { name: '새 위키' })).not.toHaveClass('hidden');
+    expect(screen.getByRole('button', { name: '설정' })).toBeInTheDocument();
   });
 
   it('로딩·빈 목록·에러 문구를 만들지 않는다', () => {
@@ -642,15 +665,14 @@ describe('WikiSideNav 닫힘', () => {
   it('Rail 항목을 시안 순서대로 렌더한다', () => {
     renderWikiNav();
 
-    ['새 채팅', '요청됨', '대시보드'].forEach((label) =>
+    ['새 채팅', '검색', '요청됨', '대시보드'].forEach((label) =>
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument(),
     );
     // 즐겨찾기·최근 위키는 갈 곳이 없어 접힘에서 뺐다
     expect(screen.queryByRole('button', { name: '즐겨찾기' })).toBeNull();
     expect(screen.queryByRole('button', { name: '최근 위키' })).toBeNull();
-    // 지식 관리는 제품 결정으로 빠졌고, 검색은 목적지가 없어 내렸다
+    // 지식 관리는 제품 결정으로 빠졌다
     expect(screen.queryByRole('button', { name: '지식 관리' })).toBeNull();
-    expect(screen.queryByRole('button', { name: '검색' })).toBeNull();
     // 닫힘에는 트리가 없다
     expect(screen.queryByText('위키')).toBeNull();
   });

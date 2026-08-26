@@ -6,12 +6,20 @@ import { usePrefersReducedMotion } from '@/shared/hooks/usePrefersReducedMotion'
 import { layoutLabelFade, layoutLabelFadeReduced, layoutShiftTransition, MotionState } from '@/shared/motion';
 import { cn } from '@/shared/utils/cn';
 
+/** 홈·위키 SNB가 서로 교체돼도 같은 버튼으로 이어지게 하는 식별자 */
+export const SPACE_SWITCHER_LAYOUT_ID = {
+  home: 'snb-space-switcher-home',
+  wiki: 'snb-space-switcher-wiki',
+} as const;
+
 export interface SnbSpaceSwitcherProps {
   Icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   /** 닫힘과 미선택에서는 렌더하지 않고 aria-label로만 쓴다 */
   label: string;
   selected?: boolean;
   variant?: 'expanded' | 'closed';
+  /** 주면 SNB가 갈려도 폭 전환이 이어진다. 같은 화면에 중복 id가 있으면 안 된다 */
+  layoutId?: string;
   onClick?: () => void;
   className?: string;
 }
@@ -25,6 +33,7 @@ export default function SnbSpaceSwitcher({
   label,
   selected = false,
   variant = 'expanded',
+  layoutId,
   onClick,
   className,
 }: SnbSpaceSwitcherProps) {
@@ -38,6 +47,8 @@ export default function SnbSpaceSwitcher({
     <motion.button
       type="button"
       layout={animatesLayout}
+      // 스페이스를 옮기면 SNB가 통째로 갈린다 — 같은 id로 이어야 폭이 이어서 늘어난다
+      layoutId={animatesLayout ? layoutId : undefined}
       transition={layoutShiftTransition}
       // rounded-full을 style로도 줘야(h-9의 절반) layout 스케일 중 모서리 왜곡을 motion이 보정한다
       style={isClosed ? undefined : { borderRadius: 18 }}

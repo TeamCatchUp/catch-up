@@ -17,7 +17,7 @@ export interface SnbRailFooterProps {
 
 /**
  * 닫힌 SNB 하단. 설정과 프로필이 세로로 붙는다.
- * 펼침에서는 설정이 프로필 행 안에 들어가므로 두 형상을 합치지 않았다.
+ * 설정 버튼 형상은 펼침 푸터와 같고, 배치만 다르다.
  */
 export default function SnbRailFooter({
   userName,
@@ -44,7 +44,7 @@ export default function SnbRailFooter({
         type="button"
         aria-label="설정"
         onClick={onSettingsClick}
-        className="hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed relative flex size-9 cursor-pointer items-center justify-center rounded-xl transition-colors"
+        className="rounded-rounded border-line-normal-normal bg-fill-normal-assistive hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed relative flex size-9 cursor-pointer items-center justify-center border p-1.5 transition-colors"
       >
         <IconSettings aria-hidden className="text-icon-normal-neutral size-6" />
         {hasSettingsNotification && (

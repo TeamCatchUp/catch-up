@@ -119,11 +119,11 @@ export default function HybridSearchResultPage() {
   const handleAiModeClick = () => {
     const trimmed = draftKeyword.trim();
     if (!trimmed) {
-      router.push('/search');
+      router.push('/');
       return;
     }
     const params = new URLSearchParams({ q: trimmed });
-    router.push(`/search?${params.toString()}`);
+    router.push(`/?${params.toString()}`);
   };
 
   // 탭 변경 시 페이지도 1로 reset.

@@ -1,14 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 import IconAdd400 from '@/public/icons/icon/add_small_400.svg';
 import IconAgent from '@/public/icons/icon/agent.svg';
-import IconDocumentSearch from '@/public/icons/icon/document_search.svg';
 import IconHistory from '@/public/icons/icon/history.svg';
 import IconMore from '@/public/icons/icon/kebab_horizontal.svg';
 import IconList from '@/public/icons/icon/list.svg';
+import IconSearch300 from '@/public/icons/icon/search_300.svg';
+import IconSearch400 from '@/public/icons/icon/search_400.svg';
 import IconUpdate from '@/public/icons/icon/update.svg';
 import { UserMenuContent } from '@/shared/components/layout/sideNavBar/modal/UserModal';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
@@ -24,7 +25,7 @@ import SnbRailFooter from './SnbRailFooter';
 import SnbRailItem from './SnbRailItem';
 import SnbRecentQuestionList from './SnbRecentQuestionList';
 import SnbSectionHeader, { SnbBetaBadge, SnbSectionAction } from './SnbSectionHeader';
-import SnbSpaceSwitcher from './SnbSpaceSwitcher';
+import SnbSpaceSwitcher, { SPACE_SWITCHER_LAYOUT_ID } from './SnbSpaceSwitcher';
 
 /**
  * 홈 모드 사이드 내비. 메뉴 목적지는 구 사이드바와 1:1로 맞춘다.
@@ -32,9 +33,9 @@ import SnbSpaceSwitcher from './SnbSpaceSwitcher';
  */
 export default function HomeSideNav() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const router = useRouter();
-  const { activePanel, isSidebarOpen, setActivePanel, setSidebarOpen, togglePanel } = useSidebarStore();
+  const { activePanel, isSidebarOpen, setActivePanel, setDocSearchOpen, setSidebarOpen, togglePanel } =
+    useSidebarStore();
   const user = useUserStore((state) => state.user);
 
   // 메뉴 이동은 열려 있던 패널을 닫고 나간다 — 구 사이드바 동작이다
@@ -47,9 +48,13 @@ export default function HomeSideNav() {
     router.push(useSidebarStore.getState().lastSettingsPath);
   };
 
-  const isDocsMode = pathname === '/' && searchParams.get('mode') === 'docs';
-  const isHome = pathname === '/' && !isDocsMode;
+  // 문서 탐색은 홈의 한 모드라 SNB에서는 같은 항목이 현재 위치다
+  const isHome = pathname === '/';
   const isAgentStudio = pathname.startsWith('/agent-studio');
+  const openDocSearch = () => {
+    setActivePanel(null);
+    setDocSearchOpen(true);
+  };
 
   // 섹션 접기는 로컬 상태다 — 서버에 보존할 계약이 없다
   const [recentOpen, setRecentOpen] = useState(true);
@@ -63,7 +68,7 @@ export default function HomeSideNav() {
           onExpand={() => setSidebarOpen(true)}
           spaceSwitcher={
             <>
-              <SnbSpaceSwitcher variant="closed" Icon={SPACE_HOME_ICON} label="홈" selected />
+              <SnbSpaceSwitcher variant="closed" Icon={SPACE_HOME_ICON} label="홈" selected onClick={go('/')} />
               <SnbSpaceSwitcher variant="closed" Icon={SPACE_WIKI_ICON} label="LLM Wiki" onClick={go('/llm-wiki')} />
             </>
           }
@@ -72,6 +77,7 @@ export default function HomeSideNav() {
           }
         >
           <SnbRailItem Icon={IconAdd400} label="새 채팅" iconOnDisc selected={isHome} onClick={go('/')} />
+          <SnbRailItem Icon={IconSearch400} label="검색" onClick={openDocSearch} />
           <SnbRailItem Icon={IconUpdate} label="요청됨" onClick={go('/llm-wiki/review')} />
           <SnbRailItem Icon={IconAgent} label="문의 대응" selected={isAgentStudio} onClick={go('/agent-studio')} />
           <SnbRailItem
@@ -92,20 +98,25 @@ export default function HomeSideNav() {
         showScrollFade
         spaceSwitcher={
           <>
-            <SnbSpaceSwitcher Icon={SPACE_HOME_ICON} label="홈" selected />
-            <SnbSpaceSwitcher Icon={SPACE_WIKI_ICON} label="LLM Wiki" onClick={go('/llm-wiki')} />
+            <SnbSpaceSwitcher
+              Icon={SPACE_HOME_ICON}
+              label="홈"
+              layoutId={SPACE_SWITCHER_LAYOUT_ID.home}
+              selected
+              onClick={go('/')}
+            />
+            <SnbSpaceSwitcher
+              Icon={SPACE_WIKI_ICON}
+              label="LLM Wiki"
+              layoutId={SPACE_SWITCHER_LAYOUT_ID.wiki}
+              onClick={go('/llm-wiki')}
+            />
           </>
         }
         primaryItems={
           <div className="flex flex-col">
             <SnbNavRow Icon={IconAdd400} label="새 채팅" iconOnDisc selected={isHome} onClick={go('/')} />
-            <SnbNavRow
-              Icon={IconDocumentSearch}
-              label="문서 탐색"
-              trailing={<SnbBetaBadge />}
-              selected={isDocsMode}
-              onClick={go('/?mode=docs')}
-            />
+            <SnbNavRow Icon={IconSearch300} label="검색" onClick={openDocSearch} />
             <SnbNavRow Icon={IconUpdate} label="요청됨" onClick={go('/llm-wiki/review')} />
           </div>
         }
@@ -114,6 +125,8 @@ export default function HomeSideNav() {
             userName={user?.name ?? '이름없음'}
             userRole={user?.email ?? ''}
             onSettingsClick={goSettings}
+            onNewClick={go('/llm-wiki/onboarding')}
+            hideNewButton={user?.role !== 'admin'}
             profileMenu={profileMenu}
           />
         }

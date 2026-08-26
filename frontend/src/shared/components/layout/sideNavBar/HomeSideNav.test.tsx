@@ -12,12 +12,15 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => ({ get: (key: string) => mockSearchParams.get(key) ?? null }),
 }));
 
+const mockUser = { name: '팀원G', email: 'teamlead@catchup.com', role: 'admin' as 'admin' | 'member' };
+
 const mockSidebarState = {
   activePanel: null as string | null,
   isSidebarOpen: true,
   lastSettingsPath: '/mypage/profile',
   setActivePanel: vi.fn(),
   setSidebarOpen: vi.fn(),
+  setDocSearchOpen: vi.fn(),
   togglePanel: vi.fn(),
 };
 
@@ -30,8 +33,7 @@ vi.mock('@/shared/store/sidebarStore', () => ({
 }));
 
 vi.mock('@/shared/store/userStore', () => ({
-  useUserStore: (selector: (s: { user: { name: string; email: string } }) => unknown) =>
-    selector({ user: { name: '팀원G', email: 'teamlead@catchup.com' } }),
+  useUserStore: (selector: (s: { user: typeof mockUser }) => unknown) => selector({ user: mockUser }),
 }));
 
 // 실데이터·포털을 쓰는 자식은 목적지 검증 범위 밖이다
@@ -43,6 +45,7 @@ import HomeSideNav from './HomeSideNav';
 beforeEach(() => {
   mockSidebarState.activePanel = null;
   mockSidebarState.isSidebarOpen = true;
+  mockUser.role = 'admin';
   mockSearchParams.clear();
   mockUsePathname.mockReturnValue('/');
 });
@@ -69,9 +72,6 @@ describe('HomeSideNav 펼침', () => {
     await user.click(screen.getByRole('button', { name: '문의 대응' }));
     expect(mockPush).toHaveBeenCalledWith('/agent-studio');
 
-    // 구 사이드바는 문서 탐색을 펼침·닫힘 양쪽에 뒀다
-    await user.click(screen.getByRole('button', { name: /^문서 탐색/ }));
-    expect(mockPush).toHaveBeenCalledWith('/?mode=docs');
 
     await user.click(screen.getByRole('button', { name: '설정' }));
     expect(mockPush).toHaveBeenCalledWith('/mypage/profile');
@@ -139,10 +139,48 @@ describe('HomeSideNav 펼침', () => {
     expect(menuRow('새 채팅')).not.toHaveAttribute('aria-current');
   });
 
-  it('검색 메뉴를 렌더하지 않는다', () => {
+  it('검색 메뉴가 문서 탐색 모달을 연다', async () => {
+    const user = userEvent.setup();
     render(<HomeSideNav />);
 
-    expect(screen.queryByRole('button', { name: '검색' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '문서 탐색' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: '검색' }));
+    expect(mockSidebarState.setDocSearchOpen).toHaveBeenCalledWith(true);
+  });
+
+  it('새 위키는 채널 만들기 온보딩으로 보낸다', async () => {
+    const user = userEvent.setup();
+    render(<HomeSideNav />);
+
+    await user.click(screen.getByRole('button', { name: '새 위키' }));
+    expect(mockPush).toHaveBeenCalledWith('/llm-wiki/onboarding');
+  });
+
+  it('관리자가 아니면 새 위키를 내린다', () => {
+    mockUser.role = 'member';
+    render(<HomeSideNav />);
+
+    expect(screen.getByRole('button', { name: '새 위키' })).toHaveClass('hidden');
+    expect(screen.getByRole('button', { name: '설정' })).not.toHaveClass('hidden');
+  });
+
+  it('설정은 새 위키와 같은 행에 선다', () => {
+    render(<HomeSideNav />);
+
+    const settings = screen.getByRole('button', { name: '설정' });
+    expect(settings.parentElement).toBe(screen.getByRole('button', { name: '새 위키' }).parentElement);
+  });
+
+  it('선택돼 있어도 스페이스 스위처는 목적지로 보낸다', async () => {
+    // 채팅처럼 홈 하위 화면에 들어가 있을 때 스위처가 유일한 복귀 수단이다
+    const user = userEvent.setup();
+    render(<HomeSideNav />);
+
+    await user.click(screen.getByRole('button', { name: '홈' }));
+    expect(mockPush).toHaveBeenCalledWith('/');
+
+    await user.click(screen.getByRole('button', { name: 'LLM Wiki' }));
+    expect(mockPush).toHaveBeenCalledWith('/llm-wiki');
   });
 
   it('로고가 홈으로 가는 링크다', () => {
@@ -151,11 +189,11 @@ describe('HomeSideNav 펼침', () => {
     expect(screen.getByRole('link', { name: '홈으로 이동' })).toHaveAttribute('href', '/');
   });
 
-  it('문서 탐색 모드에서는 새 채팅이 활성이 아니다', () => {
+  it('문서 탐색 모드도 홈이라 새 채팅이 현재 위치로 남는다', () => {
     mockSearchParams.set('mode', 'docs');
     render(<HomeSideNav />);
 
-    expect(menuRow('새 채팅')).not.toHaveAttribute('aria-current');
+    expect(menuRow('새 채팅')).toHaveAttribute('aria-current', 'page');
   });
 
   // 페이지네이션 "불러오는 중..."은 구 사이드바 동작이라 이 금지 목록에서 뺀다
@@ -171,14 +209,12 @@ describe('HomeSideNav 닫힘', () => {
     mockSidebarState.isSidebarOpen = false;
   });
 
-  it('Rail 4항목이 시안 순서대로 배치된다', () => {
+  it('Rail 5항목이 시안 순서대로 배치된다', () => {
     render(<HomeSideNav />);
 
-    const labels = ['새 채팅', '요청됨', '문의 대응', '최근 채팅'];
+    const labels = ['새 채팅', '검색', '요청됨', '문의 대응', '최근 채팅'];
     labels.forEach((label) => expect(screen.getByRole('button', { name: label })).toBeInTheDocument());
-    // 문서 탐색은 닫힘 시안에서 빠졌다 — 펼침에만 남는다
     expect(screen.queryByRole('button', { name: '문서 탐색' })).toBeNull();
-    expect(screen.queryByRole('button', { name: '검색' })).toBeNull();
   });
 
   it('Rail 항목이 펼침과 같은 목적지로 이동한다', async () => {

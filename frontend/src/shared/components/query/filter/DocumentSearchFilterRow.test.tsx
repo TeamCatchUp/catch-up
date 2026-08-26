@@ -23,6 +23,30 @@ describe('DocumentSearchFilterRow', () => {
     expect(screen.getByRole('switch', { name: '스마트 필터' })).toBeChecked();
   });
 
+  it('칩 묶음이 남는 폭을 먹고 스마트 필터는 내용만큼만 차지한다', () => {
+    const { container } = render(
+      <DocumentSearchFilterRow
+        variant="result-expanded"
+        selectedSources={[]}
+        onSourcesChange={vi.fn()}
+        dateRange={undefined}
+        onDateRangeChange={vi.fn()}
+        smartFilter={true}
+        onSmartFilterChange={vi.fn()}
+      />,
+    );
+
+    const chipGroup = screen.getByRole('button', { name: '검색 범위 필터' }).parentElement!;
+    const smartFilter = screen.getByRole('switch', { name: '스마트 필터' }).closest('div.h-9')!;
+
+    // 시안이 좌측은 fill, 우측은 hug다 — 고정 px로 잡으면 폭이 다른 소비처에서 어긋난다.
+    expect(chipGroup.className).toContain('flex-1');
+    expect(chipGroup.className).not.toMatch(/w-\[/);
+    expect(smartFilter.className).toContain('shrink-0');
+    expect(smartFilter.className).not.toMatch(/w-\[/);
+    expect(container.firstElementChild!.className).toContain('gap-5');
+  });
+
   it('calls onSmartFilterChange when switch is toggled', async () => {
     const user = userEvent.setup();
     const onSmartFilterChange = vi.fn();

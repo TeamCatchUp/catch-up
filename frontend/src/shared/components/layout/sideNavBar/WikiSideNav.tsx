@@ -13,6 +13,8 @@ import IconFolder from '@/public/icons/icon/folder.svg';
 import IconGrid from '@/public/icons/icon/grid.svg';
 import IconMore from '@/public/icons/icon/kebab_horizontal_400.svg';
 import IconLink from '@/public/icons/icon/link.svg';
+import IconSearch300 from '@/public/icons/icon/search_300.svg';
+import IconSearch400 from '@/public/icons/icon/search_400.svg';
 import IconStar from '@/public/icons/icon/star.svg';
 import IconStarOff from '@/public/icons/icon/star_off.svg';
 import IconUpdate from '@/public/icons/icon/update.svg';
@@ -38,7 +40,7 @@ import SnbRailFooter from './SnbRailFooter';
 import SnbRailItem from './SnbRailItem';
 import SnbRenamePopover from './SnbRenamePopover';
 import SnbSectionHeader, { SnbSectionAction } from './SnbSectionHeader';
-import SnbSpaceSwitcher from './SnbSpaceSwitcher';
+import SnbSpaceSwitcher, { SPACE_SWITCHER_LAYOUT_ID } from './SnbSpaceSwitcher';
 import SnbTeamspaceCard from './SnbTeamspaceCard';
 
 /** 트리·섹션 메뉴 항목 키. 항목이 늘어도 소비처가 깨지지 않게 열어둔다 */
@@ -173,12 +175,16 @@ export default function WikiSideNav({
 }: WikiSideNavProps = {}) {
   const router = useRouter();
   const pathname = usePathname();
-  const { isSidebarOpen, setSidebarOpen, setActivePanel } = useSidebarStore();
+  const { isSidebarOpen, setSidebarOpen, setActivePanel, setDocSearchOpen } = useSidebarStore();
   const user = useUserStore((state) => state.user);
 
   const go = (href: string) => () => {
     setActivePanel(null);
     router.push(href);
+  };
+  const openDocSearch = () => {
+    setActivePanel(null);
+    setDocSearchOpen(true);
   };
   const goSettings = () => {
     setActivePanel(null);
@@ -337,7 +343,7 @@ export default function WikiSideNav({
 
   /*
    * 온보딩 중에는 메뉴도 트리도 없다 — 아직 볼 것이 없기 때문이다.
-   * 스위처·팀스페이스·진행 버튼만 두고 하단 신규 버튼도 내린다(시안 18046:99122).
+   * 스위처·팀스페이스·진행 버튼만 남긴다. 하단 신규 버튼은 그대로 둔다.
    */
   if (isOnboarding && isSidebarOpen) {
     return (
@@ -347,7 +353,7 @@ export default function WikiSideNav({
           spaceSwitcher={
             <>
               <SnbSpaceSwitcher Icon={SPACE_HOME_ICON} label="홈" onClick={go('/')} />
-              <SnbSpaceSwitcher Icon={SPACE_WIKI_ICON} label="LLM Wiki" selected />
+              <SnbSpaceSwitcher Icon={SPACE_WIKI_ICON} label="LLM Wiki" selected onClick={go('/llm-wiki')} />
             </>
           }
           primaryItems={
@@ -361,8 +367,8 @@ export default function WikiSideNav({
               userName={user?.name ?? '이름없음'}
               userRole={user?.email ?? ''}
               onSettingsClick={goSettings}
+              onNewClick={go('/llm-wiki/onboarding')}
               profileMenu={profileMenu}
-              hideNewButton
             />
           }
         >
@@ -380,7 +386,13 @@ export default function WikiSideNav({
           spaceSwitcher={
             <>
               <SnbSpaceSwitcher variant="closed" Icon={SPACE_HOME_ICON} label="홈" onClick={go('/')} />
-              <SnbSpaceSwitcher variant="closed" Icon={SPACE_WIKI_ICON} label="LLM Wiki" selected />
+              <SnbSpaceSwitcher
+                variant="closed"
+                Icon={SPACE_WIKI_ICON}
+                label="LLM Wiki"
+                selected
+                onClick={go('/llm-wiki')}
+              />
             </>
           }
           footer={
@@ -388,6 +400,7 @@ export default function WikiSideNav({
           }
         >
           <SnbRailItem Icon={IconAdd400} label="새 채팅" iconOnDisc onClick={go('/')} />
+          <SnbRailItem Icon={IconSearch400} label="검색" onClick={openDocSearch} />
           <SnbRailItem Icon={IconUpdate} label="요청됨" selected={isReview} onClick={go('/llm-wiki/review')} />
           <SnbRailItem Icon={IconGrid} label="대시보드" selected={isDashboard} onClick={go('/llm-wiki')} />
         </SideNavRail>
@@ -402,14 +415,26 @@ export default function WikiSideNav({
         showScrollFade
         spaceSwitcher={
           <>
-            <SnbSpaceSwitcher Icon={SPACE_HOME_ICON} label="홈" onClick={go('/')} />
-            <SnbSpaceSwitcher Icon={SPACE_WIKI_ICON} label="LLM Wiki" selected />
+            <SnbSpaceSwitcher
+              Icon={SPACE_HOME_ICON}
+              label="홈"
+              layoutId={SPACE_SWITCHER_LAYOUT_ID.home}
+              onClick={go('/')}
+            />
+            <SnbSpaceSwitcher
+              Icon={SPACE_WIKI_ICON}
+              label="LLM Wiki"
+              layoutId={SPACE_SWITCHER_LAYOUT_ID.wiki}
+              selected
+              onClick={go('/llm-wiki')}
+            />
           </>
         }
         primaryItems={
           <>
             <div className="flex flex-col">
               <SnbNavRow Icon={IconAdd400} label="새 채팅" iconOnDisc onClick={go('/')} />
+              <SnbNavRow Icon={IconSearch300} label="검색" onClick={openDocSearch} />
               <SnbNavRow Icon={IconUpdate} label="요청됨" selected={isReview} onClick={go('/llm-wiki/review')} />
             </div>
             <SnbTeamspaceCard name="Acme의 지식 허브" Icon={TEAMSPACE_ICON} />

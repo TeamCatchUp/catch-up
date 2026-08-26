@@ -43,7 +43,7 @@ export default function DocumentSearchFilterRow({
 
   return (
     <div className={cn('flex items-center gap-5', isResultExpanded ? 'w-full px-2' : 'w-182', className)}>
-      <div className={cn('flex min-w-0 shrink-0 items-center gap-2.5', isResultExpanded ? 'w-[459px]' : 'w-[385px]')}>
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">
         <SourceFilterDropdown
           selectedSources={selectedSources}
           onSourcesChange={onSourcesChange}
@@ -64,7 +64,6 @@ export default function DocumentSearchFilterRow({
       <SmartFilterControl
         checked={smartFilter}
         onCheckedChange={onSmartFilterChange}
-        className={isResultExpanded ? 'w-[385px]' : 'w-[323px]'}
         description={isResultExpanded ? '필터를 직접 안 눌러도 자동으로 적용돼요' : '자동으로 적용되는 검색 필터'}
         tone={isResultExpanded ? 'neutral' : 'primary'}
       />
