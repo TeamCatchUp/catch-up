@@ -76,67 +76,69 @@ export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
       <div className="flex flex-col gap-1">
         {/* 상단 그룹 */}
         <div className="flex flex-col gap-0.5">
-          <DropdownMenuItem onSelect={() => router.push('/mypage/profile')}>
-            <Person className="text-icon-normal-normal size-6" />
+          <DropdownMenuItem className="py-1" onSelect={() => router.push('/mypage/profile')}>
+            <Person className="text-icon-normal-normal size-5" />
             <span>계정</span>
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => router.push('/mypage/preferences')}>
-            <Filter2 className="text-icon-normal-normal size-6" />
+          <DropdownMenuItem className="py-1" onSelect={() => router.push('/mypage/preferences')}>
+            <Filter2 className="text-icon-normal-normal size-5" />
             <span>개인 맞춤 설정</span>
           </DropdownMenuItem>
           {userRole === 'admin' && (
-            <DropdownMenuItem onSelect={() => router.push('/admin/permissions')}>
-              <Lock className="text-icon-normal-normal size-6" />
+            <DropdownMenuItem className="py-1" onSelect={() => router.push('/admin/permissions')}>
+              <Lock className="text-icon-normal-normal size-5" />
               <span>권한 정보</span>
             </DropdownMenuItem>
           )}
 
           {/* 화면 모드 서브메뉴 */}
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <Contrast className="text-icon-normal-normal size-6" />
-              <span className="flex-1">화면 모드</span>
-              <div className="flex items-center">
-                <span className="text-body-xsmall text-text-normal-alternative">{THEME_LABELS[theme ?? 'system']}</span>
-                <ArrowRight className="text-icon-normal-alternative relative -top-[0.5px] size-6" />
+            <DropdownMenuSubTrigger className="py-1">
+              <Contrast className="text-icon-normal-normal size-5" />
+              <span className="min-w-0 flex-1 truncate">화면 모드</span>
+              <div className="flex shrink-0 items-center">
+                <span className="text-body-xsmall text-text-normal-alternative max-w-19.5 truncate">
+                  {THEME_LABELS[theme ?? 'system']}
+                </span>
+                <ArrowRight className="text-icon-normal-alternative size-5 shrink-0" />
               </div>
             </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
+            <DropdownMenuSubContent className="flex flex-col gap-1">
               <DropdownMenuItem
                 onSelect={() => setTheme('system')}
-                className={cn(currentTheme === 'system' && 'bg-fill-normal-interaction-hover')}
+                className={cn('py-1', currentTheme === 'system' && 'bg-fill-normal-interaction-hover')}
               >
                 <span className="flex-1">시스템</span>
-                {currentTheme === 'system' && <Check className="text-icon-normal-normal size-6" />}
+                {currentTheme === 'system' && <Check className="text-icon-normal-normal size-5" />}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() => setTheme('light')}
-                className={cn(currentTheme === 'light' && 'bg-fill-normal-interaction-hover')}
+                className={cn('py-1', currentTheme === 'light' && 'bg-fill-normal-interaction-hover')}
               >
                 <span className="flex-1">라이트 모드</span>
-                {currentTheme === 'light' && <Check className="text-icon-normal-normal size-6" />}
+                {currentTheme === 'light' && <Check className="text-icon-normal-normal size-5" />}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() => setTheme('dark')}
-                className={cn(currentTheme === 'dark' && 'bg-fill-normal-interaction-hover')}
+                className={cn('py-1', currentTheme === 'dark' && 'bg-fill-normal-interaction-hover')}
               >
                 <span className="flex-1">다크 모드</span>
-                {currentTheme === 'dark' && <Check className="text-icon-normal-normal size-6" />}
+                {currentTheme === 'dark' && <Check className="text-icon-normal-normal size-5" />}
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
         </div>
 
-        <DropdownMenuSeparator />
+        <DropdownMenuSeparator className="mx-1.5" />
 
         {/* 하단 그룹 */}
         <div className="flex flex-col gap-0.5">
-          <DropdownMenuItem onSelect={() => router.push('/mypage/help')}>
-            <Help className="text-icon-normal-normal size-6" />
+          <DropdownMenuItem className="py-1" onSelect={() => router.push('/mypage/help')}>
+            <Help className="text-icon-normal-normal size-5" />
             <span>도움말</span>
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => logoutMutation.mutate()}>
-            <Logout className="text-icon-normal-normal size-6" />
+          <DropdownMenuItem className="py-1" onSelect={() => logoutMutation.mutate()}>
+            <Logout className="text-icon-normal-normal size-5" />
             <span>로그아웃</span>
           </DropdownMenuItem>
         </div>

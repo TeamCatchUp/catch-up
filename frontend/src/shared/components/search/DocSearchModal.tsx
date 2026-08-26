@@ -51,6 +51,8 @@ export default function DocSearchModal({ open, onOpenChange, historyEntries, his
       <DialogContent
         hideClose
         aria-describedby={undefined}
+        // 시안이 뒤 화면을 그대로 보여준다 — 딤 없이 바깥 클릭만 받는다
+        overlayClassName="bg-transparent"
         className="top-[67px] flex h-176.5 max-h-[calc(100dvh-134px)] w-250 max-w-[calc(100vw-2rem)] translate-y-0 flex-col gap-2.5 rounded-[28px] pt-2 pr-2 pb-4 pl-3"
       >
         <DialogTitle className="sr-only">문서 탐색</DialogTitle>
