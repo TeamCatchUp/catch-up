@@ -97,7 +97,7 @@ beforeEach(() => {
 });
 
 describe('HybridSearchResultPage', () => {
-  it('AI 모드 클릭 시 draft 검색어를 /search q 파라미터로 전달한다', async () => {
+  it('AI 모드 클릭 시 draft 검색어를 홈 q 파라미터로 전달한다', async () => {
     mockSearchParams.set('q', '검색어 text');
     const user = userEvent.setup();
 
@@ -105,17 +105,17 @@ describe('HybridSearchResultPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'AI 모드' }));
 
-    expect(mockPush).toHaveBeenCalledWith('/search?q=%EA%B2%80%EC%83%89%EC%96%B4+text');
+    expect(mockPush).toHaveBeenCalledWith('/?q=%EA%B2%80%EC%83%89%EC%96%B4+text');
   });
 
-  it('AI 모드 클릭 시 draft 검색어가 비어 있으면 /search로 이동한다', async () => {
+  it('AI 모드 클릭 시 draft 검색어가 비어 있으면 홈으로 이동한다', async () => {
     const user = userEvent.setup();
 
     render(<HybridSearchResultPage />);
 
     await user.click(screen.getByRole('button', { name: 'AI 모드' }));
 
-    expect(mockPush).toHaveBeenCalledWith('/search');
+    expect(mockPush).toHaveBeenCalledWith('/');
   });
 
   it('submit 시 smart_filter를 URL에 명시한다', async () => {

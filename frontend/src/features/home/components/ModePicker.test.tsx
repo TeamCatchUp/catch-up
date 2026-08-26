@@ -45,9 +45,8 @@ describe('ModePicker', () => {
     expect(mockReplace).toHaveBeenCalledWith('/?mode=docs');
   });
 
-  it('/search의 AI 모드에서 문서 탐색 전환 시 홈 문서 탐색 진입점으로 이동한다', async () => {
+  it('AI 모드의 q 파라미터를 문서 탐색 전환 시 이어받지 않는다', async () => {
     const user = userEvent.setup();
-    mockUsePathname.mockReturnValue('/search');
     mockUseSearchParams.mockReturnValue(new URLSearchParams('q=검색어'));
     render(<ModePicker mode="ai" />);
 
@@ -58,13 +57,12 @@ describe('ModePicker', () => {
 
   it('docs → ai 전환 시 mode 파라미터를 제거한다', async () => {
     const user = userEvent.setup();
-    mockUsePathname.mockReturnValue('/search');
     mockUseSearchParams.mockReturnValue(new URLSearchParams('mode=docs'));
     render(<ModePicker mode="docs" />);
 
     await user.click(screen.getByRole('tab', { name: /캐치스턴트 AI/ }));
 
-    expect(mockReplace).toHaveBeenCalledWith('/search');
+    expect(mockReplace).toHaveBeenCalledWith('/');
   });
 
   it('이미 선택된 모드를 다시 클릭하면 navigation을 발생시키지 않는다', async () => {

@@ -38,7 +38,6 @@ describe('isWikiRoute', () => {
     ['/llm-wiki/review', true],
     ['/llm-wiki/channel/channel-1', true],
     ['/', false],
-    ['/search', false],
     // 접두사만 같은 경로는 위키가 아니다
     ['/llm-wiki-other', false],
   ])('%s → %s', (pathname, expected) => {

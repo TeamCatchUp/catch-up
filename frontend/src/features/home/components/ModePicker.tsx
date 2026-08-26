@@ -1,6 +1,6 @@
 'use client';
 
-// 홈/search 페이지 히어로 모드 전환 picker (캐치스턴트 AI / 문서 탐색).
+// 홈 히어로 모드 전환 picker (캐치스턴트 AI / 문서 탐색).
 // URL `mode` 파라미터를 토글하고, 활성 배경은 layoutId로 좌우 슬라이드한다.
 
 import { motion } from 'motion/react';

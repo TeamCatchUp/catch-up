@@ -42,7 +42,7 @@ export default function RecentQuestionsModal({ onClose }: RecentQuestionsModalPr
 
   const handleNewQuestion = () => {
     onClose();
-    router.push('/search');
+    router.push('/');
   };
 
   return (

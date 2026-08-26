@@ -1,6 +1,6 @@
 'use client';
 
-// 홈/search 페이지 hero 영역의 텍스트.
+// 홈 hero 영역의 텍스트.
 // - ai 모드: 기본/포커스 두 줄 (포커스 시 다른 텍스트로 fade)
 // - docs 모드: 단일 텍스트
 
@@ -11,7 +11,7 @@ import type { HomeMode } from './ModePicker';
 interface HeroTextProps {
   mode: HomeMode;
   isFocused: boolean;
-  // 홈(/) 라우트 여부 — search(/search)와 분기해 인사말 카피를 다르게 노출. ai 모드에서만 사용.
+  // true면 인사말 카피, false면 질문 유도 카피. ai 모드에서만 사용.
   isHome?: boolean;
   userName?: string;
 }

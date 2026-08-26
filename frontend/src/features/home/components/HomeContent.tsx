@@ -1,12 +1,11 @@
 'use client';
 
-// 홈(/) 페이지와 search(/search) 페이지가 공유하는 본문 콘텐츠.
-// 두 라우트는 단지 경로만 다르고 화면 구성은 동일하다 — TopNavbar 라벨만 path/mode에 따라 분기.
-// mode 분기는 두 section 컴포넌트로 위임 + 다음 task에서 AnimatePresence fade 적용.
+// 홈(/) 본문 콘텐츠. `mode` 파라미터로 캐치스턴트 AI / 문서 탐색 두 섹션을 전환한다.
+// ai 모드는 `q` 파라미터를 컴포저 입력 초기값으로 받는다.
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { ADMIN_GUIDE_STORAGE_KEY } from '@/features/home/constants/adminGuide';
 import { FEATURE_UPDATE_NOTICE, FEATURE_UPDATE_NOTICE_ID } from '@/features/home/constants/featureUpdateNotice';
@@ -29,17 +28,14 @@ import HomeDocsSection from './HomeDocsSection';
 import ModePicker, { type HomeMode } from './ModePicker';
 import UserGuideModal from './UserGuideModal';
 
-type TopNavPageType = 'home' | 'search' | 'docs';
+type TopNavPageType = 'home' | 'docs';
 
-function resolveTopNavPageType(pathname: string, mode: HomeMode): TopNavPageType {
-  if (mode === 'docs') return 'docs';
-  if (pathname === '/search') return 'search';
-  return 'home';
+function resolveTopNavPageType(mode: HomeMode): TopNavPageType {
+  return mode === 'docs' ? 'docs' : 'home';
 }
 
 export default function HomeContent() {
   const user = useUserStore((state) => state.user);
-  const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const mode: HomeMode = searchParams.get('mode') === 'docs' ? 'docs' : 'ai';
@@ -64,13 +60,21 @@ export default function HomeContent() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const filters = useSearchFilters();
-  const initialSearchQuery = pathname === '/search' && mode === 'ai' ? (searchParams.get('q') ?? '') : '';
+  const searchQuery = mode === 'ai' ? (searchParams.get('q') ?? '') : '';
   const input = useSearchInput({
     inputRef,
     selectedSources: filters.selectedSources,
     tipData,
-    initialValue: initialSearchQuery,
+    initialValue: searchQuery,
   });
+
+  // 홈에 머문 채 `/?q=…`로 재진입하면 컴포저 입력을 그 값으로 맞춘다. 빈 q는 입력을 건드리지 않는다.
+  const { setValue } = input;
+  useEffect(() => {
+    if (!searchQuery) return;
+    setValue(searchQuery);
+  }, [searchQuery, setValue]);
+
   const { shouldShowNoHistoryBox } = useQuestionHistoryGate();
   const [isNoHistoryExpanded, setIsNoHistoryExpanded] = useState(true);
 
@@ -91,7 +95,7 @@ export default function HomeContent() {
 
   return (
     <div className={`bg-home-gradient flex min-h-full flex-col ${input.isFocused ? 'h-full overflow-y-auto' : ''}`}>
-      <TopNavbar pageType={resolveTopNavPageType(pathname, mode)} />
+      <TopNavbar pageType={resolveTopNavPageType(mode)} />
 
       <div className="flex flex-col items-center pt-14 pb-6">
         <ModePicker mode={mode} />
@@ -114,7 +118,7 @@ export default function HomeContent() {
               containerRef={containerRef}
               shouldShowNoHistoryBox={shouldShowNoHistoryBox}
               isNoHistoryExpanded={isNoHistoryExpanded}
-              isHome={pathname === '/'}
+              isHome
               userName={user?.name ?? ''}
             />
           ) : (
