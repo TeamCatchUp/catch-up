@@ -3,36 +3,50 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let searchParams = new URLSearchParams();
+const push = vi.fn();
+const replace = vi.fn();
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ push, replace }),
   usePathname: () => '/',
   useSearchParams: () => searchParams,
-}));
-
-vi.mock('@/shared/hooks/query/useQuestionHistoryGate', () => ({
-  useQuestionHistoryGate: () => ({ shouldShowNoHistoryBox: false, isLoading: false }),
 }));
 
 vi.mock('@/shared/components/layout/topNavbar/TopNavbar', () => ({
   default: ({ pageType }: { pageType: string }) => <div data-testid="top-navbar">{pageType}</div>,
 }));
 
-vi.mock('./ModePicker', () => ({
-  default: ({ mode }: { mode: string }) => <div data-testid="mode-picker">{mode}</div>,
-}));
-
-vi.mock('./HomeDocsSection', () => ({ default: () => <div data-testid="docs-section" /> }));
+vi.mock('./DocsSearchHistorySection', () => ({ default: () => <div data-testid="docs-history" /> }));
+vi.mock('./QuickTemplateList', () => ({ default: () => <div data-testid="template-list" /> }));
 vi.mock('./AdminGuideModal', () => ({ default: () => null }));
 vi.mock('./UserGuideModal', () => ({ default: () => null }));
 vi.mock('./FeatureUpdateNoticeModal', () => ({ default: () => null }));
 
-vi.mock('./HomeAiSection', () => ({
-  default: ({ input }: { input: { value: string; setValue: (next: string) => void } }) => (
-    <div>
+vi.mock('./HomeComposer', () => ({
+  default: ({
+    mode,
+    input,
+    onModeChange,
+    onDocsSubmit,
+  }: {
+    mode: string;
+    input: { value: string; setValue: (next: string) => void };
+    onModeChange: (next: string) => void;
+    onDocsSubmit: () => void;
+  }) => (
+    <div data-testid="composer" data-mode={mode}>
       <span data-testid="composer-value">{input.value}</span>
       <button type="button" onClick={() => input.setValue('사용자가 고친 값')}>
         입력 편집
+      </button>
+      <button type="button" onClick={() => input.setValue('지난주 결제 롤백')}>
+        질의 입력
+      </button>
+      <button type="button" onClick={() => onModeChange('docs')}>
+        문서 탐색으로
+      </button>
+      <button type="button" onClick={onDocsSubmit}>
+        문서 검색
       </button>
     </div>
   ),
@@ -42,6 +56,8 @@ import HomeContent from './HomeContent';
 
 beforeEach(() => {
   searchParams = new URLSearchParams();
+  push.mockClear();
+  replace.mockClear();
 });
 
 afterEach(() => {
@@ -96,8 +112,19 @@ describe('HomeContent', () => {
 
     render(<HomeContent />);
 
-    expect(screen.getByTestId('docs-section')).toBeInTheDocument();
-    expect(screen.queryByTestId('composer-value')).not.toBeInTheDocument();
+    expect(screen.getByTestId('composer-value')).toHaveTextContent('');
+  });
+
+  it('ai 모드는 템플릿 목록을, docs 모드는 검색 기록을 아래에 둔다', () => {
+    const { unmount } = render(<HomeContent />);
+    expect(screen.getByTestId('template-list')).toBeInTheDocument();
+    expect(screen.queryByTestId('docs-history')).not.toBeInTheDocument();
+    unmount();
+
+    searchParams = new URLSearchParams('mode=docs');
+    render(<HomeContent />);
+    expect(screen.getByTestId('docs-history')).toBeInTheDocument();
+    expect(screen.queryByTestId('template-list')).not.toBeInTheDocument();
   });
 
   it('mode에 따라 TopNavbar pageType이 home/docs로만 갈린다', () => {
@@ -108,5 +135,38 @@ describe('HomeContent', () => {
     searchParams = new URLSearchParams('mode=docs');
     render(<HomeContent />);
     expect(screen.getByTestId('top-navbar')).toHaveTextContent('docs');
+  });
+
+  it('컴포저의 모드 전환은 q 같은 다른 파라미터를 남긴 채 mode만 붙인다', async () => {
+    searchParams = new URLSearchParams('q=배포 롤백');
+    const user = userEvent.setup();
+    render(<HomeContent />);
+
+    await user.click(screen.getByRole('button', { name: '문서 탐색으로' }));
+
+    expect(replace).toHaveBeenCalledWith('/?q=%EB%B0%B0%ED%8F%AC+%EB%A1%A4%EB%B0%B1&mode=docs');
+  });
+
+  it('docs submit은 현재 필터를 실어 결과 페이지로 보낸다', async () => {
+    searchParams = new URLSearchParams('mode=docs');
+    const user = userEvent.setup();
+    render(<HomeContent />);
+
+    await user.click(screen.getByRole('button', { name: '질의 입력' }));
+    await user.click(screen.getByRole('button', { name: '문서 검색' }));
+
+    expect(push).toHaveBeenCalledWith(
+      '/hybrid-search?q=%EC%A7%80%EB%82%9C%EC%A3%BC+%EA%B2%B0%EC%A0%9C+%EB%A1%A4%EB%B0%B1&smart_filter=true',
+    );
+  });
+
+  it('빈 입력으로 docs submit하면 이동하지 않는다', async () => {
+    searchParams = new URLSearchParams('mode=docs');
+    const user = userEvent.setup();
+    render(<HomeContent />);
+
+    await user.click(screen.getByRole('button', { name: '문서 검색' }));
+
+    expect(push).not.toHaveBeenCalled();
   });
 });

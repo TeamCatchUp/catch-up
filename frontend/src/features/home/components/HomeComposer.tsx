@@ -17,8 +17,7 @@ import type { UseSearchInputReturn } from '@/shared/hooks/query/useSearchInput';
 import type { DocsSource } from '@/shared/types/source';
 import { cn } from '@/shared/utils/cn';
 
-import ComposerModeToggle from './ComposerModeToggle';
-import type { HomeMode } from './ModePicker';
+import ComposerModeToggle, { type HomeMode } from './ComposerModeToggle';
 
 const PLACEHOLDER = '업무 흐름이나 인수인계 내용을 질문해보세요';
 const MAX_INPUT_HEIGHT_PX = 360;

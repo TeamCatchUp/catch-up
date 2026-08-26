@@ -10,8 +10,8 @@ import type { UseSearchInputReturn } from '@/shared/hooks/query/useSearchInput';
 import type { DocsSource } from '@/shared/types/source';
 
 import { catchupParameters } from '../../../../.storybook/catchupStoryParameters';
+import type { HomeMode } from './ComposerModeToggle';
 import HomeComposer from './HomeComposer';
-import type { HomeMode } from './ModePicker';
 
 const FIGMA_FILE_KEY = '7UwupbVvmHkElmP2OBJQio';
 const figmaUrl = (nodeId: string) =>

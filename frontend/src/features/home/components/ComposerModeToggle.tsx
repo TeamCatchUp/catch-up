@@ -5,7 +5,7 @@
 
 import { cn } from '@/shared/utils/cn';
 
-import type { HomeMode } from './ModePicker';
+export type HomeMode = 'ai' | 'docs';
 
 const OPTIONS: ReadonlyArray<{ value: HomeMode; label: string }> = [
   { value: 'ai', label: '캐치스턴트 AI' },
