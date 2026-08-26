@@ -40,7 +40,7 @@ import SnbRailFooter from './SnbRailFooter';
 import SnbRailItem from './SnbRailItem';
 import SnbRenamePopover from './SnbRenamePopover';
 import SnbSectionHeader, { SnbSectionAction } from './SnbSectionHeader';
-import SnbSpaceSwitcher from './SnbSpaceSwitcher';
+import SnbSpaceSwitcher, { SPACE_SWITCHER_LAYOUT_ID } from './SnbSpaceSwitcher';
 import SnbTeamspaceCard from './SnbTeamspaceCard';
 
 /** 트리·섹션 메뉴 항목 키. 항목이 늘어도 소비처가 깨지지 않게 열어둔다 */
@@ -409,8 +409,13 @@ export default function WikiSideNav({
         showScrollFade
         spaceSwitcher={
           <>
-            <SnbSpaceSwitcher Icon={SPACE_HOME_ICON} label="홈" onClick={go('/')} />
-            <SnbSpaceSwitcher Icon={SPACE_WIKI_ICON} label="LLM Wiki" selected />
+            <SnbSpaceSwitcher
+              Icon={SPACE_HOME_ICON}
+              label="홈"
+              layoutId={SPACE_SWITCHER_LAYOUT_ID.home}
+              onClick={go('/')}
+            />
+            <SnbSpaceSwitcher Icon={SPACE_WIKI_ICON} label="LLM Wiki" layoutId={SPACE_SWITCHER_LAYOUT_ID.wiki} selected />
           </>
         }
         primaryItems={

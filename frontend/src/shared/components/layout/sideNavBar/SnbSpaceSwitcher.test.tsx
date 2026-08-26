@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { SPACE_HOME_ICON, SPACE_WIKI_ICON } from './snbNavFixtures';
-import SnbSpaceSwitcher from './SnbSpaceSwitcher';
+import SnbSpaceSwitcher, { SPACE_SWITCHER_LAYOUT_ID } from './SnbSpaceSwitcher';
 
 const realMatchMedia = window.matchMedia;
 
@@ -43,6 +43,25 @@ function SwitcherPair() {
   );
 }
 
+/** 홈·위키 SNB처럼 트리째 갈리는 배치. 같은 layoutId로만 폭 전환이 이어진다 */
+function SwappedNav({ space }: { space: 'home' | 'wiki' }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      {space === 'home' ? (
+        <>
+          <SnbSpaceSwitcher Icon={SPACE_HOME_ICON} label="홈" layoutId={SPACE_SWITCHER_LAYOUT_ID.home} selected />
+          <SnbSpaceSwitcher Icon={SPACE_WIKI_ICON} label="LLM Wiki" layoutId={SPACE_SWITCHER_LAYOUT_ID.wiki} />
+        </>
+      ) : (
+        <>
+          <SnbSpaceSwitcher Icon={SPACE_HOME_ICON} label="홈" layoutId={SPACE_SWITCHER_LAYOUT_ID.home} />
+          <SnbSpaceSwitcher Icon={SPACE_WIKI_ICON} label="LLM Wiki" layoutId={SPACE_SWITCHER_LAYOUT_ID.wiki} selected />
+        </>
+      )}
+    </div>
+  );
+}
+
 afterEach(() => {
   window.matchMedia = realMatchMedia;
 });
@@ -63,6 +82,25 @@ describe('SnbSpaceSwitcher 선택 전환', () => {
     expect(screen.getByRole('button', { name: '홈' })).not.toHaveAttribute('aria-current');
     // 나가는 라벨은 페이드가 끝난 뒤 사라진다
     await waitFor(() => expect(screen.queryByText('홈')).toBeNull());
+  });
+
+  it('SNB가 통째로 갈려도 선택 표시가 새 트리로 넘어간다', async () => {
+    setReducedMotion(false);
+    const { rerender } = render(<SwappedNav space="home" />);
+
+    expect(screen.getByRole('button', { name: '홈' })).toHaveAttribute('aria-current', 'page');
+
+    // 라우팅으로 SNB 컴포넌트가 교체되는 상황
+    rerender(<SwappedNav space="wiki" />);
+
+    expect(screen.getByRole('button', { name: 'LLM Wiki' })).toHaveAttribute('aria-current', 'page');
+    await waitFor(() => expect(screen.queryByText('홈')).toBeNull());
+  });
+
+  it('두 SNB가 같은 layoutId를 써야 폭 전환이 이어진다', () => {
+    // 값이 갈리면 교체 순간 두 버튼이 각자 새로 그려져 전환이 끊긴다
+    expect(SPACE_SWITCHER_LAYOUT_ID.home).not.toBe(SPACE_SWITCHER_LAYOUT_ID.wiki);
+    expect(Object.values(SPACE_SWITCHER_LAYOUT_ID).every(Boolean)).toBe(true);
   });
 
   it('reduced motion이면 나가는 라벨이 짧은 예산 안에 사라진다', async () => {

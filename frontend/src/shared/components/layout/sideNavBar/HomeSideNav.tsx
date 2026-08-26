@@ -25,7 +25,7 @@ import SnbRailFooter from './SnbRailFooter';
 import SnbRailItem from './SnbRailItem';
 import SnbRecentQuestionList from './SnbRecentQuestionList';
 import SnbSectionHeader, { SnbBetaBadge, SnbSectionAction } from './SnbSectionHeader';
-import SnbSpaceSwitcher from './SnbSpaceSwitcher';
+import SnbSpaceSwitcher, { SPACE_SWITCHER_LAYOUT_ID } from './SnbSpaceSwitcher';
 
 /**
  * 홈 모드 사이드 내비. 메뉴 목적지는 구 사이드바와 1:1로 맞춘다.
@@ -99,8 +99,13 @@ export default function HomeSideNav() {
         showScrollFade
         spaceSwitcher={
           <>
-            <SnbSpaceSwitcher Icon={SPACE_HOME_ICON} label="홈" selected />
-            <SnbSpaceSwitcher Icon={SPACE_WIKI_ICON} label="LLM Wiki" onClick={go('/llm-wiki')} />
+            <SnbSpaceSwitcher Icon={SPACE_HOME_ICON} label="홈" layoutId={SPACE_SWITCHER_LAYOUT_ID.home} selected />
+            <SnbSpaceSwitcher
+              Icon={SPACE_WIKI_ICON}
+              label="LLM Wiki"
+              layoutId={SPACE_SWITCHER_LAYOUT_ID.wiki}
+              onClick={go('/llm-wiki')}
+            />
           </>
         }
         primaryItems={
