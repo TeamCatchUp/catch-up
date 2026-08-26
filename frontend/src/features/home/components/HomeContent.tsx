@@ -66,11 +66,15 @@ export default function HomeContent() {
   });
 
   // 홈에 머문 채 `/?q=…`로 재진입하면 컴포저 입력을 그 값으로 맞춘다. 빈 q는 입력을 건드리지 않는다.
-  const { setValue } = input;
+  // 템플릿이 꽂혀 있으면 함께 풀어야 새 질의가 입력창에 보인다.
+  const { setValue, setIsFromTemplate, setSelectedTipIndex, resetTemplateFields } = input;
   useEffect(() => {
     if (!searchQuery) return;
+    resetTemplateFields();
+    setIsFromTemplate(false);
+    setSelectedTipIndex(null);
     setValue(searchQuery);
-  }, [searchQuery, setValue]);
+  }, [searchQuery, setValue, setIsFromTemplate, setSelectedTipIndex, resetTemplateFields]);
 
   // 문서 탐색 필터는 모드를 오가도 유지된다.
   const [docsSources, setDocsSources] = useState<DocsSource[]>([]);
@@ -91,11 +95,11 @@ export default function HomeContent() {
     if (url) router.push(url);
   };
 
+  // 포커스는 TemplateInput이 첫 빈칸에 준다 — 여기서 잡으면 곧 사라질 textarea를 잡는다.
   const handleTemplateClick = (index: number) => {
     input.resetTemplateFields();
     input.setIsFromTemplate(true);
     input.setSelectedTipIndex(index);
-    inputRef.current?.focus();
   };
 
   const selectedTipIndex = input.isFromTemplate ? input.selectedTipIndex : null;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 import IconAdd400 from '@/public/icons/icon/add_small_400.svg';
 import IconAgent from '@/public/icons/icon/agent.svg';
@@ -33,7 +33,6 @@ import SnbSpaceSwitcher, { SPACE_SWITCHER_LAYOUT_ID } from './SnbSpaceSwitcher';
  */
 export default function HomeSideNav() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const router = useRouter();
   const { activePanel, isSidebarOpen, setActivePanel, setDocSearchOpen, setSidebarOpen, togglePanel } =
     useSidebarStore();
@@ -49,8 +48,8 @@ export default function HomeSideNav() {
     router.push(useSidebarStore.getState().lastSettingsPath);
   };
 
-  const isDocsMode = pathname === '/' && searchParams.get('mode') === 'docs';
-  const isHome = pathname === '/' && !isDocsMode;
+  // 문서 탐색은 홈의 한 모드라 SNB에서는 같은 항목이 현재 위치다
+  const isHome = pathname === '/';
   const isAgentStudio = pathname.startsWith('/agent-studio');
   const openDocSearch = () => {
     setActivePanel(null);
@@ -121,6 +120,7 @@ export default function HomeSideNav() {
             userRole={user?.email ?? ''}
             onSettingsClick={goSettings}
             onNewClick={go('/llm-wiki/onboarding')}
+            hideNewButton={user?.role !== 'admin'}
             profileMenu={profileMenu}
           />
         }

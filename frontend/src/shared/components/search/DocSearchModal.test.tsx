@@ -78,6 +78,19 @@ describe('DocSearchModal', () => {
     expect(mockPush).toHaveBeenCalledWith('/');
   });
 
+  it('닫으면 다음에 열 때 빈 검색창으로 시작한다', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<DocSearchModal open onOpenChange={onOpenChange} historyEntries={[]} />);
+
+    await user.type(screen.getByPlaceholderText('업무, 채널 또는 문서를 검색해보세요'), '지난주 결제 롤백');
+
+    // 이 컴포넌트는 SNB와 함께 계속 떠 있어 닫힘이 언마운트가 아니다
+    rerender(<DocSearchModal open={false} onOpenChange={onOpenChange} historyEntries={[]} />);
+    rerender(<DocSearchModal open onOpenChange={onOpenChange} historyEntries={[]} />);
+
+    expect(screen.getByPlaceholderText('업무, 채널 또는 문서를 검색해보세요')).toHaveValue('');
+  });
+
   it('시안에 없는 닫기 버튼을 만들지 않는다', () => {
     openModal();
 

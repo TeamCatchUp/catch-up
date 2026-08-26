@@ -23,7 +23,7 @@ export default function QuickTemplateList({ onTemplateClick }: QuickTemplateList
       {rows.map((cells) => (
         <div key={cells[0].index} className="flex gap-6">
           {cells.map(({ tip, index }) => {
-            const Icon = TEMPLATE_ICONS[index];
+            const Icon = TEMPLATE_ICONS[index] ?? null;
             return (
               <button
                 key={tip.title}
@@ -31,7 +31,7 @@ export default function QuickTemplateList({ onTemplateClick }: QuickTemplateList
                 onClick={() => onTemplateClick(index)}
                 className="group hover:bg-fill-normal-interaction-hover active:bg-fill-normal-interaction-pressed flex h-10 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-lg p-2 transition-colors"
               >
-                <Icon aria-hidden className="text-icon-normal-neutral size-5 shrink-0" />
+                {Icon && <Icon aria-hidden className="text-icon-normal-neutral size-5 shrink-0" />}
                 <span className="text-body-small text-text-normal-neutral min-w-0 flex-1 truncate text-left">
                   {tip.title}
                 </span>

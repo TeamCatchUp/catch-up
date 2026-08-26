@@ -30,12 +30,16 @@ vi.mock('./HomeComposer', () => ({
     onDocsSubmit,
   }: {
     mode: string;
-    input: { value: string; setValue: (next: string) => void };
+    input: { value: string; setValue: (next: string) => void; isFromTemplate: boolean; setIsFromTemplate: (next: boolean) => void };
     onModeChange: (next: string) => void;
     onDocsSubmit: () => void;
   }) => (
     <div data-testid="composer" data-mode={mode}>
       <span data-testid="composer-value">{input.value}</span>
+      <span data-testid="composer-template">{String(input.isFromTemplate)}</span>
+      <button type="button" onClick={() => input.setIsFromTemplate(true)}>
+        템플릿 선택
+      </button>
       <button type="button" onClick={() => input.setValue('사용자가 고친 값')}>
         입력 편집
       </button>
@@ -81,6 +85,22 @@ describe('HomeContent', () => {
     rerender(<HomeContent />);
 
     expect(screen.getByTestId('composer-value')).toHaveTextContent('두 번째 질문');
+  });
+
+  it('q가 들어오면 꽂혀 있던 템플릿을 풀고 그 질의를 보여준다', async () => {
+    searchParams = new URLSearchParams();
+    const user = userEvent.setup();
+    const { rerender } = render(<HomeContent />);
+
+    await user.click(screen.getByRole('button', { name: '템플릿 선택' }));
+    expect(screen.getByTestId('composer-template')).toHaveTextContent('true');
+
+    searchParams = new URLSearchParams('q=배포 롤백');
+    rerender(<HomeContent />);
+
+    // 템플릿이 남아 있으면 입력창 대신 빈칸 채우기가 계속 떠 질의가 보이지 않는다
+    expect(screen.getByTestId('composer-template')).toHaveTextContent('false');
+    expect(screen.getByTestId('composer-value')).toHaveTextContent('배포 롤백');
   });
 
   it('q가 사라져도 사용자가 편집한 입력을 덮어쓰지 않는다', async () => {

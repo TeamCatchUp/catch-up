@@ -12,6 +12,8 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => ({ get: (key: string) => mockSearchParams.get(key) ?? null }),
 }));
 
+const mockUser = { name: '팀원G', email: 'teamlead@catchup.com', role: 'admin' as 'admin' | 'member' };
+
 const mockSidebarState = {
   activePanel: null as string | null,
   isSidebarOpen: true,
@@ -31,8 +33,7 @@ vi.mock('@/shared/store/sidebarStore', () => ({
 }));
 
 vi.mock('@/shared/store/userStore', () => ({
-  useUserStore: (selector: (s: { user: { name: string; email: string } }) => unknown) =>
-    selector({ user: { name: '팀원G', email: 'teamlead@catchup.com' } }),
+  useUserStore: (selector: (s: { user: typeof mockUser }) => unknown) => selector({ user: mockUser }),
 }));
 
 // 실데이터·포털을 쓰는 자식은 목적지 검증 범위 밖이다
@@ -44,6 +45,7 @@ import HomeSideNav from './HomeSideNav';
 beforeEach(() => {
   mockSidebarState.activePanel = null;
   mockSidebarState.isSidebarOpen = true;
+  mockUser.role = 'admin';
   mockSearchParams.clear();
   mockUsePathname.mockReturnValue('/');
 });
@@ -154,6 +156,14 @@ describe('HomeSideNav 펼침', () => {
     expect(mockPush).toHaveBeenCalledWith('/llm-wiki/onboarding');
   });
 
+  it('관리자가 아니면 새 위키를 내린다', () => {
+    mockUser.role = 'member';
+    render(<HomeSideNav />);
+
+    expect(screen.getByRole('button', { name: '새 위키' })).toHaveClass('hidden');
+    expect(screen.getByRole('button', { name: '설정' })).not.toHaveClass('hidden');
+  });
+
   it('설정은 새 위키와 같은 행에 선다', () => {
     render(<HomeSideNav />);
 
@@ -167,11 +177,11 @@ describe('HomeSideNav 펼침', () => {
     expect(screen.getByRole('link', { name: '홈으로 이동' })).toHaveAttribute('href', '/');
   });
 
-  it('문서 탐색 모드에서는 새 채팅이 활성이 아니다', () => {
+  it('문서 탐색 모드도 홈이라 새 채팅이 현재 위치로 남는다', () => {
     mockSearchParams.set('mode', 'docs');
     render(<HomeSideNav />);
 
-    expect(menuRow('새 채팅')).not.toHaveAttribute('aria-current');
+    expect(menuRow('새 채팅')).toHaveAttribute('aria-current', 'page');
   });
 
   // 페이지네이션 "불러오는 중..."은 구 사이드바 동작이라 이 금지 목록에서 뺀다

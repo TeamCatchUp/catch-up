@@ -25,7 +25,11 @@ interface DocSearchModalProps {
   historyLoading?: boolean;
 }
 
-export default function DocSearchModal({ open, onOpenChange, historyEntries, historyLoading }: DocSearchModalProps) {
+/**
+ * 질의·필터를 쥔 본문. 닫히면 Radix가 이 트리를 걷어내므로 다음에 열 때 빈 검색창으로 시작한다.
+ * 바깥 컴포넌트는 SNB와 함께 계속 떠 있어 여기에 상태를 두지 않으면 이전 검색이 남는다.
+ */
+function DocSearchModalBody({ onOpenChange, historyEntries, historyLoading }: Omit<DocSearchModalProps, 'open'>) {
   const router = useRouter();
   const [value, setValue] = useState('');
   const [selectedSources, setSelectedSources] = useState<DocsSource[]>([]);
@@ -47,7 +51,72 @@ export default function DocSearchModal({ open, onOpenChange, historyEntries, his
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <DialogTitle className="sr-only">문서 탐색</DialogTitle>
+
+      <div className="flex w-full shrink-0 flex-col gap-2">
+        <div className="flex w-full items-center gap-3 pl-0.5">
+          <div className="flex min-w-0 flex-1 items-center gap-3.5">
+            <IconSearch aria-hidden className="text-icon-normal-alternative size-7 shrink-0" />
+            <input
+              type="text"
+              autoFocus
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => {
+                // IME 조합 중 Enter(한/중/일 마지막 글자 확정)는 submit을 트리거하지 않음.
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  goToResults(value);
+                }
+              }}
+              placeholder="업무, 채널 또는 문서를 검색해보세요"
+              className="text-body-medium text-text-normal-normal placeholder:text-text-normal-assistive min-w-0 flex-1 bg-transparent outline-none"
+            />
+          </div>
+          <div className="flex shrink-0 items-center gap-2.5">
+            <span aria-hidden className="bg-line-normal-normal h-6 w-px" />
+            <button
+              type="button"
+              aria-label="검색"
+              onClick={() => goToResults(value)}
+              className={cn(
+                'rounded-rounded flex size-10 shrink-0 cursor-pointer items-center justify-center border border-solid p-2',
+                hasText
+                  ? 'border-fill-primary-normal-normal bg-fill-primary-normal-normal'
+                  : 'bg-fill-normal-interaction-inactive border-line-normal-assistive',
+              )}
+            >
+              <IconArrowSend
+                className={cn('size-6', hasText ? 'brightness-0 invert' : 'text-icon-normal-alternative')}
+              />
+            </button>
+            <AiModeButton expanded={false} onClick={goToAiMode} />
+          </div>
+        </div>
+        <span aria-hidden className="bg-line-normal-normal h-px w-full" />
+      </div>
+
+      <DocSearchPanel
+        className="gap-2.5"
+        filterRowClassName="px-2"
+        selectedSources={selectedSources}
+        onSourcesToggle={setSelectedSources}
+        dateRange={dateRange}
+        onDateRangeChange={setDateRange}
+        smartFilter={smartFilter}
+        onSmartFilterChange={setSmartFilter}
+        onHistoryItemClick={goToResults}
+        historyEntries={historyEntries}
+        historyLoading={historyLoading}
+      />
+    </>
+  );
+}
+
+export default function DocSearchModal({ open, ...body }: DocSearchModalProps) {
+  return (
+    <Dialog open={open} onOpenChange={body.onOpenChange}>
       <DialogContent
         hideClose
         aria-describedby={undefined}
@@ -55,64 +124,7 @@ export default function DocSearchModal({ open, onOpenChange, historyEntries, his
         overlayClassName="bg-transparent"
         className="top-[67px] flex h-176.5 max-h-[calc(100dvh-134px)] w-250 max-w-[calc(100vw-2rem)] translate-y-0 flex-col gap-2.5 rounded-[28px] pt-2 pr-2 pb-4 pl-3"
       >
-        <DialogTitle className="sr-only">문서 탐색</DialogTitle>
-
-        <div className="flex w-full shrink-0 flex-col gap-2">
-          <div className="flex w-full items-center gap-3 pl-0.5">
-            <div className="flex min-w-0 flex-1 items-center gap-3.5">
-              <IconSearch aria-hidden className="text-icon-normal-alternative size-7 shrink-0" />
-              <input
-                type="text"
-                autoFocus
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                onKeyDown={(e) => {
-                  // IME 조합 중 Enter(한/중/일 마지막 글자 확정)는 submit을 트리거하지 않음.
-                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                    e.preventDefault();
-                    goToResults(value);
-                  }
-                }}
-                placeholder="업무, 채널 또는 문서를 검색해보세요"
-                className="text-body-medium text-text-normal-normal placeholder:text-text-normal-assistive min-w-0 flex-1 bg-transparent outline-none"
-              />
-            </div>
-            <div className="flex shrink-0 items-center gap-2.5">
-              <span aria-hidden className="bg-line-normal-normal h-6 w-px" />
-              <button
-                type="button"
-                aria-label="검색"
-                onClick={() => goToResults(value)}
-                className={cn(
-                  'rounded-rounded flex size-10 shrink-0 cursor-pointer items-center justify-center border border-solid p-2',
-                  hasText
-                    ? 'border-fill-primary-normal-normal bg-fill-primary-normal-normal'
-                    : 'bg-fill-normal-interaction-inactive border-line-normal-assistive',
-                )}
-              >
-                <IconArrowSend
-                  className={cn('size-6', hasText ? 'brightness-0 invert' : 'text-icon-normal-alternative')}
-                />
-              </button>
-              <AiModeButton expanded={false} onClick={goToAiMode} />
-            </div>
-          </div>
-          <span aria-hidden className="bg-line-normal-normal h-px w-full" />
-        </div>
-
-        <DocSearchPanel
-          className="gap-2.5"
-          filterRowClassName="px-2"
-          selectedSources={selectedSources}
-          onSourcesToggle={setSelectedSources}
-          dateRange={dateRange}
-          onDateRangeChange={setDateRange}
-          smartFilter={smartFilter}
-          onSmartFilterChange={setSmartFilter}
-          onHistoryItemClick={goToResults}
-          historyEntries={historyEntries}
-          historyLoading={historyLoading}
-        />
+        <DocSearchModalBody {...body} />
       </DialogContent>
     </Dialog>
   );

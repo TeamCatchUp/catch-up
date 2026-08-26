@@ -31,6 +31,7 @@ import AppSideNav, { isWikiRoute } from './AppSideNav';
 
 beforeEach(() => {
   mockUsePathname.mockReturnValue('/');
+  mockSidebarState.isDocSearchOpen = false;
 });
 
 afterEach(() => {
@@ -51,6 +52,16 @@ describe('isWikiRoute', () => {
 });
 
 describe('AppSideNav', () => {
+  it('SNB가 내려갈 때 문서 탐색 모달 열림 상태를 남기지 않는다', () => {
+    mockSidebarState.isDocSearchOpen = true;
+    const { unmount } = render(<AppSideNav />);
+    expect(screen.getByText('doc-search-modal')).toBeInTheDocument();
+
+    // 설정 경로는 레이아웃이 SNB째 내리므로, 남겨두면 복귀할 때 모달이 한 번 깜빡인다
+    unmount();
+    expect(mockSidebarState.setDocSearchOpen).toHaveBeenCalledWith(false);
+  });
+
   it('위키 경로에서는 위키 SNB를, 그 외에는 홈 SNB를 렌더한다', () => {
     const { unmount } = render(<AppSideNav />);
     expect(screen.getByText('home-snb')).toBeInTheDocument();

@@ -42,6 +42,9 @@ export default function AppSideNav({ wikiNav }: AppSideNavProps = {}) {
     setDocSearchOpen(false);
   }, [pathname, setDocSearchOpen]);
 
+  // 설정 경로는 SNB째 내려가 모달도 사라진다 — 열림 상태를 남기면 복귀 때 한 번 깜빡인다
+  useEffect(() => () => setDocSearchOpen(false), [setDocSearchOpen]);
+
   return (
     <>
       {isWikiRoute(pathname) ? (wikiNav ?? <WikiSideNav />) : <HomeSideNav />}
