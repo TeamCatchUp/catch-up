@@ -68,7 +68,7 @@ export default function HomeSideNav() {
           onExpand={() => setSidebarOpen(true)}
           spaceSwitcher={
             <>
-              <SnbSpaceSwitcher variant="closed" Icon={SPACE_HOME_ICON} label="홈" selected />
+              <SnbSpaceSwitcher variant="closed" Icon={SPACE_HOME_ICON} label="홈" selected onClick={go('/')} />
               <SnbSpaceSwitcher variant="closed" Icon={SPACE_WIKI_ICON} label="LLM Wiki" onClick={go('/llm-wiki')} />
             </>
           }
@@ -98,7 +98,13 @@ export default function HomeSideNav() {
         showScrollFade
         spaceSwitcher={
           <>
-            <SnbSpaceSwitcher Icon={SPACE_HOME_ICON} label="홈" layoutId={SPACE_SWITCHER_LAYOUT_ID.home} selected />
+            <SnbSpaceSwitcher
+              Icon={SPACE_HOME_ICON}
+              label="홈"
+              layoutId={SPACE_SWITCHER_LAYOUT_ID.home}
+              selected
+              onClick={go('/')}
+            />
             <SnbSpaceSwitcher
               Icon={SPACE_WIKI_ICON}
               label="LLM Wiki"

@@ -171,6 +171,18 @@ describe('HomeSideNav 펼침', () => {
     expect(settings.parentElement).toBe(screen.getByRole('button', { name: '새 위키' }).parentElement);
   });
 
+  it('선택돼 있어도 스페이스 스위처는 목적지로 보낸다', async () => {
+    // 채팅처럼 홈 하위 화면에 들어가 있을 때 스위처가 유일한 복귀 수단이다
+    const user = userEvent.setup();
+    render(<HomeSideNav />);
+
+    await user.click(screen.getByRole('button', { name: '홈' }));
+    expect(mockPush).toHaveBeenCalledWith('/');
+
+    await user.click(screen.getByRole('button', { name: 'LLM Wiki' }));
+    expect(mockPush).toHaveBeenCalledWith('/llm-wiki');
+  });
+
   it('로고가 홈으로 가는 링크다', () => {
     render(<HomeSideNav />);
 

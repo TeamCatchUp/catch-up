@@ -626,6 +626,19 @@ describe('WikiSideNav 펼침', () => {
     expect(mockPush).toHaveBeenCalledWith('/llm-wiki/onboarding');
   });
 
+  it('선택돼 있어도 스페이스 스위처는 목적지로 보낸다', async () => {
+    // 채널·문서 화면에서 대시보드로 돌아올 길이 스위처뿐이다
+    mockUsePathname.mockReturnValue('/llm-wiki/channel/channel-2');
+    const user = userEvent.setup();
+    renderWikiNav();
+
+    await user.click(screen.getByRole('button', { name: 'LLM Wiki' }));
+    expect(mockPush).toHaveBeenCalledWith('/llm-wiki');
+
+    await user.click(screen.getByRole('button', { name: '홈' }));
+    expect(mockPush).toHaveBeenCalledWith('/');
+  });
+
   it('온보딩 중에도 새 위키 버튼은 그대로 보인다', () => {
     mockUsePathname.mockReturnValue('/llm-wiki/onboarding');
     renderWikiNav({ canCreateWiki: true });

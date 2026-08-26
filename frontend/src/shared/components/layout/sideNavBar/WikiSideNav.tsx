@@ -353,7 +353,7 @@ export default function WikiSideNav({
           spaceSwitcher={
             <>
               <SnbSpaceSwitcher Icon={SPACE_HOME_ICON} label="홈" onClick={go('/')} />
-              <SnbSpaceSwitcher Icon={SPACE_WIKI_ICON} label="LLM Wiki" selected />
+              <SnbSpaceSwitcher Icon={SPACE_WIKI_ICON} label="LLM Wiki" selected onClick={go('/llm-wiki')} />
             </>
           }
           primaryItems={
@@ -386,7 +386,13 @@ export default function WikiSideNav({
           spaceSwitcher={
             <>
               <SnbSpaceSwitcher variant="closed" Icon={SPACE_HOME_ICON} label="홈" onClick={go('/')} />
-              <SnbSpaceSwitcher variant="closed" Icon={SPACE_WIKI_ICON} label="LLM Wiki" selected />
+              <SnbSpaceSwitcher
+                variant="closed"
+                Icon={SPACE_WIKI_ICON}
+                label="LLM Wiki"
+                selected
+                onClick={go('/llm-wiki')}
+              />
             </>
           }
           footer={
@@ -415,7 +421,13 @@ export default function WikiSideNav({
               layoutId={SPACE_SWITCHER_LAYOUT_ID.home}
               onClick={go('/')}
             />
-            <SnbSpaceSwitcher Icon={SPACE_WIKI_ICON} label="LLM Wiki" layoutId={SPACE_SWITCHER_LAYOUT_ID.wiki} selected />
+            <SnbSpaceSwitcher
+              Icon={SPACE_WIKI_ICON}
+              label="LLM Wiki"
+              layoutId={SPACE_SWITCHER_LAYOUT_ID.wiki}
+              selected
+              onClick={go('/llm-wiki')}
+            />
           </>
         }
         primaryItems={
