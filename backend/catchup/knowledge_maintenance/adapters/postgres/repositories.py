@@ -17,6 +17,7 @@ from sqlalchemy import String
 from sqlalchemy import Text
 from sqlalchemy import cast
 from sqlalchemy import collate
+from sqlalchemy import delete
 from sqlalchemy import func
 from sqlalchemy import literal
 from sqlalchemy import nullsfirst
@@ -3736,6 +3737,11 @@ class SqlAlchemyRelationRepository:
         ]
 
 
+# 사람의 결정이 끝난 변경안 상태다. pending과 abandoned는
+# 사람이 확정한 것이 아니므로 반려 지문 조회에서 빠진다.
+_DECIDED_PROPOSAL_STATUSES = ("approved", "rejected")
+
+
 class SqlAlchemyBlockVerdictRepository:
     """블록 결정 저널의 영속성을 PostgreSQL로 구현한다.
 
@@ -3856,6 +3862,31 @@ class SqlAlchemyBlockVerdictRepository:
         self._session.flush()
         return inserted is not None
 
+    def delete_verdict(
+        self,
+        *,
+        proposal_id: uuid.UUID,
+        block_index: int,
+    ) -> bool:
+        """블록 하나에 적힌 결정을 지운다.
+
+        지운 행이 있으면 True, 애초에 결정이 없었으면 False다. 지웠는지는
+        DELETE가 바꾼 행 수로 본다.
+
+        Raises:
+            ValueError: 변경안이 고정된 workspace에 없을 때 던진다.
+        """
+        self._assert_proposal_in_workspace(proposal_id)
+        result = self._session.execute(
+            delete(KnowledgeBlockVerdictRow).where(
+                KnowledgeBlockVerdictRow.workspace_id == self._workspace_id,
+                KnowledgeBlockVerdictRow.proposal_id == proposal_id,
+                KnowledgeBlockVerdictRow.block_index == block_index,
+            )
+        )
+        self._session.flush()
+        return result.rowcount > 0
+
     def list_for_proposal(
         self, *, proposal_id: uuid.UUID
     ) -> tuple[StoredBlockVerdict, ...]:
@@ -3873,11 +3904,17 @@ class SqlAlchemyBlockVerdictRepository:
     def find_rejected_hashes(
         self, *, artifact_id: uuid.UUID
     ) -> dict[str, str]:
-        """artifact의 과거 반려 블록을 hash에서 사유로 모은다.
+        """artifact의 확정된 반려 블록을 hash에서 사유로 모은다.
 
         결정 행은 변경안에 매달려 있으므로 변경안을 거쳐 문서로 올라간다.
         같은 지문에 반려가 여럿이면 나중 결정이 이긴다. 그래서 결정 시각
         오름차순으로 읽어 마지막 사유가 dict에 남게 한다.
+
+        변경안이 이미 끝난 것만 센다. 계류 중인 변경안의 반려는 검토자가
+        아직 되돌릴 수 있는 중간 기록이라 사람의 확정된 결정이 아니고,
+        그것으로 다음 컴파일의 블록을 지우면 아직 끝나지 않은 검토가
+        문서 내용을 미리 깎는다. 발행이 끝난 변경안은 실린 블록이 있으면
+        approved로, 전부 반려로 끝났으면 rejected로 남으므로 둘 다 센다.
         """
         rows = self._session.execute(
             select(
@@ -3894,6 +3931,9 @@ class SqlAlchemyBlockVerdictRepository:
                 KnowledgeArtifactChangeProposalRow.workspace_id
                 == self._workspace_id,
                 KnowledgeArtifactChangeProposalRow.artifact_id == artifact_id,
+                KnowledgeArtifactChangeProposalRow.status.in_(
+                    _DECIDED_PROPOSAL_STATUSES
+                ),
                 KnowledgeBlockVerdictRow.verdict == "rejected",
             )
             .order_by(

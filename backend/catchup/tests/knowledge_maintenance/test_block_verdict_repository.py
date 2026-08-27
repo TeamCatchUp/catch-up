@@ -100,8 +100,14 @@ def session_factory(engine: Engine) -> Iterator[Callable[[], Session]]:
 def _proposal(
     session: Session,
     workspace_id: int,
+    *,
+    status: str = "approved",
 ) -> tuple[uuid.UUID, uuid.UUID]:
-    """판정을 붙일 문서와 변경안을 하나씩 마련한다."""
+    """판정을 붙일 문서와 변경안을 하나씩 마련한다.
+
+    기본은 발행이 끝난 approved다. 반려 지문 조회가 끝난 변경안만 세므로,
+    계류 상태를 기본으로 두면 시나리오 대부분이 빈 결과를 보게 된다.
+    """
     node = NodeRow(
         id=uuid.uuid4(),
         workspace_id=workspace_id,
@@ -132,6 +138,12 @@ def _proposal(
             blocks=[],
             content_hash=uuid.uuid4().hex,
             idempotency_key=uuid.uuid4().hex,
+            status=status,
+            reviewer=REVIEWER if status != "pending" else None,
+            reviewed_at=FIRST_AT if status != "pending" else None,
+            rejection_reason=(
+                "전부 반려했다." if status == "rejected" else None
+            ),
         )
     )
     session.flush()
@@ -294,6 +306,59 @@ def _scenario_latest_rejection_wins(
     }
 
 
+def _scenario_delete(
+    repository: BlockVerdictRepository,
+    *,
+    proposal_id: uuid.UUID,
+) -> None:
+    """판정 지우기가 그 줄만 없애는지 확인한다."""
+    for block_index, digest in ((0, HASH_A), (1, HASH_B)):
+        repository.upsert_verdict(
+            proposal_id=proposal_id,
+            block_index=block_index,
+            block_content_hash=digest,
+            verdict="approved",
+            rejection_reason=None,
+            chosen_winner_claim_id=None,
+            reviewer=REVIEWER,
+            reviewed_at=FIRST_AT,
+        )
+
+    assert (
+        repository.delete_verdict(proposal_id=proposal_id, block_index=0)
+        is True
+    )
+
+    stored = repository.list_for_proposal(proposal_id=proposal_id)
+    assert [row.block_index for row in stored] == [1]
+    # 이미 지운 줄을 다시 지우면 지운 것이 없다고 알린다.
+    assert (
+        repository.delete_verdict(proposal_id=proposal_id, block_index=0)
+        is False
+    )
+
+
+def _scenario_pending_rejection_is_ignored(
+    repository: BlockVerdictRepository,
+    *,
+    artifact_id: uuid.UUID,
+    pending_proposal_id: uuid.UUID,
+) -> None:
+    """계류 변경안의 반려가 지문 조회에서 빠지는지 확인한다."""
+    repository.upsert_verdict(
+        proposal_id=pending_proposal_id,
+        block_index=0,
+        block_content_hash=HASH_A,
+        verdict="rejected",
+        rejection_reason="아직 발행하지 않았다.",
+        chosen_winner_claim_id=None,
+        reviewer=REVIEWER,
+        reviewed_at=FIRST_AT,
+    )
+
+    assert repository.find_rejected_hashes(artifact_id=artifact_id) == {}
+
+
 def test_postgres_upsert_and_list(
     workspace_id: int,
     session_factory: Callable[[], Session],
@@ -338,6 +403,64 @@ def test_postgres_latest_rejection_reason_wins(
             artifact_id=artifact_id,
             proposal_id=proposal_id,
         )
+
+
+def test_postgres_delete_verdict(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """실 DB에서 판정 지우기가 그 줄만 없앤다."""
+    with session_factory() as session:
+        _, proposal_id = _proposal(session, workspace_id)
+        repository = SqlAlchemyBlockVerdictRepository(session, workspace_id)
+        _scenario_delete(repository, proposal_id=proposal_id)
+
+
+def test_postgres_pending_rejection_is_ignored(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """실 DB에서 계류 변경안의 반려는 지문 조회에 잡히지 않는다.
+
+    발행 전의 반려는 검토자가 되돌릴 수 있는 중간 기록이라, 그것으로 다음
+    컴파일의 블록을 지우면 끝나지 않은 검토가 문서를 미리 깎는다.
+    """
+    with session_factory() as session:
+        artifact_id, _ = _proposal(session, workspace_id)
+        pending_id = uuid.uuid4()
+        session.add(
+            ProposalRow(
+                id=pending_id,
+                workspace_id=workspace_id,
+                artifact_id=artifact_id,
+                blocks=[],
+                content_hash=uuid.uuid4().hex,
+                idempotency_key=uuid.uuid4().hex,
+            )
+        )
+        session.flush()
+        repository = SqlAlchemyBlockVerdictRepository(session, workspace_id)
+        _scenario_pending_rejection_is_ignored(
+            repository,
+            artifact_id=artifact_id,
+            pending_proposal_id=pending_id,
+        )
+
+
+def test_postgres_delete_rejects_foreign_workspace_proposal(
+    workspace_id: int,
+    session_factory: Callable[[], Session],
+) -> None:
+    """다른 workspace의 변경안 판정은 지우지도 못한다."""
+    with session_factory() as session:
+        other_workspace_id = _other_workspace(session, workspace_id)
+        _, foreign_proposal_id = _proposal(session, other_workspace_id)
+        repository = SqlAlchemyBlockVerdictRepository(session, workspace_id)
+
+        with pytest.raises(ValueError):
+            repository.delete_verdict(
+                proposal_id=foreign_proposal_id, block_index=0
+            )
 
 
 def test_postgres_upsert_refreshes_updated_at(
@@ -474,6 +597,35 @@ def test_fake_upsert_and_list() -> None:
     _scenario_upsert_and_list(verdicts, proposal_id=proposal_id)
 
 
+def test_fake_delete_verdict() -> None:
+    """fake도 판정 지우기를 실 DB와 같이 다룬다."""
+    artifacts, verdicts = _fake_pair()
+    proposal_id = artifacts.add_proposal(
+        artifact_id=uuid.uuid4(),
+        blocks=(),
+        base_revision_id=None,
+    )
+
+    _scenario_delete(verdicts, proposal_id=proposal_id)
+
+
+def test_fake_pending_rejection_is_ignored() -> None:
+    """fake도 계류 변경안의 반려를 지문 조회에서 뺀다."""
+    artifacts, verdicts = _fake_pair()
+    artifact_id = uuid.uuid4()
+    pending_id = artifacts.add_proposal(
+        artifact_id=artifact_id,
+        blocks=(),
+        base_revision_id=None,
+    )
+
+    _scenario_pending_rejection_is_ignored(
+        verdicts,
+        artifact_id=artifact_id,
+        pending_proposal_id=pending_id,
+    )
+
+
 def test_fake_find_rejected_hashes() -> None:
     """fake도 반려 지문을 문서별로 가른다."""
     artifacts, verdicts = _fake_pair()
@@ -483,11 +635,13 @@ def test_fake_find_rejected_hashes() -> None:
         artifact_id=artifact_id,
         blocks=(),
         base_revision_id=None,
+        status="approved",
     )
     other_proposal_id = artifacts.add_proposal(
         artifact_id=other_artifact_id,
         blocks=(),
         base_revision_id=None,
+        status="approved",
     )
 
     _scenario_rejected_hashes(
@@ -507,6 +661,7 @@ def test_fake_latest_rejection_reason_wins() -> None:
         artifact_id=artifact_id,
         blocks=(),
         base_revision_id=None,
+        status="approved",
     )
 
     _scenario_latest_rejection_wins(

@@ -330,6 +330,14 @@ class FakeBlockVerdictRepository:
         )
         return True
 
+    def delete_verdict(
+        self, *, proposal_id: uuid.UUID, block_index: int
+    ) -> bool:
+        """결정 한 줄을 지운다. 없던 줄이면 False다."""
+        if proposal_id not in self._proposals:
+            raise ValueError(f"변경안 {proposal_id}가 없다")
+        return self.verdicts.pop((proposal_id, block_index), None) is not None
+
     def list_for_proposal(
         self, *, proposal_id: uuid.UUID
     ) -> tuple[StoredBlockVerdict, ...]:
@@ -348,6 +356,7 @@ class FakeBlockVerdictRepository:
             row
             for row in self.verdicts.values()
             if row["verdict"] == "rejected"
+            and self._is_decided(row["proposal_id"])
             and self._artifact_id(row["proposal_id"]) == artifact_id
         ]
         rows.sort(key=lambda row: (row["reviewed_at"], row["block_index"]))
@@ -359,6 +368,11 @@ class FakeBlockVerdictRepository:
     def _artifact_id(self, proposal_id: uuid.UUID) -> uuid.UUID | None:
         row = self._proposals.get(proposal_id)
         return None if row is None else row["artifact_id"]
+
+    def _is_decided(self, proposal_id: uuid.UUID) -> bool:
+        """변경안이 사람의 결정으로 끝난 상태인지 본다."""
+        row = self._proposals.get(proposal_id)
+        return row is not None and row["status"] in ("approved", "rejected")
 
 
 @dataclass

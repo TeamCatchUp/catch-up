@@ -50,6 +50,7 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
 from fastapi import Query
+from fastapi import Response
 from sqlalchemy.orm import Session
 
 from catchup.audit.actions import KnowledgeReviewAction
@@ -87,6 +88,9 @@ from catchup.knowledge_maintenance.services.review_block_verdict import (
 )
 from catchup.knowledge_maintenance.services.review_block_verdict import (
     BlockVerdictError,
+)
+from catchup.knowledge_maintenance.services.review_block_verdict import (
+    delete_block_verdict,
 )
 from catchup.knowledge_maintenance.services.review_block_verdict import (
     upsert_block_verdict,
@@ -131,6 +135,7 @@ _BLOCK_VERDICT_ERRORS: dict[str, tuple[int, str]] = {
     "PROPOSAL_NOT_FOUND": (404, "변경안을 찾을 수 없습니다."),
     "ALREADY_DECIDED": (409, "이미 결정된 변경안입니다."),
     "STALE_BLOCK": (409, "블록 본문이 바뀌었습니다. 다시 읽어 주세요."),
+    "VERDICT_NOT_FOUND": (404, "지울 블록 결정이 없습니다."),
     "INVALID": (422, "블록 결정 요청이 올바르지 않습니다."),
 }
 
@@ -547,6 +552,67 @@ def put_block_verdict(
             status_code, code=error.code, message=message
         ) from error
     return _to_block_verdict(stored)
+
+
+@router.delete(
+    path="/queue/{proposal_id}/blocks/{block_index}/verdict",
+    status_code=204,
+    description=(
+        "변경안의 블록 하나에 적힌 승인 또는 반려를 지워 다시 미결정으로 "
+        "되돌린다. 아직 발행하지 않은 변경안에서만 할 수 있다. "
+        "문서 담당자만 할 수 있고, 담당자가 없는 문서는 워크스페이스 "
+        "구성원 누구나 할 수 있다."
+    ),
+)
+@audit_log(
+    action=KnowledgeReviewAction.BLOCK_VERDICT_CLEAR,
+    metadata_factory=KnowledgeReviewAuditMetadata.from_audit,
+)
+def clear_block_verdict(
+    proposal_id: uuid.UUID,
+    block_index: int,
+    context: ReviewerContext = Depends(resolve_reviewer_workspace),
+    uow_factory: ReviewUowFactory = Depends(get_review_uow_factory),
+    db: Session = Depends(get_db),
+) -> Response:
+    """블록 결정을 지우고 본문 없이 204를 돌려준다.
+
+    지운 뒤 그 블록은 미결정으로 돌아간다. 미결정 블록을 어떻게 할지는
+    발행 요청의 undecided가 정하므로, 여기서 대신 정해 두지 않는다.
+
+    지울 결정이 없으면 404다. 조용히 204로 답하면 검토자는 자기가 보던
+    판정이 지워진 줄 알지만 화면과 저널이 갈린 채로 남는다.
+
+    담당자 규칙은 서비스가 자기 transaction 안에서 다시 본다. 지우는 쪽만
+    사전 검사에 맡기면, 담당자가 지정된 뒤에 남이 담당자의 판정을 지울 수
+    있다.
+
+    Raises:
+        HTTPException: 변경안이 없거나 지울 결정이 없으면 404, 이 문서의
+            검수 권한이 없으면 403, 이미 결정된 변경안이면 409, 블록
+            번호가 범위를 벗어나면 422를 던진다.
+    """
+    _require_decidable_proposal(uow_factory, db, context, proposal_id)
+    try:
+        delete_block_verdict(
+            uow_factory(),
+            proposal_id=proposal_id,
+            block_index=block_index,
+            reviewer=context.reviewer,
+            decider_user_id=context.user.id,
+        )
+    except BlockVerdictError as error:
+        if error.code == BLOCK_CODE_NOT_DOCUMENT_OWNER:
+            # 사전 검사를 지난 뒤 담당자가 지정된 경우다. 상태가 아니라
+            # 권한 문제이므로 409 묶음에 섞지 않는다.
+            raise _document_permission_error() from error
+        status_code, message = _BLOCK_VERDICT_ERRORS.get(
+            error.code, _UNMAPPED_ERROR
+        )
+        raise review_error(
+            status_code, code=error.code, message=message
+        ) from error
+    return Response(status_code=204)
 
 
 @router.post(
