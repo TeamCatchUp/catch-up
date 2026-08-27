@@ -98,7 +98,7 @@ export default function ReviewParticipantsCard({
       {noticeContent && (
         // 문구가 2줄이 될 수 있어 아이콘은 첫 줄에 맞춘다 — 줄바꿈은 어절 단위로만 끊는다
         <div className="bg-fill-normal-strong flex items-start gap-2 rounded-lg px-2 py-1.5">
-          <noticeContent.Icon aria-hidden className="text-icon-normal-neutral size-4.5 shrink-0" />
+          <noticeContent.Icon aria-hidden className="text-icon-normal-normal size-4.5 shrink-0" />
           <span className="text-body-xsmall text-text-normal-neutral min-w-0 wrap-break-word break-keep">
             {noticeContent.message}
           </span>
