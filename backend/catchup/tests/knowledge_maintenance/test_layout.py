@@ -9,9 +9,7 @@ from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.artifact import BlockSource
 from catchup.knowledge_maintenance.domain.layout import ITEM_BLOCK
 from catchup.knowledge_maintenance.domain.layout import ITEM_PLACEHOLDER
-from catchup.knowledge_maintenance.domain.layout import ITEM_TABLE
 from catchup.knowledge_maintenance.domain.layout import Layout
-from catchup.knowledge_maintenance.domain.layout import TableGroup
 from catchup.knowledge_maintenance.domain.layout import apply_layout
 
 
@@ -43,13 +41,6 @@ LAYOUT = Layout(
         ("workaround", "우회 방법"),
         ("requested_by(out)", "요청 고객사"),
     ),
-    table_groups=(
-        TableGroup(
-            key="usage_table",
-            title="사용 상황",
-            section_keys=("usage_context", "frequency"),
-        ),
-    ),
     always_show=("workaround",),
 )
 
@@ -77,20 +68,29 @@ def test_reorders_relabels_and_preserves_index() -> None:
     assert kept == [("요청 상태", 1), ("요청 고객사", 0)]
 
 
-def test_table_group_merges_blocks_into_one_item() -> None:
-    """표 묶음에 속한 블록들을 항목 하나로 합친다."""
+def test_each_section_becomes_its_own_block_item() -> None:
+    """칸마다 블록 항목을 따로 내고 sections 순서를 따른다."""
     blocks = [
         _block("frequency", body="주 3회"),
         _block("usage_context", narrative="모바일에서 쓴다"),
     ]
     items = apply_layout(blocks, LAYOUT)
-    table = next(i for i in items if i.item_kind == ITEM_TABLE)
-    assert table.heading == "사용 상황"
-    assert table.block_indexes == (1, 0)
-    assert table.rows == (
-        ("사용 상황", "모바일에서 쓴다"),
-        ("빈도", "주 3회"),
-    )
+    assert [(i.item_kind, i.heading, i.block_index) for i in items] == [
+        (ITEM_BLOCK, "사용 상황", 1),
+        (ITEM_BLOCK, "빈도", 0),
+        (ITEM_PLACEHOLDER, "우회 방법", None),
+    ]
+
+
+def test_no_item_is_a_table() -> None:
+    """어떤 항목도 표 종류로 나오지 않는다."""
+    blocks = [
+        _block("frequency"),
+        _block("usage_context"),
+        _block("request_status"),
+    ]
+    items = apply_layout(blocks, LAYOUT)
+    assert {i.item_kind for i in items} <= {ITEM_BLOCK, ITEM_PLACEHOLDER}
 
 
 def test_always_show_inserts_placeholder_without_index() -> None:

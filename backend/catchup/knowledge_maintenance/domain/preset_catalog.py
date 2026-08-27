@@ -32,7 +32,6 @@ from catchup.knowledge_maintenance.domain.artifact_definition import RelationPat
 from catchup.knowledge_maintenance.domain.artifact_definition import RelationStep
 from catchup.knowledge_maintenance.domain.artifact_definition import SelectionSpec
 from catchup.knowledge_maintenance.domain.layout import Layout
-from catchup.knowledge_maintenance.domain.layout import TableGroup
 
 
 @dataclass(frozen=True, slots=True)
@@ -525,13 +524,6 @@ _FEATURE_REQUEST_STATUS_LAYOUT = Layout(
         ("workaround", "우회 방법"),
         ("requested_by(out)", "요청 고객사"),
         ("belongs_to_area(out)", "기능 영역"),
-    ),
-    table_groups=(
-        TableGroup(
-            key="usage_table",
-            title="사용 상황",
-            section_keys=("usage_context", "requester_role", "frequency"),
-        ),
     ),
     always_show=("request_status", "support_status", "workaround"),
 )
