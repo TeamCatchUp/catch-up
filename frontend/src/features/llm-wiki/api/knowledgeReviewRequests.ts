@@ -34,6 +34,10 @@ export async function submitReviewBlockVerdict(
   return res.data;
 }
 
+export async function clearReviewBlockVerdict(proposalId: string, blockIndex: number): Promise<void> {
+  await api.delete(API.knowledgeReview.blockVerdict(proposalId, blockIndex));
+}
+
 /** 발행. 블록 판정이 남아 있으면 서버가 UNDECIDED_BLOCKS로 막는다. */
 export async function publishReviewProposal(proposalId: string, body: ReviewPublishRequest): Promise<ReviewPublishDto> {
   const res = await api.post<ReviewPublishDto>(API.knowledgeReview.publish(proposalId), body);

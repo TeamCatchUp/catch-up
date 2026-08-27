@@ -23,6 +23,7 @@ import {
   type BlockVerdictTarget,
   useReviewBlockVerdictMutation,
   useReviewBulkVerdictMutation,
+  useReviewClearBlockVerdictMutation,
   useReviewPublishMutation,
 } from '../queries/knowledgeReview.mutations';
 import { knowledgeReviewQueries } from '../queries/knowledgeReview.queries';
@@ -187,6 +188,7 @@ export function useReviewQueueModel({
   });
 
   const verdictMutation = useReviewBlockVerdictMutation();
+  const clearVerdictMutation = useReviewClearBlockVerdictMutation();
   const publishMutation = useReviewPublishMutation();
   const bulkVerdictMutation = useReviewBulkVerdictMutation();
   const assignOwnersMutation = useAssignWikiArtifactOwnersMutation();
@@ -282,6 +284,11 @@ export function useReviewQueueModel({
     // 여는 순간의 안건을 고정한다 — 입력 중 목록이 갈려도 제출이 이 안건으로 나간다
     setSelectedId(selectedRowId);
     setRejecting({ blockIndex: entry.blockIndex, blockContentHash: entry.blockContentHash, proposalId: selectedRowId });
+  };
+
+  const resetBlock = (entry: BlockDiffEntry) => {
+    if (selectedRowId === null || !hasVerdictPath(entry)) return;
+    clearVerdictMutation.mutate({ proposalId: selectedRowId, blockIndex: entry.blockIndex });
   };
 
   // 사유는 이미 트림돼 온다 — 빈 사유는 서버가 422로 막는 계약이라 다이얼로그가 먼저 잠근다
@@ -419,6 +426,7 @@ export function useReviewQueueModel({
     onPreview: preview,
     onApproveBlock: approveBlock,
     onRejectBlock: rejectBlock,
+    onResetBlock: resetBlock,
     onPublish: publish,
     onApproveAll: approveAll,
     rejectDialogOpen,
@@ -435,5 +443,6 @@ export function useReviewQueueModel({
     },
     onRejectBlockSubmit: submitBlockReject,
     blockRejectPending: verdictMutation.isPending,
+    blockResetPending: clearVerdictMutation.isPending,
   };
 }

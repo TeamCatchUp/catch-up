@@ -9,12 +9,17 @@ import type {
   ReviewPublishDto,
   ReviewPublishRequest,
 } from '../api/knowledgeReviewDto';
-import { publishReviewProposal, submitReviewBlockVerdict } from '../api/knowledgeReviewRequests';
+import {
+  clearReviewBlockVerdict,
+  publishReviewProposal,
+  submitReviewBlockVerdict,
+} from '../api/knowledgeReviewRequests';
 import { knowledgeReviewQueries } from './knowledgeReview.queries';
 import { wikiQueries } from './wiki.queries';
 
 /** 블록 판정이 낡은 상태로 막히는 코드. 재조회가 곧 복구다 */
 const BLOCK_VERDICT_STALE_CODES = ['STALE_BLOCK', 'ALREADY_DECIDED'];
+const CLEAR_BLOCK_VERDICT_STALE_CODES = ['VERDICT_NOT_FOUND'];
 
 /** 발행이 낡은 상태로 막히는 코드. 블록 판정에는 없는 미결정·모순 경합이 더 온다 */
 const PUBLISH_STALE_CODES = ['STALE_BLOCK', 'ALREADY_DECIDED', 'UNDECIDED_BLOCKS', 'CONFLICT_RACE'];
@@ -23,6 +28,11 @@ interface BlockVerdictVariables extends ReviewBlockVerdictRequest {
   /** 판정 대상 안건. 클릭 시점 값을 실어 비행 중 선택 교체가 경로·무효화를 흔들지 않는다 */
   proposalId: string;
   /** 경로에 실리는 블록 자리. 화면이 본 블록의 값을 그대로 보낸다 */
+  blockIndex: number;
+}
+
+interface ClearBlockVerdictVariables {
+  proposalId: string;
   blockIndex: number;
 }
 
@@ -84,6 +94,27 @@ export const useReviewBlockVerdictMutation = () => {
       const { code, message } = parseApiError(error);
       toast(message);
       if (BLOCK_VERDICT_STALE_CODES.includes(code)) {
+        queryClient.invalidateQueries({ queryKey: knowledgeReviewQueries.queueItem(proposalId).queryKey });
+      }
+    },
+  });
+};
+
+export const useReviewClearBlockVerdictMutation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ proposalId, blockIndex }: ClearBlockVerdictVariables): Promise<void> =>
+      clearReviewBlockVerdict(proposalId, blockIndex),
+    onSuccess: (_data, { proposalId }) => {
+      queryClient.invalidateQueries({ queryKey: knowledgeReviewQueries.queueItem(proposalId).queryKey });
+    },
+    onError: (error, { proposalId }) => {
+      const { code, message } = parseApiError(error);
+      toast(message);
+      if (code === 'ALREADY_DECIDED') {
+        queryClient.invalidateQueries({ queryKey: knowledgeReviewQueries.all() });
+      } else if (CLEAR_BLOCK_VERDICT_STALE_CODES.includes(code)) {
         queryClient.invalidateQueries({ queryKey: knowledgeReviewQueries.queueItem(proposalId).queryKey });
       }
     },

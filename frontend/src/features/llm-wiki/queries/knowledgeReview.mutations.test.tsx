@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   useReviewBlockVerdictMutation,
   useReviewBulkVerdictMutation,
+  useReviewClearBlockVerdictMutation,
   useReviewPublishMutation,
 } from './knowledgeReview.mutations';
 import { knowledgeReviewQueries } from './knowledgeReview.queries';
@@ -13,6 +14,7 @@ import { wikiQueries } from './wiki.queries';
 
 const reviewApi = vi.hoisted(() => ({
   submitReviewBlockVerdict: vi.fn(),
+  clearReviewBlockVerdict: vi.fn(),
   publishReviewProposal: vi.fn(),
 }));
 const toastMock = vi.hoisted(() => vi.fn());
@@ -138,6 +140,44 @@ describe('useReviewBlockVerdictMutation', () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(toastMock).toHaveBeenCalledWith('검토 권한이 없어요.');
     expect(invalidatedKeys()).toEqual([]);
+  });
+});
+
+describe('useReviewClearBlockVerdictMutation', () => {
+  it('완료된 블록을 다시 검토하게 만들면 같은 경로로 DELETE하고 상세를 다시 읽는다', async () => {
+    reviewApi.clearReviewBlockVerdict.mockResolvedValue(undefined);
+    const { wrapper, invalidatedKeys } = createHarness();
+    const { result } = renderHook(() => useReviewClearBlockVerdictMutation(), { wrapper });
+
+    result.current.mutate({ proposalId: PROPOSAL_ID, blockIndex: 2 });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(reviewApi.clearReviewBlockVerdict).toHaveBeenCalledWith(PROPOSAL_ID, 2);
+    expect(invalidatedKeys()).toEqual([detailKey]);
+  });
+
+  it('VERDICT_NOT_FOUND면 현재 안건만 다시 읽어 오래된 카드를 복구한다', async () => {
+    reviewApi.clearReviewBlockVerdict.mockRejectedValue(apiError('VERDICT_NOT_FOUND', '이미 상태가 바뀌었어요.'));
+    const { wrapper, invalidatedKeys } = createHarness();
+    const { result } = renderHook(() => useReviewClearBlockVerdictMutation(), { wrapper });
+
+    result.current.mutate({ proposalId: PROPOSAL_ID, blockIndex: 2 });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(toastMock).toHaveBeenCalledWith('이미 상태가 바뀌었어요.');
+    expect(invalidatedKeys()).toEqual([detailKey]);
+  });
+
+  it('ALREADY_DECIDED면 발행으로 사라진 안건을 포함해 큐를 다시 읽는다', async () => {
+    reviewApi.clearReviewBlockVerdict.mockRejectedValue(apiError('ALREADY_DECIDED', '이미 발행됐어요.'));
+    const { wrapper, invalidatedKeys } = createHarness();
+    const { result } = renderHook(() => useReviewClearBlockVerdictMutation(), { wrapper });
+
+    result.current.mutate({ proposalId: PROPOSAL_ID, blockIndex: 2 });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(toastMock).toHaveBeenCalledWith('이미 발행됐어요.');
+    expect(invalidatedKeys()).toEqual([knowledgeReviewQueries.all()]);
   });
 });
 

@@ -22,7 +22,7 @@ const meta = {
   title: 'Compositions/LLM Wiki/ReviewQueue/BlockDiffSection',
   component: BlockDiffSection,
   tags: ['autodocs'],
-  args: { onApprove: fn(), onReject: fn(), onApproveAll: fn(), onRejectAll: fn() },
+  args: { onApprove: fn(), onReject: fn(), onReset: fn() },
   parameters: {
     ...catchupParameters({
       level: 'composition',
@@ -83,13 +83,6 @@ export const Default: Story = {
     await expect(canvas.getByText('PG 점검 시간 예외')).toBeInTheDocument();
     await expect(canvas.getByText('수동 재시도 안내')).toBeInTheDocument();
 
-    // 헤더의 전역 액션은 전체 반려·전체 승인 둘뿐이다
-    await userEvent.click(canvas.getByRole('button', { name: '전체 반려' }));
-    await expect(args.onRejectAll).toHaveBeenCalled();
-
-    await userEvent.click(canvas.getByRole('button', { name: '전체 승인' }));
-    await expect(args.onApproveAll).toHaveBeenCalled();
-
     await expect(canvas.queryByRole('button', { name: /미리보기/ })).toBeNull();
     await expect(canvas.queryByRole('button', { name: '이 블록 수정' })).toBeNull();
 
@@ -106,7 +99,7 @@ export const Default: Story = {
  */
 export const PartiallyDecided: Story = {
   args: { entries: partiallyDecidedEntries },
-  play: async ({ canvasElement }) => {
+  play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
 
     // 판정한 카드마다 자기 배지가 선다 — 승인과 반려가 뒤바뀌면 안 된다.
@@ -115,21 +108,21 @@ export const PartiallyDecided: Story = {
     const rejectedCard = canvas.getByText('PG 점검 시간 예외').closest('section')!;
     await expect(within(rejectedCard).getByText('반려됨')).toBeInTheDocument();
 
-    // 판정된 두 카드 모두 접혀 있고 액션이 없다 — 남은 버튼은 셰브런뿐이다.
     const approvedCard = canvas.getByText('재시도 정책').closest('section')!;
     await expect(within(approvedCard).getByText('승인됨')).toBeInTheDocument();
     await expect(within(approvedCard).queryByText('반려됨')).toBeNull();
     await expect(within(approvedCard).queryByRole('button', { name: '승인' })).toBeNull();
     await expect(within(approvedCard).getByRole('button', { name: '펼치기' })).toBeInTheDocument();
     await expect(within(rejectedCard).getByRole('button', { name: '펼치기' })).toBeInTheDocument();
+    await userEvent.click(within(approvedCard).getByRole('button', { name: '다시 검토하기' }));
+    await expect(args.onReset).toHaveBeenCalledWith('modified-0');
 
     // 미판정 카드(빠진 블록)는 펼친 채로 남는다 — 접힘이 판정 여부를 가른다.
     const undecidedCard = canvas.getByText('수동 재시도 안내').closest('section')!;
     await expect(within(undecidedCard).getByRole('button', { name: '접기' })).toBeInTheDocument();
 
-    // 전체 승인·반려는 판정이 시작된 뒤에도 남는다 — 이미 판정된 카드도 덮어쓰기 대상이다.
-    await expect(canvas.getByRole('button', { name: '전체 승인' })).toBeEnabled();
-    await expect(canvas.getByRole('button', { name: '전체 반려' })).toBeEnabled();
+    await expect(canvas.queryByRole('button', { name: '전체 승인' })).toBeNull();
+    await expect(canvas.queryByRole('button', { name: '전체 반려' })).toBeNull();
 
     // 반려한 이유는 펼치면 카드 안에 남아 있다 — 쓰기만 하고 못 읽는 값이 되면 안 된다.
     await userEvent.click(within(rejectedCard).getByRole('button', { name: '펼치기' }));

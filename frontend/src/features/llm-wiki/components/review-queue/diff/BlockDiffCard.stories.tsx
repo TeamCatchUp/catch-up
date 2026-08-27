@@ -26,7 +26,7 @@ const meta = {
   title: 'Compositions/LLM Wiki/ReviewQueue/BlockDiffCard',
   component: BlockDiffCard,
   tags: ['autodocs'],
-  args: { onApprove: fn(), onReject: fn() },
+  args: { onApprove: fn(), onReject: fn(), onReset: fn() },
   parameters: {
     ...catchupParameters({
       level: 'composition',
@@ -179,13 +179,14 @@ export const Rejected: Story = {
     entry: { ...modifiedEntry, rejected: true, rejectionReason: REJECTION_REASON },
     defaultCollapsed: true,
   },
-  play: async ({ canvasElement }) => {
+  play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
 
     await expect(canvas.getByText('반려됨')).toBeInTheDocument();
-    // 판정이 끝났으므로 액션이 하나도 남으면 안 된다 — 셰브런만 버튼이다
     const names = canvas.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent);
-    await expect(names).toEqual(['펼치기']);
+    await expect(names).toEqual(['펼치기', '다시 검토하기']);
+    await userEvent.click(canvas.getByRole('button', { name: '다시 검토하기' }));
+    await expect(args.onReset).toHaveBeenCalledWith(modifiedEntry.id);
 
     // 검토자가 적은 사유가 읽을 자리를 갖는다 — "수정된 이유"와 같은 패널이다
     await userEvent.click(canvas.getByRole('button', { name: '펼치기' }));
@@ -197,18 +198,19 @@ export const Rejected: Story = {
 /** 승인 처리된 블록. 액션이 "승인됨" 배지로 바뀌고 접힌 채로 남는다. */
 export const Approved: Story = {
   args: { entry: { ...modifiedEntry, approved: true }, defaultCollapsed: true },
-  play: async ({ canvasElement }) => {
+  play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // 판정이 끝났으므로 액션이 하나도 남으면 안 된다 — 셰브런만 버튼이다
     const names = canvas.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent);
-    await expect(names).toEqual(['펼치기']);
+    await expect(names).toEqual(['펼치기', '다시 검토하기']);
+    await userEvent.click(canvas.getByRole('button', { name: '다시 검토하기' }));
+    await expect(args.onReset).toHaveBeenCalledWith(modifiedEntry.id);
 
     // 승인 흔적이 남는다 — 반려됨과 같은 자리·같은 셸이고 문구만 다르다
     const badge = canvas.getByText('승인됨');
     await expect(badge).toBeInTheDocument();
     await expect(canvas.queryByText('반려됨')).toBeNull();
-    await expect(badge.className).toContain('bg-fill-normal-interaction-inactive');
+    await expect(badge.className).toContain('bg-accent-light-blue-lighten');
     await expect(badge.className).toContain('h-7.5');
 
     // 열람은 그대로다 — 펼치면 본문이 돌아오고 배지는 그대로 선다
