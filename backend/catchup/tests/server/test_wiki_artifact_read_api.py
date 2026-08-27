@@ -587,6 +587,33 @@ def test_document_layout_keeps_original_block_indexes(
         assert block["block_index"] == item["block_index"]
 
 
+def test_former_table_sections_come_out_as_separate_blocks(
+    client, member, db, workspace_id
+):
+    """한 표로 묶던 세 칸이 각각 별도 block 항목으로 나온다."""
+    artifact_id, _ = _publish(
+        db,
+        workspace_id=workspace_id,
+        narrative=None,
+        blocks=[
+            _block("주 3회 쓴다.", heading="frequency"),
+            _block("담당자가 요청했다.", heading="requester_role"),
+            _block("모바일에서 쓴다.", heading="usage_context"),
+        ],
+    )
+
+    body = client.get(f"/api/v1/wiki/artifacts/{artifact_id}").json()
+
+    items = body["layout"]
+    assert all(item["item_kind"] != "table" for item in items)
+    picked = [
+        (item["heading"], item["block_index"])
+        for item in items
+        if item["item_kind"] == "block"
+    ]
+    assert picked == [("사용 상황", 2), ("요청자 역할", 1), ("빈도", 0)]
+
+
 def test_document_layout_without_catalog_kind_keeps_block_order(
     client, member, db, workspace_id
 ):

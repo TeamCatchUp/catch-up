@@ -16,7 +16,6 @@ from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 from catchup.knowledge_maintenance.domain.layout import apply_layout
 from catchup.knowledge_maintenance.domain.preset_catalog import layout_for_kind
 from catchup.server.wiki.schemas import LayoutItemResponse
-from catchup.server.wiki.schemas import LayoutTableRowResponse
 
 
 def layout_items(
@@ -40,11 +39,6 @@ def layout_items(
             item_kind=item.item_kind,
             heading=item.heading,
             block_index=item.block_index,
-            block_indexes=list(item.block_indexes),
-            rows=[
-                LayoutTableRowResponse(label=label, value=value)
-                for label, value in item.rows
-            ],
             text=item.text,
         )
         for item in apply_layout(blocks, layout)

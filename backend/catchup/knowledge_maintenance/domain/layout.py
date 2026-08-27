@@ -30,7 +30,6 @@ from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
 
 # 레이아웃이 내놓는 항목의 종류다.
 ITEM_BLOCK = "block"
-ITEM_TABLE = "table"
 ITEM_PLACEHOLDER = "placeholder"
 
 # 머리말 섹션 heading을 화면에 보여 줄 제목으로 바꾸는 표다. 머리말은
@@ -44,36 +43,18 @@ SUMMARY_SECTION_LABELS = {
 
 
 @dataclass(frozen=True, slots=True)
-class TableGroup:
-    """여러 블록을 표 하나로 합쳐 보여 줄 묶음을 표현한다.
-
-    Attributes:
-        key: 표 묶음의 식별자다. 비어 있을 때 자리표시를 낼지 정하는
-            always_show도 이 값으로 가리킨다.
-        title: 표 항목의 제목으로 쓴다.
-        section_keys: 표로 합칠 블록들의 heading을 순서대로 담는다.
-    """
-
-    key: str
-    title: str
-    section_keys: tuple[str, ...]
-
-
-@dataclass(frozen=True, slots=True)
 class Layout:
     """문서 한 종류를 어떤 순서와 이름으로 읽힐지 정한다.
 
     Attributes:
         sections: (section_key, 표시 제목)을 보여 줄 순서대로 담는다.
             section_key는 블록의 heading과 글자 그대로 같다.
-        table_groups: 표 하나로 합칠 블록 묶음들을 담는다.
         always_show: 해당하는 블록이 없어도 자리표시로 보여 줄
-            section_key와 표 묶음 key를 담는다.
+            section_key를 담는다.
         empty_text: 자리표시에 넣을 문구다.
     """
 
     sections: tuple[tuple[str, str], ...]
-    table_groups: tuple[TableGroup, ...] = ()
     always_show: tuple[str, ...] = ()
     empty_text: str = "없음"
 
@@ -83,22 +64,16 @@ class LayoutItem:
     """레이아웃이 내놓는 표시 항목 하나를 표현한다.
 
     Attributes:
-        item_kind: 항목의 종류다. block·table·placeholder 중 하나다.
+        item_kind: 항목의 종류다. block과 placeholder 중 하나다.
         heading: 화면에 보여 줄 제목이다.
-        block_index: block 항목이 가리키는 원래 블록의 위치다. 표와
+        block_index: block 항목이 가리키는 원래 블록의 위치다.
             자리표시는 None이다.
-        block_indexes: table 항목이 합친 블록들의 원래 위치를 담는다.
-        rows: table 항목의 행을 (열 제목, 값)으로 담는다. 열 제목은
-            sections에 적힌 표시 제목이고, 값은 산문이 있으면 산문,
-            없으면 본문이다.
         text: placeholder 항목에 넣을 문구다.
     """
 
     item_kind: str
     heading: str
     block_index: int | None = None
-    block_indexes: tuple[int, ...] = ()
-    rows: tuple[tuple[str, str], ...] = ()
     text: str | None = None
 
 
@@ -146,25 +121,8 @@ def apply_layout(
             continue
         indexes_by_heading.setdefault(block.heading, []).append(index)
 
-    group_by_key = {
-        section_key: group
-        for group in layout.table_groups
-        for section_key in group.section_keys
-    }
-
     placed: set[int] = set()
-    done_groups: set[str] = set()
     for section_key, title in layout.sections:
-        group = group_by_key.get(section_key)
-        if group is not None:
-            if group.key in done_groups:
-                continue
-            done_groups.add(group.key)
-            item = _table_item(blocks, indexes_by_heading, group, layout)
-            if item is not None:
-                items.append(item)
-                placed.update(item.block_indexes)
-            continue
         indexes = indexes_by_heading.get(section_key, [])
         if indexes:
             for index in indexes:
@@ -180,50 +138,3 @@ def apply_layout(
             continue
         items.append(LayoutItem(ITEM_BLOCK, block.heading, block_index=index))
     return tuple(items)
-
-
-def _table_item(
-    blocks: Sequence[ArtifactBlock],
-    indexes_by_heading: dict[str, list[int]],
-    group: TableGroup,
-    layout: Layout,
-) -> LayoutItem | None:
-    """표 묶음 하나를 표 항목이나 자리표시로 만든다.
-
-    행의 열 제목은 sections에 적힌 표시 제목을 쓴다. 표로 합쳐도 읽는
-    사람이 보는 칸 이름은 양식이 정한 이름 그대로여야 하기 때문이다.
-    sections에 없는 key는 key를 그대로 쓴다.
-
-    묶음에 속한 블록이 하나도 없으면 always_show일 때만 자리표시를 내고,
-    아니면 아무 항목도 내지 않는다.
-
-    Args:
-        blocks: 문서에 저장된 블록 배열이다.
-        indexes_by_heading: heading별 블록 위치 목록이다.
-        group: 만들 표 묶음이다.
-        layout: 적용 중인 레이아웃이다.
-
-    Returns:
-        표 항목이나 자리표시 항목이다. 낼 항목이 없으면 None이다.
-    """
-    titles = dict(layout.sections)
-    indexes: list[int] = []
-    rows: list[tuple[str, str]] = []
-    for section_key in group.section_keys:
-        label = titles.get(section_key, section_key)
-        for index in indexes_by_heading.get(section_key, []):
-            block = blocks[index]
-            indexes.append(index)
-            rows.append((label, block.narrative or block.body))
-    if indexes:
-        return LayoutItem(
-            ITEM_TABLE,
-            group.title,
-            block_indexes=tuple(indexes),
-            rows=tuple(rows),
-        )
-    if group.key in layout.always_show:
-        return LayoutItem(
-            ITEM_PLACEHOLDER, group.title, text=layout.empty_text
-        )
-    return None

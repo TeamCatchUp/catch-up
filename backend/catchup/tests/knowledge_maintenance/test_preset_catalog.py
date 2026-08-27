@@ -373,8 +373,6 @@ def test_every_kind_layout_keys_exist_in_its_selection_spec() -> None:
                 for path in spec.relation_paths
             }
             keys = {key for key, _ in layout.sections}
-            for group in layout.table_groups:
-                keys |= set(group.section_keys)
             keys |= set(layout.always_show)
             assert keys <= allowed, (preset_kind.kind, keys - allowed)
 
@@ -385,13 +383,12 @@ def test_layout_for_kind_returns_none_for_unknown() -> None:
     assert layout_for_kind("feature_request_status") is not None
 
 
-def test_every_table_group_key_is_listed_in_sections() -> None:
-    """표로 합칠 칸이 전부 sections 순서에도 올라 있는지 본다."""
+def test_every_always_show_key_is_listed_in_sections() -> None:
+    """자리표시로 보여 줄 칸이 전부 sections 순서에도 올라 있는지 본다."""
     for domain in PRESET_DOMAINS:
         for preset_kind in domain.kinds:
             layout = preset_kind.layout
             assert layout is not None, preset_kind.kind
             section_keys = {key for key, _ in layout.sections}
-            for group in layout.table_groups:
-                missing = set(group.section_keys) - section_keys
-                assert not missing, (preset_kind.kind, group.key, missing)
+            missing = set(layout.always_show) - section_keys
+            assert not missing, (preset_kind.kind, missing)
