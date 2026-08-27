@@ -129,6 +129,7 @@ function stubReviewEndpoints(items: readonly ReturnType<typeof queueItem>[]) {
   const dropped = new Set<string>();
   const decided = new Map<string, Map<number, SavedVerdict>>();
   const verdictCalls: { proposalId: string; blockIndex: string; verdict: string; reason: string | null }[] = [];
+  const clearCalls: { proposalId: string; blockIndex: string }[] = [];
 
   server.use(
     http.get('*/api/v1/knowledge-review/queue', () => {
@@ -153,6 +154,13 @@ function stubReviewEndpoints(items: readonly ReturnType<typeof queueItem>[]) {
       decided.set(proposalId, (decided.get(proposalId) ?? new Map()).set(blockIndex, saved));
       return HttpResponse.json(blockVerdict(proposalId, blockIndex, saved.verdict, saved.reason));
     }),
+    http.delete('*/api/v1/knowledge-review/queue/:proposalId/blocks/:blockIndex/verdict', ({ params }) => {
+      const proposalId = String(params.proposalId);
+      const blockIndex = Number(params.blockIndex);
+      clearCalls.push({ proposalId, blockIndex: String(blockIndex) });
+      decided.get(proposalId)?.delete(blockIndex);
+      return new HttpResponse(null, { status: 204 });
+    }),
     http.post('*/api/v1/knowledge-review/queue/:proposalId/publish', ({ params }) => {
       dropped.add(String(params.proposalId));
       return HttpResponse.json({
@@ -173,7 +181,7 @@ function stubReviewEndpoints(items: readonly ReturnType<typeof queueItem>[]) {
     ),
   );
 
-  return { verdictCalls };
+  return { verdictCalls, clearCalls };
 }
 
 beforeEach(() => {
@@ -181,6 +189,20 @@ beforeEach(() => {
 });
 
 describe('useReviewQueueModel', () => {
+  it('완료된 카드의 다시 검토하기는 DELETE 뒤 해당 블록을 미결정으로 돌린다', async () => {
+    const { clearCalls } = stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
+    const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.entries).toHaveLength(3));
+    act(() => result.current.onApproveBlock(result.current.entries[0]));
+    await waitFor(() => expect(result.current.entries[0].approved).toBe(true));
+
+    act(() => result.current.onResetBlock?.(result.current.entries[0]));
+
+    await waitFor(() => expect(clearCalls).toEqual([{ proposalId: FIRST, blockIndex: '0' }]));
+    await waitFor(() => expect(result.current.entries[0].approved).toBe(false));
+  });
+
   it('전체 승인은 판정 경로가 있는 카드 수만큼 블록 판정을 보낸다 — 빠진 블록은 빠진다', async () => {
     const { verdictCalls } = stubReviewEndpoints([queueItem(FIRST, '결제 재시도 정책')]);
     const { result } = renderHook(() => useReviewQueueModel(), { wrapper: makeWrapper() });

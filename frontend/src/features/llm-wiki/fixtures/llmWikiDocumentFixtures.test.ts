@@ -46,25 +46,20 @@ describe('llmWikiDocumentFixtures', () => {
 });
 
 describe('WIKI_DOCUMENT_LAYOUT_FIXTURE', () => {
-  it('세 가지 항목이 모두 있다 — 하나라도 빠지면 스토리가 그 경로를 덮지 못한다', () => {
+  it('block과 placeholder 항목이 모두 있다 — 하나라도 빠지면 스토리가 그 경로를 덮지 못한다', () => {
     const kinds = new Set(WIKI_DOCUMENT_LAYOUT_FIXTURE.layout.map((item) => item.kind));
-    expect(kinds).toEqual(new Set(['block', 'table', 'placeholder']));
+    expect(kinds).toEqual(new Set(['block', 'placeholder']));
   });
 
-  it('block·table 항목이 가리키는 자리가 blocks에 실재한다', () => {
+  it('block 항목이 가리키는 자리가 blocks에 실재한다', () => {
     for (const item of WIKI_DOCUMENT_LAYOUT_FIXTURE.layout) {
       if (item.kind === 'block') expect(WIKI_DOCUMENT_LAYOUT_FIXTURE.blocks[item.blockIndex]).toBeDefined();
-      if (item.kind === 'table') {
-        for (const blockIndex of item.blockIndexes) {
-          expect(WIKI_DOCUMENT_LAYOUT_FIXTURE.blocks[blockIndex]).toBeDefined();
-        }
-      }
     }
   });
 
-  it('표의 행 수와 묶인 블록 수가 같다 — 같은 순서의 짝이라는 계약이다', () => {
-    const table = WIKI_DOCUMENT_LAYOUT_FIXTURE.layout.find((item) => item.kind === 'table')!;
-    expect(table.rows).toHaveLength(table.blockIndexes.length);
+  it('사용 상황과 지원 상태가 각 block으로 있다', () => {
+    const headings = WIKI_DOCUMENT_LAYOUT_FIXTURE.layout.flatMap((item) => (item.kind === 'block' ? [item.heading] : []));
+    expect(headings).toEqual(expect.arrayContaining(['사용 상황', '지원 상태']));
   });
 
   it('표시 순서가 저장 순서와 다르다 — 같으면 layout을 따르는지 드러나지 않는다', () => {

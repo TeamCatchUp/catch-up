@@ -7,6 +7,7 @@ import IconArrowDropdownDown from '@/public/icons/icon/arrow_dropdown_down.svg';
 import IconArrowDropdownRight from '@/public/icons/icon/arrow_dropdown_right.svg';
 import IconCheckCircle from '@/public/icons/icon/check_circle.svg';
 import IconDelete2 from '@/public/icons/icon/delete_2.svg';
+import IconReviewAgain from '@/public/icons/icon/icon_left.svg';
 import { Button } from '@/shared/components/ui/button';
 import { usePrefersReducedMotion } from '@/shared/hooks/usePrefersReducedMotion';
 import { disclosureExpand, disclosureExpandReduced, MotionState } from '@/shared/motion';
@@ -26,19 +27,39 @@ export interface BlockDiffCardProps {
   onApprove: (id: string) => void;
   /** 제안 기각 */
   onReject: (id: string) => void;
+  onReset?: (id: string) => void;
+  resetPending?: boolean;
 }
 
 /** 판정이 끝난 블록의 헤더 표시. 승인·반려가 같은 자리에서 같은 시각을 쓴다 */
 const VERDICT_BADGES = {
-  approved: { Icon: IconCheckCircle, label: '승인됨' },
-  rejected: { Icon: IconDelete2, label: '반려됨' },
+  approved: {
+    Icon: IconCheckCircle,
+    label: '승인됨',
+    className: 'bg-accent-light-blue-lighten text-accent-light-blue-default',
+  },
+  rejected: {
+    Icon: IconDelete2,
+    label: '반려됨',
+    className: 'bg-fill-normal-interaction-hover text-text-normal-alternative',
+  },
 } as const;
 
 /** 시안은 비활성 버튼이지만 누를 수 없는 표시라 span으로 낸다 */
-function VerdictBadge({ Icon, label }: { Icon: ComponentType<SVGProps<SVGSVGElement>>; label: string }) {
+function VerdictBadge({
+  Icon,
+  label,
+  className,
+}: {
+  Icon: ComponentType<SVGProps<SVGSVGElement>>;
+  label: string;
+  className: string;
+}) {
   return (
-    <span className="bg-fill-normal-interaction-inactive border-line-normal-normal text-body-xsmall text-text-normal-assistive flex h-7.5 shrink-0 items-center gap-1 rounded-lg border px-2">
-      <Icon aria-hidden className="text-icon-normal-assistive size-5" />
+    <span
+      className={cn('text-body-xsmall rounded-md2 flex h-7.5 shrink-0 items-center gap-1 px-1.5 py-0.5', className)}
+    >
+      <Icon aria-hidden className="size-4.5" />
       {label}
     </span>
   );
@@ -65,6 +86,8 @@ export default function BlockDiffCard({
   canReject = true,
   onApprove,
   onReject,
+  onReset,
+  resetPending = false,
 }: BlockDiffCardProps) {
   const prefersReducedMotion = usePrefersReducedMotion();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
@@ -81,7 +104,7 @@ export default function BlockDiffCard({
   const verdictBadge = (rejected && VERDICT_BADGES.rejected) || (approved && VERDICT_BADGES.approved) || null;
 
   return (
-    <section className="border-line-normal-neutral flex flex-col rounded-xl border px-5 py-4">
+    <section className="border-line-normal-neutral flex flex-col rounded-xl border px-5 py-[15px]">
       <header className="flex w-full items-center gap-2">
         <Button
           variant="icon-only-gray"
@@ -93,24 +116,41 @@ export default function BlockDiffCard({
         >
           <ChevronIcon aria-hidden className="size-5" />
         </Button>
-        <h3 className="text-heading-medium text-text-normal-normal min-w-0 flex-1 truncate">{title}</h3>
-
         {verdictBadge ? (
-          <VerdictBadge Icon={verdictBadge.Icon} label={verdictBadge.label} />
-        ) : (
-          canReview && (
-            <>
-              {/* outline은 테두리 1px이 더해져 solid와 높이가 어긋난다 — 양쪽에 같은 높이를 준다 */}
-              {canReject && (
-                <Button variant="box-outline-gray" size="sm" className="h-7.5" onClick={() => onReject(id)}>
-                  반려
-                </Button>
-              )}
-              <Button variant="box-solid-primary" size="sm" className="h-7.5" onClick={() => onApprove(id)}>
-                승인
+          <>
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <h3 className="text-heading-medium text-text-normal-normal max-w-[383px] min-w-0 truncate">{title}</h3>
+              <VerdictBadge Icon={verdictBadge.Icon} label={verdictBadge.label} className={verdictBadge.className} />
+            </div>
+            {canReview && onReset && (
+              <Button
+                variant="box-outline-gray"
+                size="sm"
+                className="h-7.5"
+                disabled={resetPending}
+                onClick={() => onReset(id)}
+              >
+                <IconReviewAgain aria-hidden className="size-5" />
+                다시 검토하기
               </Button>
-            </>
-          )
+            )}
+          </>
+        ) : (
+          <>
+            <h3 className="text-heading-medium text-text-normal-normal min-w-0 flex-1 truncate">{title}</h3>
+            {canReview && (
+              <>
+                {canReject && (
+                  <Button variant="box-outline-gray" size="sm" className="h-7.5" onClick={() => onReject(id)}>
+                    반려
+                  </Button>
+                )}
+                <Button variant="box-solid-primary" size="sm" className="h-7.5" onClick={() => onApprove(id)}>
+                  승인
+                </Button>
+              </>
+            )}
+          </>
         )}
       </header>
 

@@ -13,6 +13,7 @@ import { useQueryErrorToast } from '@/features/llm-wiki/hooks/useQueryErrorToast
 import { knowledgeReviewQueries } from '@/features/llm-wiki/queries/knowledgeReview.queries';
 import { wikiQueries } from '@/features/llm-wiki/queries/wiki.queries';
 import type { DocumentBreadcrumb } from '@/features/llm-wiki/types/llmWikiModel';
+import { formatRelativeTime } from '@/shared/utils/formatDate';
 
 /**
  * 제안본 미리보기. 발행판이 아니라 검토 중인 변경안을 블록 판정 반영본으로 읽는다.
@@ -51,6 +52,8 @@ export default function Page() {
   return (
     <ProposalPreviewPage
       title={title}
+      owners={detail.owners}
+      timeLabel={formatRelativeTime(detail.createdAt)}
       breadcrumbs={breadcrumbs}
       items={items}
       onBreadcrumbClick={(crumb) => {

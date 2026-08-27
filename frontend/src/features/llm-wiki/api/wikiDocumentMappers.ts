@@ -36,19 +36,12 @@ export interface WikiDocumentBlock {
   sources: readonly WikiDocumentSource[];
 }
 
-/** [BE] 레이아웃 표의 한 행. label이 칸 이름이고 value는 산문(없으면 값 표기)이다 */
-export interface WikiLayoutRow {
-  label: string;
-  value: string;
-}
-
 /**
  * [BE] 표시 항목 하나. blockIndex는 blocks[] 자리 그대로다.
  * 미지 item_kind는 이 union에 자리가 없고 매퍼가 떨군다.
  */
 export type WikiLayoutItem =
   | { kind: 'block'; heading: string; blockIndex: number }
-  | { kind: 'table'; heading: string; blockIndexes: readonly number[]; rows: readonly WikiLayoutRow[] }
   | { kind: 'placeholder'; heading: string; text: string };
 
 /** 지금 발행된 판 하나. 발행판이 없는 문서는 이 계약에 도달하지 못한다(404) */
@@ -107,14 +100,6 @@ function mapWikiLayoutItem(dto: WikiLayoutItemDto): WikiLayoutItem | null {
     return typeof dto.block_index === 'number'
       ? { kind: 'block', heading: dto.heading, blockIndex: dto.block_index }
       : null;
-  }
-  if (dto.item_kind === 'table') {
-    return {
-      kind: 'table',
-      heading: dto.heading,
-      blockIndexes: dto.block_indexes ?? [],
-      rows: (dto.rows ?? []).map((row) => ({ label: row.label, value: row.value })),
-    };
   }
   if (dto.item_kind === 'placeholder') {
     return { kind: 'placeholder', heading: dto.heading, text: dto.text ?? '' };

@@ -89,6 +89,7 @@ export interface ReviewQueuePageProps {
   onApproveBlock: (entry: BlockDiffEntry) => void;
   /** 카드 반려 클릭. 요청은 사유 입력을 거쳐 나간다 */
   onRejectBlock?: (entry: BlockDiffEntry) => void;
+  onResetBlock?: (entry: BlockDiffEntry) => void;
   onPublish: () => void;
 
   /** 미판정 카드 일괄 승인. 발행은 별도 액션으로 남는다 */
@@ -106,6 +107,7 @@ export interface ReviewQueuePageProps {
   /** 블록 반려 확정. 사유는 이미 트림돼 있다 */
   onRejectBlockSubmit?: (reason: string) => void;
   blockRejectPending?: boolean;
+  blockResetPending?: boolean;
 }
 
 /** 블록 반려 사유 입력의 문구. 전체 반려 다이얼로그를 그대로 쓰고 문구만 갈아 끼운다 */
@@ -149,8 +151,8 @@ export default function ReviewQueuePage({
   onPreview,
   onApproveBlock,
   onRejectBlock,
+  onResetBlock,
   onPublish,
-  onApproveAll,
   rejectDialogOpen,
   onRejectDialogOpenChange,
   onRejectAll,
@@ -159,6 +161,7 @@ export default function ReviewQueuePage({
   onBlockRejectDialogOpenChange,
   onRejectBlockSubmit,
   blockRejectPending = false,
+  blockResetPending = false,
 }: ReviewQueuePageProps) {
   const selectedIndex = items.findIndex((item) => item.id === selectedId);
   // 목록이 비면 그릴 상세가 없다 — 첫 조회를 기다리는 동안에는 골격이 서고 안내는 서지 않는다
@@ -333,8 +336,11 @@ export default function ReviewQueuePage({
                             const entry = entries.find((item) => item.id === id);
                             if (entry) onRejectBlock?.(entry);
                           }}
-                          onApproveAll={onApproveAll}
-                          onRejectAll={() => onRejectDialogOpenChange(true)}
+                          onReset={(id) => {
+                            const entry = entries.find((item) => item.id === id);
+                            if (entry) onResetBlock?.(entry);
+                          }}
+                          resetPending={blockResetPending}
                         />
                       </>
                     )}

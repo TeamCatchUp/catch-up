@@ -1,13 +1,14 @@
 /** 검토 중인 변경안 + 블록 판정 → 문서 화면에 그릴 항목. 순수 함수라 요청·캐시를 알지 못한다. */
 
 import type { ReviewProposalDetailData } from '../../../api/knowledgeReviewDetailMappers';
-import type { WikiLayoutRow } from '../../../api/wikiDocumentMappers';
 import type { WikiBlock } from '../../../types/llmWikiDiff';
+import {
+  composeDocumentPresentation,
+  type DocumentPresentationBlock,
+  type DocumentPresentationItem,
+} from '../../document/composeDocumentPresentation';
 
-/** 문서 화면의 표시 항목 하나. 자리표시는 문구가 곧 본문이라 section으로 접는다 */
-export type ProposalPreviewItem =
-  | { kind: 'section'; heading: string; text: string }
-  | { kind: 'table'; heading: string; rows: readonly WikiLayoutRow[] };
+export type ProposalPreviewItem = DocumentPresentationItem;
 
 /** 화면에 실리는 본문. 산문이 정본이고 없으면 값 표기로 폴백한다 — diff 카드와 같은 규칙이다 */
 const displayText = (block: WikiBlock) => block.narrative ?? block.body;
@@ -45,33 +46,22 @@ export function composeProposalPreview(detail: ReviewProposalDetailData): Propos
   const blocks = resolveBlocks(detail);
 
   if (detail.layout.length === 0) {
-    return blocks.flatMap((block) =>
-      block ? [{ kind: 'section' as const, heading: block.heading, text: displayText(block) }] : [],
+    return composeDocumentPresentation(
+      blocks.flatMap((block) =>
+        block
+          ? [{ blockIndex: block.blockIndex, kind: block.kind, heading: block.heading, text: displayText(block) }]
+          : [],
+      ),
     );
   }
 
-  const items: ProposalPreviewItem[] = [];
-  for (const item of detail.layout) {
-    if (item.kind === 'placeholder') {
-      items.push({ kind: 'section', heading: item.heading, text: item.text });
-      continue;
-    }
+  const presentationBlocks: DocumentPresentationBlock[] = detail.layout.flatMap((item) => {
+    if (item.kind === 'placeholder') return [{ blockIndex: -1, kind: 'placeholder', heading: item.heading, text: item.text }];
+    const block = blocks[item.blockIndex];
+    return block
+      ? [{ blockIndex: block.blockIndex, kind: block.kind, heading: item.heading, text: displayText(block) }]
+      : [];
+  });
 
-    if (item.kind === 'block') {
-      const block = blocks[item.blockIndex];
-      if (block) items.push({ kind: 'section', heading: item.heading, text: displayText(block) });
-      continue;
-    }
-
-    // 표의 행과 블록 자리는 같은 순서로 짝지어 온다 — 빠진 블록의 행은 함께 빠진다
-    const rows: WikiLayoutRow[] = [];
-    item.blockIndexes.forEach((blockIndex, position) => {
-      const block = blocks[blockIndex];
-      const row = item.rows[position];
-      if (block && row) rows.push({ label: row.label, value: displayText(block) });
-    });
-    if (rows.length > 0) items.push({ kind: 'table', heading: item.heading, rows });
-  }
-
-  return items;
+  return composeDocumentPresentation(presentationBlocks);
 }

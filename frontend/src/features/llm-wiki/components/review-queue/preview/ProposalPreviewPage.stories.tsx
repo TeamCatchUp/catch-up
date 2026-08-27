@@ -10,7 +10,7 @@ import {
 } from '../../../fixtures/llmWikiDiffFixtures';
 import type { DocumentBreadcrumb } from '../../../types/llmWikiModel';
 import { composeProposalPreview } from './composeProposalPreview';
-import ProposalPreviewPage, { PREVIEW_GUIDE } from './ProposalPreviewPage';
+import ProposalPreviewPage from './ProposalPreviewPage';
 
 const [MODIFIED, ADDED] = PROPOSED_WIKI_BLOCKS;
 
@@ -26,6 +26,8 @@ const meta = {
   tags: ['autodocs'],
   args: {
     title: '결제 재시도 정책',
+    owners: [],
+    timeLabel: '12시간 전',
     breadcrumbs: BREADCRUMBS,
     items: composeProposalPreview(reviewProposalDetail()),
     onBreadcrumbClick: fn(),
@@ -64,13 +66,8 @@ export const Undecided: Story = {
     const canvas = within(canvasElement);
 
     await expect(canvas.getByRole('heading', { level: 1, name: '결제 재시도 정책' })).toBeInTheDocument();
-    // 발행 시각 자리 — 아직 판이 아니라는 표기가 선다
-    await expect(canvas.getByText('검토 중인 제안본 미리보기')).toBeInTheDocument();
-    // 본문 위 안내 — 판정 반영본이고 내보내기 전에는 문서가 바뀌지 않는다는 계약
-    const guide = canvas.getByText(PREVIEW_GUIDE);
-    // 2줄이 될 수 있는 문구다 — 어절 단위 줄바꿈과 아이콘 첫 줄 정렬은 담당자 카드 배너와 같다
-    await expect(guide).toHaveClass('break-keep', 'wrap-break-word');
-    await expect(guide.parentElement).toHaveClass('items-start');
+    await expect(canvas.getByText('담당자 없음')).toBeInTheDocument();
+    await expect(canvas.getByText('12시간 전')).toBeInTheDocument();
 
     // 양식 순서(PG → 재시도)가 저장 순서(재시도 → PG)를 이긴다
     const headings = canvas.getAllByRole('heading', { level: 2 }).map((node) => node.textContent);
@@ -129,6 +126,6 @@ export const NewDocument: Story = {
 
     const headings = canvas.getAllByRole('heading', { level: 2 }).map((node) => node.textContent);
     await expect(headings).toEqual(['PG 점검 시간 예외', '재시도 정책']);
-    await expect(canvas.getByText('검토 중인 제안본 미리보기')).toBeInTheDocument();
+    await expect(canvas.getByText('12시간 전')).toBeInTheDocument();
   },
 };

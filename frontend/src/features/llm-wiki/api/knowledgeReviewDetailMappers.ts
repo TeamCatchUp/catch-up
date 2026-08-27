@@ -14,6 +14,7 @@ import { mapWikiOwners } from './wikiMappers';
 export interface ReviewProposalDetailData {
   proposalId: string;
   artifactId: string;
+  createdAt: string;
   /** 제목 없는 문서가 있다. 목록 행은 summary로 폴백하지만 상세에는 그 자리가 없다 */
   title: string | null;
   channelId: string | null;
@@ -41,6 +42,7 @@ export function mapReviewProposalDetail(dto: ReviewProposalDetailDto): ReviewPro
   return {
     proposalId: dto.proposal_id,
     artifactId: dto.artifact.id,
+    createdAt: dto.created_at,
     title: dto.artifact.title,
     channelId: dto.artifact.channel_id,
     folderId: dto.artifact.folder_id,

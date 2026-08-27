@@ -68,10 +68,6 @@ function indexLayoutSlots(layout: readonly WikiLayoutItem[]): Map<number, Layout
 
   layout.forEach((item, position) => {
     if (item.kind === 'block') slots.set(item.blockIndex, { position, label: item.heading });
-    if (item.kind === 'table') {
-      // 표의 행과 블록 자리는 같은 순서로 짝지어 온다 — rows[i]가 blockIndexes[i]의 이름이다
-      item.blockIndexes.forEach((blockIndex, at) => slots.set(blockIndex, { position, label: item.rows[at]?.label }));
-    }
   });
 
   return slots;

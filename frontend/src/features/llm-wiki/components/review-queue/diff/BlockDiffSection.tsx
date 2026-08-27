@@ -1,5 +1,3 @@
-import { Button } from '@/shared/components/ui/button';
-
 import type { BlockDiffEntry } from '../../../types/llmWikiDiff';
 import BlockDiffCard from './BlockDiffCard';
 
@@ -12,10 +10,8 @@ export interface BlockDiffSectionProps {
   onApprove: (id: string) => void;
   /** 제안 기각 */
   onReject: (id: string) => void;
-  /** 변경안 통째 승인 */
-  onApproveAll: () => void;
-  /** 변경안 통째 반려. 사유 입력을 여는 자리다 */
-  onRejectAll: () => void;
+  onReset?: (id: string) => void;
+  resetPending?: boolean;
 }
 
 /**
@@ -28,12 +24,12 @@ export default function BlockDiffSection({
   canReject = true,
   onApprove,
   onReject,
-  onApproveAll,
-  onRejectAll,
+  onReset,
+  resetPending = false,
 }: BlockDiffSectionProps) {
   return (
     <section className="flex w-full flex-col gap-3">
-      <header className="flex items-start justify-between gap-2">
+      <header className="flex items-start gap-2">
         <div className="flex min-w-0 flex-col gap-1.5">
           <div className="flex items-center gap-3">
             <h2 className="text-heading-medium text-text-normal-normal">변경 내용</h2>
@@ -43,18 +39,6 @@ export default function BlockDiffSection({
           </div>
           <p className="text-body-small text-text-normal-assistive">작성자가 변경한 내용입니다.</p>
         </div>
-
-        {/* 판정이 시작됐어도 잠그지 않는다 — 서버가 거절하고 그 메시지를 토스트로 보인다 */}
-        {canReview && (
-          <div className="flex shrink-0 items-center gap-2">
-            <Button variant="box-outline-gray" size="md" onClick={onRejectAll}>
-              전체 반려
-            </Button>
-            <Button variant="box-soft-primary" size="md" onClick={onApproveAll}>
-              전체 승인
-            </Button>
-          </div>
-        )}
       </header>
 
       {/* 판정이 끝난 카드는 접은 채로 남는다 — 결정한 블록을 다시 훑을 이유가 없다 */}
@@ -68,6 +52,8 @@ export default function BlockDiffSection({
           canReject={canReject}
           onApprove={onApprove}
           onReject={onReject}
+          onReset={onReset}
+          resetPending={resetPending}
         />
       ))}
     </section>

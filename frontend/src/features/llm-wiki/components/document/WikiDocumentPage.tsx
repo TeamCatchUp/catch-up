@@ -1,3 +1,5 @@
+import { formatRelativeTime } from '@/shared/utils/formatDate';
+
 import {
   resolveDocumentBlockText,
   type WikiDocumentBlock,
@@ -5,7 +7,9 @@ import {
   type WikiLayoutItem,
 } from '../../api/wikiDocumentMappers';
 import type { DocumentBreadcrumb } from '../../types/llmWikiModel';
-import WikiDocumentShell, { DocumentSection, DocumentTable } from './WikiDocumentShell';
+import { composeDocumentPresentation, type DocumentPresentationBlock } from './composeDocumentPresentation';
+import DocumentPresentation from './DocumentPresentation';
+import WikiDocumentShell from './WikiDocumentShell';
 
 export interface WikiDocumentPageProps {
   document: WikiDocumentData;
@@ -14,21 +18,26 @@ export interface WikiDocumentPageProps {
   onBreadcrumbClick?: (crumb: DocumentBreadcrumb, index: number) => void;
 }
 
-/** 항목이 가리키는 블록이 없으면 낼 본문이 없어 건너뛴다 */
-function renderLayoutItem(item: WikiLayoutItem, position: number, blocks: readonly WikiDocumentBlock[]) {
-  if (item.kind === 'table') {
-    return <DocumentTable key={`table-${position}`} heading={item.heading} rows={item.rows} />;
-  }
-  if (item.kind === 'placeholder') {
-    return <DocumentSection key={`placeholder-${position}`} heading={item.heading} text={item.text} />;
+function documentPresentationBlocks(
+  blocks: readonly WikiDocumentBlock[],
+  layout: readonly WikiLayoutItem[],
+): DocumentPresentationBlock[] {
+  if (layout.length === 0) {
+    return blocks.map((block) => ({
+      blockIndex: block.blockIndex,
+      kind: block.kind,
+      heading: block.heading,
+      text: resolveDocumentBlockText(block),
+    }));
   }
 
-  const block = blocks[item.blockIndex];
-  if (!block) return null;
-
-  return (
-    <DocumentSection key={`block-${item.blockIndex}`} heading={item.heading} text={resolveDocumentBlockText(block)} />
-  );
+  return layout.flatMap((item) => {
+    if (item.kind === 'placeholder') return [{ blockIndex: -1, kind: 'placeholder', heading: item.heading, text: item.text }];
+    const block = blocks[item.blockIndex];
+    return block
+      ? [{ blockIndex: block.blockIndex, kind: block.kind, heading: item.heading, text: resolveDocumentBlockText(block) }]
+      : [];
+  });
 }
 
 /**
@@ -36,19 +45,18 @@ function renderLayoutItem(item: WikiLayoutItem, position: number, blocks: readon
  * 블록의 근거(sources)는 표시 시안이 없어 렌더하지 않는다.
  */
 export default function WikiDocumentPage({ document, breadcrumbs, onBreadcrumbClick }: WikiDocumentPageProps) {
+  const items = composeDocumentPresentation(documentPresentationBlocks(document.blocks, document.layout));
+  const timeLabel = formatRelativeTime(document.lastEditedAt ?? document.publishedAt);
+
   return (
     <WikiDocumentShell
       title={document.title}
-      caption={document.publishedLabel}
+      owners={document.owners}
+      timeLabel={timeLabel}
       breadcrumbs={breadcrumbs}
       onBreadcrumbClick={onBreadcrumbClick}
     >
-      {/* 양식이 없는 문서 종류는 layout이 비어 오고, 그때는 blocks 순서가 표시 순서다 */}
-      {document.layout.length > 0
-        ? document.layout.map((item, position) => renderLayoutItem(item, position, document.blocks))
-        : document.blocks.map((block) => (
-            <DocumentSection key={block.blockIndex} heading={block.heading} text={resolveDocumentBlockText(block)} />
-          ))}
+      <DocumentPresentation items={items} />
     </WikiDocumentShell>
   );
 }
