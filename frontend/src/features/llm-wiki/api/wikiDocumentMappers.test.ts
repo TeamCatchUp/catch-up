@@ -109,30 +109,8 @@ describe('mapWikiLayout', () => {
     expect(mapWikiLayout([{ item_kind: 'block', heading: '요청 상태', block_index: 0 }])).toHaveLength(1);
   });
 
-  it('table 항목은 자리 목록과 행을 같은 순서로 옮긴다', () => {
-    expect(
-      mapWikiLayout([
-        {
-          item_kind: 'table',
-          heading: '사용 상황',
-          block_indexes: [5, 6],
-          rows: [
-            { label: '사용 상황', value: '월말 정산 때 쓴다.' },
-            { label: '요청자 역할', value: '재무 담당자가 요청했다.' },
-          ],
-        },
-      ]),
-    ).toEqual([
-      {
-        kind: 'table',
-        heading: '사용 상황',
-        blockIndexes: [5, 6],
-        rows: [
-          { label: '사용 상황', value: '월말 정산 때 쓴다.' },
-          { label: '요청자 역할', value: '재무 담당자가 요청했다.' },
-        ],
-      },
-    ]);
+  it('폐기된 table 항목은 그리지 않는다', () => {
+    expect(mapWikiLayout([{ item_kind: 'table', heading: '사용 상황' }])).toEqual([]);
   });
 
   it('placeholder 항목은 가리킬 블록 없이 문구만 갖는다', () => {

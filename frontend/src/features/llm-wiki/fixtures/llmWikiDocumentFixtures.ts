@@ -104,6 +104,7 @@ export const WIKI_DOCUMENT_LAYOUT_FIXTURE: WikiDocumentData = {
     layoutBlock(4, 'claim_section', 'request_status', '검토 중이다.'),
     layoutBlock(5, 'claim_section', 'usage_context', '월말 정산 때 쓴다.'),
     layoutBlock(6, 'claim_section', 'requester_role', '재무 담당자가 요청했다.'),
+    layoutBlock(7, 'claim_section', 'support_status', '다음 분기에 지원할 예정이다.'),
   ],
   layout: [
     // 머리말 세 블록은 서버가 양식 제목으로 바꿔 싣는다 — 블록의 heading은 section key다
@@ -112,15 +113,9 @@ export const WIKI_DOCUMENT_LAYOUT_FIXTURE: WikiDocumentData = {
     { kind: 'block', heading: '요청 배경', blockIndex: 2 },
     { kind: 'block', heading: '요청 상태', blockIndex: 4 },
     { kind: 'block', heading: '최근 보고', blockIndex: 3 },
-    {
-      kind: 'table',
-      heading: '사용 상황',
-      blockIndexes: [5, 6],
-      rows: [
-        { label: '사용 상황', value: '월말 정산 때 쓴다.' },
-        { label: '요청자 역할', value: '재무 담당자가 요청했다.' },
-      ],
-    },
+    { kind: 'block', heading: '사용 상황', blockIndex: 5 },
+    { kind: 'block', heading: '요청자 역할', blockIndex: 6 },
+    { kind: 'block', heading: '지원 상태', blockIndex: 7 },
     // 해당 블록이 없어도 양식이 늘 보여 주기로 한 자리다
     { kind: 'placeholder', heading: '우회 방법', text: '없음' },
   ],

@@ -187,15 +187,8 @@ describe('buildBlockDiff', () => {
         change({ blockIndex: 2, baseBlockIndex: 2 }),
       ],
       [
-        {
-          kind: 'table',
-          heading: '사용 상황',
-          blockIndexes: [1, 2],
-          rows: [
-            { label: '언제', value: 'b2' },
-            { label: '누가', value: 'c2' },
-          ],
-        },
+        { kind: 'block', heading: '언제', blockIndex: 1 },
+        { kind: 'block', heading: '누가', blockIndex: 2 },
         { kind: 'block', heading: '요청 상태', blockIndex: 0 },
       ],
     );
@@ -209,8 +202,10 @@ describe('buildBlockDiff', () => {
       [block({ heading: 'retry_policy' }), block({ blockIndex: 1, heading: 'usage_when', body: 'b' })],
       [block({ heading: 'retry_policy', body: 'a2' }), block({ blockIndex: 1, heading: 'usage_when', body: 'b2' })],
       [change({ blockIndex: 0 }), change({ blockIndex: 1, baseBlockIndex: 1 })],
-      // 표의 행 이름이 블록 수보다 모자란 응답 — 짝이 없는 자리는 블록 이름으로 남는다
-      [{ kind: 'table', heading: '사용 상황', blockIndexes: [0, 1], rows: [{ label: '언제', value: 'a2' }] }],
+      [
+        { kind: 'block', heading: '언제', blockIndex: 0 },
+        { kind: 'block', heading: 'usage_when', blockIndex: 1 },
+      ],
     );
 
     expect(entries.map((entry) => entry.title)).toEqual(['언제', 'usage_when']);

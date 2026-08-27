@@ -11,7 +11,12 @@ import { composeProposalPreview } from './composeProposalPreview';
 /** 0번은 modified(발행판에 짝이 있음), 1번은 added(되돌릴 자리가 없음) */
 const [MODIFIED, ADDED] = PROPOSED_WIKI_BLOCKS;
 
-const headings = (items: ReturnType<typeof composeProposalPreview>) => items.map((item) => item.heading);
+const headings = (items: ReturnType<typeof composeProposalPreview>) =>
+  items.flatMap((item) => {
+    if (item.kind === 'details') return item.rows.map((row) => row.heading);
+    if (item.kind === 'timeline') return item.items.map((timelineItem) => timelineItem.heading);
+    return [item.heading];
+  });
 
 describe('composeProposalPreview', () => {
   it('판정이 없으면 제안 블록을 양식 순서대로 낸다', () => {
@@ -65,44 +70,6 @@ describe('composeProposalPreview', () => {
     );
 
     expect(headings(items)).toEqual(['PG 점검 시간 예외', '재시도 정책']);
-  });
-
-  it('표 항목은 빠진 블록의 행을 함께 뺀다', () => {
-    const items = composeProposalPreview(
-      reviewProposalDetail({
-        blocks: [MODIFIED, withBlockVerdict(ADDED, 'rejected')],
-        layout: [
-          {
-            kind: 'table',
-            heading: '정책 요약',
-            blockIndexes: [0, 1],
-            rows: [
-              { label: '재시도', value: '자리 표기' },
-              { label: '예외', value: '자리 표기' },
-            ],
-          },
-        ],
-      }),
-    );
-
-    expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({
-      kind: 'table',
-      rows: [{ label: '재시도', value: MODIFIED.narrative }],
-    });
-  });
-
-  it('남은 행이 없는 표는 항목 자체가 서지 않는다', () => {
-    const items = composeProposalPreview(
-      reviewProposalDetail({
-        blocks: [MODIFIED, withBlockVerdict(ADDED, 'rejected')],
-        layout: [
-          { kind: 'table', heading: '정책 요약', blockIndexes: [1], rows: [{ label: '예외', value: '자리 표기' }] },
-        ],
-      }),
-    );
-
-    expect(items).toEqual([]);
   });
 
   it('자리표시 항목은 그대로 남는다 — 값이 없다는 사실도 문서의 일부다', () => {

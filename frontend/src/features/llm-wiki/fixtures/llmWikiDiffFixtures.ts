@@ -213,6 +213,7 @@ export function reviewProposalDetail(overrides: Partial<ReviewProposalDetailData
   return {
     proposalId: 'prop-payment-retry',
     artifactId: 'artifact-payment-retry',
+    createdAt: '2026-08-20T00:00:00Z',
     title: '결제 재시도 정책',
     channelId: 'channel-payments',
     folderId: 'folder-approval',

@@ -29,9 +29,9 @@ const meta = {
       dataProfile: 'realistic-fixture',
       designSource: 'figma',
       figma: {
-        url: 'https://www.figma.com/design/7UwupbVvmHkElmP2OBJQio/Design-System?node-id=17735-186169',
+        url: 'https://www.figma.com/design/7UwupbVvmHkElmP2OBJQio/Design-System?node-id=19035-134490',
         fileKey: '7UwupbVvmHkElmP2OBJQio',
-        nodeId: '17735:186169',
+        nodeId: '19035:134490',
       },
       viewport: { width: 1200, height: 1000 },
       states: [
@@ -141,13 +141,15 @@ export const WithLayout: Story = {
     // 저장 순서(최근 보고 = 3번)보다 양식 순서(요청 상태 = 4번)가 앞선다.
     const headings = canvas.getAllByRole('heading', { level: 2 }).map((node) => node.textContent);
     await expect(headings.indexOf('요청 상태')).toBeLessThan(headings.indexOf('최근 보고'));
-    await expect(headings.slice(0, 3)).toEqual(['한 줄 요약', '원하는 결과', '요청 배경']);
+    await expect(headings.slice(0, 3)).toEqual(['한 줄 요약', '원하는 결과', '최근 보고']);
 
-    // 표 항목: 라벨이 행 머리이고 값이 같은 행에 선다.
-    const row = canvas.getByRole('rowheader', { name: '요청자 역할' }).closest('tr')!;
-    await expect(within(row).getByRole('cell')).toHaveTextContent('재무 담당자가 요청했다.');
-    // 표로 묶인 블록은 개별 항목으로 또 나오지 않는다.
-    await expect(canvas.queryByRole('heading', { level: 2, name: '요청자 역할' })).toBeNull();
+    const details = canvasElement.querySelector('dl')!;
+    await expect(within(details).getByText('요청 배경')).toBeInTheDocument();
+    await expect(within(details).getByText('요청 상태')).toBeInTheDocument();
+    await expect(within(details).getByText('매월 결제 내역을 손으로 옮겨 적고 있다.')).toBeInTheDocument();
+    await expect(within(details).getByText('검토 중이다.')).toBeInTheDocument();
+    await expect(canvas.getByRole('heading', { level: 2, name: '사용 상황' })).toBeInTheDocument();
+    await expect(canvas.getByRole('heading', { level: 2, name: '지원 상태' })).toBeInTheDocument();
 
     // 자리표시: 가리킬 블록이 없어도 양식이 자리를 남긴다.
     await expect(canvas.getByRole('heading', { level: 2, name: '우회 방법' })).toBeInTheDocument();
@@ -174,6 +176,28 @@ export const NarrativeMissing: Story = {
 
     // 폴백해도 블록 heading은 그대로 남는다.
     await expect(canvas.getByRole('heading', { level: 2, name: '현황' })).toBeInTheDocument();
+  },
+};
+
+export const LongTimelineText: Story = {
+  args: {
+    document: {
+      ...WIKI_DOCUMENT_LAYOUT_FIXTURE,
+      blocks: WIKI_DOCUMENT_LAYOUT_FIXTURE.blocks.map((block) =>
+        block.blockIndex === 5
+          ? {
+              ...block,
+              narrative:
+                'LLM Wiki 권한 관련해서 희망 사항이 있는데, RBAC 기반으로 문서 관리가 되면 좋겠다는 의견이에요. 담당자는 검토 흐름과 현재 지원 상태를 한 화면에서 확인할 수 있어야 해요. 이 문장은 한국어 긴 본문이 좁은 폭에서도 단어 단위로 자연스럽게 줄바꿈되는지 확인하기 위한 표본입니다.',
+            }
+          : block,
+      ),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const text = within(canvasElement).getByText(/RBAC 기반으로 문서 관리가 되면 좋겠다는 의견이에요/);
+    await expect(text.scrollWidth).toBeLessThanOrEqual(text.clientWidth);
+    await expect(getComputedStyle(text).wordBreak).toBe('keep-all');
   },
 };
 
