@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import pytest
+from botocore.exceptions import ConnectionClosedError
 
+from catchup.knowledge_maintenance.adapters.llm import retry as llm_retry
 from catchup.knowledge_maintenance.adapters.llm.name_embedder import (
     EmbeddingServiceNameEmbedder,
 )
+from catchup.knowledge_maintenance.adapters.llm.retry import LlmRetryPolicy
 from catchup.knowledge_maintenance.ports.name_embedder import NameEmbeddingError
+
+_NO_WAIT_RETRY_POLICY = LlmRetryPolicy(base_delay=0.0, max_delay=0.0)
 
 
 class _FakeEmbeddings:
@@ -70,3 +75,34 @@ def test_count_mismatch_becomes_port_error() -> None:
 
     with pytest.raises(NameEmbeddingError):
         _embedder(embeddings).embed(("Slack", "슬랙"))
+
+
+class _FlakyEmbeddings:
+    """첫 호출만 연결 끊김으로 실패하고 다음 호출부터 벡터를 준다."""
+
+    def __init__(self, vectors: list[list[float]], error: Exception) -> None:
+        self.vectors = vectors
+        self._pending_error: Exception | None = error
+        self.call_count = 0
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        self.call_count += 1
+        if self._pending_error is not None:
+            error, self._pending_error = self._pending_error, None
+            raise error
+        return self.vectors
+
+
+def test_transient_connection_error_is_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """임베딩 호출이 끊기면 다시 불러 벡터를 받아 온다."""
+    monkeypatch.setattr(llm_retry, "DEFAULT_LLM_RETRY_POLICY", _NO_WAIT_RETRY_POLICY)
+    embeddings = _FlakyEmbeddings(
+        [[1.0, 0.0]], ConnectionClosedError(endpoint_url="https://bedrock")
+    )
+
+    vectors = EmbeddingServiceNameEmbedder(_FakeService(embeddings)).embed(("Slack",))
+
+    assert vectors == ((1.0, 0.0),)
+    assert embeddings.call_count == 2

@@ -6,6 +6,7 @@ import time
 from collections.abc import Sequence
 from typing import Protocol
 
+from catchup.knowledge_maintenance.adapters.llm.retry import retry_llm_call
 from catchup.knowledge_maintenance.domain.entity_resolution import normalize_name
 from catchup.knowledge_maintenance.ports.name_embedder import NameEmbedder
 from catchup.knowledge_maintenance.ports.name_embedder import NameEmbeddingCache
@@ -90,7 +91,10 @@ class EmbeddingServiceNameEmbedder:
 
         started = time.perf_counter()
         try:
-            vectors = self._embeddings.embed_documents(texts)
+            vectors = retry_llm_call(
+                lambda: self._embeddings.embed_documents(texts),
+                subject="name_embedding",
+            )
         except Exception as error:
             logger.warning(
                 "name_embedding_failed",

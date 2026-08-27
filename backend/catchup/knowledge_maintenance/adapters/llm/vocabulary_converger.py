@@ -10,6 +10,7 @@ from langchain_core.language_models import BaseChatModel
 from catchup.knowledge_maintenance.adapters.llm.prompt_versioning import (
     versioned_prompt,
 )
+from catchup.knowledge_maintenance.adapters.llm.retry import aretry_llm_call
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.contracts.vocabulary_convergence import (
     PredicateUsage,
@@ -101,7 +102,10 @@ class LlmVocabularyConverger:
         """
         started = time.perf_counter()
         try:
-            response = await self._structured.ainvoke(rendered)
+            response = await aretry_llm_call(
+                lambda: self._structured.ainvoke(rendered),
+                subject="vocabulary_convergence",
+            )
         except Exception as error:
             logger.exception(
                 "vocabulary_convergence_failed",
