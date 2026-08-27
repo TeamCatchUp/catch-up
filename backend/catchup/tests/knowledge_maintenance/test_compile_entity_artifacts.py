@@ -593,6 +593,14 @@ class FakeBlockVerdictRepository:
         )
         return True
 
+    def delete_verdict(
+        self, *, proposal_id: uuid.UUID, block_index: int
+    ) -> bool:
+        """결정 한 줄을 지운다. 없던 줄이면 False다."""
+        if proposal_id not in self._proposals:
+            raise ValueError(f"변경안 {proposal_id}가 없다")
+        return self.verdicts.pop((proposal_id, block_index), None) is not None
+
     def list_for_proposal(
         self, *, proposal_id: uuid.UUID
     ) -> tuple[StoredBlockVerdict, ...]:
@@ -611,6 +619,7 @@ class FakeBlockVerdictRepository:
             row
             for row in self.verdicts.values()
             if row["verdict"] == "rejected"
+            and self._is_decided(row["proposal_id"])
             and self._artifact_id(row["proposal_id"]) == artifact_id
         ]
         rows.sort(key=lambda row: (row["reviewed_at"], row["block_index"]))
@@ -623,6 +632,15 @@ class FakeBlockVerdictRepository:
         """결정이 매달린 변경안을 거쳐 문서를 찾는다."""
         row = self._proposals.get(proposal_id)
         return None if row is None else row["artifact_id"]
+
+    def _is_decided(self, proposal_id: uuid.UUID) -> bool:
+        """변경안이 사람의 결정으로 끝난 상태인지 본다.
+
+        계류 중인 변경안의 반려는 아직 되돌릴 수 있는 중간 기록이라
+        다음 컴파일의 블록을 지우는 근거가 되지 못한다.
+        """
+        row = self._proposals.get(proposal_id)
+        return row is not None and row["status"] in ("approved", "rejected")
 
 
 class NoRelationRepository:
@@ -731,7 +749,12 @@ def _reject_block(
     block_index: int,
     reason: str = "근거가 부족하다",
 ) -> str:
-    """계류 변경안의 블록 하나에 반려 결정을 남기고 그 지문을 돌려준다."""
+    """블록 하나를 반려로 확정하고 그 지문을 돌려준다.
+
+    판정을 적은 뒤 변경안을 반려로 끝맺는다. 계류 중인 반려는 검토자가
+    되돌릴 수 있는 중간 기록이라 다음 컴파일을 막지 못하므로, 발행까지
+    끝난 상태를 만들어야 억제가 실제로 걸린다.
+    """
     block = uow.artifacts.by_id[proposal_id]["blocks"][block_index]
     digest = block_content_hash(block)
     uow.block_verdicts.upsert_verdict(
@@ -743,6 +766,11 @@ def _reject_block(
         chosen_winner_claim_id=None,
         reviewer="tester",
         reviewed_at=NOW,
+    )
+    uow.artifacts.mark_rejected(
+        proposal_id=proposal_id,
+        reviewer="tester",
+        reason=reason,
     )
     return digest
 
@@ -1845,22 +1873,33 @@ def test_changed_block_reappears_after_rejection() -> None:
 def test_node_with_every_block_rejected_is_skipped() -> None:
     """블록이 모두 반려로 빠지면 빈 카드 대신 계류를 접는다.
 
-    남은 계류는 방금 반려된 본문을 담고 있다. 그대로 두면 사람이 같은
-    것을 검토 큐에서 또 만난다.
+    남은 계류는 지금 근거로는 다시 세울 수 없는 본문을 담고 있다. 그대로
+    두면 사람이 이미 지나간 카드를 검토 큐에서 또 만난다.
     """
     node_id = uuid.uuid4()
+    month = _claim(
+        node_id=node_id,
+        predicate="release_month",
+        value="2026-09",
+        value_type="date",
+    )
     uow = FakeUnitOfWork(
         nodes=[_node(node_id)],
-        claims=[_claim(node_id=node_id, value=60)],
+        claims=[_claim(node_id=node_id, value=60), month],
+    )
+    _run(uow)
+    # 머리말을 뺀 첫 본문 블록을 물린다. 머리말은 남은 본문을 다시 세어
+    # 서므로 본문이 통째로 빠지면 머리말도 함께 사라진다.
+    _reject_block(
+        uow,
+        proposal_id=_only_pending(uow)["id"],
+        block_index=FIRST_CONTENT_INDEX,
     )
     _run(uow)
     stale_id = _only_pending(uow)["id"]
-    # 머리말을 뺀 본문 블록을 물린다. 머리말은 남은 본문을 다시 세어
-    # 서므로 본문이 통째로 빠지면 머리말도 함께 사라진다.
-    _reject_block(
-        uow, proposal_id=stale_id, block_index=FIRST_CONTENT_INDEX
-    )
 
+    # rate_limit 근거가 사라져, 남는 본문이 반려된 블록 하나뿐이 된다.
+    uow.knowledge_candidates.claims = [month]
     result = _run(uow)
 
     assert result.blocks_suppressed == 1

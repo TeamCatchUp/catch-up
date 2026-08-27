@@ -124,6 +124,7 @@ class KnowledgeReviewAction(BaseAuditAction):
     RESOLVE = "resolve"
     APPLY = "apply"
     BLOCK_VERDICT = "block_verdict"
+    BLOCK_VERDICT_CLEAR = "block_verdict_clear"
     PUBLISH = "publish"
 
     # 문서 담당자 명단이 줄어든 사실. 해제만 남긴다 — 책임자가 사라지는

@@ -28,6 +28,9 @@ from catchup.knowledge_maintenance.services.review_block_verdict import (
     BlockVerdictError,
 )
 from catchup.knowledge_maintenance.services.review_block_verdict import (
+    delete_block_verdict,
+)
+from catchup.knowledge_maintenance.services.review_block_verdict import (
     upsert_block_verdict,
 )
 
@@ -80,6 +83,7 @@ class FakeArtifactRepository:
 
     def __init__(self) -> None:
         self.proposals: dict[uuid.UUID, dict[str, Any]] = {}
+        self.owner_user_ids: dict[uuid.UUID, frozenset[int]] = {}
 
     def add_proposal(
         self,
@@ -103,6 +107,12 @@ class FakeArtifactRepository:
             "created_at": CREATED_AT,
         }
         return proposal_id
+
+    def lock_owner_user_ids(
+        self, *, artifact_id: uuid.UUID
+    ) -> frozenset[int]:
+        """문서 행을 잠그고 담당자 명단을 읽는 자리를 대신한다."""
+        return self.owner_user_ids.get(artifact_id, frozenset())
 
     def get_proposal(
         self,
@@ -197,6 +207,14 @@ class FakeBlockVerdictRepository:
             reviewed_at=reviewed_at,
         )
         return True
+
+    def delete_verdict(
+        self, *, proposal_id: uuid.UUID, block_index: int
+    ) -> bool:
+        """결정 한 줄을 지운다. 없던 줄이면 False다."""
+        if proposal_id not in self._proposals:
+            raise ValueError(f"변경안 {proposal_id}가 없다")
+        return self.verdicts.pop((proposal_id, block_index), None) is not None
 
     def list_for_proposal(
         self, *, proposal_id: uuid.UUID
@@ -461,3 +479,157 @@ def test_now_defaults_to_current_time() -> None:
     result = _approve(uow, proposal_id, block, now=None)
 
     assert before <= result.reviewed_at <= datetime.now(UTC)
+
+
+def test_delete_returns_block_to_undecided() -> None:
+    """판정을 지우면 그 블록은 결정이 없는 상태로 돌아간다."""
+    uow = FakeUnitOfWork()
+    block = _claim_block()
+    proposal_id = uow.artifacts.add_proposal(blocks=(block,))
+    _approve(uow, proposal_id, block)
+
+    delete_block_verdict(
+        uow,
+        proposal_id=proposal_id,
+        block_index=0,
+        reviewer=REVIEWER,
+    )
+
+    assert uow.block_verdicts.list_for_proposal(proposal_id=proposal_id) == ()
+    assert uow.committed is True
+
+
+def test_delete_without_verdict_is_not_found() -> None:
+    """지울 결정이 없으면 VERDICT_NOT_FOUND로 알린다.
+
+    조용히 성공으로 답하면 검토자는 자기가 보던 판정이 지워진 줄 안다.
+    """
+    uow = FakeUnitOfWork()
+    block = _claim_block()
+    proposal_id = uow.artifacts.add_proposal(blocks=(block,))
+
+    with pytest.raises(BlockVerdictError) as error:
+        delete_block_verdict(
+            uow,
+            proposal_id=proposal_id,
+            block_index=0,
+            reviewer=REVIEWER,
+        )
+
+    assert error.value.code == "VERDICT_NOT_FOUND"
+    assert uow.committed is False
+
+
+def test_delete_on_unknown_proposal_is_not_found() -> None:
+    """없는 변경안의 판정은 지울 것도 없다."""
+    uow = FakeUnitOfWork()
+
+    with pytest.raises(BlockVerdictError) as error:
+        delete_block_verdict(
+            uow,
+            proposal_id=uuid.uuid4(),
+            block_index=0,
+            reviewer=REVIEWER,
+        )
+
+    assert error.value.code == "PROPOSAL_NOT_FOUND"
+
+
+@pytest.mark.parametrize("status", ["approved", "rejected", "abandoned"])
+def test_delete_on_decided_proposal_is_refused(status: str) -> None:
+    """계류를 벗어난 변경안의 판정은 지우지 못한다.
+
+    발행이 끝난 뒤의 판정은 사람이 확정한 결정이라, 지우면 감사 기록이
+    사라진다.
+    """
+    uow = FakeUnitOfWork()
+    block = _claim_block()
+    proposal_id = uow.artifacts.add_proposal(blocks=(block,), status=status)
+    uow.block_verdicts.verdicts[(proposal_id, 0)] = {
+        "proposal_id": proposal_id,
+        "block_index": 0,
+        "block_content_hash": block_content_hash(block),
+        "verdict": "approved",
+        "rejection_reason": None,
+        "chosen_winner_claim_id": None,
+        "reviewer": REVIEWER,
+        "reviewed_at": NOW,
+    }
+
+    with pytest.raises(BlockVerdictError) as error:
+        delete_block_verdict(
+            uow,
+            proposal_id=proposal_id,
+            block_index=0,
+            reviewer=REVIEWER,
+        )
+
+    assert error.value.code == "ALREADY_DECIDED"
+    assert len(uow.block_verdicts.list_for_proposal(
+        proposal_id=proposal_id
+    )) == 1
+
+
+def test_delete_by_non_owner_is_refused() -> None:
+    """담당자가 있는 문서의 판정은 담당자만 지울 수 있다.
+
+    지우는 쪽만 규칙 밖에 두면 남이 담당자가 적어 둔 판정을 지울 수 있다.
+    """
+    uow = FakeUnitOfWork()
+    block = _claim_block()
+    proposal_id = uow.artifacts.add_proposal(blocks=(block,))
+    artifact_id = uow.artifacts.proposals[proposal_id]["artifact_id"]
+    uow.artifacts.owner_user_ids[artifact_id] = frozenset({7})
+    _approve(uow, proposal_id, block)
+
+    with pytest.raises(BlockVerdictError) as error:
+        delete_block_verdict(
+            uow,
+            proposal_id=proposal_id,
+            block_index=0,
+            reviewer=REVIEWER,
+            decider_user_id=9,
+        )
+
+    assert error.value.code == "NOT_DOCUMENT_OWNER"
+    assert len(uow.block_verdicts.list_for_proposal(
+        proposal_id=proposal_id
+    )) == 1
+
+
+def test_delete_by_owner_is_allowed() -> None:
+    """담당자 본인은 자기 문서의 판정을 지울 수 있다."""
+    uow = FakeUnitOfWork()
+    block = _claim_block()
+    proposal_id = uow.artifacts.add_proposal(blocks=(block,))
+    artifact_id = uow.artifacts.proposals[proposal_id]["artifact_id"]
+    uow.artifacts.owner_user_ids[artifact_id] = frozenset({7})
+    _approve(uow, proposal_id, block)
+
+    delete_block_verdict(
+        uow,
+        proposal_id=proposal_id,
+        block_index=0,
+        reviewer=REVIEWER,
+        decider_user_id=7,
+    )
+
+    assert uow.block_verdicts.list_for_proposal(proposal_id=proposal_id) == ()
+
+
+@pytest.mark.parametrize("block_index", [-1, 1, 99])
+def test_delete_with_out_of_range_index_is_invalid(block_index: int) -> None:
+    """변경안에 없는 블록 번호는 INVALID로 거절한다."""
+    uow = FakeUnitOfWork()
+    block = _claim_block()
+    proposal_id = uow.artifacts.add_proposal(blocks=(block,))
+
+    with pytest.raises(BlockVerdictError) as error:
+        delete_block_verdict(
+            uow,
+            proposal_id=proposal_id,
+            block_index=block_index,
+            reviewer=REVIEWER,
+        )
+
+    assert error.value.code == "INVALID"

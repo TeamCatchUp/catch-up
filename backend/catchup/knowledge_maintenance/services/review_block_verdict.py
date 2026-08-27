@@ -15,6 +15,11 @@
 같은 블록을 다시 누르는 것은 오류가 아니라 마음을 바꾼 것이다. 블록당
 한 줄이라는 유일 제약 위에서 갱신으로 흡수하고, 마지막 결정만 남긴다.
 
+계류 중인 변경안에 적힌 판정은 발행 전까지 고칠 수 있는 저널이다. 판정
+하나를 지우면 그 블록은 다시 미결정으로 돌아가고, 미결정 블록을 어떻게
+할지는 발행 요청의 undecided가 정한다. 사람의 결정이 불변이 되는 것은
+변경안이 계류를 벗어난 뒤다. 그때부터는 판정을 적지도 지우지도 못한다.
+
 담당자 규칙도 이 transaction 안에서 본다. 판정은 발행이 읽어 확정하는
 재료이므로, 여기가 규칙 밖에 있으면 담당자가 지정된 뒤에도 남이 적어 둔
 판정이 담당자의 발행을 타고 문서에 실린다.
@@ -53,6 +58,8 @@ CODE_INVALID = "INVALID"
 # 담당자가 정해진 문서에 담당자가 아닌 사람이 판정을 적으려 한 경우다.
 # 호출자는 이것만 권한 응답으로 옮기고 나머지는 상태 응답으로 옮긴다.
 CODE_NOT_DOCUMENT_OWNER = "NOT_DOCUMENT_OWNER"
+# 지울 결정이 애초에 없던 경우다.
+CODE_VERDICT_NOT_FOUND = "VERDICT_NOT_FOUND"
 
 
 class BlockVerdictError(Exception):
@@ -227,6 +234,87 @@ def upsert_block_verdict(
         chosen_winner_claim_id=chosen_winner_claim_id,
         reviewer=reviewer,
         reviewed_at=reviewed_at,
+    )
+
+
+def delete_block_verdict(
+    uow: BlockVerdictUnitOfWork,
+    *,
+    proposal_id: uuid.UUID,
+    block_index: int,
+    reviewer: str,
+    decider_user_id: int | None = None,
+) -> None:
+    """블록 하나에 적힌 결정을 지워 다시 미결정으로 되돌린다.
+
+    검토자가 잘못 누른 판정을 물릴 자리다. 계류 중인 변경안에서만 지울 수
+    있다. 발행이 끝난 변경안의 판정은 사람이 확정한 결정이라 지우면 감사
+    기록이 사라진다.
+
+    내용 지문은 보지 않는다. 지우는 것은 블록 내용에 대해 무엇도 주장하지
+    않으므로, 본문이 바뀌었다는 이유로 막을 것이 없다.
+
+    `decider_user_id`를 주면 담당자 규칙을 이 transaction 안에서
+    강제한다. 판정을 적을 때와 같은 규칙이다. 지우는 쪽만 규칙 밖에 두면
+    남이 담당자가 적어 둔 판정을 지울 수 있다.
+
+    Raises:
+        BlockVerdictError: 지울 수 없을 때 던진다. code는
+            PROPOSAL_NOT_FOUND·ALREADY_DECIDED·NOT_DOCUMENT_OWNER·
+            INVALID·VERDICT_NOT_FOUND 중 하나다.
+    """
+    if not reviewer.strip():
+        # 누가 지웠는지 없는 기록은 감사 기록이 되지 못한다.
+        raise BlockVerdictError(CODE_INVALID, "결정자가 비어 있다")
+
+    with uow:
+        # 판정을 적을 때와 같은 행을 잠근다. 발행과 줄을 서야 발행이 읽는
+        # 미결정 판단이 도중에 어긋나지 않는다.
+        proposal = uow.artifacts.get_proposal(
+            proposal_id=proposal_id, for_update=True
+        )
+        if proposal is None:
+            raise BlockVerdictError(
+                CODE_NOT_FOUND, f"변경안 {proposal_id}를 찾을 수 없다"
+            )
+        if proposal.status != PROPOSAL_STATUS_PENDING:
+            raise BlockVerdictError(
+                CODE_ALREADY_DECIDED,
+                f"변경안 {proposal_id}는 이미 {proposal.status} 상태다",
+            )
+        if decider_user_id is not None:
+            owner_user_ids = uow.artifacts.lock_owner_user_ids(
+                artifact_id=proposal.artifact_id
+            )
+            if owner_user_ids and decider_user_id not in owner_user_ids:
+                raise BlockVerdictError(
+                    CODE_NOT_DOCUMENT_OWNER,
+                    f"변경안 {proposal_id}의 문서는 담당자만 판정할 수 있다",
+                )
+        if not 0 <= block_index < len(proposal.blocks):
+            raise BlockVerdictError(
+                CODE_INVALID,
+                f"블록 번호 {block_index}가 변경안 범위를 벗어났다",
+            )
+
+        removed = uow.block_verdicts.delete_verdict(
+            proposal_id=proposal_id, block_index=block_index
+        )
+        if not removed:
+            # 지울 것이 없었다는 사실을 알린다. 조용히 성공으로 답하면
+            # 검토자는 자기가 본 판정이 지워진 줄 안다.
+            raise BlockVerdictError(
+                CODE_VERDICT_NOT_FOUND,
+                f"블록 {block_index}에 지울 결정이 없다",
+            )
+        uow.commit()
+
+    logger.info(
+        "artifact_block_verdict_cleared",
+        proposal_id=str(proposal_id),
+        artifact_id=str(proposal.artifact_id),
+        block_index=block_index,
+        reviewer=reviewer,
     )
 
 

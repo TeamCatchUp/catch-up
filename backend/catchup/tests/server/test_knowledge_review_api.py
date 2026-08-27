@@ -3461,6 +3461,217 @@ def test_block_verdict_hides_other_workspace_proposal(
     assert stored == ()
 
 
+def test_clear_block_verdict_returns_block_to_undecided(
+    app: FastAPI,
+    client: TestClient,
+    reviewer: User,
+    session_factory: Callable[[], Session],
+    workspace_ids: tuple[int, int],
+) -> None:
+    """판정을 지우면 204를 돌려주고 저널에서 그 줄이 사라진다."""
+    workspace_id, _ = workspace_ids
+    proposal_id, blocks = _seed_two_block_proposal(
+        session_factory,
+        workspace_id=workspace_id,
+        admin_user_id=reviewer.id,
+    )
+
+    with _real_session_local(session_factory):
+        client.put(
+            _verdict_path(proposal_id, 0),
+            json={
+                "verdict": "approved",
+                "block_content_hash": block_content_hash(blocks[0]),
+            },
+        )
+        response = client.delete(_verdict_path(proposal_id, 0))
+
+    assert response.status_code == 204
+    assert response.content == b""
+    with KnowledgeMaintenanceUnitOfWork(
+        session_factory, workspace_id=workspace_id
+    ) as uow:
+        stored = uow.block_verdicts.list_for_proposal(
+            proposal_id=proposal_id
+        )
+    assert stored == ()
+
+
+def test_clear_block_verdict_without_verdict_returns_404(
+    app: FastAPI,
+    client: TestClient,
+    reviewer: User,
+    session_factory: Callable[[], Session],
+    workspace_ids: tuple[int, int],
+) -> None:
+    """지울 결정이 없으면 404 VERDICT_NOT_FOUND다.
+
+    204로 답하면 검토자는 자기가 보던 판정이 지워진 줄 안다.
+    """
+    workspace_id, _ = workspace_ids
+    proposal_id, _ = _seed_two_block_proposal(
+        session_factory,
+        workspace_id=workspace_id,
+        admin_user_id=reviewer.id,
+    )
+
+    with _real_session_local(session_factory):
+        response = client.delete(_verdict_path(proposal_id, 0))
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "VERDICT_NOT_FOUND"
+
+
+def test_clear_block_verdict_on_decided_proposal_returns_409(
+    app: FastAPI,
+    client: TestClient,
+    reviewer: User,
+    session_factory: Callable[[], Session],
+    workspace_ids: tuple[int, int],
+) -> None:
+    """발행이 끝난 변경안의 판정은 지우지 못한다."""
+    workspace_id, _ = workspace_ids
+    proposal_id, blocks = _seed_two_block_proposal(
+        session_factory,
+        workspace_id=workspace_id,
+        admin_user_id=reviewer.id,
+    )
+
+    with _real_session_local(session_factory):
+        for index, block in enumerate(blocks):
+            client.put(
+                _verdict_path(proposal_id, index),
+                json={
+                    "verdict": "approved",
+                    "block_content_hash": block_content_hash(block),
+                },
+            )
+        client.post(
+            f"/api/v1/knowledge-review/queue/{proposal_id}/publish",
+            json={"base_revision_id": None},
+        )
+        response = client.delete(_verdict_path(proposal_id, 0))
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "ALREADY_DECIDED"
+
+
+def test_clear_block_verdict_missing_proposal_returns_404(
+    app: FastAPI,
+    client: TestClient,
+    reviewer: User,
+    session_factory: Callable[[], Session],
+) -> None:
+    """이 workspace에 없는 변경안의 판정은 지울 것도 없다."""
+    with _real_session_local(session_factory):
+        response = client.delete(_verdict_path(uuid.uuid4(), 0))
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "PROPOSAL_NOT_FOUND"
+
+
+def test_clear_block_verdict_requires_document_permission(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """남이 담당하는 문서에서는 판정을 지우지도 못한다."""
+    workspace_id, _ = workspace_ids
+    user = _make_user(db, email="clear-blocked@example.com")
+    owner = _make_user(db, email="clear-doc-owner@example.com")
+    _join(db, user=user, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    _make_owner(db, artifact_id=artifact_id, user=owner)
+    as_user(user)
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.delete_block_verdict"
+    ) as service:
+        response = client.delete(_verdict_path(proposal_id, 0))
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "NOT_DOCUMENT_REVIEWER"
+    service.assert_not_called()
+
+
+def test_clear_block_verdict_owner_refusal_becomes_403(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """서비스가 담당자 규칙으로 막은 지우기도 403으로 나간다."""
+    workspace_id, _ = workspace_ids
+    member = _make_user(db, email="clear-race@example.com")
+    _join(db, user=member, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    as_user(member)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.delete_block_verdict",
+        side_effect=BlockVerdictError(
+            BLOCK_CODE_NOT_DOCUMENT_OWNER, "담당자가 아니다"
+        ),
+    ):
+        response = client.delete(_verdict_path(proposal_id, 0))
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "NOT_DOCUMENT_REVIEWER"
+
+
+def test_clear_block_verdict_passes_decider_to_service(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    workspace_ids: tuple[int, int],
+    as_user: Callable[[User], None],
+) -> None:
+    """지우기도 결정자를 실어 보내 담당자 규칙을 서비스가 다시 보게 한다."""
+    workspace_id, _ = workspace_ids
+    member = _make_user(db, email="clear-decider@example.com")
+    _join(db, user=member, workspace_id=workspace_id)
+    artifact_id = _make_artifact(db, workspace_id=workspace_id)
+    as_user(member)
+
+    proposal_id = uuid.uuid4()
+    app.dependency_overrides[get_review_uow_factory] = lambda: _fake_factory(
+        artifacts=_FakeArtifacts(
+            proposal=_proposal(
+                proposal_id=proposal_id, artifact_id=artifact_id
+            )
+        )
+    )
+
+    with patch(
+        "catchup.server.knowledge_review.api.delete_block_verdict",
+        return_value=None,
+    ) as service:
+        response = client.delete(_verdict_path(proposal_id, 0))
+
+    assert response.status_code == 204
+    assert service.call_args.kwargs["decider_user_id"] == member.id
+
+
 def test_publish_hides_other_workspace_proposal(
     app: FastAPI,
     client: TestClient,

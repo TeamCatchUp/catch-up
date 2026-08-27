@@ -88,6 +88,23 @@ class BlockVerdictRepository(Protocol):
         """
         ...
 
+    def delete_verdict(
+        self,
+        *,
+        proposal_id: uuid.UUID,
+        block_index: int,
+    ) -> bool:
+        """블록 하나에 적힌 결정을 지운다.
+
+        지운 행이 있으면 True, 애초에 결정이 없었으면 False다. 결정이
+        사라진 블록은 다시 미결정으로 돌아간다.
+
+        Raises:
+            ValueError: 변경안이 저장소가 고정한 workspace에 없을 때
+                던진다.
+        """
+        ...
+
     def list_for_proposal(
         self, *, proposal_id: uuid.UUID
     ) -> tuple[StoredBlockVerdict, ...]:
@@ -97,11 +114,16 @@ class BlockVerdictRepository(Protocol):
     def find_rejected_hashes(
         self, *, artifact_id: uuid.UUID
     ) -> dict[str, str]:
-        """artifact의 과거 반려 블록을 hash에서 사유로 모은다.
+        """artifact의 확정된 반려 블록을 hash에서 사유로 모은다.
 
         결정 행은 변경안에만 매달려 있으므로 변경안을 거쳐 문서로
         올라간다. 같은 내용이 다시 컴파일돼 올라오는 좀비 블록을 막는
         재료이며, 같은 지문에 반려가 여럿이면 마지막 결정의 사유를
         남긴다.
+
+        아직 계류 중인 변경안의 반려는 세지 않는다. 발행 전의 반려는
+        검토자가 되돌릴 수 있는 중간 기록이라 사람의 확정된 결정이
+        아니고, 그것으로 다음 컴파일의 블록을 지우면 아직 끝나지 않은
+        검토가 문서 내용을 미리 깎는다.
         """
         ...
