@@ -10,6 +10,7 @@ from pydantic import ConfigDict
 from catchup.knowledge_maintenance.adapters.llm.prompt_versioning import (
     versioned_prompt,
 )
+from catchup.knowledge_maintenance.adapters.llm.retry import aretry_llm_call
 from catchup.knowledge_maintenance.contracts.extraction import EntityTypeEntry
 from catchup.knowledge_maintenance.domain.entity_blocking import EntityBlock
 from catchup.knowledge_maintenance.domain.entity_resolution import IdentityGroup
@@ -141,7 +142,12 @@ class BedrockIdentityJudge:
         )
 
         started = time.perf_counter()
-        response = asyncio.run(self._structured.ainvoke(rendered))
+        response = asyncio.run(
+            aretry_llm_call(
+                lambda: self._structured.ainvoke(rendered),
+                subject="identity_judge",
+            )
+        )
         elapsed = round(time.perf_counter() - started, 3)
 
         parsed = response.get("parsed")
@@ -192,7 +198,12 @@ class BedrockIdentityJudge:
         )
 
         started = time.perf_counter()
-        response = asyncio.run(self._partition_structured.ainvoke(rendered))
+        response = asyncio.run(
+            aretry_llm_call(
+                lambda: self._partition_structured.ainvoke(rendered),
+                subject="identity_partition",
+            )
+        )
         elapsed = round(time.perf_counter() - started, 3)
 
         parsed = response.get("parsed")

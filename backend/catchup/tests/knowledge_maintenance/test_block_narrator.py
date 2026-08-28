@@ -11,9 +11,11 @@ import re
 from typing import Any
 
 import pytest
+from botocore.exceptions import ConnectionClosedError
 from structlog.testing import capture_logs
 
 from catchup.knowledge_maintenance.adapters.llm import block_narrator
+from catchup.knowledge_maintenance.adapters.llm import retry as llm_retry
 from catchup.knowledge_maintenance.adapters.llm.block_narrator import (
     DOCUMENT_PROMPT_VERSION,
 )
@@ -28,6 +30,7 @@ from catchup.knowledge_maintenance.adapters.llm.block_narrator import _BlockNarr
 from catchup.knowledge_maintenance.adapters.llm.block_narrator import (
     _DocumentNarrationContract,
 )
+from catchup.knowledge_maintenance.adapters.llm.retry import LlmRetryPolicy
 from catchup.knowledge_maintenance.contracts.block_narration import ChangeReasonContract
 from catchup.knowledge_maintenance.domain.narration_contract import BlockNarrationInput
 from catchup.knowledge_maintenance.domain.narration_contract import (
@@ -36,6 +39,8 @@ from catchup.knowledge_maintenance.domain.narration_contract import (
 from catchup.knowledge_maintenance.domain.narration_contract import block_fact_texts
 from catchup.knowledge_maintenance.ports.narrator import ChangeExplanationRequest
 from catchup.knowledge_maintenance.ports.narrator import NarrationError
+
+_NO_WAIT_RETRY_POLICY = LlmRetryPolicy(base_delay=0.0, max_delay=0.0)
 
 
 class _FakeStructured:
@@ -1118,3 +1123,35 @@ def test_explain_change_failure_logs_no_exception_message() -> None:
     )
     assert failed["error_type"] == "RuntimeError"
     assert failed["reason"] == "llm_call_error"
+
+
+class _FlakyStructured(_FakeStructured):
+    """첫 호출만 연결 끊김으로 실패하고 다음 호출부터 정상 응답을 준다."""
+
+    def __init__(self, responses: list[Any], error: Exception) -> None:
+        super().__init__(responses, None)
+        self._pending_error: Exception | None = error
+
+    def invoke(self, rendered: str) -> Any:
+        if self._pending_error is not None:
+            error, self._pending_error = self._pending_error, None
+            self.prompts.append(rendered)
+            raise error
+        return super().invoke(rendered)
+
+
+def test_transient_connection_error_is_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """산문 호출이 끊기면 다시 불러 산문을 받아 온다."""
+    monkeypatch.setattr(llm_retry, "DEFAULT_LLM_RETRY_POLICY", _NO_WAIT_RETRY_POLICY)
+    llm = _FakeLlm([])
+    llm.document_structured = _FlakyStructured(
+        [_doc(((0, "이 요구는 아직 검토 중이다."),))],
+        ConnectionClosedError(endpoint_url="https://bedrock"),
+    )
+
+    result = LlmBlockNarrator(llm).narrate_document(_request((_block(0),)))
+
+    assert result.narratives == {0: "이 요구는 아직 검토 중이다."}
+    assert len(llm.document_structured.prompts) == 2

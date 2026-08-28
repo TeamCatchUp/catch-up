@@ -3,7 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from botocore.exceptions import ConnectionClosedError
 
+from catchup.knowledge_maintenance.adapters.llm import retry as llm_retry
+from catchup.knowledge_maintenance.adapters.llm.retry import LlmRetryPolicy
 from catchup.knowledge_maintenance.adapters.llm.vocabulary_converger import (
     TEMPLATE_PATH,
 )
@@ -27,6 +30,8 @@ from catchup.knowledge_maintenance.contracts.vocabulary_convergence import (
     VocabularyConvergenceProposal,
 )
 from catchup.prompts.loader import prompt_loader
+
+_NO_WAIT_RETRY_POLICY = LlmRetryPolicy(base_delay=0.0, max_delay=0.0)
 
 
 class _StubStructuredRunnable:
@@ -342,3 +347,30 @@ class TestRetry:
 
         assert result is None
         assert llm.runnable.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_연결이_끊기면_같은_시도_안에서_다시_부른다(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """일시적 연결 끊김은 어댑터의 시도 횟수를 쓰지 않고 재시도한다."""
+        monkeypatch.setattr(
+            llm_retry, "DEFAULT_LLM_RETRY_POLICY", _NO_WAIT_RETRY_POLICY
+        )
+        proposal = self._proposal()
+        llm = _SequenceLlm(
+            [
+                ConnectionClosedError(endpoint_url="https://bedrock"),
+                ConnectionClosedError(endpoint_url="https://bedrock"),
+                {"parsed": proposal, "raw": None, "parsing_error": None},
+            ]
+        )
+        converger = LlmVocabularyConverger(llm)
+
+        result = await converger.propose(
+            current=ExtractionVocabulary(),
+            predicate_usage=[_usage("release_date")],
+            relation_usage=[],
+        )
+
+        assert result == proposal
+        assert llm.runnable.call_count == 3

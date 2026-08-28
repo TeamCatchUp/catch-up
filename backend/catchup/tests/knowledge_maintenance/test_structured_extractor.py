@@ -5,7 +5,10 @@ from datetime import timezone
 from typing import Any
 
 import pytest
+from botocore.exceptions import ConnectionClosedError
 
+from catchup.knowledge_maintenance.adapters.llm import retry as llm_retry
+from catchup.knowledge_maintenance.adapters.llm.retry import LlmRetryPolicy
 from catchup.knowledge_maintenance.adapters.llm.structured_extractor import (
     StructuredKnowledgeExtractor,
 )
@@ -18,6 +21,8 @@ from catchup.knowledge_maintenance.contracts.extraction import (
 from catchup.knowledge_maintenance.domain.observation import MetadataEntity
 from catchup.knowledge_maintenance.ports.extraction import ExtractionAPIError
 from catchup.knowledge_maintenance.ports.extraction import ExtractionContractError
+
+_NO_WAIT_RETRY_POLICY = LlmRetryPolicy(base_delay=0.0, max_delay=0.0)
 
 
 class _StubStructuredRunnable:
@@ -240,3 +245,47 @@ async def test_per_message_timestamps_anchor_relative_expressions() -> None:
 
     prompt = llm.runnable.rendered_prompt
     assert "nearest preceding message" in prompt
+
+
+class _FlakyStructuredRunnable:
+    """첫 호출만 연결 끊김으로 실패하고 다음 호출부터 정상 응답을 준다."""
+
+    def __init__(self, response: dict[str, Any], error: Exception) -> None:
+        self._response = response
+        self._pending_error: Exception | None = error
+        self.call_count = 0
+
+    async def ainvoke(
+        self, prompt: str, config: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        self.call_count += 1
+        if self._pending_error is not None:
+            error, self._pending_error = self._pending_error, None
+            raise error
+        return self._response
+
+
+class _FlakyChatModel:
+    def __init__(self, response: dict[str, Any], error: Exception) -> None:
+        self.runnable = _FlakyStructuredRunnable(response, error)
+
+    def with_structured_output(self, *args: Any, **kwargs: Any):
+        return self.runnable
+
+
+@pytest.mark.asyncio
+async def test_transient_connection_error_is_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """응답을 받다 연결이 끊기면 다시 불러 결과를 받아 온다."""
+    monkeypatch.setattr(llm_retry, "DEFAULT_LLM_RETRY_POLICY", _NO_WAIT_RETRY_POLICY)
+    batch = KnowledgeCandidateBatch()
+    llm = _FlakyChatModel(
+        {"parsed": batch, "raw": None},
+        ConnectionClosedError(endpoint_url="https://bedrock"),
+    )
+
+    result = await StructuredKnowledgeExtractor(llm).extract(_request())
+
+    assert result == batch
+    assert llm.runnable.call_count == 2

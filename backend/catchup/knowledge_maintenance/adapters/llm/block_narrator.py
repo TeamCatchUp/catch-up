@@ -13,6 +13,7 @@ from pydantic import Field
 from catchup.knowledge_maintenance.adapters.llm.prompt_versioning import (
     versioned_prompt,
 )
+from catchup.knowledge_maintenance.adapters.llm.retry import retry_llm_call
 from catchup.knowledge_maintenance.contracts.block_narration import ChangeReasonContract
 from catchup.knowledge_maintenance.domain.narration_contract import BlockNarrationInput
 from catchup.knowledge_maintenance.domain.narration_contract import (
@@ -565,7 +566,9 @@ def _invoke_contract(
 
     started = time.perf_counter()
     try:
-        response = structured.invoke(rendered)
+        response = retry_llm_call(
+            lambda: structured.invoke(rendered), subject=event_prefix
+        )
     except Exception as error:
         logger.warning(
             f"{event_prefix}_failed",

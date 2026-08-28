@@ -3,15 +3,20 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from botocore.exceptions import ConnectionClosedError
 
+from catchup.knowledge_maintenance.adapters.llm import retry as llm_retry
 from catchup.knowledge_maintenance.adapters.llm.identity_judge import (
     BedrockIdentityJudge,
 )
 from catchup.knowledge_maintenance.adapters.llm.identity_judge import (
     IdentityJudgeOutput,
 )
+from catchup.knowledge_maintenance.adapters.llm.retry import LlmRetryPolicy
 from catchup.knowledge_maintenance.contracts.extraction import EntityTypeEntry
 from catchup.knowledge_maintenance.ports.identity_judge import JudgeCandidate
+
+_NO_WAIT_RETRY_POLICY = LlmRetryPolicy(base_delay=0.0, max_delay=0.0)
 
 
 class _FakeStructured:
@@ -127,3 +132,52 @@ def test_parse_failure_raises() -> None:
 
     with pytest.raises(ValueError):
         judge.judge(_group())
+
+
+class _FlakyStructured:
+    """첫 호출만 연결 끊김으로 실패하고 다음 호출부터 정상 응답을 준다."""
+
+    def __init__(self, response: dict, error: Exception) -> None:
+        self.response = response
+        self._pending_error: Exception | None = error
+        self.call_count = 0
+
+    async def ainvoke(self, rendered: str) -> dict:
+        self.call_count += 1
+        if self._pending_error is not None:
+            error, self._pending_error = self._pending_error, None
+            raise error
+        return self.response
+
+
+class _FlakyLlm:
+    def __init__(self, response: dict, error: Exception) -> None:
+        self.structured = _FlakyStructured(response, error)
+
+    def with_structured_output(self, *args, **kwargs):
+        del args, kwargs
+        return self.structured
+
+
+def test_judge_retries_transient_connection_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """판정 호출이 끊기면 다시 불러 판정을 받아 온다."""
+    monkeypatch.setattr(llm_retry, "DEFAULT_LLM_RETRY_POLICY", _NO_WAIT_RETRY_POLICY)
+    llm = _FlakyLlm(
+        {
+            "parsed": IdentityJudgeOutput(
+                same=True,
+                reason="같은 대상이다",
+                canonical_type="integration",
+                canonical_name="Slack",
+            ),
+            "raw": None,
+        },
+        ConnectionClosedError(endpoint_url="https://bedrock"),
+    )
+
+    verdict = BedrockIdentityJudge(llm).judge(_group())
+
+    assert verdict.same
+    assert llm.structured.call_count == 2

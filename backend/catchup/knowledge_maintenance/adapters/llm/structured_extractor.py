@@ -10,6 +10,7 @@ from langchain_core.language_models import BaseChatModel
 from catchup.knowledge_maintenance.adapters.llm.prompt_versioning import (
     versioned_prompt,
 )
+from catchup.knowledge_maintenance.adapters.llm.retry import aretry_llm_call
 from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
 from catchup.knowledge_maintenance.contracts.extraction import KnowledgeCandidateBatch
 from catchup.knowledge_maintenance.contracts.extraction import (
@@ -129,8 +130,9 @@ class StructuredKnowledgeExtractor:
 
         started = time.perf_counter()
         try:
-            response = await self._structured.ainvoke(
-                rendered, config=invoke_config
+            response = await aretry_llm_call(
+                lambda: self._structured.ainvoke(rendered, config=invoke_config),
+                subject="knowledge_extraction",
             )
         except Exception as error:
             logger.exception(
