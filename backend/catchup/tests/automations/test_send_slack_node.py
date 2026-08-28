@@ -1,19 +1,33 @@
+import json
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
 import pytest
 
+from catchup.automations.nodes.send_slack import _format_citation
 from catchup.automations.nodes.send_slack import send_slack_node
 
 
-def _make_state(guide_text: str = "테스트 가이드") -> dict:
+def _make_state(
+    guide_text: str = "테스트 가이드",
+    guide_explanation: str = "테스트 설명",
+) -> dict:
     return {
         "inquiry_text": "결제 오류",
+        "channel_talk_channel_id": "channel-001",
         "user_chat_id": "abc123",
         "slack_channel_id": "C123456",
         "slack_credential_id": 1,
         "guide_text": guide_text,
+        "guide_explanation": guide_explanation,
+        "citations": [
+            {
+                "index": 1,
+                "title": "환불 정책",
+                "url": "https://example.com/refund",
+            }
+        ],
     }
 
 
@@ -31,8 +45,10 @@ async def test_send_slack_node_posts_thread_reply():
         "messages": [
             {
                 "ts": "1700000000.000000",
-                "bot_id": "B123",
-                "text": "https://example.com/user-chats/abc123",
+                "text": (
+                    "https://channel.works/zxq46/user-chats/"
+                    "%EC%97%98%EB%A6%AC+708-abc123"
+                ),
             }
         ],
         "has_more": False,
@@ -52,18 +68,26 @@ async def test_send_slack_node_posts_thread_reply():
     ):
         result = await send_slack_node(state)
 
-    mock_client.post_message.assert_awaited_once()
-    call_kwargs = mock_client.post_message.call_args.kwargs
-    assert call_kwargs["channel"] == "C123456"
-    assert call_kwargs["thread_ts"] == "1700000000.000000"
-    assert "테스트 가이드" in call_kwargs["text"]
+    assert mock_client.post_message.await_count == 2
+    explanation_call, guide_call = mock_client.post_message.await_args_list
+    assert explanation_call.kwargs["channel"] == "C123456"
+    assert explanation_call.kwargs["thread_ts"] == "1700000000.000000"
+    assert "테스트 설명" in explanation_call.kwargs["text"]
+    assert "환불 정책" in explanation_call.kwargs["text"]
+    assert "테스트 가이드" in guide_call.kwargs["text"]
+    button = guide_call.kwargs["blocks"][1]["elements"][0]
+    assert json.loads(button["value"]) == {
+        "channel_id": "channel-001",
+        "user_chat_id": "abc123",
+    }
     assert result == {}
 
 
 @pytest.mark.asyncio
 async def test_send_slack_node_no_guide_text_skips():
-    """guide_text가 없으면 발송을 건너뛴다."""
-    state = _make_state(guide_text="")
+    """가이드와 설명이 모두 없으면 발송을 건너뛴다."""
+    state = _make_state(guide_text="", guide_explanation="")
+    state["citations"] = []
 
     with (
         patch("catchup.automations.nodes.send_slack.asyncio.to_thread") as mock_to_thread,
@@ -124,8 +148,90 @@ async def test_send_slack_node_retries_until_link_message_appears():
 
     assert mock_client.get_conversation_history.await_count == 3
     assert mock_sleep.await_count == 2
-    mock_client.post_message.assert_awaited_once()
+    assert mock_client.post_message.await_count == 2
     assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_send_slack_node_retries_explanation_before_guide():
+    """설명 전송이 실패하면 재시도하고 성공한 뒤 가이드를 전송한다."""
+    state = _make_state()
+    mock_token = MagicMock(bot_access_token="xoxb-test", team_id="T123")
+    mock_client = AsyncMock()
+    mock_client.get_conversation_history.return_value = {
+        "messages": [
+            {
+                "ts": "1700000000.000000",
+                "bot_id": "B123",
+                "text": "https://example.com/user-chats/abc123",
+            }
+        ],
+        "has_more": False,
+    }
+    mock_client.post_message.side_effect = [RuntimeError("temporary"), {}, {}]
+
+    with (
+        patch(
+            "catchup.automations.nodes.send_slack.asyncio.to_thread",
+            new_callable=AsyncMock,
+            return_value=mock_token,
+        ),
+        patch(
+            "catchup.automations.nodes.send_slack.SlackApiClientWrapper",
+            return_value=mock_client,
+        ),
+        patch(
+            "catchup.automations.nodes.send_slack.asyncio.sleep",
+            new_callable=AsyncMock,
+        ) as mock_sleep,
+    ):
+        await send_slack_node(state)
+
+    assert mock_client.post_message.await_count == 3
+    mock_sleep.assert_awaited_once_with(1.0)
+
+
+@pytest.mark.asyncio
+async def test_send_slack_node_does_not_send_guide_when_explanation_fails():
+    """설명 재시도가 모두 실패하면 가이드는 전송하지 않는다."""
+    state = _make_state()
+    mock_token = MagicMock(bot_access_token="xoxb-test", team_id="T123")
+    mock_client = AsyncMock()
+    mock_client.get_conversation_history.return_value = {
+        "messages": [
+            {
+                "ts": "1700000000.000000",
+                "bot_id": "B123",
+                "text": "https://example.com/user-chats/abc123",
+            }
+        ],
+        "has_more": False,
+    }
+    mock_client.post_message.side_effect = RuntimeError("temporary")
+
+    with (
+        patch(
+            "catchup.automations.nodes.send_slack.asyncio.to_thread",
+            new_callable=AsyncMock,
+            return_value=mock_token,
+        ),
+        patch(
+            "catchup.automations.nodes.send_slack.SlackApiClientWrapper",
+            return_value=mock_client,
+        ),
+        patch(
+            "catchup.automations.nodes.send_slack.asyncio.sleep",
+            new_callable=AsyncMock,
+        ),
+        pytest.raises(RuntimeError, match="temporary"),
+    ):
+        await send_slack_node(state)
+
+    assert mock_client.post_message.await_count == 3
+    assert all(
+        call.kwargs["text"].startswith("테스트 설명")
+        for call in mock_client.post_message.await_args_list
+    )
 
 
 @pytest.mark.asyncio
@@ -169,3 +275,29 @@ async def test_send_slack_node_raises_after_retries_exhausted():
     assert error_call_kwargs["channel_id"] == "C123456"
 
     mock_client.post_message.assert_not_awaited()
+
+
+def test_format_citation_collapses_newlines_and_truncates_title():
+    """줄바꿈이 섞인 긴 제목도 한 줄 라벨로 접히고 20자에서 잘린다."""
+    line = _format_citation(
+        {
+            "index": 4,
+            "title": "[공유 | 배포 14주차 현황 공유] 안녕하세요 동민님!\n\n누적 질문: 1,122건",
+            "url": "https://slack.com/archives/C0AHX9SPSKS/p1784009288380589",
+        }
+    )
+
+    assert "\n" not in line
+    assert line == (
+        "- <https://slack.com/archives/C0AHX9SPSKS/p1784009288380589|"
+        "[4] [공유 &#124; 배포 14주차 현황 공유]...>"
+    )
+
+
+def test_format_citation_keeps_short_title_intact():
+    """20자 이하 제목은 말줄임 없이 그대로 유지한다."""
+    line = _format_citation(
+        {"index": 3, "title": "LLM Wiki 랜딩페이지", "url": "https://example.com/wiki"}
+    )
+
+    assert line == "- <https://example.com/wiki|[3] LLM Wiki 랜딩페이지>"

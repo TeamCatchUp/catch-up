@@ -4,6 +4,7 @@ import { useQueries } from '@tanstack/react-query';
 import { CONNECTOR_STATUS_SOURCE_ORDER as SOURCE_ORDER } from '../constants/connectorOrder';
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
 import type { AdminConnectorTargetRangeResponse, SyncConnector } from '../types/syncModel';
+import { isCompletedSyncTarget } from '../utils/isCompletedSyncTarget';
 
 /**
  * 임베딩 히스토리 조회 훅.
@@ -22,9 +23,7 @@ export const useEmbeddingHistory = () => {
       const targets = historyQueries[i]?.data?.targets;
       if (targets?.length) {
         // in_progress/pending/retrying은 진행 중 섹션(useEmbeddingJobs)에서 표시하므로 제외
-        const completed = targets.filter(
-          (t) => t.sync_status !== 'in_progress' && t.sync_status !== 'pending' && t.sync_status !== 'retrying',
-        );
+        const completed = targets.filter(isCompletedSyncTarget);
         if (completed.length) {
           result[source as SyncConnector] = completed;
         }

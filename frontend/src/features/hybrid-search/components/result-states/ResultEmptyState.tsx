@@ -32,7 +32,7 @@ export default function ResultEmptyState() {
       </div>
       <button
         type="button"
-        onClick={() => router.push('/search')}
+        onClick={() => router.push('/')}
         className="text-text-primary-normal hover:bg-fill-primary-normal-interaction-hover-assistive flex h-8 cursor-pointer items-center gap-1 rounded-full px-1.5 py-1 transition-colors"
       >
         <Chat2 className="text-icon-primary-normal h-5 w-5" />

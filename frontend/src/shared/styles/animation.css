@@ -141,7 +141,7 @@
     background: linear-gradient(
       90deg,
       var(--color-fill-strong, #f7f7f8) 0%,
-      var(--color-fill-normal-interaction-hover, #eaebec) 50%,
+      var(--skeleton-shimmer, #eaebec) 50%,
       var(--color-fill-strong, #f7f7f8) 100%
     );
     background-size: 200% 100%;

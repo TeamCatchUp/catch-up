@@ -27,6 +27,24 @@ export const DOCUMENT_SPACE_SYNC_INTERVAL_OPTIONS: ChannelTalkSyncInterval[] = [
 ];
 export const DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT: ChannelTalkSyncInterval = '1hour';
 
+/**
+ * 백엔드 polling_cycle_hours(1..168) → dropdown 옵션 역매핑.
+ * 서버 값을 무시하고 기본값으로 hydrate하면 재제출 시 저장된 주기를 덮어쓰므로,
+ * 옵션 밖의 값(API로 직접 설정된 경우)도 가장 가까운 옵션으로 보존한다.
+ */
+export const syncIntervalFromHours = (hours: number): ChannelTalkSyncInterval => {
+  let nearest = DOCUMENT_SPACE_SYNC_INTERVAL_OPTIONS[0];
+  for (const option of DOCUMENT_SPACE_SYNC_INTERVAL_OPTIONS) {
+    if (
+      Math.abs(CHANNEL_TALK_SYNC_INTERVAL_HOURS[option] - hours) <
+      Math.abs(CHANNEL_TALK_SYNC_INTERVAL_HOURS[nearest] - hours)
+    ) {
+      nearest = option;
+    }
+  }
+  return nearest;
+};
+
 // idle: 입력 전 / tested: 검증 성공 collapsed lock / error: 검증 실패 expanded 유지
 export type ChannelTalkConnectionStatus = 'idle' | 'tested' | 'error';
 
@@ -54,7 +72,8 @@ export interface ChannelTalkChannel {
 
 export interface ChannelTalkConnectionState {
   connected: boolean;
-  lastSyncedAt: string | null;
+  /** credential이 마지막으로 검증·저장된 시각 — 임베딩·sync 시각이 아니다(그건 GET /sync/status) */
+  credentialVerifiedAt: string | null;
   channels: ChannelTalkChannel[];
 }
 

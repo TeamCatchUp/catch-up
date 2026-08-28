@@ -3,10 +3,11 @@
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 
+import WikiSideNavContainer from '@/features/llm-wiki/components/navigation/WikiSideNavContainer';
 import InboxPanel from '@/shared/components/layout/panels/InboxPanel';
 import QuestionsHistoryPanel from '@/shared/components/layout/panels/QuestionsHistoryPanel';
 import SettingsPanel from '@/shared/components/layout/panels/SettingsPanel';
-import SideNavBar from '@/shared/components/layout/sideNavBar/SideNavBar';
+import AppSideNav from '@/shared/components/layout/sideNavBar/AppSideNav';
 import ServiceNoticeMount from '@/shared/components/notice/ServiceNoticeMount';
 import FloatingActionButton from '@/shared/components/ui/floating-action-button';
 import Toast from '@/shared/components/ui/toast';
@@ -53,29 +54,41 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
   return (
     <TooltipProvider delayDuration={200}>
       <div className="relative flex h-full" data-snb={isSidebarOpen ? 'open' : 'collapsed'}>
-        <aside className="shrink-0">
-          <SideNavBar />
-        </aside>
+        {/*
+          설정 경로에서는 전역 SNB를 렌더하지 않는다.
+          신규 IA에서 SettingsPanel이 그 자리를 대신하고, 복귀는 '메인으로 가기' 버튼이 맡는다.
+        */}
+        {!isSettingsRoute && (
+          <aside className="shrink-0">
+            {/* 위키 SNB만 데이터 주입이 필요해 features 컨테이너를 넘긴다 */}
+            <AppSideNav wikiNav={<WikiSideNavContainer />} />
+          </aside>
+        )}
         <div
           className={cn(
-            'z-panel absolute top-0 h-full overflow-hidden transition-[width,left] duration-300 ease-out',
+            'z-panel absolute top-0 h-full overflow-hidden transition-[width,left] duration-300 ease-out motion-reduce:transition-none',
             'left-snb',
             activePanel === 'inbox' ? 'w-104.5' : 'w-0',
           )}
         >
           <InboxPanel />
         </div>
+        {/*
+          isSettingsRoute를 함께 보는 이유: activePanel 기본값이 null이라
+          설정 경로를 새로고침하면 effect가 돌기 전 첫 페인트에 w-0이 된다.
+          전역 SNB까지 빠진 지금은 그 순간 좌측이 통째로 비어 보인다.
+        */}
         <div
           className={cn(
-            'h-full shrink-0 overflow-hidden transition-[width] duration-300 ease-out',
-            activePanel === 'settings' ? 'w-60' : 'w-0',
+            'h-full shrink-0 overflow-hidden transition-[width] duration-300 ease-out motion-reduce:transition-none',
+            activePanel === 'settings' || isSettingsRoute ? 'w-60' : 'w-0',
           )}
         >
           <SettingsPanel />
         </div>
         <div
           className={cn(
-            'z-panel absolute top-0 h-full overflow-hidden transition-[width,left] duration-300 ease-out',
+            'z-panel absolute top-0 h-full overflow-hidden transition-[width,left] duration-300 ease-out motion-reduce:transition-none',
             'left-snb',
             activePanel === 'questionsHistory' ? 'w-95' : 'w-0',
           )}

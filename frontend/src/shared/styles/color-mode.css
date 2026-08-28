@@ -36,11 +36,12 @@
     --fill-strong: var(--color-neutral-1);
     --fill-primary: var(--color-blue-45);
     --fill-primary-assistive: var(--color-blue-1);
-    --fill-interaction-hover: var(--color-neutral-3);
-    --fill-interaction-pressed: var(--color-neutral-4);
-    --fill-interaction-pressed-hover: var(--color-neutral-5);
-    --fill-interaction-inactive: var(--color-neutral-1);
-    --fill-interaction-disable: var(--color-neutral-3);
+    /* 기존 배경 위에 얹는 알파 레이어 (2026-07-29 스펙) — 솔리드 교체가 아니다 */
+    --fill-interaction-hover: color-mix(in srgb, var(--color-gray-90) 6%, transparent);
+    --fill-interaction-pressed: color-mix(in srgb, var(--color-gray-90) 10%, transparent);
+    --fill-interaction-pressed-hover: color-mix(in srgb, var(--color-gray-90) 12%, transparent);
+    --fill-interaction-inactive: color-mix(in srgb, var(--color-gray-90) 3%, transparent);
+    --fill-interaction-disable: color-mix(in srgb, var(--color-gray-90) 8%, transparent);
     --fill-primary-interaction-hover: var(--color-blue-55);
     --fill-primary-interaction-pressed: var(--color-blue-60);
     --fill-primary-interaction-inactive: var(--color-blue-10);
@@ -48,6 +49,12 @@
     --fill-primary-interaction-hover-assistive: color-mix(in srgb, var(--color-blue-10) 68%, transparent);
     --fill-primary-normal-neutral: var(--color-blue-5);
     --fill-normal-assistive-dark: var(--color-white);
+    /* fill-normal-assistive-dark와 동일 값 — 한쪽만 바뀌면 갈라지므로 함께 유지 */
+    --fill-normal-assistive: var(--color-white);
+
+    /* 스켈레톤 전용 (상태 토큰을 정적 배경으로 쓰던 것을 분리 — 값은 분리 전과 동일) */
+    --skeleton-bone: var(--color-neutral-3);
+    --skeleton-shimmer: var(--color-neutral-3);
 
     /* Text */
     --text-strong: var(--color-gray-90);
@@ -87,6 +94,14 @@
     --background-elevated-normal: var(--color-white);
     --background-elevated-alternative: var(--color-neutral-1);
 
+    /* Surface — diff 강조면 */
+    --surface-red-subtle: var(--color-surface-red-1);
+    --surface-red-muted: var(--color-surface-red-5);
+    --surface-red-strong: var(--color-surface-red-10);
+    --surface-green-subtle: var(--color-surface-green-1);
+    --surface-green-muted: var(--color-surface-green-5);
+    --surface-green-strong: var(--color-surface-green-10);
+
     /* Data/Static */
     --data-chart-primary: var(--color-blue-30);
     --static-white: var(--color-white);
@@ -103,14 +118,19 @@
     --accent-violet-neutral: var(--color-violet-5);
     --accent-violet-lighten: var(--color-violet-1);
     --accent-light-blue: var(--color-light-blue-50);
+    --accent-light-blue-neutral: var(--color-light-blue-10);
     --accent-light-blue-lighten: var(--color-light-blue-5);
     --accent-pink: var(--color-pink-40);
+    --accent-pink-neutral: var(--color-pink-5);
     --accent-pink-lighten: var(--color-pink-1);
     --accent-red: var(--color-red-40);
+    --accent-red-neutral: var(--color-red-5);
     --accent-red-lighten: var(--color-red-1);
     --accent-information: var(--color-information-50);
+    --accent-information-neutral: var(--color-information-10);
     --accent-information-lighten: var(--color-information-5);
     --accent-black: var(--color-neutral-90);
+    --accent-black-neutral: var(--color-neutral-80);
     --accent-black-lighten: var(--color-neutral-70);
 
     /* Status */
@@ -137,6 +157,11 @@
     --fill-overlay-point: rgba(181, 199, 228, 0.4);
     --fill-overlay-background: #f9fafd;
     --fill-overlay-background-transparent: rgba(249, 250, 253, 0);
+    --fill-overlay-background-elevated: #f9fafd;
+    --fill-overlay-gradient-ai-start: #dfe4ffcc;
+    --fill-overlay-gradient-ai-mid: #ffffff00;
+    --fill-overlay-gradient-ai-end: #daf3ffcc;
+    --fill-overlay-gradient-ai-core: #ffffff;
 
     /* Material */
     --material-scrim: var(--color-alpha-white-50);
@@ -176,11 +201,11 @@
     --fill-strong: var(--color-neutral-80);
     --fill-primary: var(--color-blue-40);
     --fill-primary-assistive: color-mix(in srgb, var(--color-blue-10) 8%, transparent);
-    --fill-interaction-hover: var(--color-neutral-75);
-    --fill-interaction-pressed: var(--color-neutral-70);
-    --fill-interaction-pressed-hover: var(--color-neutral-60);
-    --fill-interaction-inactive: var(--color-neutral-80);
-    --fill-interaction-disable: var(--color-neutral-70);
+    --fill-interaction-hover: color-mix(in srgb, var(--color-gray-5) 4%, transparent);
+    --fill-interaction-pressed: color-mix(in srgb, var(--color-gray-5) 7%, transparent);
+    --fill-interaction-pressed-hover: color-mix(in srgb, var(--color-gray-5) 9%, transparent);
+    --fill-interaction-inactive: color-mix(in srgb, var(--color-gray-5) 2%, transparent);
+    --fill-interaction-disable: color-mix(in srgb, var(--color-gray-5) 6%, transparent);
     --fill-primary-interaction-hover: var(--color-blue-45);
     --fill-primary-interaction-pressed: var(--color-blue-50);
     --fill-primary-interaction-inactive: var(--color-neutral-80);
@@ -188,6 +213,11 @@
     --fill-primary-interaction-hover-assistive: color-mix(in srgb, var(--color-blue-10) 20%, transparent);
     --fill-primary-normal-neutral: color-mix(in srgb, var(--color-blue-10) 12%, transparent);
     --fill-normal-assistive-dark: var(--color-neutral-83);
+    --fill-normal-assistive: var(--color-neutral-83);
+
+    /* 스켈레톤 전용 */
+    --skeleton-bone: var(--color-neutral-70);
+    --skeleton-shimmer: var(--color-neutral-75);
 
     /* Text */
     --text-strong: var(--color-gray-5);
@@ -227,6 +257,14 @@
     --background-elevated-normal: var(--color-neutral-80);
     --background-elevated-alternative: var(--color-neutral-93);
 
+    /* Surface — diff 강조면 */
+    --surface-red-subtle: var(--color-surface-red-90);
+    --surface-red-muted: var(--color-surface-red-80);
+    --surface-red-strong: var(--color-surface-red-70);
+    --surface-green-subtle: var(--color-surface-green-90);
+    --surface-green-muted: var(--color-surface-green-80);
+    --surface-green-strong: var(--color-surface-green-70);
+
     /* Data/Static */
     --data-chart-primary: var(--color-blue-20);
     --static-white: var(--color-white);
@@ -243,14 +281,19 @@
     --accent-violet-neutral: var(--color-high-contrast-violet-80);
     --accent-violet-lighten: var(--color-high-contrast-violet-90);
     --accent-light-blue: var(--color-light-blue-40);
+    --accent-light-blue-neutral: var(--color-light-blue-70);
     --accent-light-blue-lighten: var(--color-light-blue-80);
     --accent-pink: var(--color-high-contrast-pink-50);
+    --accent-pink-neutral: var(--color-high-contrast-pink-80);
     --accent-pink-lighten: var(--color-high-contrast-pink-90);
     --accent-red: var(--color-red-30);
+    --accent-red-neutral: var(--color-red-80);
     --accent-red-lighten: var(--color-red-90);
     --accent-information: var(--color-information-40);
+    --accent-information-neutral: var(--color-information-70);
     --accent-information-lighten: var(--color-information-80);
     --accent-black: var(--color-white);
+    --accent-black-neutral: var(--color-neutral-2);
     --accent-black-lighten: var(--color-neutral-1);
 
     /* Status */
@@ -277,10 +320,15 @@
     --fill-overlay-point: rgba(0, 0, 0, 0);
     --fill-overlay-background: #141415;
     --fill-overlay-background-transparent: rgba(20, 20, 21, 0);
+    --fill-overlay-background-elevated: #292a2d;
+    --fill-overlay-gradient-ai-start: #b9c3ff1c;
+    --fill-overlay-gradient-ai-mid: #ffffff00;
+    --fill-overlay-gradient-ai-end: #aae1ff2e;
+    --fill-overlay-gradient-ai-core: #ffffff08;
 
     /* Material */
     --material-scrim: color-mix(in srgb, var(--color-neutral-90) 50%, transparent);
-    --material-alert-modal: var(--color-gray-80);
+    --material-alert-modal: var(--color-white);
     --material-tooltip: var(--color-gray-80);
 
     /* Shadow */

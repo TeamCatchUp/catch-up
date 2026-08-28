@@ -655,6 +655,31 @@ class McpAuditMetadata(BaseAuditMetadata):
         )
 
 
+class KnowledgeReviewAuditMetadata(BaseAuditMetadata):
+    proposal_id: str | None = None
+    block_index: int | None = None
+    workspace_id: int | None = None
+    user_id: int | None = None
+    # 문서 역할 변경(담당자 해제)이 쓰는 자리다. user_id가 행위자이고
+    # target_user_id가 명단에서 빠진 사람이다 — 둘을 한 필드에 겹쳐 담으면
+    # "누가 누구를 뗐나"를 기록에서 되짚을 수 없다.
+    artifact_id: str | None = None
+    target_user_id: int | None = None
+
+    @classmethod
+    def from_audit(
+        cls, data: "AuditLogMetadataInput"
+    ) -> "KnowledgeReviewAuditMetadata":
+        proposal_id = data.arguments.get("proposal_id")
+        context = data.arguments.get("context")
+
+        return cls(
+            proposal_id=None if proposal_id is None else str(proposal_id),
+            block_index=data.arguments.get("block_index"),
+            workspace_id=getattr(context, "workspace_id", None),
+        )
+
+
 class ManualSearchAuditMetadata(BaseAuditMetadata):
     user_id: int
     query: str

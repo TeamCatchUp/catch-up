@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 from typing import Optional
@@ -7,6 +8,7 @@ from typing import Optional
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import CheckConstraint
 from sqlalchemy import ForeignKey
+from sqlalchemy import ForeignKeyConstraint
 from sqlalchemy import Index
 from sqlalchemy import UniqueConstraint
 from sqlalchemy import func
@@ -24,6 +26,7 @@ from sqlalchemy.types import BigInteger
 from sqlalchemy.types import Boolean
 from sqlalchemy.types import DateTime
 from sqlalchemy.types import Integer
+from sqlalchemy.types import Numeric
 from sqlalchemy.types import String
 from sqlalchemy.types import Text
 
@@ -53,6 +56,7 @@ class SourceType(StrEnum):
     GITHUB = "github"
     SLACK = "slack"
     CHANNEL_TALK = "channel_talk"
+    LLM_WIKI = "llm_wiki"
 
 
 class VectorStoreEntityType(StrEnum):
@@ -468,6 +472,273 @@ class UserWorkspace(Base):
     
     user: Mapped["User"] = relationship(back_populates="workspace_links")
     workspace: Mapped["Workspace"] = relationship(back_populates="user_links")
+
+
+class Channel(Base):
+    """LLM Wiki의 개념 단위인 채널 하나를 담는다.
+
+    workspace 1 : N 채널이며 문서는 채널(과 폴더) 아래에 놓인다. 구독 같은
+    나머지 config 필드는 두지 않는다 — 별도 테이블이 이 id를 참조하는
+    방향이다.
+
+    문체는 프리셋 id를 저장하고, text 컬럼은 자연어 입력 개방을 위한
+    예약 자리다 — 문체의 효력은 표현층이 생길 때부터다. 목적 프리셋은
+    채널 하나가 여러 개를 고를 수 있어 이 표가 아니라 channel_purposes
+    표에 있다.
+    """
+
+    __tablename__ = "channels"
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id", "name", name="uq_channels_workspace_name"
+        ),
+        # 하위 테이블이 (workspace_id, channel_id) 복합 FK로 걸 수 있게
+        # 잉여 UNIQUE를 둔다. 채널이 다른 workspace의 문서를 품는 배치를
+        # DB가 직접 막는 근거다.
+        UniqueConstraint(
+            "workspace_id", "id", name="uq_channels_workspace_id_id"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    purpose_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    style_preset: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    style_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ChannelFolder(Base):
+    """채널 바로 아래의 폴더 하나를 담는다.
+
+    parent 컬럼이 없다 — depth 최대 1을 구조로 강제한다.
+
+    workspace_id는 channel에서 유도할 수 있지만 일부러 승격해 둔다. 이
+    컬럼이 있어야 채널과의 관계를 (workspace_id, channel_id) 복합 FK로
+    묶어, 폴더가 다른 workspace의 채널에 붙는 배치를 DB가 막는다.
+    """
+
+    __tablename__ = "channel_folders"
+    __table_args__ = (
+        UniqueConstraint(
+            "channel_id", "name", name="uq_channel_folders_channel_name"
+        ),
+        UniqueConstraint(
+            "workspace_id", "id", name="uq_channel_folders_workspace_id_id"
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "channel_id"],
+            ["channels.workspace_id", "channels.id"],
+            name="fk_channel_folders_channel",
+            ondelete="CASCADE",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    channel_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # 이 컬럼이 생기기 전에 만들어진 폴더는 만든 사람을 되찾을 수 없어
+    # nullable이다. 새로 만드는 폴더는 언제나 요청한 사용자를 채운다.
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", name="fk_channel_folders_created_by"),
+        nullable=True,
+    )
+
+
+class ChannelPurpose(Base):
+    """채널이 고른 목적 preset 하나를 담는다.
+
+    채널 하나가 목적을 여러 개 고를 수 있어 별도 테이블이다. position은
+    사용자가 고른 순서이며, 노출 수준처럼 목적 하나만 필요한 곳은 position
+    0을 쓴다.
+    """
+
+    __tablename__ = "channel_purposes"
+
+    channel_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("channels.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    purpose_preset: Mapped[str] = mapped_column(String(64), primary_key=True)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class WikiArtifactFavorite(Base):
+    """사용자 한 명이 문서 하나를 즐겨찾기한 사실을 담는다.
+
+    workspace_id는 artifact에서 유도되지만 사용자별 목록을 workspace로
+    좁혀 읽기 위해 승격해 둔다.
+    """
+
+    __tablename__ = "wiki_artifact_favorites"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    artifact_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("knowledge_artifacts.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ArtifactDefinition(Base):
+    """아티팩트 정의 하나를 담는다.
+
+    채널 1:N이며 정의 하나 = kind 하나의 선택 규칙이다. selection_spec은
+    좁은 스키마(entity 필터·relation 경로·predicate 섹션)의 직렬화 값이고
+    쓰기 경로가 도메인 검증을 통과시킨다. claim·entity id를 담는 필드는
+    없다 — 정의는 조건이지 목록이 아니다.
+    """
+
+    __tablename__ = "artifact_definitions"
+    __table_args__ = (
+        UniqueConstraint(
+            "channel_id", "kind", name="uq_artifact_definitions_channel_kind"
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_artifact_definitions_workspace_id_id",
+        ),
+        # 문서가 "정의와 같은 채널·같은 kind"임을 DB로 붙들려면 그 넷을 한
+        # 번에 참조해야 한다. 그 복합 FK가 딛고 설 잉여 UNIQUE다.
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            "channel_id",
+            "kind",
+            name="uq_artifact_definitions_identity",
+        ),
+        # ondelete를 주지 않아 RESTRICT다 — 정의가 남아 있는 채널은 지워지지
+        # 않고, 지우려면 정의를 먼저 정리해야 한다.
+        ForeignKeyConstraint(
+            ["workspace_id", "channel_id"],
+            ["channels.workspace_id", "channels.id"],
+            name="fk_artifact_definitions_channel",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    channel_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
+    # 문서 kind 컬럼과 길이가 같아야 정의 kind가 문서에 그대로 실린다.
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    # 이 정의가 새로 만드는 문서가 놓일 폴더다. 온보딩이 kind 라벨로 만든
+    # 폴더를 여기에 걸고, 컴파일은 새 문서 행에 이 값을 복사한다. 폴더가
+    # 지워지면 NULL이 되고 이후 문서는 채널 루트에 생긴다.
+    folder_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("channel_folders.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    purpose: Mapped[str | None] = mapped_column(Text, nullable=True)
+    selection_spec: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False
+    )
+    created_by: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ChannelAdmin(Base):
+    """채널 관리자 한 명을 담는다.
+
+    위키(채널) 단위 관리자다. 채널 생성 시 생성자가 자동으로
+    삽입되고, 기존 관리자가 추가 지정할 수 있다.
+    """
+
+    __tablename__ = "channel_admins"
+    __table_args__ = (
+        # PK 선두가 channel_id라 "이 사람이 관리자인 채널" 질의는 인덱스를
+        # 못 탄다. 역방향 조회용으로 따로 건다.
+        Index("ix_channel_admins_user_id", "user_id"),
+    )
+
+    channel_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("channels.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    granted_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    granted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ArtifactOwner(Base):
+    """문서 담당자 한 명을 담는다.
+
+    문서 단위 담당자(1~N)다. 검수 권한의 1차 출처이며, 담당자
+    없는 문서는 채널 관리자(미분류는 전역 ADMIN)로 폴백한다.
+    """
+
+    __tablename__ = "artifact_owners"
+    __table_args__ = (
+        # "이 사람이 담당인 문서" 질의가 인가 경로의 1차 조회다.
+        Index("ix_artifact_owners_user_id", "user_id"),
+    )
+
+    artifact_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("knowledge_artifacts.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    granted_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    granted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class KnowledgeSource(Base):
@@ -1353,6 +1624,54 @@ class ChannelTalkCredentials(Base):
         UniqueConstraint(
             "channel_id",
             name="uq_channel_talk_credentials_channel_id",
+        ),
+    )
+
+
+class TestKnowledgeMaintenanceSetting(Base):
+    __tablename__ = "test_knowledge_maintaince_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    channel_talk_credential_id: Mapped[int] = mapped_column(
+        ForeignKey("channel_talk_credentials.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
+    execution_anchor_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    interval_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "channel_talk_credential_id",
+            name="uq_test_knowledge_maintaince_workspace_credential",
+        ),
+        CheckConstraint(
+            "interval_minutes > 0",
+            name="ck_test_knowledge_maintaince_interval_positive",
         ),
     )
 
@@ -3486,4 +3805,2005 @@ class AgentTriggerOutbox(Base):
         ),
         Index("idx_agent_trigger_outbox_status_created_at", "status", "created_at"),
         Index("idx_agent_trigger_outbox_stream_message_id", "stream_message_id"),
+    )
+
+
+# =====================
+# Knowledge Maintenance
+# =====================
+class SourceVersion(Base):
+    """Knowledge Maintenance가 관찰한 원문 버전을 불변 record로 보존한다."""
+
+    __tablename__ = "source_versions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    source_type: Mapped[str] = mapped_column(String(50), nullable=False)
+
+    # 외부 source 문서 하나를 식별하는 복합 identity를 평탄화해 보존한다.
+    entity_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    scope_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    external_document_id: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    change_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    source_version_key: Mapped[str] = mapped_column(
+        String(512),
+        nullable=False,
+    )
+    title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    canonical_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content_type: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    content_hash: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+    source_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    idempotency_key: Mapped[str] = mapped_column(
+        String(512),
+        nullable=False,
+    )
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_metadata: Mapped[dict[str, Any]] = mapped_column(
+        "metadata",
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "idempotency_key",
+            name="uq_source_versions_workspace_idempotency_key",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "source_type",
+            "entity_type",
+            "scope_id",
+            "target_id",
+            "external_document_id",
+            "source_version_key",
+            name="uq_source_versions_logical_version",
+        ),
+        CheckConstraint(
+            "change_kind IN ('created', 'updated', 'deleted')",
+            name="ck_source_versions_change_kind",
+        ),
+        CheckConstraint(
+            "("
+            "change_kind = 'deleted' "
+            "AND content IS NULL "
+            "AND content_type IS NULL "
+            "AND content_hash IS NULL"
+            ") OR ("
+            "change_kind IN ('created', 'updated') "
+            "AND content IS NOT NULL "
+            "AND content_type IS NOT NULL "
+            "AND content_hash IS NOT NULL"
+            ")",
+            name="ck_source_versions_content_by_change_kind",
+        ),
+        CheckConstraint(
+            "char_length(payload_hash) = 64",
+            name="ck_source_versions_payload_hash_length",
+        ),
+        CheckConstraint(
+            "content_hash IS NULL OR char_length(content_hash) = 64",
+            name="ck_source_versions_content_hash_length",
+        ),
+        Index(
+            "idx_source_versions_source_latest",
+            "workspace_id",
+            "source_type",
+            "entity_type",
+            "scope_id",
+            "target_id",
+            "external_document_id",
+            "source_updated_at",
+            "observed_at",
+            "created_at",
+        ),
+        # Observation이 (workspace_id, source_version_id)로 참조할 대상이다.
+        # workspace를 함께 묶어야 다른 workspace의 원문을 가리키는 행이
+        # 생기지 않는다.
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_source_versions_workspace_id_id",
+        ),
+    )
+
+
+class Observation(Base):
+    """SourceVersion을 Extractor가 읽을 형태로 정규화한 결과를 보존한다.
+
+    SourceVersion과 1:1이 아니라 1:N이다. 정규화 규칙이 바뀌면 같은 원문에서
+    새 Observation을 만들 수 있어야 재추출 실험이 성립하기 때문이다. 어느
+    규칙으로 만들었는지는 normalizer_id와 normalizer_version이 밝힌다.
+    """
+
+    __tablename__ = "observations"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    source_version_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+
+    observation_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    normalized_content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    normalized_content_hash: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
+    normalizer_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    normalizer_version: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    # 원문의 상태값이다. state·priority·tags처럼 대화 내용이 아닌 것을 담는다.
+    source_attributes: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    # 결정론적 레이어가 source metadata에서 뽑은 Entity 후보다.
+    observation_metadata_entities: Mapped[list[Any]] = mapped_column(
+        "metadata_entities",
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+    )
+    observation_metadata: Mapped[dict[str, Any]] = mapped_column(
+        "metadata",
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+
+    # 원문에서 일이 일어난 시각이다. Claim의 valid_from이 여기서 나온다.
+    occurred_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "source_version_id"],
+            ["source_versions.workspace_id", "source_versions.id"],
+            name="fk_observations_source_version",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "source_version_id",
+            "normalizer_id",
+            "normalizer_version",
+            name="uq_observations_source_version_normalizer",
+        ),
+        CheckConstraint(
+            "observation_kind IN ('document', 'tombstone')",
+            name="ck_observations_observation_kind",
+        ),
+        CheckConstraint(
+            "("
+            "observation_kind = 'tombstone' "
+            "AND normalized_content IS NULL "
+            "AND normalized_content_hash IS NULL"
+            ") OR ("
+            "observation_kind = 'document' "
+            "AND normalized_content IS NOT NULL "
+            "AND normalized_content_hash IS NOT NULL"
+            ")",
+            name="ck_observations_content_by_kind",
+        ),
+        CheckConstraint(
+            "normalized_content_hash IS NULL "
+            "OR char_length(normalized_content_hash) = 64",
+            name="ck_observations_content_hash_length",
+        ),
+    )
+
+
+class KnowledgeNode(Base):
+    """graph에서 주소를 가질 수 있는 모든 대상의 identity registry다.
+
+    본문을 담는 테이블이 아니다. SourceVersion이나 Observation처럼 이미 자기
+    테이블을 가진 record는 `resource_type`·`resource_id`로 연결하고, 원문에서
+    나온 Entity처럼 자기 테이블이 없는 대상은 `canonical_key`로 식별한다.
+
+    PostgreSQL은 polymorphic foreign key를 강제하지 못하므로, 가리키는 record가
+    실재하는지는 application service가 같은 transaction에서 확인한다.
+    """
+
+    __tablename__ = "knowledge_nodes"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    node_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    # 자기 테이블을 이미 가진 record와 연결할 때 쓴다.
+    resource_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    resource_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # 자기 테이블이 없는 Entity identity에 쓴다.
+    entity_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    canonical_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    lifecycle_state: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="active",
+        server_default=text("'active'"),
+    )
+    merged_into_node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    attributes: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    retired_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_knowledge_nodes_workspace_id_id",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "merged_into_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_nodes_merged_into",
+        ),
+        CheckConstraint(
+            "node_kind IN ("
+            "'source_version', 'observation', 'entity', 'claim', "
+            "'relation_assertion', 'artifact', 'artifact_revision', "
+            "'review_decision', 'editorial_override'"
+            ")",
+            name="ck_knowledge_nodes_node_kind",
+        ),
+        CheckConstraint(
+            "lifecycle_state IN ('active', 'merged', 'retired')",
+            name="ck_knowledge_nodes_lifecycle_state",
+        ),
+        CheckConstraint(
+            "("
+            "lifecycle_state = 'merged' AND merged_into_node_id IS NOT NULL"
+            ") OR ("
+            "lifecycle_state <> 'merged' AND merged_into_node_id IS NULL"
+            ")",
+            name="ck_knowledge_nodes_merged_target",
+        ),
+        # 같은 record에 node가 둘 생기지 않게 한다. "insert 또는 reuse"가
+        # 성립하는 근거다.
+        Index(
+            "uq_knowledge_nodes_resource",
+            "workspace_id",
+            "resource_type",
+            "resource_id",
+            unique=True,
+            postgresql_where=text(
+                "resource_type IS NOT NULL AND resource_id IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_knowledge_nodes_canonical_entity",
+            "workspace_id",
+            "entity_type",
+            "canonical_key",
+            unique=True,
+            postgresql_where=text(
+                "node_kind = 'entity' AND canonical_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "ix_knowledge_nodes_workspace_kind",
+            "workspace_id",
+            "node_kind",
+            "lifecycle_state",
+        ),
+    )
+
+
+class KnowledgeExtractionRun(Base):
+    """Extractor를 한 번 돌린 기록을 남긴다.
+
+    LLM 호출 전에 이 row를 먼저 확보한다. 중복 실행을 막고 재시도의 기준점이
+    되기 때문이다. 무엇을 입력으로 삼았는지는 `input_node_id`가 가리키는
+    Observation node가 말한다.
+    """
+
+    __tablename__ = "knowledge_extraction_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    input_node_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    extractor_version: Mapped[str] = mapped_column(String(128), nullable=False)
+    prompt_version: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    # 이 실행이 따른 어휘 스냅샷이다. 한 번의 실행은 하나의 어휘로 돌므로
+    # candidate마다 적지 않고 여기 한 번만 남긴다. 나중에 어휘를 통합할 때
+    # 어떤 규칙 아래 만들어진 후보인지 되짚는 근거가 된다.
+    ontology_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    ontology_version: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    # 계약을 어긴 출력도 남긴다. 무엇이 왜 거부됐는지가 성공만큼 중요하다.
+    #
+    # none_as_null을 켜지 않으면 Python None이 SQL NULL이 아니라 JSON null로
+    # 저장된다. 그러면 `raw_output IS NOT NULL`이 참이 되어 "원본 출력이 있다"고
+    # 거짓을 말한다.
+    raw_output: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True),
+        nullable=True,
+    )
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_knowledge_extraction_runs_workspace_id_id",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "input_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_extraction_runs_input_node",
+        ),
+        # 존재하지 않는 어휘를 가리키는 실행이 생기지 않게 한다.
+        ForeignKeyConstraint(
+            ["workspace_id", "ontology_id", "ontology_version"],
+            [
+                "knowledge_ontology_snapshots.workspace_id",
+                "knowledge_ontology_snapshots.ontology_id",
+                "knowledge_ontology_snapshots.version",
+            ],
+            name="fk_knowledge_extraction_runs_ontology",
+        ),
+        CheckConstraint(
+            "status IN ('running', 'succeeded', 'failed')",
+            name="ck_knowledge_extraction_runs_status",
+        ),
+        Index(
+            "ix_knowledge_extraction_runs_input_node",
+            "workspace_id",
+            "input_node_id",
+            "started_at",
+        ),
+    )
+
+
+class KnowledgeEntityCandidate(Base):
+    """이름과 type을 가진 대상 identity 후보를 보존한다.
+
+    아직 canonical Entity가 아니다. resolution과 승인을 지나야 node가 된다.
+    `extraction_method`가 결정론적 레이어의 산출물과 LLM 추출을 가른다.
+    """
+
+    __tablename__ = "knowledge_entity_candidates"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    extraction_run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    # 한 번의 추출 안에서만 유효한 참조 키다. Extractor가 지은 이름을 보존해
+    # 나중에 원본 출력과 대조할 수 있게 한다.
+    local_key: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    proposed_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    proposed_name: Mapped[str] = mapped_column(Text, nullable=False)
+
+    extraction_method: Mapped[str] = mapped_column(String(16), nullable=False)
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric, nullable=True)
+    raw_payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+
+    resolution_status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="pending",
+        server_default=text("'pending'"),
+    )
+    resolved_node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_knowledge_entity_candidates_workspace_id_id",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "extraction_run_id"],
+            [
+                "knowledge_extraction_runs.workspace_id",
+                "knowledge_extraction_runs.id",
+            ],
+            name="fk_knowledge_entity_candidates_run",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "resolved_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_entity_candidates_resolved_node",
+        ),
+        UniqueConstraint(
+            "extraction_run_id",
+            "local_key",
+            name="uq_knowledge_entity_candidates_run_local_key",
+        ),
+        CheckConstraint(
+            "extraction_method IN ('deterministic', 'llm')",
+            name="ck_knowledge_entity_candidates_extraction_method",
+        ),
+        CheckConstraint(
+            "resolution_status IN ('pending', 'accepted', 'merged', 'rejected', 'superseded')",
+            name="ck_knowledge_entity_candidates_resolution_status",
+        ),
+    )
+
+
+class KnowledgeClaimCandidate(Base):
+    """Entity가 가진 값에 대한 주장 후보를 보존한다.
+
+    자유 텍스트가 아니라 `subject + predicate + value` 구조로 둔다. 승인 전에도
+    검색과 중복·충돌 판정을 해야 하고, 그 판정이 subject와 predicate의 일치로
+    정의되기 때문이다.
+
+    subject는 같은 run에서 나온 entity candidate이거나 이미 존재하는 canonical
+    node다. 둘 중 정확히 하나만 값을 갖는다.
+    """
+
+    __tablename__ = "knowledge_claim_candidates"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    extraction_run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    local_key: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    subject_entity_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    subject_node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+
+    predicate: Mapped[str] = mapped_column(String(128), nullable=False)
+    value_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    value: Mapped[Any] = mapped_column(JSONB, nullable=False)
+    # 같은 주장인지 비교할 때 JSON 표현의 사소한 차이를 무시하려고 둔다.
+    value_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    statement: Mapped[str] = mapped_column(Text, nullable=False)
+
+    valid_from: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    valid_to: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    # 어느 어휘 스냅샷으로 뽑았는지를 남긴다. 나중에 어휘가 바뀌어도 과거
+    # candidate가 어떤 규칙 아래 만들어졌는지 되짚을 수 있다.
+    ontology_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    ontology_version: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    extraction_method: Mapped[str] = mapped_column(String(16), nullable=False)
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric, nullable=True)
+    raw_payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+
+    resolution_status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="pending",
+        server_default=text("'pending'"),
+    )
+    resolved_claim_node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_knowledge_claim_candidates_workspace_id_id",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "extraction_run_id"],
+            [
+                "knowledge_extraction_runs.workspace_id",
+                "knowledge_extraction_runs.id",
+            ],
+            name="fk_knowledge_claim_candidates_run",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "subject_entity_candidate_id"],
+            [
+                "knowledge_entity_candidates.workspace_id",
+                "knowledge_entity_candidates.id",
+            ],
+            name="fk_knowledge_claim_candidates_subject_candidate",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "subject_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_claim_candidates_subject_node",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "resolved_claim_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_claim_candidates_resolved_node",
+        ),
+        UniqueConstraint(
+            "extraction_run_id",
+            "local_key",
+            name="uq_knowledge_claim_candidates_run_local_key",
+        ),
+        CheckConstraint(
+            "(subject_entity_candidate_id IS NULL) "
+            "<> (subject_node_id IS NULL)",
+            name="ck_knowledge_claim_candidates_subject_exactly_one",
+        ),
+        CheckConstraint(
+            "extraction_method IN ('deterministic', 'llm')",
+            name="ck_knowledge_claim_candidates_extraction_method",
+        ),
+        CheckConstraint(
+            "resolution_status IN ('pending', 'accepted', 'duplicate', 'rejected', 'superseded')",
+            name="ck_knowledge_claim_candidates_resolution_status",
+        ),
+        CheckConstraint(
+            "valid_to IS NULL OR valid_from IS NULL OR valid_to > valid_from",
+            name="ck_knowledge_claim_candidates_valid_range",
+        ),
+        Index(
+            "ix_knowledge_claim_candidates_lookup",
+            "workspace_id",
+            "predicate",
+            "value_hash",
+        ),
+    )
+
+
+class KnowledgeRelationAssertionCandidate(Base):
+    """두 Entity 사이의 관계 주장 후보를 보존한다.
+
+    양 끝은 같은 run에서 나온 entity candidate이거나 이미 존재하는 canonical
+    node다. 각 끝에서 둘 중 정확히 하나만 값을 갖는다.
+
+    Extractor가 만드는 관계는 Entity 사이로 제한한다. Claim 사이의 모순이나
+    lineage는 canonical identity가 생긴 뒤 system operation으로 만든다.
+    """
+
+    __tablename__ = "knowledge_relation_assertion_candidates"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    extraction_run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    local_key: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    source_entity_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    source_node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    target_entity_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    target_node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+
+    relation_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    assertion_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    valid_from: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    valid_to: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    extraction_method: Mapped[str] = mapped_column(String(16), nullable=False)
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric, nullable=True)
+    raw_payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+
+    resolution_status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="pending",
+        server_default=text("'pending'"),
+    )
+    resolved_relation_node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_knowledge_relation_candidates_workspace_id_id",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "extraction_run_id"],
+            [
+                "knowledge_extraction_runs.workspace_id",
+                "knowledge_extraction_runs.id",
+            ],
+            name="fk_knowledge_relation_candidates_run",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "source_entity_candidate_id"],
+            [
+                "knowledge_entity_candidates.workspace_id",
+                "knowledge_entity_candidates.id",
+            ],
+            name="fk_knowledge_relation_candidates_source_candidate",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "target_entity_candidate_id"],
+            [
+                "knowledge_entity_candidates.workspace_id",
+                "knowledge_entity_candidates.id",
+            ],
+            name="fk_knowledge_relation_candidates_target_candidate",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "source_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_relation_candidates_source_node",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "target_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_relation_candidates_target_node",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "resolved_relation_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_relation_candidates_resolved_node",
+        ),
+        UniqueConstraint(
+            "extraction_run_id",
+            "local_key",
+            name="uq_knowledge_relation_candidates_run_local_key",
+        ),
+        CheckConstraint(
+            "(source_entity_candidate_id IS NULL) <> (source_node_id IS NULL)",
+            name="ck_knowledge_relation_candidates_source_exactly_one",
+        ),
+        CheckConstraint(
+            "(target_entity_candidate_id IS NULL) <> (target_node_id IS NULL)",
+            name="ck_knowledge_relation_candidates_target_exactly_one",
+        ),
+        CheckConstraint(
+            "extraction_method IN ('deterministic', 'llm')",
+            name="ck_knowledge_relation_candidates_extraction_method",
+        ),
+        CheckConstraint(
+            "resolution_status IN ('pending', 'accepted', 'duplicate', 'rejected', 'superseded')",
+            name="ck_knowledge_relation_candidates_resolution_status",
+        ),
+        CheckConstraint(
+            "valid_to IS NULL OR valid_from IS NULL OR valid_to > valid_from",
+            name="ck_knowledge_relation_candidates_valid_range",
+        ),
+    )
+
+
+class KnowledgeCandidateEvidenceLink(Base):
+    """Candidate가 어떤 Observation에서 나왔는지 잇는다.
+
+    네 번째 Candidate 유형이 아니라 보조 record다. 세 종류의 candidate 중
+    정확히 하나만 가리킨다.
+
+    `excerpt`와 `locator`는 비워도 된다. Entity와 RelationAssertion은 문서
+    단위 근거로 충분하고, Claim은 서버가 근거 문구를 본문에서 다시 찾아
+    위치를 계산한다. 찾지 못하면 문서 단위로 낮춘다.
+
+    Claim evidence를 읽을 때의 계약: `locator`가 채워져 있어야 원문 대조를
+    통과한 인용이다. `excerpt`가 있는데 `locator`가 빈 것은 인용이
+    본문에 없거나(환각 의심) 여러 번 나온 경우이며, 그 `excerpt`는 LLM의
+    주장 원문을 감사용으로 보존한 것이지 검증된 인용이 아니다. locator의
+    offset은 Unicode code point 단위다(UTF-16 아님). 통과 여부는
+    content와 excerpt로 언제든 재계산할 수 있다.
+
+    `locator`는 "어디서"와 함께 "언제"도 담는다. 위치가 확정된 Claim
+    evidence는 그 위치가 속한 발화의 시각을 `event_at`(ISO 8601 문자열)로
+    싣는다. 주장의 시간은 그 주장이 발화된 시각이어야 하는데, Observation의
+    `occurred_at`은 문서 하나에 하나뿐이라 여러 날에 걸친 상담에서는 뒷날
+    발화가 상담 시작 시각으로 앵커되기 때문이다. 발화 구간을 모르면 키가
+    없고, 소비자는 문서 단위 사슬로 물러난다.
+    """
+
+    __tablename__ = "knowledge_candidate_evidence_links"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    extraction_run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+
+    entity_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    claim_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    relation_assertion_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+
+    evidence_node_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    evidence_role: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="supports",
+        server_default=text("'supports'"),
+    )
+    excerpt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    locator: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "extraction_run_id"],
+            [
+                "knowledge_extraction_runs.workspace_id",
+                "knowledge_extraction_runs.id",
+            ],
+            name="fk_knowledge_candidate_evidence_links_run",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "entity_candidate_id"],
+            [
+                "knowledge_entity_candidates.workspace_id",
+                "knowledge_entity_candidates.id",
+            ],
+            name="fk_knowledge_candidate_evidence_links_entity",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "claim_candidate_id"],
+            [
+                "knowledge_claim_candidates.workspace_id",
+                "knowledge_claim_candidates.id",
+            ],
+            name="fk_knowledge_candidate_evidence_links_claim",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "relation_assertion_candidate_id"],
+            [
+                "knowledge_relation_assertion_candidates.workspace_id",
+                "knowledge_relation_assertion_candidates.id",
+            ],
+            name="fk_knowledge_candidate_evidence_links_relation",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "evidence_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_candidate_evidence_links_evidence_node",
+        ),
+        CheckConstraint(
+            "num_nonnulls("
+            "entity_candidate_id, "
+            "claim_candidate_id, "
+            "relation_assertion_candidate_id"
+            ") = 1",
+            name="ck_knowledge_candidate_evidence_links_exactly_one_target",
+        ),
+        CheckConstraint(
+            "evidence_role IN ('supports', 'contradicts')",
+            name="ck_knowledge_candidate_evidence_links_role",
+        ),
+        Index(
+            "ix_knowledge_candidate_evidence_links_evidence_node",
+            "workspace_id",
+            "evidence_node_id",
+        ),
+    )
+
+
+class KnowledgeMutationProposal(Base):
+    """resolver가 발견한 신규·중복·모순을 검토 단위로 묶는다.
+
+    canonical DB 수정 명령으로 바로 실행하지 않는다. 계획서로 저장되고,
+    적용은 승인 트랜잭션의 일이다. 사람이 직접 승인하는 대상도 아니다 —
+    사람은 이 계획으로 compile된 ArtifactChangeProposal을 승인한다.
+    """
+
+    __tablename__ = "knowledge_mutation_proposals"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    trigger_entity_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    trigger_claim_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    trigger_relation_assertion_candidate_id: Mapped[uuid.UUID | None] = (
+        mapped_column(UUID(as_uuid=True), nullable=True)
+    )
+    proposal_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    detector: Mapped[str] = mapped_column(String(64), nullable=False)
+    detector_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="pending",
+        server_default=text("'pending'"),
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    resolver_metadata: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    # 결정 저널이다. 병합 안건의 승인·반려는 사람의 결정이므로 누가
+    # 언제 어떤 사유로 정했는지가 행에 남아야 한다.
+    reviewer: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    applied_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_knowledge_mutation_proposals_workspace_id_id",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "idempotency_key",
+            name="uq_knowledge_mutation_proposals_idempotency_key",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "trigger_entity_candidate_id"],
+            [
+                "knowledge_entity_candidates.workspace_id",
+                "knowledge_entity_candidates.id",
+            ],
+            name="fk_knowledge_mutation_proposals_entity_candidate",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "trigger_claim_candidate_id"],
+            [
+                "knowledge_claim_candidates.workspace_id",
+                "knowledge_claim_candidates.id",
+            ],
+            name="fk_knowledge_mutation_proposals_claim_candidate",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "trigger_relation_assertion_candidate_id"],
+            [
+                "knowledge_relation_assertion_candidates.workspace_id",
+                "knowledge_relation_assertion_candidates.id",
+            ],
+            name="fk_knowledge_mutation_proposals_relation_candidate",
+        ),
+        CheckConstraint(
+            "proposal_kind IN "
+            "('create', 'duplicate', 'contradiction', 'mixed')",
+            name="ck_knowledge_mutation_proposals_kind",
+        ),
+        CheckConstraint(
+            "num_nonnulls("
+            "trigger_entity_candidate_id, "
+            "trigger_claim_candidate_id, "
+            "trigger_relation_assertion_candidate_id"
+            ") = 1",
+            name="ck_knowledge_mutation_proposals_exactly_one_trigger",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'approved', 'applied', "
+            "'rejected', 'stale', 'abandoned')",
+            name="ck_knowledge_mutation_proposals_status",
+        ),
+        CheckConstraint(
+            "status != 'rejected' OR rejection_reason IS NOT NULL",
+            name="ck_knowledge_mutation_proposals_rejection_reason",
+        ),
+        CheckConstraint(
+            "status NOT IN ('approved', 'rejected', 'applied') "
+            "OR (reviewer IS NOT NULL AND btrim(reviewer) != '' "
+            "AND reviewed_at IS NOT NULL)",
+            name="ck_knowledge_mutation_proposals_decision_journal",
+        ),
+        Index(
+            "ix_knowledge_mutation_proposals_review_queue",
+            "workspace_id",
+            "status",
+            "created_at",
+        ),
+    )
+
+
+class KnowledgeMutationOperation(Base):
+    """proposal이 승인되면 적용할 작은 변경들을 순서대로 담는다.
+
+    operation별 필수 reference는 application layer가 검증한다.
+    """
+
+    __tablename__ = "knowledge_mutation_operations"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    proposal_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    operation_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    entity_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    claim_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    relation_assertion_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    target_node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    evidence_node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    effective_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    operation_data: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "proposal_id"],
+            [
+                "knowledge_mutation_proposals.workspace_id",
+                "knowledge_mutation_proposals.id",
+            ],
+            name="fk_knowledge_mutation_operations_proposal",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "entity_candidate_id"],
+            [
+                "knowledge_entity_candidates.workspace_id",
+                "knowledge_entity_candidates.id",
+            ],
+            name="fk_knowledge_mutation_operations_entity_candidate",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "claim_candidate_id"],
+            [
+                "knowledge_claim_candidates.workspace_id",
+                "knowledge_claim_candidates.id",
+            ],
+            name="fk_knowledge_mutation_operations_claim_candidate",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "relation_assertion_candidate_id"],
+            [
+                "knowledge_relation_assertion_candidates.workspace_id",
+                "knowledge_relation_assertion_candidates.id",
+            ],
+            name="fk_knowledge_mutation_operations_relation_candidate",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "target_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_mutation_operations_target_node",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "evidence_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_mutation_operations_evidence_node",
+        ),
+        UniqueConstraint(
+            "proposal_id",
+            "sequence",
+            name="uq_knowledge_mutation_operations_sequence",
+        ),
+        CheckConstraint(
+            "sequence >= 1",
+            name="ck_knowledge_mutation_operations_sequence",
+        ),
+        CheckConstraint(
+            "operation_type IN ("
+            "'create_entity', 'merge_entity', "
+            "'create_claim', 'invalidate_claim', 'supersede_claim', "
+            "'create_relation_assertion', "
+            "'invalidate_relation_assertion', "
+            "'supersede_relation_assertion', "
+            "'attach_evidence'"
+            ")",
+            name="ck_knowledge_mutation_operations_type",
+        ),
+    )
+
+
+class KnowledgeNodeAlias(Base):
+    """Entity resolution에 쓰는 이름 목록을 담는다.
+
+    alias는 identity가 아니라 identity를 찾기 위한 단서다. alias가 같다는
+    이유만으로 자동 병합하지 않는다.
+    """
+
+    __tablename__ = "knowledge_node_aliases"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    node_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    alias: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_alias: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_node_aliases_node",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "node_id",
+            "normalized_alias",
+            name="uq_knowledge_node_aliases_normalized",
+        ),
+        CheckConstraint(
+            "source IN ('source', 'extractor', 'human', 'system')",
+            name="ck_knowledge_node_aliases_source",
+        ),
+        Index(
+            "ix_knowledge_node_aliases_lookup",
+            "workspace_id",
+            "normalized_alias",
+        ),
+    )
+
+
+class KnowledgeOntologySnapshot(Base):
+    """추출이 따른 어휘 목록을 그 시점 그대로 보존한다.
+
+    `extraction_runs.ontology_version`이 이 행을 가리킨다. 스냅샷을 남기지
+    않으면 버전 문자열만 있고 그것이 어떤 어휘였는지 알 수 없어, 나중에 어휘를
+    통합할 때 과거 후보가 어떤 규칙 아래 만들어졌는지 되짚지 못한다.
+
+    부트스트랩 초기처럼 어휘가 없던 시점도 빈 목록 행으로 남긴다. 값을 비우는
+    대신 "그때는 어휘가 없었다"를 기록으로 만든다.
+    """
+
+    __tablename__ = "knowledge_ontology_snapshots"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    ontology_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    version: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    predicates: Mapped[list[Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+    )
+    relation_types: Mapped[list[Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        # extraction run이 (workspace_id, ontology_id, version)으로 참조한다.
+        UniqueConstraint(
+            "workspace_id",
+            "ontology_id",
+            "version",
+            name="uq_knowledge_ontology_snapshots_version",
+        ),
+    )
+
+
+class KnowledgePipelineOutbox(Base):
+    """다음 단계가 처리할 일을 transaction 안에서 함께 적어 둔다.
+
+    Observation을 저장하는 transaction에서 이 행도 함께 만든다. 그래야 원문이
+    확정됐는데 그것을 처리하라는 지시가 유실되는 경우가 없다.
+
+    상태를 매번 계산하는 대신 큐로 두는 이유는 재시도 때문이다. 추출이 실패하면
+    왜 실패했는지와 몇 번 시도했는지를 남겨야 하고, 다시 시도할 시각을 미룰 수
+    있어야 한다. 그것이 없으면 결정론적으로 실패하는 문서에 매 주기마다 LLM
+    비용이 나간다.
+    """
+
+    __tablename__ = "knowledge_pipeline_outbox"
+
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    aggregate_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    # polymorphic 참조라 PostgreSQL이 강제하지 못한다. 만드는 쪽이 같은
+    # transaction에서 대상 record의 존재를 보장한다.
+    aggregate_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="pending",
+        server_default=text("'pending'"),
+    )
+    # 실패를 미뤄 두는 자리다. 백오프가 여기로 표현된다.
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    attempts: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    processed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        # 같은 대상에 같은 지시를 두 번 적지 않는다.
+        UniqueConstraint(
+            "event_type",
+            "aggregate_type",
+            "aggregate_id",
+            name="uq_knowledge_pipeline_outbox_event",
+        ),
+        CheckConstraint(
+            "event_type IN ('observation.ready')",
+            name="ck_knowledge_pipeline_outbox_event_type",
+        ),
+        CheckConstraint(
+            "aggregate_type IN ('observation')",
+            name="ck_knowledge_pipeline_outbox_aggregate_type",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'processing', 'processed', 'failed')",
+            name="ck_knowledge_pipeline_outbox_status",
+        ),
+        CheckConstraint(
+            "attempts >= 0",
+            name="ck_knowledge_pipeline_outbox_attempts",
+        ),
+        Index(
+            "ix_knowledge_pipeline_outbox_claim",
+            "status",
+            "available_at",
+            "id",
+        ),
+    )
+
+
+class KnowledgeArtifact(Base):
+    """사람이 읽는 문서 한 편의 identity를 잡아 둔다.
+
+    본문은 여기 두지 않는다. 본문은 승인된 revision이 갖고, 이 행은 "무엇에
+    대한 어떤 문서인가"만 말한다. 그래야 문서가 여러 판으로 자라도 참조하는
+    쪽은 같은 주소를 계속 쓴다.
+
+    kind에 CHECK를 걸지 않는다. 문서 종류는 앞으로 늘어날 자리라, DB 제약으로
+    묶으면 종류를 하나 늘릴 때마다 마이그레이션이 필요해진다.
+    """
+
+    __tablename__ = "knowledge_artifacts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    # 위치는 workspace 복합 FK로 건다(아래 __table_args__). 복합 FK는
+    # 참조 컬럼이 NULL이면 검사되지 않으므로 미분류(NULL)는 그대로
+    # 성립한다.
+    channel_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    folder_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    definition_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    subject_node_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_knowledge_artifacts_workspace_id_id",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "subject_node_id"],
+            ["knowledge_nodes.workspace_id", "knowledge_nodes.id"],
+            name="fk_knowledge_artifacts_subject_node",
+        ),
+        # 문서와 채널·폴더가 같은 workspace임을 DB가 보증한다. 채널 FK는
+        # ondelete를 주지 않아 RESTRICT다. 문서가 남아 있는 채널은 지워지지
+        # 않고, 지우려면 문서를 먼저 옮겨야 한다.
+        ForeignKeyConstraint(
+            ["workspace_id", "channel_id"],
+            ["channels.workspace_id", "channels.id"],
+            name="fk_knowledge_artifacts_channel",
+        ),
+        # 폴더 FK는 SET NULL이다. 폴더를 지우면 그 폴더에 있던 문서는
+        # 채널 루트로 옮겨진다. 비울 컬럼을 folder_id로 지정하지 않으면
+        # PostgreSQL이 참조 컬럼을 모두 비워 NOT NULL인 workspace_id까지
+        # 건드린다.
+        ForeignKeyConstraint(
+            ["workspace_id", "folder_id"],
+            ["channel_folders.workspace_id", "channel_folders.id"],
+            name="fk_knowledge_artifacts_folder",
+            ondelete="SET NULL (folder_id)",
+        ),
+        # 문서가 딛고 선 정의와 같은 workspace·채널·kind임을 DB가 보증한다.
+        # 정의는 "이 채널의 이 종류 문서"를 정하는 행이라, 문서가 다른 채널
+        # 이나 다른 kind로 어긋나면 그 정의로 다시 컴파일할 수 없다.
+        ForeignKeyConstraint(
+            ["workspace_id", "definition_id", "channel_id", "kind"],
+            [
+                "artifact_definitions.workspace_id",
+                "artifact_definitions.id",
+                "artifact_definitions.channel_id",
+                "artifact_definitions.kind",
+            ],
+            name="fk_knowledge_artifacts_definition",
+        ),
+        # 복합 FK는 참조 컬럼 중 하나라도 NULL이면 검사를 건너뛴다. 정의를
+        # 걸어 두고 channel_id만 비우면 위 FK가 통째로 풀리므로, 그 우회를
+        # 여기서 막는다. kind는 NOT NULL이라 따로 막을 필요가 없다.
+        CheckConstraint(
+            "definition_id IS NULL OR channel_id IS NOT NULL",
+            name="ck_knowledge_artifacts_definition_channel",
+        ),
+        # 정의 하나가 같은 대상에 문서를 둘 만들지 못하게 한다. PG에서
+        # UNIQUE는 NULL을 중복으로 세지 않으므로, 정의가 생기기 전에 만들어진
+        # 문서(definition_id NULL)는 이 제약에 걸리지 않는다.
+        UniqueConstraint(
+            "definition_id",
+            "subject_node_id",
+            name="uq_knowledge_artifacts_definition_subject",
+        ),
+        # 정의 이전 문서만 workspace 전역에서 (kind, 대상) 하나다. compile이
+        # "만들거나 찾아 쓴다"로 성립하는 근거이며, 정의 기반 문서의 유일성은
+        # 위 정의-대상 제약이 맡는다. 채널이 다른 두 정의가 같은 대상을
+        # 문서화하는 일이 정상이라 전역 유일성을 씌우면 두 번째가 막힌다.
+        Index(
+            "uq_knowledge_artifacts_subject",
+            "workspace_id",
+            "kind",
+            "subject_node_id",
+            unique=True,
+            postgresql_where=text("definition_id IS NULL"),
+        ),
+        Index("ix_knowledge_artifacts_channel_id", "channel_id"),
+        Index("ix_knowledge_artifacts_folder_id", "folder_id"),
+        Index("ix_knowledge_artifacts_definition_id", "definition_id"),
+    )
+
+
+class KnowledgeArtifactChangeProposal(Base):
+    """사람이 승인하거나 반려할 문서 변경안 한 건을 담는다.
+
+    사람이 실제로 보는 검토 단위다. mutation proposal이 기계가 발견한 변경
+    후보라면, 이쪽은 그것을 compile해 문서 본문 형태로 보여 주는 쪽이다.
+
+    `base_revision_id`는 이 변경안이 딛고 선 판을 가리킨다. 승인 시점에
+    문서가 그 사이 다른 판으로 넘어갔는지 판단하는 근거가 된다.
+    """
+
+    __tablename__ = "knowledge_artifact_change_proposals"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    artifact_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    blocks: Mapped[list[Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+    )
+    status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="pending",
+        server_default=text("'pending'"),
+    )
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    base_revision_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    reviewer: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # 변경의 기원 — 기획 이력 배지(승인된 변경 제안·검토자 직접 편집·
+    # 외부 유입 승인·승인된 연결)와 1:1. manual/external/linked의 생성
+    # 경로는 후속 슬라이스이고 지금은 값만 예약한다.
+    origin: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="compiled",
+        server_default=text("'compiled'"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_knowledge_artifact_change_proposals_workspace_id_id",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "idempotency_key",
+            name="uq_knowledge_artifact_change_proposals_idempotency_key",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "artifact_id"],
+            ["knowledge_artifacts.workspace_id", "knowledge_artifacts.id"],
+            name="fk_knowledge_artifact_change_proposals_artifact",
+            ondelete="CASCADE",
+        ),
+        # revision과 서로 참조하므로 순환을 끊도록 나중에 건다.
+        ForeignKeyConstraint(
+            ["workspace_id", "base_revision_id"],
+            [
+                "knowledge_artifact_revisions.workspace_id",
+                "knowledge_artifact_revisions.id",
+            ],
+            name="fk_knowledge_artifact_change_proposals_base_revision",
+            use_alter=True,
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'approved', 'rejected', 'abandoned')",
+            name="ck_knowledge_artifact_change_proposals_status",
+        ),
+        # 반려는 이유가 남아야 한다. 이유 없는 반려는 다음 사람이 같은
+        # 변경안을 다시 올리게 만든다.
+        CheckConstraint(
+            "status <> 'rejected' OR rejection_reason IS NOT NULL",
+            name="ck_knowledge_artifact_change_proposals_rejection_reason",
+        ),
+        CheckConstraint(
+            "origin IN ('compiled', 'manual', 'external', 'linked')",
+            name="ck_knowledge_artifact_change_proposals_origin",
+        ),
+        # 결정에는 반드시 결정자와 시각이 남는다. 병합/모순 proposal의
+        # ck_knowledge_mutation_proposals_decision_journal과 같은 형태 —
+        # 문서 승인 경로만 이 강제가 빠져 있던 비대칭을 교정한다.
+        CheckConstraint(
+            "status NOT IN ('approved', 'rejected') "
+            "OR (reviewer IS NOT NULL AND btrim(reviewer) != '' "
+            "AND reviewed_at IS NOT NULL)",
+            name="ck_knowledge_artifact_change_proposals_decision_journal",
+        ),
+        Index(
+            "ix_knowledge_artifact_change_proposals_review_queue",
+            "workspace_id",
+            "status",
+            "created_at",
+        ),
+    )
+
+
+class KnowledgeBlockVerdict(Base):
+    """변경안 안의 블록 한 칸에 대한 사람의 판정을 남긴다.
+
+    변경안 전체를 통째로 승인·반려하던 자리를 블록 단위로 쪼갠다. 한 변경안
+    안에서 어떤 문단은 통과하고 어떤 문단은 근거가 모자라 막히는 일이
+    정상이기 때문이다.
+
+    저널이므로 블록당 한 줄만 산다. 사람이 마음을 바꿔 다시 누르면 유일
+    제약 위에서 갱신으로 흡수되고, 판정 자체는 결정자와 시각을 반드시
+    달고 남는다.
+
+    `chosen_winner_claim_id`에는 FK를 걸지 않는다. 후보 claim 테이블과 서로
+    참조하면 순환과 수명 결합이 생기는데, 이 행은 "그때 사람이 무엇을
+    골랐는가"를 기록할 뿐이라 claim이 나중에 닫혀도 기록은 그대로 남아야
+    한다.
+    """
+
+    __tablename__ = "knowledge_block_verdicts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    proposal_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(
+            "knowledge_artifact_change_proposals.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+    block_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    block_content_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+    verdict: Mapped[str] = mapped_column(String(16), nullable=False)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    chosen_winner_claim_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    reviewer: Mapped[str] = mapped_column(String(255), nullable=False)
+    reviewed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "proposal_id",
+            "block_index",
+            name="uq_block_verdict_proposal_block",
+        ),
+        CheckConstraint(
+            "verdict IN ('approved','rejected')",
+            name="ck_block_verdict_kind",
+        ),
+        # 반려는 이유가 남아야 한다. 이유 없는 반려는 다음 사람이 같은
+        # 블록을 그대로 다시 올리게 만든다.
+        CheckConstraint(
+            "verdict != 'rejected' OR (rejection_reason IS NOT NULL "
+            "AND length(trim(rejection_reason)) > 0)",
+            name="ck_block_verdict_rejection_reason",
+        ),
+        CheckConstraint(
+            "length(trim(reviewer)) > 0",
+            name="ck_block_verdict_reviewer",
+        ),
+        Index(
+            "ix_knowledge_block_verdicts_workspace_proposal",
+            "workspace_id",
+            "proposal_id",
+        ),
+    )
+
+
+class KnowledgeArtifactRevision(Base):
+    """승인으로 확정된 문서 한 판을 그대로 보존한다.
+
+    문서를 덮어쓰지 않고 판을 쌓는다. 그래야 지금 문장이 어느 승인에서
+    나왔는지 `source_proposal_id`로 되짚을 수 있고, 과거 판을 그대로 다시
+    읽을 수 있다.
+    """
+
+    __tablename__ = "knowledge_artifact_revisions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    artifact_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    blocks: Mapped[list[Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+    )
+    source_proposal_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_knowledge_artifact_revisions_workspace_id_id",
+        ),
+        # 판 번호가 겹치면 순서가 무너진다. 동시 승인을 DB가 막는 자리다.
+        UniqueConstraint(
+            "workspace_id",
+            "artifact_id",
+            "revision_number",
+            name="uq_knowledge_artifact_revisions_number",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "artifact_id"],
+            ["knowledge_artifacts.workspace_id", "knowledge_artifacts.id"],
+            name="fk_knowledge_artifact_revisions_artifact",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "source_proposal_id"],
+            [
+                "knowledge_artifact_change_proposals.workspace_id",
+                "knowledge_artifact_change_proposals.id",
+            ],
+            name="fk_knowledge_artifact_revisions_source_proposal",
+        ),
+    )
+
+
+class KnowledgeNameEmbedding(Base):
+    """이름 하나를 벡터로 바꾼 결과를 정규화 이름 단위로 보관한다.
+
+    해소 단계는 라운드마다 이번 후보 이름과 살아 있는 노드 별칭 전부를
+    벡터로 바꾼다. 별칭이 쌓이면 이미 바꿔 본 이름을 매 라운드 다시
+    임베딩하게 되므로, 여기에 담아 두고 없는 이름만 임베딩한다.
+
+    이 표는 정본이 아니라 다시 만들 수 있는 사본이다. 통째로 지워도 다음
+    라운드가 임베딩을 다시 불러 같은 값을 채운다. 그래서 사람 결정이나
+    claim처럼 보존 규칙이 걸린 자료와 달리 마음대로 비워도 된다.
+
+    벡터는 pgvector 컬럼이 아니라 JSONB 실수 배열로 담고 HNSW 색인도 두지
+    않는다. 여기서 하는 일은 이름으로 정확히 찾아오는 조회지 가까운 벡터를
+    훑는 ANN 검색이 아니다. 조회 경로가 (workspace_id, model_id,
+    normalized_name) 하나뿐이라 UNIQUE 제약이 만드는 색인이면 충분하다.
+
+    model_id를 키에 넣는 이유는 모델이 다르면 벡터 공간이 달라 같은 이름의
+    옛 벡터를 새 모델 벡터와 나란히 견줄 수 없기 때문이다. 모델을 바꾸면
+    옛 행은 조회되지 않고 남아 있다가 지워질 뿐이다.
+    """
+
+    __tablename__ = "knowledge_name_embeddings"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    normalized_name: Mapped[str] = mapped_column(Text, nullable=False)
+    model_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    vector: Mapped[list[Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "model_id",
+            "normalized_name",
+            name="uq_knowledge_name_embeddings_name",
+        ),
+    )
+
+
+class KnowledgeResolutionEvent(Base):
+    """entity 병합과 되돌림 확정 한 건을 불변 저널로 남긴다.
+
+    병합이 자동으로 적용되면 왜, 무슨 근거로, 어떤 멤버 구성으로 붙였는지가
+    이 행에만 남는다. 판정 당시의 멤버 구성과 근거는 그 순간에만 존재하므로
+    사후에 다시 만들어 낼 수 없다. 그래서 판정 시점의 구성을
+    member_snapshot에, 판단 근거를 basis에 그대로 담아 둔다.
+
+    이 표는 덧붙이기만 하는 표다. 갱신하거나 지우는 경로를 만들지 않는다.
+    병합을 되돌릴 때도 원본 행을 고치지 않고, reverses_event_id로 원본을
+    가리키는 unmerge 행을 새로 쓴다.
+    """
+
+    __tablename__ = "knowledge_resolution_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    decider: Mapped[str] = mapped_column(String(16), nullable=False)
+    decider_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # node_id에는 외래 키를 걸지 않는다. 되돌림으로 노드가 물러나도 저널 행은
+    # 그 노드를 계속 가리켜야 하고, 저널은 그래프의 현재 상태에 딸린 자료가
+    # 아니라 그와 무관하게 남는 기록이기 때문이다.
+    node_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+    member_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    member_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    basis: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    reverses_event_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["reverses_event_id"],
+            ["knowledge_resolution_events.id"],
+            name="fk_knowledge_resolution_events_reverses",
+        ),
+        CheckConstraint(
+            "event_type IN ('merge_create_node', 'merge_into_node', 'unmerge')",
+            name="ck_knowledge_resolution_events_type",
+        ),
+        CheckConstraint(
+            "decider IN ('system', 'human')",
+            name="ck_knowledge_resolution_events_decider",
+        ),
+        # 되돌림 행은 무엇을 되돌리는지가 반드시 있어야 저널이 짝을 이룬다.
+        CheckConstraint(
+            "event_type != 'unmerge' OR reverses_event_id IS NOT NULL",
+            name="ck_knowledge_resolution_events_unmerge_reversal",
+        ),
+        Index(
+            "ix_knowledge_resolution_events_member_hash",
+            "workspace_id",
+            "member_hash",
+        ),
+        # 한 원본에 되돌림 행은 하나뿐이다. 서비스가 되돌림 여부를 미리
+        # 읽어 보기는 하지만 그것은 잠금 없는 읽기라, 두 운영자가 거의
+        # 동시에 되돌리면 둘 다 통과한다. 원본당 한 번이라는 규칙은 DB가
+        # 지킨다.
+        Index(
+            "uq_knowledge_resolution_events_reversal",
+            "reverses_event_id",
+            unique=True,
+            postgresql_where=text("reverses_event_id IS NOT NULL"),
+        ),
     )

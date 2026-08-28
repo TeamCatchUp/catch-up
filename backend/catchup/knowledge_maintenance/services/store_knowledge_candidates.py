@@ -1,0 +1,663 @@
+"""추출 결과를 candidate로 저장한다.
+
+여기서 두 가지가 일어난다.
+
+`local_key`가 실제 식별자가 된다. Extractor는 `e1`, `c1`처럼 그 실행
+안에서만 유효한 이름으로 서로를 가리킨다. 저장 시점에 entity를 먼저 넣어
+식별자를 받고, 그것으로 claim과 relation의 참조를 FK로 바꾼다.
+
+레이어 1이 뽑은 Entity가 행이 된다. 프롬프트가 고객과 상담원을 `m1`,
+`m2`로 보여주고 Extractor가 그것을 관계의 끝점으로 쓰므로, 그 Entity가
+`deterministic` candidate로 먼저 저장되어야 관계의 FK가 걸린다. 이것이
+설계 문서 §7이 말한 "레이어 1 산출물의 통로"다.
+"""
+
+from __future__ import annotations
+
+import uuid
+from collections.abc import Callable
+from dataclasses import dataclass
+from dataclasses import replace
+from datetime import datetime
+from datetime import timezone
+from decimal import Decimal
+
+from catchup.knowledge_maintenance.contracts.extraction import EntityCandidateDraft
+from catchup.knowledge_maintenance.contracts.extraction import KnowledgeCandidateBatch
+from catchup.knowledge_maintenance.contracts.extraction import (
+    RelationAssertionCandidateDraft,
+)
+from catchup.knowledge_maintenance.contracts.extraction import is_metadata_local_key
+from catchup.knowledge_maintenance.contracts.extraction import metadata_local_key
+from catchup.knowledge_maintenance.domain.actor_identity import ACTOR_ENTITY_TYPE
+from catchup.knowledge_maintenance.domain.actor_identity import ActorIdentity
+from catchup.knowledge_maintenance.domain.actor_identity import (
+    actor_candidate_attributes,
+)
+from catchup.knowledge_maintenance.domain.actor_identity import (
+    actor_identity_from_metadata,
+)
+from catchup.knowledge_maintenance.domain.actor_identity import is_role_label
+from catchup.knowledge_maintenance.domain.evidence import locate_excerpt
+from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionMethod
+from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunSpec
+from catchup.knowledge_maintenance.domain.knowledge_candidate import ExtractionRunStatus
+from catchup.knowledge_maintenance.domain.knowledge_candidate import (
+    StoredCandidateBatch,
+)
+from catchup.knowledge_maintenance.domain.knowledge_node import NodeKind
+from catchup.knowledge_maintenance.domain.observation import MetadataEntity
+from catchup.knowledge_maintenance.domain.observation import StoredObservation
+from catchup.knowledge_maintenance.domain.observation import utterance_event_at
+from catchup.knowledge_maintenance.ports.knowledge_candidates import (
+    KnowledgeCandidateUnitOfWork,
+)
+from catchup.observability.logging import get_logger
+
+logger = get_logger(__name__)
+
+# 결정론적 레이어의 산출물은 추론이 아니라 원문 구조에 적혀 있던 사실이다.
+DETERMINISTIC_CONFIDENCE = Decimal("1.0")
+
+# 문의를 남긴 사람을 가리키는 관계 이름이다.
+DERIVED_REQUESTED_BY_RELATION = "requested_by"
+
+# 요청 사항을 담는 entity 종류다. 이 종류만 requested_by 파생의 대상이다.
+FEATURE_REQUEST_ENTITY_TYPE = "feature_request"
+
+
+class ObservationNodeMissing(RuntimeError):
+    """Observation이 graph에 올라와 있지 않음을 알린다."""
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateStorageResult:
+    """저장 결과를 표현한다.
+
+    Attributes:
+        batch: 저장된 후보와 local_key 지도를 담는다.
+        reused: 이미 저장된 실행이 있어 새로 넣지 않았는지 나타낸다.
+    """
+
+    batch: StoredCandidateBatch
+    reused: bool = False
+
+
+def store_knowledge_candidates(
+    observation: StoredObservation,
+    batch: KnowledgeCandidateBatch,
+    *,
+    spec: ExtractionRunSpec,
+    uow: KnowledgeCandidateUnitOfWork,
+    raw_output: dict | None = None,
+    clock: Callable[[], datetime] | None = None,
+) -> CandidateStorageResult:
+    """추출 결과 한 벌을 후보로 저장한다.
+
+    같은 Observation에 같은 계약(prompt·어휘·모델)으로 성공한 실행이 있으면
+    그 실행을 재사용하고 아무것도 저장하지 않는다. 계약이 다르면 새 배치를
+    저장하고, 같은 입력에서 나온 구 pending 후보를 superseded로 은퇴시킨다.
+    은퇴시키지 않으면 resolution이 같은 대상을 두 벌로 보게 된다.
+    """
+    clock = clock or _utcnow
+    now = clock()
+
+    with uow:
+        node = uow.knowledge_nodes.get_for_resource(
+            workspace_id=observation.workspace_id,
+            node_kind=NodeKind.OBSERVATION,
+            resource_id=observation.id,
+        )
+        if node is None:
+            raise ObservationNodeMissing(
+                f"observation {observation.id} has no graph node"
+            )
+
+        # 같은 계약으로 이미 성공한 실행이 있을 때만 건너뛴다. 입력만 보고
+        # 판정하면 prompt를 고치거나 어휘를 올려도 다시 추출되지 않는다.
+        existing = uow.knowledge_candidates.find_succeeded_run(
+            workspace_id=observation.workspace_id,
+            input_node_id=node.id,
+            spec=spec,
+        )
+        if existing is not None:
+            logger.info(
+                "knowledge_candidates_reused",
+                workspace_id=observation.workspace_id,
+                observation_id=str(observation.id),
+                input_node_id=str(node.id),
+                run_id=str(existing.id),
+                ontology_version=spec.ontology_version,
+            )
+            return CandidateStorageResult(
+                batch=StoredCandidateBatch(run_id=existing.id),
+                reused=True,
+            )
+
+        # 실행이 어휘 스냅샷을 FK로 가리키므로 그 행이 먼저 있어야 한다.
+        uow.ontology.ensure(
+            workspace_id=observation.workspace_id,
+            ontology_id=spec.ontology_id,
+            vocabulary=spec.vocabulary,
+        )
+        run = uow.knowledge_candidates.start_run(
+            workspace_id=observation.workspace_id,
+            input_node_id=node.id,
+            spec=spec,
+            started_at=now,
+        )
+
+        # 재추출이면 구 배치의 pending 후보를 먼저 은퇴시킨다. 같은 UoW
+        # 안이라 은퇴와 새 배치 저장은 함께 확정되거나 함께 무산된다.
+        superseded_count = (
+            uow.knowledge_candidates.supersede_stale_pending_candidates(
+                workspace_id=observation.workspace_id,
+                input_node_id=node.id,
+                current_run_id=run.id,
+            )
+        )
+        if superseded_count:
+            logger.info(
+                "knowledge_candidates_superseded",
+                workspace_id=observation.workspace_id,
+                observation_id=str(observation.id),
+                input_node_id=str(node.id),
+                run_id=str(run.id),
+                superseded_count=superseded_count,
+            )
+
+        entity_ids, aliases, sole_actor = _store_entities(
+            observation,
+            batch,
+            run_id=run.id,
+            uow=uow,
+        )
+        # 별칭된 local_key도 참조로는 풀려야 하므로 병합 사전을 따로 만든다.
+        references = _reference_ids(entity_ids, aliases)
+        claim_ids = _store_claims(
+            observation,
+            batch,
+            run_id=run.id,
+            reference_ids=references,
+            spec=spec,
+            uow=uow,
+        )
+        relation_ids = _store_relations(
+            observation,
+            batch,
+            run_id=run.id,
+            reference_ids=references,
+            aliases=aliases,
+            sole_actor=sole_actor,
+            uow=uow,
+        )
+        evidence = _store_evidence(
+            observation,
+            batch,
+            run_id=run.id,
+            evidence_node_id=node.id,
+            entity_ids=entity_ids,
+            claim_ids=claim_ids,
+            relation_ids=relation_ids,
+            uow=uow,
+        )
+
+        uow.knowledge_candidates.complete_run(
+            run_id=run.id,
+            status=ExtractionRunStatus.SUCCEEDED,
+            completed_at=clock(),
+            raw_output=raw_output,
+        )
+        uow.commit()
+        logger.info(
+            "knowledge_candidates_stored",
+            workspace_id=observation.workspace_id,
+            observation_id=str(observation.id),
+            run_id=str(run.id),
+            ontology_id=spec.ontology_id,
+            ontology_version=spec.ontology_version,
+            entity_count=len(entity_ids),
+            deterministic_entity_count=len(observation.observation.metadata_entities),
+            claim_count=len(claim_ids),
+            relation_count=len(relation_ids),
+            evidence_link_count=evidence.total,
+            located_claim_count=evidence.located_claims,
+            demoted_not_found_count=evidence.not_found_claims,
+            demoted_ambiguous_count=evidence.ambiguous_claims,
+        )
+
+        return CandidateStorageResult(
+            batch=StoredCandidateBatch(
+                run_id=run.id,
+                entity_ids=entity_ids,
+                claim_ids=claim_ids,
+                relation_ids=relation_ids,
+                evidence_link_count=evidence.total,
+                located_claim_count=evidence.located_claims,
+                demoted_not_found_count=evidence.not_found_claims,
+                demoted_ambiguous_count=evidence.ambiguous_claims,
+            )
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class _SoleActor:
+    """observation에 외부 행위자가 한 명뿐일 때 그 한 명을 가리킨다.
+
+    Attributes:
+        local_key: 그 행위자 후보를 이번 추출에서 가리키는 참조 키다.
+        identity: metadata에서 뽑은 행위자 정보를 담는다.
+    """
+
+    local_key: str
+    identity: ActorIdentity
+
+
+def _store_entities(
+    observation: StoredObservation,
+    batch: KnowledgeCandidateBatch,
+    *,
+    run_id: uuid.UUID,
+    uow: KnowledgeCandidateUnitOfWork,
+) -> tuple[dict[str, uuid.UUID], dict[str, str], _SoleActor | None]:
+    """metadata Entity를 먼저, 그 다음 Extractor가 만든 Entity를 저장한다.
+
+    순서가 중요하다. relation의 끝점이 `m1`을 가리킬 수 있으므로 그 행이 먼저
+    있어야 한다.
+
+    metadata 중 행위자로 판정된 것은 source의 entity_type이 아니라 어휘의
+    행위자 종류(ACTOR_ENTITY_TYPE)로 저장한다. 행위자가 누구인지는 원문 밖
+    구조에 이미 적혀 있는 사실이므로 추론이 아니다.
+
+    행위자가 정확히 한 명일 때만, `고객`·`사용자`처럼 사람이 아니라 역할을
+    가리키는 LLM 후보를 그 행위자의 별칭으로 접는다. 두 명 이상이면 그 역할
+    표기가 누구를 가리키는지 원문 밖에서 정할 근거가 없으므로 접지 않는다.
+
+    돌려주는 것은 `(저장된 후보 id, 별칭 지도, 유일 행위자)`다. 별칭된 후보는
+    저장하지 않으므로 첫 사전에는 없고, 참조 해소는 `_reference_ids`가 맡는다.
+    """
+    entity_ids: dict[str, uuid.UUID] = {}
+    actors: list[_SoleActor] = []
+
+    for index, entity in enumerate(observation.observation.metadata_entities, start=1):
+        local_key = metadata_local_key(index)
+        identity = actor_identity_from_metadata(entity)
+        if identity is not None:
+            actors.append(_SoleActor(local_key=local_key, identity=identity))
+        entity_ids[local_key] = uow.knowledge_candidates.add_entity_candidate(
+            workspace_id=observation.workspace_id,
+            run_id=run_id,
+            draft=_metadata_entity_draft(local_key, entity, identity),
+            extraction_method=ExtractionMethod.DETERMINISTIC,
+            confidence=DETERMINISTIC_CONFIDENCE,
+        )
+
+    sole_actor = actors[0] if len(actors) == 1 else None
+
+    aliases: dict[str, str] = {}
+    for draft in batch.entities:
+        if (
+            sole_actor is not None
+            and draft.proposed_type == ACTOR_ENTITY_TYPE
+            and is_role_label(draft.proposed_name)
+        ):
+            aliases[draft.local_key] = sole_actor.local_key
+            continue
+        entity_ids[draft.local_key] = uow.knowledge_candidates.add_entity_candidate(
+            workspace_id=observation.workspace_id,
+            run_id=run_id,
+            draft=draft,
+            extraction_method=ExtractionMethod.LLM,
+        )
+
+    return entity_ids, aliases, sole_actor
+
+
+def _metadata_entity_draft(
+    local_key: str,
+    entity: MetadataEntity,
+    identity: ActorIdentity | None = None,
+) -> EntityCandidateDraft:
+    """레이어 1 Entity를 Extractor 출력과 같은 형태로 맞춘다.
+
+    저장 경로를 하나로 두려는 것이다. resolution이 나중에 한 곳만 보면 되고
+    provenance도 한 형태로 유지된다. 출처는 `extraction_method`가 밝힌다.
+
+    행위자면 어휘의 행위자 종류로 담고 attributes도 행위자 형태로 바꾼다.
+    행위자가 아니면 source가 준 종류와 attributes를 그대로 옮긴다.
+    """
+    if identity is not None:
+        return EntityCandidateDraft(
+            local_key=local_key,
+            proposed_type=ACTOR_ENTITY_TYPE,
+            proposed_name=identity.display_name,
+            attributes=actor_candidate_attributes(identity),
+        )
+
+    return EntityCandidateDraft(
+        local_key=local_key,
+        proposed_type=entity.entity_type,
+        proposed_name=entity.display_name,
+        attributes={
+            "external_key": entity.external_key,
+            **dict(entity.attributes),
+        },
+    )
+
+
+def _reference_ids(
+    entity_ids: dict[str, uuid.UUID],
+    aliases: dict[str, str],
+) -> dict[str, uuid.UUID]:
+    """claim·relation이 쓸 참조 지도를 만든다.
+
+    별칭된 local_key는 저장된 후보가 없으므로 행위자 후보의 식별자로 푼다.
+    근거 링크는 이 지도가 아니라 저장된 후보만 보고 걸어야 중복이 생기지 않는다.
+    """
+    references = dict(entity_ids)
+    for alias_key, actor_key in aliases.items():
+        references[alias_key] = entity_ids[actor_key]
+    return references
+
+
+def _store_claims(
+    observation: StoredObservation,
+    batch: KnowledgeCandidateBatch,
+    *,
+    run_id: uuid.UUID,
+    reference_ids: dict[str, uuid.UUID],
+    spec: ExtractionRunSpec,
+    uow: KnowledgeCandidateUnitOfWork,
+) -> dict[str, uuid.UUID]:
+    claim_ids: dict[str, uuid.UUID] = {}
+    for draft in batch.claims:
+        subject_id = _resolve(draft.subject_local_key, reference_ids, draft.local_key)
+        claim_ids[draft.local_key] = uow.knowledge_candidates.add_claim_candidate(
+            workspace_id=observation.workspace_id,
+            run_id=run_id,
+            draft=draft,
+            subject_candidate_id=subject_id,
+            spec=spec,
+            extraction_method=_method_for(draft.subject_local_key),
+        )
+    return claim_ids
+
+
+def _store_relations(
+    observation: StoredObservation,
+    batch: KnowledgeCandidateBatch,
+    *,
+    run_id: uuid.UUID,
+    reference_ids: dict[str, uuid.UUID],
+    aliases: dict[str, str],
+    sole_actor: _SoleActor | None,
+    uow: KnowledgeCandidateUnitOfWork,
+) -> dict[str, uuid.UUID]:
+    """Extractor가 만든 관계를 저장하고, 빠진 requested_by를 채운다.
+
+    요청 사항 후보에 "누가 요청했는가"가 없으면 그 요청은 사람과 이어지지
+    않는다. 행위자가 정확히 한 명이면 그 사람이 이 문의를 남긴 사람이라는 것이
+    metadata에서 확정되므로 결정론 관계로 채운다. 두 명 이상이면 어느 쪽인지
+    정할 근거가 없어 채우지 않는다.
+    """
+    relation_ids: dict[str, uuid.UUID] = {}
+    for draft in batch.relation_assertions:
+        source_id = _resolve(draft.source_local_key, reference_ids, draft.local_key)
+        target_id = _resolve(draft.target_local_key, reference_ids, draft.local_key)
+        relation_ids[draft.local_key] = uow.knowledge_candidates.add_relation_candidate(
+            workspace_id=observation.workspace_id,
+            run_id=run_id,
+            draft=draft,
+            source_candidate_id=source_id,
+            target_candidate_id=target_id,
+            extraction_method=ExtractionMethod.LLM,
+        )
+
+    if sole_actor is None:
+        return relation_ids
+
+    for draft in batch.entities:
+        if draft.proposed_type != FEATURE_REQUEST_ENTITY_TYPE:
+            continue
+        if draft.local_key in aliases:
+            continue
+        already_stated = any(
+            relation.source_local_key == draft.local_key
+            and relation.relation_type == DERIVED_REQUESTED_BY_RELATION
+            for relation in batch.relation_assertions
+        )
+        if already_stated:
+            continue
+
+        derived = RelationAssertionCandidateDraft(
+            local_key=f"actor:{DERIVED_REQUESTED_BY_RELATION}:{draft.local_key}",
+            source_local_key=draft.local_key,
+            target_local_key=sole_actor.local_key,
+            relation_type=DERIVED_REQUESTED_BY_RELATION,
+            assertion_text=(
+                f"{sole_actor.identity.display_name}이(가) 이 문의를 남겼다"
+            ),
+        )
+        relation_ids[derived.local_key] = (
+            uow.knowledge_candidates.add_relation_candidate(
+                workspace_id=observation.workspace_id,
+                run_id=run_id,
+                draft=derived,
+                source_candidate_id=_resolve(
+                    derived.source_local_key, reference_ids, derived.local_key
+                ),
+                target_candidate_id=_resolve(
+                    derived.target_local_key, reference_ids, derived.local_key
+                ),
+                extraction_method=ExtractionMethod.DETERMINISTIC,
+                confidence=DETERMINISTIC_CONFIDENCE,
+            )
+        )
+
+    return relation_ids
+
+
+def _method_for(subject_local_key: str) -> ExtractionMethod:
+    """주장이 확정된 Entity에 대한 것인지 보고 출처를 정한다.
+
+    Extractor가 metadata Entity를 주어로 삼아도 그 주장 자체는 LLM이 원문에서
+    읽은 것이므로 `llm`이다. 여기서 `deterministic`이 되는 것은 레이어 1이
+    직접 만든 Entity뿐이다.
+    """
+    del subject_local_key
+    return ExtractionMethod.LLM
+
+
+def _resolve(
+    local_key: str,
+    reference_ids: dict[str, uuid.UUID],
+    referrer: str,
+) -> uuid.UUID:
+    """`local_key` 참조를 저장된 식별자로 바꾼다.
+
+    별칭된 키도 여기서 풀린다. 참조 지도에 이미 행위자 후보의 식별자로
+    들어가 있기 때문이다.
+    """
+    found = reference_ids.get(local_key)
+    if found is None:
+        kind = "metadata" if is_metadata_local_key(local_key) else "entity"
+        raise ValueError(
+            f"{referrer}가 가리킨 {kind} local_key를 찾을 수 없다: {local_key}"
+        )
+    return found
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceStorageCounts:
+    """근거 링크 저장의 집계를 표현한다.
+
+    Attributes:
+        total: 남긴 근거 링크 전체 수를 나타낸다.
+        located_claims: 인용을 본문에서 다시 찾은 claim 수를 나타낸다.
+        not_found_claims: 인용이 본문에 없어 낮춘 claim 수를 나타낸다.
+        ambiguous_claims: 인용이 여러 번 나와 낮춘 claim 수를 나타낸다.
+    """
+
+    total: int = 0
+    located_claims: int = 0
+    not_found_claims: int = 0
+    ambiguous_claims: int = 0
+
+
+def _store_evidence(
+    observation: StoredObservation,
+    batch: KnowledgeCandidateBatch,
+    *,
+    run_id: uuid.UUID,
+    evidence_node_id: uuid.UUID,
+    entity_ids: dict[str, uuid.UUID],
+    claim_ids: dict[str, uuid.UUID],
+    relation_ids: dict[str, uuid.UUID],
+    uow: KnowledgeCandidateUnitOfWork,
+) -> EvidenceStorageCounts:
+    """모든 후보를 그것이 나온 Observation에 잇는다.
+
+    Claim은 근거 문구를 함께 남기고, 서버가 그 문구를 본문에서 다시 찾아
+    위치를 확정한다. LLM의 인용 주장은 검증 없이 믿지 않는다. 정확히 한 번
+    나오면 locator에 문자 offset을 적고, 없거나 여러 번이면 위치 없이 문서
+    단위 근거로 낮춘다.
+
+    위치가 확정되면 그 위치가 속한 발화의 시각도 locator에 함께 적는다.
+    주장의 시간은 그 주장이 발화된 시각이어야 하기 때문이다. 위치를 잃었거나
+    발화 구간 밖이면 시각도 남기지 않는다 — 소비자가 문서 단위 사슬로
+    물러나는 편이 남의 발화 시각을 붙이는 것보다 안전하다.
+    """
+    count = 0
+    located = 0
+    not_found = 0
+    ambiguous = 0
+    for local_key, candidate_id in entity_ids.items():
+        del local_key
+        uow.knowledge_candidates.add_evidence_link(
+            workspace_id=observation.workspace_id,
+            run_id=run_id,
+            evidence_node_id=evidence_node_id,
+            entity_candidate_id=candidate_id,
+        )
+        count += 1
+
+    statements = {draft.local_key: draft.statement for draft in batch.claims}
+    for local_key, candidate_id in claim_ids.items():
+        statement = statements.get(local_key)
+        locator = locate_excerpt(observation.observation.content, statement)
+        if locator is None:
+            content = observation.observation.content or ""
+            if statement in content:
+                ambiguous += 1
+                reason = "ambiguous"
+            else:
+                not_found += 1
+                reason = "not_found"
+            logger.info(
+                "claim_evidence_demoted",
+                workspace_id=observation.workspace_id,
+                observation_id=str(observation.id),
+                run_id=str(run_id),
+                claim_local_key=local_key,
+                reason=reason,
+            )
+        else:
+            located += 1
+            locator = replace(
+                locator,
+                event_at=utterance_event_at(
+                    observation.observation.source_attributes,
+                    locator.start,
+                ),
+            )
+        uow.knowledge_candidates.add_evidence_link(
+            workspace_id=observation.workspace_id,
+            run_id=run_id,
+            evidence_node_id=evidence_node_id,
+            claim_candidate_id=candidate_id,
+            excerpt=statement,
+            locator=locator,
+        )
+        count += 1
+
+    for local_key, candidate_id in relation_ids.items():
+        del local_key
+        uow.knowledge_candidates.add_evidence_link(
+            workspace_id=observation.workspace_id,
+            run_id=run_id,
+            evidence_node_id=evidence_node_id,
+            relation_candidate_id=candidate_id,
+        )
+        count += 1
+
+    return EvidenceStorageCounts(
+        total=count,
+        located_claims=located,
+        not_found_claims=not_found,
+        ambiguous_claims=ambiguous,
+    )
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def record_failed_extraction(
+    observation: StoredObservation,
+    *,
+    spec: ExtractionRunSpec,
+    error: str,
+    uow: KnowledgeCandidateUnitOfWork,
+    raw_output: dict | None = None,
+    clock: Callable[[], datetime] | None = None,
+) -> uuid.UUID:
+    """실패한 추출을 실행 기록으로 남긴다.
+
+    남기지 않으면 어느 Observation이 왜 실패했는지 DB에 흔적이 없다. 수천
+    건에서 몇 %가 조용히 빠져도 아무도 모른다.
+
+    재추출 판정이 성공한 실행만 보므로 이 기록이 재시도를 막지는 않는다.
+    """
+    clock = clock or _utcnow
+    now = clock()
+
+    with uow:
+        node = uow.knowledge_nodes.get_for_resource(
+            workspace_id=observation.workspace_id,
+            node_kind=NodeKind.OBSERVATION,
+            resource_id=observation.id,
+        )
+        if node is None:
+            raise ObservationNodeMissing(
+                f"observation {observation.id} has no graph node"
+            )
+
+        uow.ontology.ensure(
+            workspace_id=observation.workspace_id,
+            ontology_id=spec.ontology_id,
+            vocabulary=spec.vocabulary,
+        )
+        run = uow.knowledge_candidates.start_run(
+            workspace_id=observation.workspace_id,
+            input_node_id=node.id,
+            spec=spec,
+            started_at=now,
+        )
+        uow.knowledge_candidates.complete_run(
+            run_id=run.id,
+            status=ExtractionRunStatus.FAILED,
+            completed_at=clock(),
+            raw_output=raw_output,
+            error=error,
+        )
+        uow.commit()
+
+    logger.info(
+        "knowledge_extraction_run_failed",
+        workspace_id=observation.workspace_id,
+        observation_id=str(observation.id),
+        run_id=str(run.id),
+        ontology_version=spec.ontology_version,
+        error=error[:200],
+    )
+    return run.id

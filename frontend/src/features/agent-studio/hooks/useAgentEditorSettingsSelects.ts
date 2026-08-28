@@ -3,9 +3,10 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
+import { automationCredentialsQueries } from '@/shared/queries/automationCredentials.queries';
+
 import { AGENT_EDITOR_SETTINGS_MESSAGES } from '../constants/agentEditorSettingsMessages';
 import { AGENT_STUDIO_SETTINGS_FIXTURE } from '../fixtures/agentStudioFixtures';
-import { automationCredentialsQueries } from '../queries/automationCredentials.queries';
 import { inquiryAutomationsQueries } from '../queries/inquiryAutomations.queries';
 import type { AgentStudioSelectItem } from '../types/agentStudioModel';
 import { mapAutomationCredentialToSelectItem, mapAutomationTargetToSelectItem } from '../utils/mapAutomationSelectItems';

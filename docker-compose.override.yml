@@ -14,6 +14,7 @@ services:
       - ./backend/.secrets:/app/.secrets
       - ./backend/alembic.ini:/app/alembic.ini
       - ./backend/alembic:/app/alembic
+      - ./backend/scripts:/app/scripts
       - ${HOME}/.aws:/root/.aws:ro
       - ./logs:/var/log/catchup
     env_file:
@@ -54,7 +55,7 @@ services:
       target: dev
     volumes:
       - ./frontend:/app
-      - /app/node_modules
+      - web_node_modules:/app/node_modules
     env_file:
       - .env
     environment:
@@ -70,3 +71,4 @@ services:
       
 volumes:
   pg_data:
+  web_node_modules:

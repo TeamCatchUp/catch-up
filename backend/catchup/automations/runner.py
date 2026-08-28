@@ -24,6 +24,7 @@ observe = get_observe()
 @dataclass(frozen=True)
 class AutomationInput:
     inquiry_text: str
+    channel_talk_channel_id: str
     user_chat_id: str
     slack_channel_id: str
     slack_credential_id: int
@@ -59,8 +60,10 @@ def _build_trace_context(automation_input: AutomationInput) -> Any:
 
 
 @observe(name="inquiry-automation")
-async def run_inquiry_automation(automation_input: AutomationInput) -> None:
-    """Channel Talk 문의 자동화 파이프라인을 실행한다."""
+async def run_inquiry_automation(
+    automation_input: AutomationInput,
+) -> dict[str, Any] | None:
+    """Channel Talk 문의 자동화 파이프라인을 실행하고 구조화된 결과를 반환한다."""
     logger.info(
         "inquiry_automation_started",
         user_chat_id=automation_input.user_chat_id,
@@ -69,6 +72,7 @@ async def run_inquiry_automation(automation_input: AutomationInput) -> None:
 
     state = AutomationState(
         inquiry_text=automation_input.inquiry_text,
+        channel_talk_channel_id=automation_input.channel_talk_channel_id,
         user_chat_id=automation_input.user_chat_id,
         slack_channel_id=automation_input.slack_channel_id,
         slack_credential_id=automation_input.slack_credential_id,
@@ -83,6 +87,8 @@ async def run_inquiry_automation(automation_input: AutomationInput) -> None:
         rerank_count=0,
         grade_result=None,
         guide_text=None,
+        guide_explanation=None,
+        citations=None,
     )
 
     client = get_langfuse_client()
@@ -98,11 +104,18 @@ async def run_inquiry_automation(automation_input: AutomationInput) -> None:
             state, config=invoke_config
         )
 
+    citations = (result or {}).get("citations") or []
+    guide_result = {
+        "guide_text": (result or {}).get("guide_text"),
+        "guide_explanation": (result or {}).get("guide_explanation"),
+        "citations": [citation.model_dump(mode="json") for citation in citations],
+    }
+
     if client is not None:
         try:
             client.update_current_span(
                 input={"inquiry_text": automation_input.inquiry_text},
-                output={"guide_text": (result or {}).get("guide_text")},
+                output=guide_result,
             )
         except Exception as exc:
             logger.warning("langfuse_update_span_failed", error=str(exc))
@@ -117,3 +130,5 @@ async def run_inquiry_automation(automation_input: AutomationInput) -> None:
             await run_in_threadpool(client.flush)
         except Exception as exc:
             logger.warning("langfuse_flush_failed", error=str(exc))
+
+    return guide_result

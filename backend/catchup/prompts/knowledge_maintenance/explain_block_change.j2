@@ -1,0 +1,53 @@
+You write one sentence saying why one block of an internal wiki page changed.
+The page is assembled by a deterministic compiler; what changed is already
+fixed. Your only job is the reason a reader would want to hear.
+
+## What this page is for
+
+<< purpose_sentence >>
+
+## Which block changed
+
+- heading: << heading >>
+
+## What it said before
+
+{% if before_statements -%}
+{% for statement in before_statements -%}
+- << statement >>
+{% endfor -%}
+{% else -%}
+(this block did not exist before)
+{% endif %}
+## What it says now
+
+{% if after_statements -%}
+{% for statement in after_statements -%}
+- << statement >>
+{% endfor -%}
+{% else -%}
+(this block has no statement now)
+{% endif %}
+{% if new_sources -%}
+## Newly added quotes (the only facts you may state)
+
+These are the verified quotes that arrived with this change. They are the only
+place a cause may come from.
+
+{% for source in new_sources -%}
+- << source >>
+{% endfor %}
+{% endif -%}
+## Rules
+
+1. State only what the lists above already say. Never invent or infer a
+   person, a team, a date or a number.
+2. Say what changed and, if the newly added quotes carry it, what brought the
+   change. If they do not, say only what changed.
+3. Write exactly one sentence. No heading, no bullet list, no markdown.
+4. Write in Korean. End the sentence with the polite -습니다 ending.
+   This sentence is a notice on a reviewer's screen, not wiki body prose, so
+   it never follows the page's own writing style.
+5. Add no recommendation and no judgement of your own.
+
+Return the sentence in the `reason` field.

@@ -32,6 +32,8 @@ class EntityType(StrEnum):
     # Channel Talk
     USER_CHAT = "user_chat"
     DOCUMENT_ARTICLE = "document_article"
+    # LLM Wiki
+    ARTIFACT_REVISION = "artifact_revision"
 
 
 # Source Metadata Registry
@@ -79,6 +81,16 @@ SOURCE_METADATA: dict[SourceType, SourceMeta] = {
         authority=(
             "Customer conversation history and support knowledge base articles. "
             "Reflects real customer issues, resolutions, and support patterns."
+        ),
+    ),
+    SourceType.LLM_WIKI: SourceMeta(
+        display="LLM Wiki",
+        role="Canonical Knowledge Cards",
+        authority=(
+            "Human-reviewed and approved knowledge cards distilled from the "
+            "other sources. Each card states the currently agreed-upon fact "
+            "with its provenance. (Highest Authority — prefer it when it "
+            "conflicts with raw source documents.)"
         ),
     ),
 }
@@ -326,6 +338,18 @@ class BaseSource(BaseModel):
                     state=da_article.get("state"),
                 )
 
+        # 6. LLM Wiki
+        elif source_str == "llm_wiki":
+            return LlmWikiSource(
+                **base_data,
+                source=SourceType.LLM_WIKI,
+                title=metadata.get("title", "No Title"),
+                author=metadata.get("author_name"),
+                # LLM Wiki Specific
+                artifact_id=metadata.get("artifact_id"),
+                heading=metadata.get("heading"),
+            )
+
         # Fallback
         return UnknownSource(
             **base_data,
@@ -400,6 +424,13 @@ class ChannelTalkSource(BaseSource):
     priority: str | None = Field(None, description="우선순위 (high/medium/low)")
 
 
+class LlmWikiSource(BaseSource):
+    source: Literal[SourceType.LLM_WIKI] = SourceType.LLM_WIKI
+
+    artifact_id: str | None = Field(None, description="아티팩트 ID")
+    heading: str | None = Field(None, description="블록 제목")
+
+
 # Fallback
 class UnknownSource(BaseSource):
     source: Literal["unknown"] = "unknown"
@@ -413,6 +444,7 @@ SourceResponse = Annotated[
         GithubSource,
         ConfluenceSource,
         ChannelTalkSource,
+        LlmWikiSource,
         UnknownSource,
     ],
     Field(discriminator="source"),

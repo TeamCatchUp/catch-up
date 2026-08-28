@@ -34,11 +34,11 @@ function makeStorybookQueryClient() {
   });
 }
 
-function StorybookProviders({ children }: { children: ReactNode }) {
+function StorybookProviders({ children, theme }: { children: ReactNode; theme: 'light' | 'dark' }) {
   const [queryClient] = useState(makeStorybookQueryClient);
 
   return (
-    <ThemeProvider>
+    <ThemeProvider forcedTheme={theme}>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider delayDuration={200}>
           <div className="bg-fill-normal-normal text-text-normal-normal min-h-screen">{children}</div>
@@ -49,17 +49,39 @@ function StorybookProviders({ children }: { children: ReactNode }) {
   );
 }
 
-const withCatchupProviders: Decorator = (Story) => (
-  <StorybookProviders>
+const withCatchupProviders: Decorator = (Story, context) => (
+  <StorybookProviders theme={context.globals.theme === 'dark' ? 'dark' : 'light'}>
     <Story />
   </StorybookProviders>
 );
 
 const preview: Preview = {
   decorators: [withCatchupProviders],
+  globalTypes: {
+    theme: {
+      description: '화면 모드',
+      toolbar: {
+        title: '화면 모드',
+        icon: 'contrast',
+        items: [
+          { value: 'light', title: '라이트 모드' },
+          { value: 'dark', title: '다크 모드' },
+        ],
+        dynamicTitle: true,
+      },
+    },
+  },
+  initialGlobals: { theme: 'light' },
   loaders: [mswLoader],
   parameters: {
     layout: 'fullscreen',
+    // Flows(여정 문서)를 사이드바 맨 위로. Flows 안은 여정 순서(커넥터 연결 → 임베딩 → 이용자 매핑)로 고정한다
+    // — 임포트 순서 등 암묵적 정렬에 맡기지 않고, 여정 순서를 명시적으로 고정하기 위해서다.
+    options: {
+      storySort: {
+        order: ['Flows', ['커넥터 연결', '임베딩', '이용자 매핑'], 'Screens', 'Compositions', 'Primitives'],
+      },
+    },
     nextjs: {
       appDirectory: true,
     },

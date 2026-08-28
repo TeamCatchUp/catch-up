@@ -18,51 +18,6 @@ export interface MappingUploadResponse {
   stats: MappingUploadStats;
 }
 
-// ─── Connector Status ───
-
-/** 커넥터 상태 공통 필드 */
-export interface ConnectorStatusBase {
-  tool_name: string;
-  connected: boolean;
-  oldest: string | null;
-  latest: string | null;
-}
-
-export interface GithubConnectorStatus extends ConnectorStatusBase {
-  tool_name: 'github';
-  repositories: string[];
-}
-
-export interface JiraConnectorStatus extends ConnectorStatusBase {
-  tool_name: 'jira';
-  projects: string[];
-}
-
-export interface SlackConnectorStatus extends ConnectorStatusBase {
-  tool_name: 'slack';
-  channels: string[];
-}
-
-export interface ConfluenceConnectorStatus extends ConnectorStatusBase {
-  tool_name: 'confluence';
-  spaces: string[];
-}
-
-export type ConnectorStatus =
-  | GithubConnectorStatus
-  | JiraConnectorStatus
-  | SlackConnectorStatus
-  | ConfluenceConnectorStatus;
-
-// ─── User Mapping Filter Chip (frontend-only state) ───
-
-/**
- * 이용자 연동 탭 필터 칩 상태.
- * `'all' | 'full' | 'partial'` → backend `?mapping_status=`로 그대로 매핑.
- * `'channel_talk'` → backend는 `mapping_status='all'`로 호출하고 frontend가 컬럼만 좁힘.
- */
-export type SyncFilterType = 'all' | 'full' | 'partial' | 'channel_talk';
-
 // ─── Vendor Users (툴별 사용자 목록 드롭다운) ───
 
 export interface ToolUserResponse {

@@ -1,8 +1,6 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import { IntegrationsPageClient } from '@/features/admin/integrations';
-
-/** 관리자 - 협업툴 연동 페이지 */
+/** 구 협업툴 연동 라우트 — 커넥터 연결로 이동 */
 export default function AdminIntegrationsPage() {
-  return <IntegrationsPageClient />;
+  redirect('/admin/connectors');
 }

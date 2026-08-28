@@ -1,0 +1,215 @@
+from __future__ import annotations
+
+import functools
+from collections.abc import Awaitable
+from collections.abc import Callable
+from collections.abc import Iterator
+from contextlib import ExitStack
+from contextlib import contextmanager
+from typing import Any
+from typing import TypeVar
+
+from catchup.knowledge_maintenance.contracts.extraction import KnowledgeCandidateBatch
+from catchup.knowledge_maintenance.contracts.extraction import (
+    KnowledgeExtractionRequest,
+)
+from catchup.knowledge_maintenance.domain.observation import MetadataEntity
+from catchup.knowledge_maintenance.domain.observation import NormalizedObservation
+from catchup.knowledge_maintenance.domain.source_version import SourceVersion
+from catchup.knowledge_maintenance.observability.tracing import TRACE_NAME
+from catchup.knowledge_maintenance.observability.tracing import llm_invoke_config
+from catchup.knowledge_maintenance.observability.tracing import user_chat_trace_id
+from catchup.observability.langfuse.configs import get_langfuse_client
+from catchup.observability.logging import get_logger
+
+logger = get_logger(__name__)
+
+_Normalize = TypeVar("_Normalize", bound=Callable[..., NormalizedObservation])
+
+
+def _close_stack(
+    stack: ExitStack,
+    *,
+    name: str,
+    trace_id: str,
+    exc_info: tuple[Any, Any, Any] = (None, None, None),
+) -> None:
+    """
+    열린 span을 닫되, 닫는 과정의 실패가 호출자의 예외를 덮지 않게 한다.
+    """
+    try:
+        stack.__exit__(*exc_info)
+    except Exception as error:
+        logger.warning(
+            "langfuse_span_close_failed",
+            name=name,
+            trace_id=trace_id,
+            error=str(error),
+        )
+
+
+@contextmanager
+def _safe_span(
+    client: Any,
+    trace_id: str,
+    *,
+    name: str,
+    input: Any = None,
+) -> Iterator[Any]:
+    """
+    span을 열되, 실패하더라도 호출자의 동작을 중단하지 않고 로그만 남긴다.
+
+    Langfuse가 돌려주는 context manager는 `__enter__`에서 입력 직렬화까지
+    수행한다. 생성 호출만 감싸면 진입 단계의 실패가 그대로 파이프라인으로
+    새어 나가므로 진입과 종료까지 이 안에서 처리한다.
+    """
+    stack = ExitStack()
+    span: Any = None
+    try:
+        span = stack.enter_context(
+            client.start_as_current_observation(
+                trace_context={"trace_id": trace_id},
+                name=name,
+                as_type="span",
+                input=input,
+            )
+        )
+    except Exception as error:
+        logger.warning(
+            "langfuse_span_open_failed",
+            name=name,
+            trace_id=trace_id,
+            error=str(error),
+        )
+        _close_stack(stack, name=name, trace_id=trace_id)
+        span = None
+    else:
+        # normalize와 extract는 각각 독립된 root span으로 붙는다. 이름을
+        # 지정하지 않으면 먼저 도착한 span 이름이 Trace 이름이 되므로,
+        # 두 단계가 같은 이름을 밀어 넣어 Trace 이름을 고정한다.
+        try:
+            from langfuse import propagate_attributes
+
+            stack.enter_context(propagate_attributes(trace_name=TRACE_NAME))
+        except Exception as error:
+            # 이름이 없어도 관측 자체는 유효하므로 span은 유지한다.
+            logger.warning(
+                "langfuse_trace_name_failed",
+                name=name,
+                trace_id=trace_id,
+                error=str(error),
+            )
+
+    try:
+        yield span
+    except BaseException as error:
+        _close_stack(
+            stack,
+            name=name,
+            trace_id=trace_id,
+            exc_info=(type(error), error, error.__traceback__),
+        )
+        raise
+    else:
+        _close_stack(stack, name=name, trace_id=trace_id)
+
+
+def _safe_update(span: Any, **output: Any) -> None:
+    if span is None:
+        return
+    try:
+        span.update(output=output)
+    except Exception as error:
+        logger.warning("langfuse_span_update_failed", error=str(error))
+
+
+def _metadata_entity_dict(entity: MetadataEntity) -> dict[str, Any]:
+    """
+    `MetadataEntity`를 JSON 직렬화 가능한 dict으로 변환한다.
+    """
+    return {
+        "entity_type": entity.entity_type,
+        "external_key": entity.external_key,
+        "display_name": entity.display_name,
+        "attributes": dict(entity.attributes),
+    }
+
+
+def trace_normalize(normalize: _Normalize) -> _Normalize:
+
+    @functools.wraps(normalize)
+    def wrapper(self: Any, source_version: SourceVersion) -> NormalizedObservation:
+        client = get_langfuse_client()
+        if client is None:
+            return normalize(self, source_version)
+
+        trace_id = user_chat_trace_id(
+            workspace_id=source_version.workspace_id,
+            external_document_id=source_version.source_identity.external_document_id,
+        )
+        with _safe_span(
+            client,
+            trace_id,
+            name="normalize",
+            input={"content": source_version.content},
+        ) as span:
+            result = normalize(self, source_version)
+            _safe_update(
+                span,
+                content=result.content,
+                metadata_entities=[
+                    _metadata_entity_dict(entity)
+                    for entity in result.metadata_entities
+                ],
+                observation_kind=str(result.observation_kind),
+            )
+            return result
+
+    return wrapper
+
+
+def trace_extract(
+    extract: Callable[..., Awaitable[KnowledgeCandidateBatch]],
+) -> Callable[[Any, KnowledgeExtractionRequest], Awaitable[KnowledgeCandidateBatch]]:
+
+    @functools.wraps(extract)
+    async def wrapper(
+        self: Any,
+        request: KnowledgeExtractionRequest,
+    ) -> KnowledgeCandidateBatch:
+        client = get_langfuse_client()
+        if (
+            client is None
+            or request.workspace_id is None
+            or request.external_document_id is None
+        ):
+            return await extract(self, request, invoke_config=None)
+
+        trace_id = user_chat_trace_id(
+            workspace_id=request.workspace_id,
+            external_document_id=request.external_document_id,
+        )
+        with _safe_span(
+            client,
+            trace_id,
+            name="extract",
+            input={
+                "content": request.content,
+                "source_type": request.source_type,
+                "contract_version": request.contract_version,
+            },
+        ) as span:
+            invoke_config = llm_invoke_config(trace_id)
+            batch = await extract(self, request, invoke_config=invoke_config)
+            _safe_update(
+                span,
+                entities=[entity.model_dump(mode="json") for entity in batch.entities],
+                claims=[claim.model_dump(mode="json") for claim in batch.claims],
+                relations=[
+                    relation.model_dump(mode="json")
+                    for relation in batch.relation_assertions
+                ],
+            )
+            return batch
+
+    return wrapper

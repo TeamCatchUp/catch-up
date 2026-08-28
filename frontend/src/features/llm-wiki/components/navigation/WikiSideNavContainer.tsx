@@ -1,0 +1,186 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { usePathname, useRouter } from 'next/navigation';
+
+import WikiSideNav, {
+  findTreeNode,
+  SNB_POPOVER_SHELL_CLASS,
+  type SnbMenuActionId,
+  type WikiTreeNode,
+} from '@/shared/components/layout/sideNavBar/WikiSideNav';
+import { Popover, PopoverAnchor, PopoverContent } from '@/shared/components/ui/popover';
+import { toast } from '@/shared/components/ui/toast';
+import { authQueries } from '@/shared/queries/auth.queries';
+
+import { useWikiSideNav } from '../../hooks/useWikiSideNav';
+import { useMoveWikiArtifactMutation } from '../../queries/wikiArtifacts.mutations';
+import {
+  useCreateWikiFolderMutation,
+  useDeleteWikiFolderMutation,
+  useRenameWikiChannelMutation,
+  useRenameWikiFolderMutation,
+} from '../../queries/wikiChannels.mutations';
+import { useWikiFavoriteToggleMutation } from '../../queries/wikiFavorites.mutations';
+import { wikiChannelHref, wikiFolderHref } from '../../utils/wikiNavTree';
+import MoveTargetPicker, {
+  MOVE_PICKER_FOLDER_INPUT_ATTR,
+  type MoveTarget,
+  type MoveTargetChannel,
+} from './MoveTargetPicker';
+
+/** 액션 버튼이 붙은 토스트는 누를 시간이 필요해 기본 표시 시간보다 길게 둔다 */
+const ACTION_TOAST_DURATION = 6000;
+
+/** 위키 SNB에 실 데이터를 물리는 자리. shared 층은 features를 import할 수 없어 여기서 잇는다. */
+export default function WikiSideNavContainer() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { treeNodes, favorites, channelAdmins, onNodeToggle } = useWikiSideNav();
+  const { data: me } = useQuery(authQueries.me());
+  const favoriteToggle = useWikiFavoriteToggleMutation();
+  const renameChannel = useRenameWikiChannelMutation();
+  const renameFolder = useRenameWikiFolderMutation();
+  const createFolder = useCreateWikiFolderMutation();
+  const deleteFolder = useDeleteWikiFolderMutation();
+  const moveArtifact = useMoveWikiArtifactMutation();
+
+  // 옮기기 대상 패널. 케밥이 섰던 앵커에 이어 뜨고, 본문이 features 데이터라 팝오버째 여기서 소유한다
+  const [movePicker, setMovePicker] = useState<{ node: WikiTreeNode; anchor: HTMLElement } | null>(null);
+
+  // 이동 API가 같은 채널 안만 받아 대상을 그 문서의 채널 하나로 좁히고, 현재 자리는 트리의 부모로 찾는다
+  const moveTarget = useMemo<{ channel: MoveTargetChannel; currentFolderId: string | null } | undefined>(() => {
+    const channel = movePicker ? treeNodes.find((node) => node.id === movePicker.node.channelId) : undefined;
+    if (!movePicker || !channel) return undefined;
+    const folders = (channel.children ?? []).filter((child) => child.kind === 'folder');
+    const parentFolder = folders.find((folder) => (folder.children ?? []).some((doc) => doc.id === movePicker.node.id));
+    // 즐겨찾기에서 온 문서는 채널을 펼치기 전이라 트리에 없을 수 있다 — 즐겨찾기 데이터의 폴더로 보완한다
+    const favoriteFolderId = favorites.find((item) => item.id === movePicker.node.id)?.folderId ?? null;
+    return {
+      channel: {
+        id: channel.id,
+        label: channel.label,
+        folders: folders.map((folder) => ({ id: folder.id, label: folder.label })),
+      },
+      currentFolderId: parentFolder?.id ?? favoriteFolderId,
+    };
+  }, [treeNodes, favorites, movePicker]);
+
+  // 노드가 들고 있는 경로에 현재 오리진을 붙인다 — 공유 링크 규격이 따로 없다
+  const copyNodeLink = async (nodeId: string) => {
+    // 즐겨찾기 행의 문서는 채널을 펼치기 전이라 트리에 없을 수 있다
+    const href = findTreeNode(treeNodes, nodeId)?.href ?? favorites.find((item) => item.id === nodeId)?.href;
+    if (href === undefined) return;
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${href}`);
+      toast('링크가 복사되었습니다.');
+    } catch {
+      toast('복사에 실패했습니다.');
+    }
+  };
+
+  // 즐겨찾기 항목은 문서 행에만 뜬다 — 그 노드 id가 곧 artifact_id다
+  const handleMenuAction = (nodeId: string | undefined, actionId: SnbMenuActionId) => {
+    if (nodeId === undefined) return;
+    if (actionId === 'favorite' || actionId === 'unfavorite') {
+      favoriteToggle.mutate({ artifactId: nodeId, favorite: actionId === 'favorite' });
+      return;
+    }
+    if (actionId === 'copy-link') void copyNodeLink(nodeId);
+  };
+
+  // 문서는 이름 변경 API가 없어 채널·폴더만 여기로 온다
+  const handleRenameSubmit = (node: WikiTreeNode, name: string) => {
+    if (node.kind === 'channel') renameChannel.mutate({ channelId: node.id, name });
+    else if (node.kind === 'folder') renameFolder.mutate({ channelId: node.channelId, folderId: node.id, name });
+  };
+
+  const handleFolderCreateSubmit = (channelNode: WikiTreeNode, name: string) => {
+    createFolder.mutate({ channelId: channelNode.channelId, name });
+  };
+
+  const handleMoveSelect = (node: WikiTreeNode, target: MoveTarget) => {
+    const href = target.folderId === null ? wikiChannelHref(target.channelId) : wikiFolderHref(target.folderId);
+    moveArtifact.mutate(
+      { artifactId: node.id, folderId: target.folderId },
+      {
+        onSuccess: () => {
+          toast(`${node.label}의 옮긴 위치는 ${target.label} 입니다.`, {
+            duration: ACTION_TOAST_DURATION,
+            action: { label: '이동', onClick: () => router.push(href) },
+          });
+        },
+      },
+    );
+  };
+
+  // 패널에서 새 폴더 만들기 — 생성만 한다. 무효화로 목록에 새 폴더가 서고 이동은 사용자가 직접 고른다
+  // reject는 입력 유지를 위해 패널로 그대로 돌려보낸다(패널이 catch) — 토스트는 뮤테이션이 띄운다
+  const handlePickerFolderCreate = async (name: string) => {
+    if (!moveTarget) return;
+    await createFolder.mutateAsync({ channelId: moveTarget.channel.id, name });
+  };
+
+  return (
+    <>
+      <WikiSideNav
+        canCreateWiki={me?.role === 'admin'}
+        treeNodes={treeNodes}
+        favorites={favorites}
+        channelAdmins={channelAdmins}
+        onNodeToggle={onNodeToggle}
+        onMenuAction={handleMenuAction}
+        onRenameSubmit={handleRenameSubmit}
+        onFolderCreateSubmit={handleFolderCreateSubmit}
+        onFolderDeleteSubmit={(node) =>
+          deleteFolder.mutate(
+            { channelId: node.channelId, folderId: node.id },
+            {
+              onSuccess: () => {
+                toast('폴더를 삭제했습니다. 문서는 채널 바로 아래로 옮겨졌습니다.');
+                // 보고 있던 폴더 페이지가 사라지므로 문서들이 실제로 간 채널 페이지로 옮긴다
+                if (pathname === wikiFolderHref(node.id)) router.replace(wikiChannelHref(node.channelId));
+              },
+            },
+          )
+        }
+        onMoveRequest={(node, anchor) => {
+          // 대상 채널이 트리에 없으면(미분류 문서 포함) 빈 패널이 뜬다 — 진입 자체를 막는다
+          if (!treeNodes.some((channel) => channel.id === node.channelId)) return;
+          setMovePicker({ node, anchor });
+        }}
+        moveOpenNodeId={movePicker?.node.id}
+      />
+
+      {/* 케밥과 같은 앵커에 virtualRef로 붙는다 — 껍데기 규격은 SNB 팝오버 공통이다 */}
+      {movePicker && (
+        <Popover open onOpenChange={(open) => !open && setMovePicker(null)}>
+          <PopoverAnchor virtualRef={{ current: movePicker.anchor }} />
+          <PopoverContent
+            align="start"
+            side="right"
+            className={SNB_POPOVER_SHELL_CLASS}
+            onEscapeKeyDown={(event) => {
+              // 폴더 이름 입력 중의 Escape는 인라인 입력만 닫는다 — 패널째 dismiss되면 입력이 증발한다
+              if (event.target instanceof Element && event.target.closest(`[${MOVE_PICKER_FOLDER_INPUT_ATTR}]`))
+                event.preventDefault();
+            }}
+          >
+            <MoveTargetPicker
+              channel={moveTarget?.channel}
+              currentFolderId={moveTarget?.currentFolderId}
+              onSelect={(target) => {
+                setMovePicker(null);
+                handleMoveSelect(movePicker.node, target);
+              }}
+              onCreateFolder={
+                moveTarget && channelAdmins[moveTarget.channel.id] === true ? handlePickerFolderCreate : undefined
+              }
+            />
+          </PopoverContent>
+        </Popover>
+      )}
+    </>
+  );
+}

@@ -35,7 +35,7 @@ function SideNavUserSurface({ isOpen, name, email, role }: SideNavUserStoryArgs)
 }
 
 const meta = {
-  title: 'Compositions/Shared/Layout/SideNavUser',
+  title: 'Compositions/Shared/Layout/SideNavBar/SideNavUser',
   tags: ['autodocs'],
   args: {
     isOpen: true,

@@ -114,6 +114,24 @@ class ManualSearchAction(BaseAuditAction):
     SEND_QUERY = "send_query"
 
 
+class KnowledgeReviewAction(BaseAuditAction):
+    """
+    위키 검수 루프의 인가·조회·결정·적용을 기록
+    """
+    AUTHORIZE = "authorize"
+    LIST = "list"
+    DETAIL = "detail"
+    RESOLVE = "resolve"
+    APPLY = "apply"
+    BLOCK_VERDICT = "block_verdict"
+    BLOCK_VERDICT_CLEAR = "block_verdict_clear"
+    PUBLISH = "publish"
+
+    # 문서 담당자 명단이 줄어든 사실. 해제만 남긴다 — 책임자가 사라지는
+    # 방향만 나중에 "누가 뗐나"를 물을 수 있어야 한다.
+    OWNER_REMOVE = "owner_remove"
+
+
 class McpAction(BaseAuditAction):
     SEARCH_KNOWLEDGE_BASE = "search_knowledge_base"
     READ_DOCUMENTS = "read_documents"

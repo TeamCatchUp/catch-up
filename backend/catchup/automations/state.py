@@ -9,12 +9,14 @@ from langgraph.graph.message import add_messages
 from catchup.automations.structures import GradeResult
 from catchup.db.models import SourceType
 from catchup.schemas.context import GlobalContext
+from catchup.schemas.sources import BaseSource
 from catchup.schemas.structures import VectorDbSearchQuery
 
 
 class AutomationState(TypedDict):
     # 트리거 레이어에서 주입
     inquiry_text: str
+    channel_talk_channel_id: str
     user_chat_id: str
     slack_channel_id: str
     slack_credential_id: int
@@ -33,3 +35,5 @@ class AutomationState(TypedDict):
     quiet_period_seconds: int | None
     grade_result: GradeResult | None
     guide_text: str | None
+    guide_explanation: str | None
+    citations: list[BaseSource] | None

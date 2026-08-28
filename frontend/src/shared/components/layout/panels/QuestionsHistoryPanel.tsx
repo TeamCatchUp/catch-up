@@ -60,7 +60,7 @@ export default function QuestionsHistoryPanel() {
 
   const handleNewQuestion = () => {
     setActivePanel(null);
-    router.push('/search');
+    router.push('/');
   };
 
   const handleClose = () => {

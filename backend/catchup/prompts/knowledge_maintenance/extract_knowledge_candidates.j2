@@ -1,0 +1,229 @@
+You extract structured knowledge candidates from a single source document.
+
+The document below came from `<< source_type >>`. Read it and report the
+entities, claims, and relation assertions it contains.
+
+<# 관찰 단계에서는 vocabulary가 비어 있다. 그때는 predicate를 자유롭게 짓되
+   같은 문서 안에서는 일관되게 쓰도록 유도한다. #>
+{% if vocabulary and not vocabulary.is_empty() %}
+## Vocabulary already in use
+
+Earlier documents produced these terms. **Reuse them whenever they fit** —
+that is what makes two documents comparable. Coin a new term only when
+nothing here expresses what the document says, and keep it in the same
+naming style.
+
+{% if vocabulary.entity_type_entries -%}
+Entity types — use the exact name when the definition fits:
+{% for entry in vocabulary.entity_type_entries -%}
+- << entry.name >> — << entry.definition >>
+{% if entry.identity_scope == "anchored" %}  the name alone does not say which one it is; call it this type only when the document also says who it belongs to
+{% endif -%}
+{% if entry.examples %}  e.g. << entry.examples | join(" · ") >>
+{% endif -%}
+{% endfor %}
+{% endif -%}
+
+{% if vocabulary.predicate_entries -%}
+Predicates (for claims) — reuse the exact name when the definition fits:
+{% for entry in vocabulary.predicate_entries -%}
+- << entry.name >> (<< entry.value_type >>{% if entry.enum_values %}, one of: << entry.enum_values | join(" / ") >>{% endif %}) — << entry.definition >>
+{% if entry.domain %}  subjects: << entry.domain | join(", ") >>
+{% endif -%}
+{% if entry.examples %}  e.g. << entry.examples | join(" · ") >>
+{% endif -%}
+{% endfor -%}
+<# 정의가 아직 없는 이름도 함께 실어야 한다. 감추면 관찰로 늘어난
+   용어가 다음 문서에서 사라져 재사용이 끊긴다. -#>
+{% set defined = vocabulary.predicate_entries | map(attribute="name") | list -%}
+{% set undefined = vocabulary.predicates | reject("in", defined) | list -%}
+{% if undefined %}
+Used before, definition not written down yet:
+{% for predicate in undefined -%}
+- << predicate >>
+{% endfor %}
+{% endif -%}
+{% elif vocabulary.predicates -%}
+Predicates (for claims):
+{% for predicate in vocabulary.predicates -%}
+- << predicate >>
+{% endfor %}
+{% endif -%}
+
+{% if vocabulary.relation_type_entries -%}
+Relation types (for relation assertions) — reuse the exact name when the
+definition fits:
+{% for entry in vocabulary.relation_type_entries -%}
+- << entry.name >> — << entry.definition >>
+{% if entry.domain %}  subjects: << entry.domain | join(", ") >>
+{% endif -%}
+{% if entry.range_ %}  targets: << entry.range_ | join(", ") >>
+{% endif -%}
+{% if entry.examples %}  e.g. << entry.examples | join(" · ") >>
+{% endif -%}
+{% endfor -%}
+{% set defined = vocabulary.relation_type_entries | map(attribute="name") | list -%}
+{% set undefined = vocabulary.relation_types | reject("in", defined) | list -%}
+{% if undefined %}
+Used before, definition not written down yet:
+{% for relation_type in undefined -%}
+- << relation_type >>
+{% endfor %}
+{% endif -%}
+{% elif vocabulary.relation_types -%}
+Relation types (for relation assertions):
+{% for relation_type in vocabulary.relation_types -%}
+- << relation_type >>
+{% endfor %}
+{% endif -%}
+
+{% if vocabulary.entity_type_entries or vocabulary.predicate_entries or vocabulary.relation_type_entries -%}
+A definition beats a guess from the name. If a document's phrasing does not
+match the definition above, do not reuse that term — coin a new one.
+{% endif -%}
+{% endif %}
+
+{% if metadata_entities %}
+## Already known entities
+
+These come from the source system's own fields, not from the text. They are
+already confirmed, so do **not** list them again in `entities` and do not
+rename them. Point at them by their `local_key` when the document talks about
+them — as a claim's subject, or as one end of a relation.
+
+{% for entity in metadata_entities %}
+- local_key `<< entity.local_key >>` — << entity.display_name >> (<< entity.entity_type >>)
+{% endfor %}
+
+The speakers in the document are these people. Prefer a relation between a
+known entity and something the document talks about over a relation between
+two things you invented.
+{% endif %}
+
+## What to extract
+
+**Entity** — something with a name and an identity that the document talks
+about. A feature, a system, a team, a person, a customer. Give each one a
+`local_key` such as `e1`, `e2`. Never use a key that starts with `m` followed
+by a number; those are reserved for the already-known entities above.
+Register an entity only when the document also says something about it — a
+claim or a relation you return. A name that is merely mentioned in passing
+(a tool in a list, a product named once with nothing said about it) does
+not deserve an entry on its own.
+
+**Claim** — a statement about the *value* of some property of one entity.
+
+    subject   the entity's local_key
+    predicate the property being described, in snake_case
+    value     a literal, or a compact text label when it isn't
+
+**RelationAssertion** — a statement connecting *two entities*.
+
+    payment_feature --depends_on--> auth_system
+
+## The value
+
+A literal beats a sentence. One date, one number, one boolean, one short
+label — literals are what the conflict detector can compare, so reach for
+them first.
+
+    good   payment_feature · release_month · "2026-05"
+    good   slack_ingestion · min_title_length · 10
+
+When the fact does not reduce to a literal, walk down this ladder.
+
+1. Find the literal hiding inside it. "제목이 10글자 이하면 임베딩 안 함"
+   carries the number 10, so report `min_title_length · 10`.
+2. If it describes how two entities relate, make it a RelationAssertion.
+3. Otherwise keep it as a claim with `value_type: text`. Make the value a
+   compact label for the fact — a noun phrase or snake_case tag, under
+   about 40 characters. The label is an index key, not evidence: the
+   quoted `statement` carries the actual content, so never put anything
+   into the value that the quoted span does not contain.
+
+Never put a whole sentence into the value.
+
+    bad    payment_feature · bug_report · "Sync가 안되는 버그가 있다는 보고"
+    good   payment_feature · bug_report · "sync_failure"
+
+Drop a fact only when it is small talk or routine noise. A real fact about
+a person, a system, or an event belongs in the wiki even when its value
+can only be a label.
+
+`value_type` must be one of `date`, `number`, `boolean`, `enum`, `text`.
+
+## Events are knowledge too
+
+A document often narrates events — someone attended, decided, planned, or
+finished something. Extract them as claims: pick the most central entity
+as the subject, put the action into a snake_case verb-based predicate, and
+when the time is the point of the fact, make the date the value.
+
+When the event's date resolves to a full calendar date, also
+set the claim's `valid_from` to that same date. A one-off event leaves
+`valid_to` empty. When the date resolves only to a year or a month,
+keep it in the value and leave `valid_from` empty — a bound must be a
+full calendar date.
+
+    good   communication_workshop · attended_on · "2026-01-10" · valid_from "2026-01-10"
+    good   communication_workshop · practice_planned_for · "2026-01-17" · valid_from "2026-01-17"
+    good   communication_workshop · key_topic · "active_listening"
+    good   marathon · completed_in · "2026-04" · valid_from empty (month only)
+
+An event that names no reusable entity still counts — attach it to the
+entity the document is about.
+
+This covers only events the body *narrates*. When the source system marks
+the same thing as a record field, the rule below (What not to extract)
+wins.
+
+## What not to extract
+
+The document may display the source system's own record fields — ticket
+status, priority, type, assignee, sprint, issue key, URL, branch names,
+commit counts, review dates. **Do not turn these into claims.** They are
+structured data that the system already holds outside the text, and
+recording them here only creates duplicates that drift.
+
+Extract what the document *says*, not what the source system *stores about*
+the document.
+
+## Rules
+
+- Every claim's `subject_local_key` and every relation's endpoints must refer
+  either to an entity you return in `entities`, or to one of the already-known
+  entities listed above. Never point at anything else.
+- Reuse one predicate for one property. If you write `release_month` once, do
+  not write `launch_month` for the same idea later.
+- `statement` must quote the exact span of the document that supports the
+  claim. Do not paraphrase it; the server locates this text in the source.
+- Extract only what this document states. Do not add what you know from
+  elsewhere, and do not resolve contradictions you find.
+{%- if reference_time %}
+- The document's reference time is << reference_time >>. Interpret every
+  relative time expression ("next month", "어제", "다음 달 15일") against
+  this reference time and write absolute values. Dates must use the
+  `YYYY`, `YYYY-MM`, or `YYYY-MM-DD` form only. If a time expression
+  cannot be resolved to an absolute date, omit that value (or the claim
+  if the time is its point).
+- Messages may carry their own `[YYYY-MM-DD HH:MM]` timestamps. Resolve
+  each relative expression against the nearest preceding message
+  timestamp, falling back to the document reference time.
+- If the document states a time bound for a claim, set `valid_from` or
+  `valid_to`, resolved the same way. Unlike a claim's value, a bound must
+  resolve to a full calendar date (`YYYY-MM-DD`) or a full timestamp — if
+  you can only determine the year or the month, leave the bound empty.
+{%- else %}
+- If the document states a time bound for a claim, set `valid_from` or
+  `valid_to`. A bound must be a full calendar date (`YYYY-MM-DD`) or a
+  full timestamp — if you can only determine the year or the month, leave
+  the bound empty. Leave them empty otherwise. Do not guess dates for
+  relative time expressions.
+{%- endif %}
+- Skip pleasantries, greetings, and routine status noise.
+- Returning nothing is valid only when the document holds no facts at all —
+  pure pleasantries or routine notifications.
+
+## Document
+
+<< content >>

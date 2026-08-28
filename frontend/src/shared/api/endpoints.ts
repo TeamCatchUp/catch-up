@@ -72,18 +72,17 @@ export const API = {
       decide: `${API_PREFIX}/admin/members/requests/decide`, // POST 승인/반려
     },
     queries: `${API_PREFIX}/admin/queries`, // GET 이용자 질문 기록 (페이지네이션, 필터, 검색)
-    // auditLogs: 엔드포인트 미확정, mock 직접 사용
+    // 감사 로그 화면은 CAM-256에서 제거됨. 백엔드에 실존하는 감사 로그 계약은
+    // GET /api/v1/audit-logs/download (CSV 스트리밍, date_range 쿼리) 하나뿐이다 — 필요 시 여기 추가.
     connector: {
-      githubStatus: `${API_PREFIX}/admin/connector/github/status`, // GET GitHub 연동 상태
-      jiraStatus: `${API_PREFIX}/admin/connector/jira/status`, // GET Jira 연동 상태
-      slackStatus: `${API_PREFIX}/admin/connector/slack/status`, // GET Slack 연동 상태
-      confluenceStatus: `${API_PREFIX}/admin/connector/confluence/status`, // GET Confluence 연동 상태
+      // vendor별 GET .../{vendor}/status 엔드포인트는 백엔드에 존재하지 않는다(404) — 아래 status 하나가 canonical
       status: `${API_PREFIX}/admin/connector/status`, // GET target별 임베딩 데이터 범위 (?source=)
       channelTalk: {
-        credentials: `${API_PREFIX}/admin/connector/channel_talk/credentials`, // GET(list)/POST 채널 credential 조회/저장(upsert)
+        // 이 라우터에 GET은 없다(백엔드 테스트가 405를 고정) — 조회는 integrations.connectionStatus 사용
+        credentials: `${API_PREFIX}/admin/connector/channel_talk/credentials`, // POST 채널 credential 저장(upsert)
         credentialsValidate: `${API_PREFIX}/admin/connector/channel_talk/credentials/validate`, // POST 채널 credential 검증
         // DELETE는 ?channel_id=X query parameter 사용
-        documentCredentials: `${API_PREFIX}/admin/connector/channel_talk/documents/credentials`, // GET(list)/POST 도큐먼트 스페이스 credential 조회/저장
+        documentCredentials: `${API_PREFIX}/admin/connector/channel_talk/documents/credentials`, // POST 도큐먼트 스페이스 credential 저장
         documentCredentialsValidate: `${API_PREFIX}/admin/connector/channel_talk/documents/credentials/validate`, // POST 도큐먼트 스페이스 credential 검증
         // DELETE는 ?space_id=X query parameter 사용
       },
@@ -102,8 +101,8 @@ export const API = {
   },
 
   mapping: {
-    upload: `${API_PREFIX}/mapping/upload`, // POST GitHub 매핑 CSV/Excel 일괄 업로드 (multipart/form-data)
-    vendorUpload: (vendor: string) => `${API_PREFIX}/mapping/${vendor}/upload`, // POST 협업툴별 사용자 매핑 CSV/Excel 일괄 업로드
+    // /mapping/upload(vendor 없는 형태)는 백엔드에 없다 — 경로는 /{vendor_type}/upload 뿐
+    vendorUpload: (vendor: string) => `${API_PREFIX}/mapping/${vendor}/upload`, // POST 협업툴별 사용자 매핑 CSV/Excel 일괄 업로드 (multipart/form-data)
   },
 
   stats: {
@@ -145,5 +144,40 @@ export const API = {
     inquirySettings: (agentSpecId: number) => `${API_PREFIX}/automations/inquiries/${agentSpecId}/settings`, // PATCH 문의 자동화 설정
     publishInquiry: `${API_PREFIX}/automations/inquiries/publish`, // POST 문의 자동화 설정 생성 및 활성화
   },
+
+  // LLM Wiki — 채널·폴더·문서·담당자·즐겨찾기
+  wiki: {
+    channels: `${API_PREFIX}/wiki/channels`, // GET 채널 목록(폴더·정의·문서 수 동봉) / POST 채널 생성
+    channelsOnboarding: `${API_PREFIX}/wiki/channels/onboarding`, // POST preset 선택으로 채널·정의·폴더 일괄 생성
+    definitionPresets: `${API_PREFIX}/wiki/definition-presets`, // GET 온보딩 preset 카탈로그(도메인·목적·종류·문체)
+    channel: (channelId: string) => `${API_PREFIX}/wiki/channels/${channelId}`, // PATCH 채널 이름 변경 (채널 관리자)
+    folders: (channelId: string) => `${API_PREFIX}/wiki/channels/${channelId}/folders`, // POST 폴더 생성 (채널 관리자)
+    folder: (channelId: string, folderId: string) => `${API_PREFIX}/wiki/channels/${channelId}/folders/${folderId}`, // PATCH 이름 변경 / DELETE 삭제 (채널 관리자)
+    // 관리자 해제 경로는 백엔드에 없다 — 지정(PUT)만 열려 있다
+    channelAdmin: (channelId: string, userId: number) => `${API_PREFIX}/wiki/channels/${channelId}/admins/${userId}`, // PUT 채널 관리자 추가
+    members: `${API_PREFIX}/wiki/members`, // GET 워크스페이스 활성 멤버 목록 (담당자 피커 후보, 구성원이면 조회 가능)
+    artifacts: `${API_PREFIX}/wiki/artifacts`, // GET 문서 목록 (channel_id, folder_id, kind, status, owner_user_id | unassigned, q, created_after, created_before, sort, order, limit, offset)
+    artifact: (artifactId: string) => `${API_PREFIX}/wiki/artifacts/${artifactId}`, // GET 발행판 상세 / PATCH 폴더 이동
+    artifactOwner: (artifactId: string, userId: number) =>
+      `${API_PREFIX}/wiki/artifacts/${artifactId}/owners/${userId}`, // PUT 담당자 지정 / DELETE 해제
+    favorites: `${API_PREFIX}/wiki/favorites`, // GET 즐겨찾기 목록 (최근 등록 순)
+    favorite: (artifactId: string) => `${API_PREFIX}/wiki/favorites/${artifactId}`, // PUT 등록 / DELETE 해제 (둘 다 멱등)
+    // 경로 키는 채널톡 credential_id다 — 수집 설정은 위키가 아니라 소스 채널 단위로 저장된다
+    knowledgeMaintenanceSettings: (credentialId: number) =>
+      `${API_PREFIX}/wiki/knowledge-maintenance-settings/${credentialId}`, // PUT 수집 주기·실행 앵커 저장 (관리자)
+  },
+
+  // LLM Wiki 검수 루프 — 변경안 큐·블록 판정·발행
+  knowledgeReview: {
+    queue: `${API_PREFIX}/knowledge-review/queue`, // GET 검토 큐 (contains_conflict, channel_id, owner_user_id, created_after, created_before, limit, offset)
+    queueItem: (proposalId: string) => `${API_PREFIX}/knowledge-review/queue/${proposalId}`, // GET 변경안 상세 (블록·근거·발행판 대비 변경·충돌)
+    blockVerdict: (proposalId: string, blockIndex: number) =>
+      `${API_PREFIX}/knowledge-review/queue/${proposalId}/blocks/${blockIndex}/verdict`, // PUT 블록 승인/반려 (멱등)
+    publish: (proposalId: string) => `${API_PREFIX}/knowledge-review/queue/${proposalId}/publish`, // POST 블록 판정 마감 후 발행
+    // approve·reject는 blocks 경로가 아니라 artifacts 경로다 — 전체 승인·반려 모두 블록 판정 일괄 전송으로 가서 미사용이다
+    approve: (proposalId: string) => `${API_PREFIX}/knowledge-review/artifacts/${proposalId}/approve`, // POST 변경안 전체 승인 (미사용)
+    reject: (proposalId: string) => `${API_PREFIX}/knowledge-review/artifacts/${proposalId}/reject`, // POST 변경안 전체 반려 (사유 필수, 미사용)
+  },
+
   version: `${API_PREFIX}/version`, // GET 현재 앱 버전
 } as const;

@@ -1,39 +1,13 @@
-export type AutomationConnector = 'slack' | 'channel_talk';
+export type {
+  AutomationConnector,
+  AutomationCredentialItem,
+  AutomationCredentialsResponse,
+  AutomationTargetItem,
+  AutomationTargetsResponse,
+} from '@/shared/types/automationApi';
+
 export type InquiryAutomationStatus = 'draft' | 'active' | 'inactive';
 export type InquiryAutomationMutableStatus = Extract<InquiryAutomationStatus, 'active' | 'inactive'>;
-
-export interface AutomationCredentialItem {
-  connector: AutomationConnector;
-  credential_id: number;
-  display_name: string;
-  external_id: string;
-  external_name: string | null;
-  is_configured: boolean;
-  metadata: Record<string, unknown>;
-}
-
-export interface AutomationCredentialsResponse {
-  connector: AutomationConnector;
-  total_credentials: number;
-  credentials: AutomationCredentialItem[];
-}
-
-export interface AutomationTargetItem {
-  connector: AutomationConnector;
-  credential_id: number | null;
-  target_id: string;
-  display_name: string;
-  target_type: string;
-  is_accessible: boolean;
-  metadata: Record<string, unknown>;
-}
-
-export interface AutomationTargetsResponse {
-  connector: AutomationConnector;
-  credential_id: number | null;
-  total_targets: number;
-  targets: AutomationTargetItem[];
-}
 
 export interface InquiryAutomationItem {
   agent_spec_id: number;

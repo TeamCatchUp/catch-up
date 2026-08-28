@@ -4,6 +4,7 @@
   --color-fill-normal-normal: var(--fill-normal);
   --color-fill-normal-strong: var(--fill-strong);
   --color-fill-normal-assistive-dark: var(--fill-normal-assistive-dark);
+  --color-fill-normal-assistive: var(--fill-normal-assistive);
   --color-fill-normal-interaction-hover: var(--fill-interaction-hover);
   --color-fill-normal-interaction-pressed: var(--fill-interaction-pressed);
   --color-fill-normal-interaction-pressed-hover: var(--fill-interaction-pressed-hover);
@@ -17,6 +18,9 @@
   --color-fill-primary-normal-interaction-inactive: var(--fill-primary-interaction-inactive);
   --color-fill-primary-normal-interaction-disable: var(--fill-primary-interaction-disable);
   --color-fill-primary-normal-interaction-hover-assistive: var(--fill-primary-interaction-hover-assistive);
+
+  /* 스켈레톤 전용 */
+  --color-skeleton-bone: var(--skeleton-bone);
 
   /* Fill compatibility aliases */
   --color-fill-normal: var(--fill-normal);
@@ -41,6 +45,7 @@
   --color-fill-overlay-point: var(--fill-overlay-point);
   --color-fill-overlay-background: var(--fill-overlay-background);
   --color-fill-overlay-background-transparent: var(--fill-overlay-background-transparent);
+  --color-fill-overlay-background-elevated: var(--fill-overlay-background-elevated);
 
   /* Text */
   --color-text-normal-strong: var(--text-strong);
@@ -110,6 +115,14 @@
   --color-background-elevated-normal: var(--background-elevated-normal);
   --color-background-elevated-alternative: var(--background-elevated-alternative);
 
+  /* Surface — diff 강조면 */
+  --color-surface-red-subtle: var(--surface-red-subtle);
+  --color-surface-red-muted: var(--surface-red-muted);
+  --color-surface-red-strong: var(--surface-red-strong);
+  --color-surface-green-subtle: var(--surface-green-subtle);
+  --color-surface-green-muted: var(--surface-green-muted);
+  --color-surface-green-strong: var(--surface-green-strong);
+
   /* Accent */
   --color-accent-green-default: var(--accent-green);
   --color-accent-green-neutral: var(--accent-green-neutral);
@@ -121,14 +134,19 @@
   --color-accent-violet-neutral: var(--accent-violet-neutral);
   --color-accent-violet-lighten: var(--accent-violet-lighten);
   --color-accent-light-blue-default: var(--accent-light-blue);
+  --color-accent-light-blue-neutral: var(--accent-light-blue-neutral);
   --color-accent-light-blue-lighten: var(--accent-light-blue-lighten);
   --color-accent-pink-default: var(--accent-pink);
+  --color-accent-pink-neutral: var(--accent-pink-neutral);
   --color-accent-pink-lighten: var(--accent-pink-lighten);
   --color-accent-red-default: var(--accent-red);
+  --color-accent-red-neutral: var(--accent-red-neutral);
   --color-accent-red-lighten: var(--accent-red-lighten);
   --color-accent-information-default: var(--accent-information);
+  --color-accent-information-neutral: var(--accent-information-neutral);
   --color-accent-information-lighten: var(--accent-information-lighten);
   --color-accent-black-default: var(--accent-black);
+  --color-accent-black-neutral: var(--accent-black-neutral);
   --color-accent-black-lighten: var(--accent-black-lighten);
 
   /* Accent compatibility aliases */

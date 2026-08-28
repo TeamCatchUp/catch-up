@@ -1,0 +1,373 @@
+{
+  "schema_version": 1,
+  "detail": {
+    "channel_id": "ch-catchup-eval",
+    "user_chat_id": "ct-eval-008",
+    "state": "closed",
+    "managed": true,
+    "name": "요금 산정 기준 문의",
+    "customer": {
+      "channel_id": "ch-catchup-eval",
+      "external_user_id": "user-472bc3787295",
+      "unified_id": "unified-008",
+      "user_type": "user",
+      "name": "사용자 008"
+    },
+    "assignment": {
+      "manager_ids": [
+        "manager-1bafef47f546"
+      ],
+      "managers": [
+        {
+          "manager_id": "manager-1bafef47f546",
+          "name": "Catch Up - 캐치업",
+          "email": "manager-1bafef47f546@example.com"
+        }
+      ],
+      "assignee_id": "manager-1bafef47f546",
+      "assignee_name": "Catch Up - 캐치업",
+      "assignee_email": "manager-1bafef47f546@example.com"
+    },
+    "timing": {
+      "created_at": "2026-06-09T09:00:00Z",
+      "updated_at": "2026-06-09T09:30:00Z",
+      "first_opened_at": "2026-06-09T09:00:00Z",
+      "opened_at": "2026-06-09T09:00:00Z",
+      "first_asked_at": "2026-06-09T09:04:00Z",
+      "first_replied_at": "2026-06-09T09:12:00Z",
+      "first_replied_at_after_open": "2026-06-09T09:12:00Z",
+      "front_updated_at": "2026-06-09T09:30:00Z",
+      "closed_at": "2026-06-09T09:30:00Z"
+    },
+    "metrics": {
+      "waiting_time": 480000,
+      "avg_reply_time": 210000,
+      "total_reply_time": 840000,
+      "reply_count": 5
+    },
+    "anchors": {
+      "front_message_id": "ct-eval-008-m15",
+      "user_last_message_id": "ct-eval-008-m14"
+    },
+    "tags": [
+      {
+        "key": "요금",
+        "name": "요금"
+      },
+      {
+        "key": "도입",
+        "name": "도입"
+      }
+    ]
+  },
+  "messages": [
+    {
+      "message_id": "ct-eval-008-m01",
+      "user_chat_id": "ct-eval-008",
+      "message_type": "default",
+      "person_type": "bot",
+      "author": {
+        "author_type": "bot",
+        "bot_id": "bot-e25207826d7b",
+        "name": "Catch Up | 캐치업",
+        "bot_name": "Catch Up | 캐치업",
+        "is_bot": true
+      },
+      "plain_text": "방문해주셔서 감사합니다 :) 어떻게 도와드릴까요?",
+      "created_at": "2026-06-09T09:02:00Z",
+      "updated_at": "2026-06-09T09:02:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-008-m02",
+      "user_chat_id": "ct-eval-008",
+      "message_type": "default",
+      "person_type": "customer",
+      "author": {
+        "author_type": "customer",
+        "user_id": "user-472bc3787295",
+        "name": "사용자 008",
+        "is_bot": false
+      },
+      "plain_text": "Catch Up은 사용자 수로 과금하나요, 연결한 데이터 양으로 과금하나요?",
+      "created_at": "2026-06-09T09:04:00Z",
+      "updated_at": "2026-06-09T09:04:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-008-m03",
+      "user_chat_id": "ct-eval-008",
+      "message_type": "log",
+      "person_type": "customer",
+      "author": {
+        "author_type": "customer",
+        "user_id": "user-472bc3787295",
+        "name": "사용자 008",
+        "is_bot": false
+      },
+      "plain_text": "open",
+      "created_at": "2026-06-09T09:06:00Z",
+      "updated_at": "2026-06-09T09:06:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": [],
+      "log": {
+        "action": "open",
+        "log_type": "userChat"
+      }
+    },
+    {
+      "message_id": "ct-eval-008-m04",
+      "user_chat_id": "ct-eval-008",
+      "message_type": "default",
+      "person_type": "bot",
+      "author": {
+        "author_type": "bot",
+        "bot_id": "bot-e25207826d7b",
+        "name": "Catch Up | 캐치업",
+        "bot_name": "Catch Up | 캐치업",
+        "is_bot": true
+      },
+      "plain_text": "오프라인 답변 알림이 필요하면 연락처를 남겨주세요. 제출하지 않아도 상담은 계속할 수 있습니다.",
+      "created_at": "2026-06-09T09:08:00Z",
+      "updated_at": "2026-06-09T09:08:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": [],
+      "form": {
+        "form_type": "requestUserInfo",
+        "inputs": []
+      }
+    },
+    {
+      "message_id": "ct-eval-008-m05",
+      "user_chat_id": "ct-eval-008",
+      "message_type": "log",
+      "person_type": "manager",
+      "author": {
+        "author_type": "manager",
+        "manager_id": "manager-1bafef47f546",
+        "name": "Catch Up - 캐치업",
+        "is_bot": false
+      },
+      "plain_text": "assign",
+      "created_at": "2026-06-09T09:10:00Z",
+      "updated_at": "2026-06-09T09:10:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": [],
+      "log": {
+        "action": "assign",
+        "log_type": "userChat"
+      }
+    },
+    {
+      "message_id": "ct-eval-008-m06",
+      "user_chat_id": "ct-eval-008",
+      "message_type": "default",
+      "person_type": "manager",
+      "author": {
+        "author_type": "manager",
+        "manager_id": "manager-1bafef47f546",
+        "name": "Catch Up - 캐치업",
+        "is_bot": false
+      },
+      "plain_text": "현재 검토 중인 인원과 연결하려는 도구 수를 알려주시면 안내에 도움이 됩니다.",
+      "created_at": "2026-06-09T09:12:00Z",
+      "updated_at": "2026-06-09T09:12:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-008-m07",
+      "user_chat_id": "ct-eval-008",
+      "message_type": "default",
+      "person_type": "customer",
+      "author": {
+        "author_type": "customer",
+        "user_id": "user-472bc3787295",
+        "name": "사용자 008",
+        "is_bot": false
+      },
+      "plain_text": "80명이고 Slack, Jira, Confluence, GitHub를 연결하려고 합니다.",
+      "created_at": "2026-06-09T09:14:00Z",
+      "updated_at": "2026-06-09T09:14:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-008-m08",
+      "user_chat_id": "ct-eval-008",
+      "message_type": "default",
+      "person_type": "manager",
+      "author": {
+        "author_type": "manager",
+        "manager_id": "manager-1bafef47f546",
+        "name": "Catch Up - 캐치업",
+        "is_bot": false
+      },
+      "plain_text": "기본 구독은 사용자 규모를 중심으로 안내드리고, 초기 구축 범위와 사용량이 큰 자동화 기능은 별도로 협의할 수 있습니다. 정확한 견적은 데이터 범위와 배포 환경을 확인한 뒤 제공됩니다.",
+      "created_at": "2026-06-09T09:16:00Z",
+      "updated_at": "2026-06-09T09:16:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-008-m09",
+      "user_chat_id": "ct-eval-008",
+      "message_type": "default",
+      "person_type": "customer",
+      "author": {
+        "author_type": "customer",
+        "user_id": "user-472bc3787295",
+        "name": "사용자 008",
+        "is_bot": false
+      },
+      "plain_text": "연결 데이터가 많다고 바로 추가 요금이 붙는 건가요?",
+      "created_at": "2026-06-09T09:18:00Z",
+      "updated_at": "2026-06-09T09:18:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-008-m10",
+      "user_chat_id": "ct-eval-008",
+      "message_type": "default",
+      "person_type": "manager",
+      "author": {
+        "author_type": "manager",
+        "manager_id": "manager-1bafef47f546",
+        "name": "Catch Up - 캐치업",
+        "is_bot": false
+      },
+      "plain_text": "단순 문서 수만으로 바로 과금된다고 확정하기는 어렵습니다. 동기화 범위, 보관 기간, 자동화 사용량과 인프라 구성을 함께 확인해야 합니다.",
+      "created_at": "2026-06-09T09:20:00Z",
+      "updated_at": "2026-06-09T09:20:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-008-m11",
+      "user_chat_id": "ct-eval-008",
+      "message_type": "default",
+      "person_type": "customer",
+      "author": {
+        "author_type": "customer",
+        "user_id": "user-472bc3787295",
+        "name": "사용자 008",
+        "is_bot": false
+      },
+      "plain_text": "그러면 견적 상담을 따로 신청하겠습니다.",
+      "created_at": "2026-06-09T09:22:00Z",
+      "updated_at": "2026-06-09T09:22:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-008-m12",
+      "user_chat_id": "ct-eval-008",
+      "message_type": "default",
+      "person_type": "manager",
+      "author": {
+        "author_type": "manager",
+        "manager_id": "manager-1bafef47f546",
+        "name": "Catch Up - 캐치업",
+        "is_bot": false
+      },
+      "plain_text": "도입 상담 신청",
+      "created_at": "2026-06-09T09:24:00Z",
+      "updated_at": "2026-06-09T09:24:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [
+        {
+          "text": "상담 신청",
+          "action": "open"
+        }
+      ],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-008-m13",
+      "user_chat_id": "ct-eval-008",
+      "message_type": "default",
+      "person_type": "manager",
+      "author": {
+        "author_type": "manager",
+        "manager_id": "manager-1bafef47f546",
+        "name": "Catch Up - 캐치업",
+        "is_bot": false
+      },
+      "plain_text": "신청 후 담당자가 환경을 확인해 안내드리겠습니다. 추가 질문이 없으시면 상담을 종료하겠습니다.",
+      "created_at": "2026-06-09T09:26:00Z",
+      "updated_at": "2026-06-09T09:26:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-008-m14",
+      "user_chat_id": "ct-eval-008",
+      "message_type": "default",
+      "person_type": "customer",
+      "author": {
+        "author_type": "customer",
+        "user_id": "user-472bc3787295",
+        "name": "사용자 008",
+        "is_bot": false
+      },
+      "plain_text": "네 감사합니다.",
+      "created_at": "2026-06-09T09:28:00Z",
+      "updated_at": "2026-06-09T09:28:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": []
+    },
+    {
+      "message_id": "ct-eval-008-m15",
+      "user_chat_id": "ct-eval-008",
+      "message_type": "log",
+      "person_type": "manager",
+      "author": {
+        "author_type": "manager",
+        "manager_id": "manager-1bafef47f546",
+        "name": "Catch Up - 캐치업",
+        "is_bot": false
+      },
+      "plain_text": "close",
+      "created_at": "2026-06-09T09:30:00Z",
+      "updated_at": "2026-06-09T09:30:00Z",
+      "is_private": false,
+      "attachments": [],
+      "buttons": [],
+      "blocks": [],
+      "log": {
+        "action": "close",
+        "log_type": "userChat"
+      }
+    }
+  ]
+}

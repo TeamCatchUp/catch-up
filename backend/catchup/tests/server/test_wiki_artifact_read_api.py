@@ -1,0 +1,632 @@
+"""발행된 문서를 읽는 endpoint를 실 PostgreSQL로 확인한다.
+
+산문은 표현이고 근거 지위는 statement에만 있다. 그래서 이 응답은 산문과
+근거 인용을 반드시 함께 싣는다. 발행 판이 없는 문서와 남의 workspace
+문서는 똑같이 404다 — 코드가 갈려도 존재 여부가 새면 안 된다.
+"""
+
+from __future__ import annotations
+
+import uuid
+from collections.abc import Callable
+from collections.abc import Iterator
+from datetime import datetime
+from datetime import timezone
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy import Connection
+from sqlalchemy import Engine
+from sqlalchemy import create_engine
+from sqlalchemy import inspect
+from sqlalchemy import select
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session
+from sqlalchemy.orm import sessionmaker
+
+from catchup.configs.config import settings
+from catchup.db.dependencies import get_db
+from catchup.db.models import ArtifactOwner
+from catchup.db.models import ChannelFolder
+from catchup.db.models import KnowledgeArtifact
+from catchup.db.models import KnowledgeArtifactChangeProposal
+from catchup.db.models import KnowledgeArtifactRevision
+from catchup.db.models import KnowledgeNode
+from catchup.db.models import User
+from catchup.db.models import UserStatus
+from catchup.db.models import UserWorkspace
+from catchup.db.models import WikiArtifactFavorite
+from catchup.db.models import Workspace
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_CLAIM_SECTION
+from catchup.knowledge_maintenance.domain.artifact import BLOCK_KIND_SUMMARY
+from catchup.knowledge_maintenance.domain.artifact import ArtifactBlock
+from catchup.knowledge_maintenance.domain.artifact import BlockSource
+from catchup.knowledge_maintenance.domain.artifact import serialize_blocks
+from catchup.server.knowledge_review.dependencies import get_reviewer_user
+from catchup.server.wiki.api import router
+
+# ======================= 실 DB fixture =======================
+
+
+@pytest.fixture(scope="module")
+def engine() -> Iterator[Engine]:
+    engine = create_engine(settings.sqlalchemy_database_url)
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except OperationalError:
+        engine.dispose()
+        pytest.skip("PostgreSQL이 없어 통합 테스트를 건너뛴다.")
+
+    if not inspect(engine).has_table(ChannelFolder.__tablename__):
+        engine.dispose()
+        pytest.skip("채널 테이블이 없다. alembic upgrade head가 필요하다.")
+
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture(scope="module")
+def company_id(engine: Engine) -> int:
+    """실 DB에 있는 회사 하나의 id를 빌린다."""
+    with engine.connect() as connection:
+        found = connection.execute(
+            select(Workspace.company_id).order_by(Workspace.id).limit(1)
+        ).scalar()
+
+    if found is None:
+        pytest.skip("workspace가 없어 통합 테스트를 건너뛴다.")
+    return found
+
+
+@pytest.fixture
+def connection(engine: Engine) -> Iterator[Connection]:
+    """테스트마다 되감는 연결 하나를 만든다."""
+    connection = engine.connect()
+    transaction = connection.begin()
+
+    yield connection
+
+    transaction.rollback()
+    connection.close()
+
+
+@pytest.fixture
+def session_factory(connection: Connection) -> Callable[[], Session]:
+    """같은 트랜잭션 위에 세션을 여는 factory를 만든다."""
+    return sessionmaker(
+        bind=connection,
+        join_transaction_mode="create_savepoint",
+        expire_on_commit=False,
+    )
+
+
+@pytest.fixture
+def db(session_factory: Callable[[], Session]) -> Iterator[Session]:
+    """행을 넣고 읽을 세션을 만든다."""
+    session = session_factory()
+
+    yield session
+
+    session.close()
+
+
+@pytest.fixture
+def workspace_id(db: Session, company_id: int) -> int:
+    """이 테스트만 쓰는 새 workspace를 만든다."""
+    workspace = Workspace(
+        name=f"읽기-{uuid.uuid4().hex[:8]}",
+        company_id=company_id,
+    )
+    db.add(workspace)
+    db.flush()
+    return workspace.id
+
+
+def _make_user(db: Session, *, email: str) -> User:
+    """테스트용 사용자 한 명을 만든다."""
+    user = User(
+        email=email,
+        name="구성원",
+        provider="keycloak",
+        status=UserStatus.ACTIVE,
+    )
+    db.add(user)
+    db.flush()
+    return user
+
+
+def _join(db: Session, *, user: User, workspace_id: int) -> None:
+    """사용자를 workspace 구성원으로 넣는다."""
+    db.add(UserWorkspace(user_id=user.id, workspace_id=workspace_id))
+    db.flush()
+
+
+# ======================= 앱 fixture =======================
+
+
+@pytest.fixture
+def app() -> FastAPI:
+    application = FastAPI()
+    application.include_router(router)
+    return application
+
+
+@pytest.fixture
+def client(app: FastAPI) -> Iterator[TestClient]:
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def as_user(app: FastAPI, db: Session) -> Callable[[User], None]:
+    """인증만 우회한다. 소속 검사는 실 DB로 그대로 돈다."""
+
+    def register(user: User) -> None:
+        app.dependency_overrides[get_db] = lambda: db
+        app.dependency_overrides[get_reviewer_user] = lambda: user
+
+    return register
+
+
+@pytest.fixture
+def member(
+    db: Session,
+    workspace_id: int,
+    as_user: Callable[[User], None],
+) -> User:
+    """새 workspace에만 속한 구성원 한 명을 세운다."""
+    user = _make_user(db, email=f"member-{uuid.uuid4().hex[:8]}@example.com")
+    _join(db, user=user, workspace_id=workspace_id)
+    as_user(user)
+    return user
+
+
+@pytest.fixture
+def outsider(
+    db: Session,
+    as_user: Callable[[User], None],
+) -> User:
+    """어느 workspace에도 속하지 않은 사용자 한 명을 세운다."""
+    user = _make_user(db, email=f"outsider-{uuid.uuid4().hex[:8]}@example.com")
+    as_user(user)
+    return user
+
+
+# ======================= 문서·판 헬퍼 =======================
+
+
+def _block(
+    narrative: str | None,
+    *,
+    heading: str = "request_status",
+    block_kind: str = BLOCK_KIND_CLAIM_SECTION,
+) -> ArtifactBlock:
+    """근거 인용이 붙은 claim 절 블록 하나를 만든다."""
+    claim_id = uuid.uuid4()
+    return ArtifactBlock(
+        block_kind=block_kind,
+        heading=heading,
+        body="검토 중 (2026-08-15 관찰)",
+        claim_ids=(claim_id,),
+        proposal_ids=(),
+        ontology_version="v3",
+        sources=(
+            BlockSource(
+                claim_id=claim_id,
+                statement="상태는 검토 중이다",
+                observed_at=datetime(2026, 8, 15, tzinfo=timezone.utc),
+                citation_verified=True,
+            ),
+        ),
+        narrative=narrative,
+    )
+
+
+def _artifact_without_revision(
+    db: Session, *, workspace_id: int, kind: str = "feature_request_status"
+) -> uuid.UUID:
+    """판이 하나도 없는 문서 한 편을 만든다."""
+    node = KnowledgeNode(
+        id=uuid.uuid4(),
+        workspace_id=workspace_id,
+        node_kind="entity",
+        entity_type="feature_request",
+        canonical_key=f"test:feature_request:{uuid.uuid4().hex}",
+        display_name="요청 A",
+        lifecycle_state="active",
+    )
+    db.add(node)
+    db.flush()
+    artifact = KnowledgeArtifact(
+        id=uuid.uuid4(),
+        workspace_id=workspace_id,
+        kind=kind,
+        subject_node_id=node.id,
+        title="요청 현황: 요청 A",
+    )
+    db.add(artifact)
+    db.flush()
+    return artifact.id
+
+
+def _publish(
+    db: Session,
+    *,
+    workspace_id: int,
+    narrative: str | None,
+    artifact_id: uuid.UUID | None = None,
+    revision_number: int = 1,
+    blocks: list[ArtifactBlock] | None = None,
+    kind: str = "feature_request_status",
+    reviewer: str = "test",
+    reviewed_at: datetime = datetime(2026, 8, 15, tzinfo=timezone.utc),
+) -> tuple[uuid.UUID, uuid.UUID]:
+    """문서 하나를 발행 상태까지 만들어 (문서 id, 판 id)를 돌려준다.
+
+    승인 흐름을 흉내 내지 않고 행을 직접 심는다. 여기서 보는 것은 읽기
+    표면이 최신 판을 어떻게 고르는가이지 승인 규칙이 아니다.
+    """
+    if artifact_id is None:
+        artifact_id = _artifact_without_revision(
+            db, workspace_id=workspace_id, kind=kind
+        )
+    stored_blocks = serialize_blocks(
+        [_block(narrative)] if blocks is None else blocks
+    )
+    proposal_id = uuid.uuid4()
+    db.add(
+        KnowledgeArtifactChangeProposal(
+            id=proposal_id,
+            workspace_id=workspace_id,
+            artifact_id=artifact_id,
+            blocks=stored_blocks,
+            status="approved",
+            content_hash=uuid.uuid4().hex,
+            idempotency_key=uuid.uuid4().hex,
+            base_revision_id=None,
+            reviewer=reviewer,
+            reviewed_at=reviewed_at,
+        )
+    )
+    db.flush()
+    revision_id = uuid.uuid4()
+    db.add(
+        KnowledgeArtifactRevision(
+            id=revision_id,
+            workspace_id=workspace_id,
+            artifact_id=artifact_id,
+            revision_number=revision_number,
+            blocks=stored_blocks,
+            source_proposal_id=proposal_id,
+        )
+    )
+    db.flush()
+    return artifact_id, revision_id
+
+
+# ======================= 본문 =======================
+
+
+def test_returns_the_latest_published_revision(client, member, db, workspace_id):
+    """발행된 최신 판의 블록을 산문·근거와 함께 돌려준다."""
+    artifact_id, revision_id = _publish(
+        db, workspace_id=workspace_id, narrative="이 요구는 검토 중이다."
+    )
+
+    response = client.get(f"/api/v1/wiki/artifacts/{artifact_id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["revision_id"] == str(revision_id)
+    block = body["blocks"][0]
+    assert block["block_index"] == 0
+    assert block["narrative"] == "이 요구는 검토 중이다."
+    assert block["sources"][0]["statement"] == "상태는 검토 중이다"
+    assert block["sources"][0]["citation_verified"] is True
+
+
+def test_summary_block_has_no_derived_sections_field(
+    client, member, db, workspace_id
+):
+    """머리말 블록이 곧 섹션이라 응답에 파생 필드가 없다."""
+    artifact_id, _ = _publish(
+        db,
+        workspace_id=workspace_id,
+        narrative=None,
+        blocks=[
+            _block(
+                "A사가 CSV 내보내기를 원한다.",
+                heading="one_line_summary",
+                block_kind=BLOCK_KIND_SUMMARY,
+            ),
+            _block("이 요구는 검토 중이다."),
+        ],
+    )
+
+    response = client.get(f"/api/v1/wiki/artifacts/{artifact_id}")
+
+    assert response.status_code == 200
+    blocks = response.json()["blocks"]
+    assert blocks[0]["narrative"] == "A사가 CSV 내보내기를 원한다."
+    assert all("summary_sections" not in block for block in blocks)
+
+
+def test_second_revision_wins(client, member, db, workspace_id):
+    """판이 두 개면 번호가 큰 쪽을 돌려준다."""
+    artifact_id, _ = _publish(
+        db, workspace_id=workspace_id, narrative="첫 번째 판의 문장이다."
+    )
+    _, second_id = _publish(
+        db,
+        workspace_id=workspace_id,
+        narrative="두 번째 판의 문장이다.",
+        artifact_id=artifact_id,
+        revision_number=2,
+    )
+
+    response = client.get(f"/api/v1/wiki/artifacts/{artifact_id}")
+
+    body = response.json()
+    assert body["revision_id"] == str(second_id)
+    assert body["blocks"][0]["narrative"] == "두 번째 판의 문장이다."
+
+
+def test_block_without_narrative_is_null(client, member, db, workspace_id):
+    """산문이 없던 블록은 없음으로 실린다."""
+    artifact_id, _ = _publish(db, workspace_id=workspace_id, narrative=None)
+
+    response = client.get(f"/api/v1/wiki/artifacts/{artifact_id}")
+
+    assert response.json()["blocks"][0]["narrative"] is None
+
+
+def test_unpublished_artifact_is_four_hundred_four(
+    client, member, db, workspace_id
+):
+    """발행 판이 없는 문서는 404다."""
+    artifact_id = _artifact_without_revision(db, workspace_id=workspace_id)
+
+    response = client.get(f"/api/v1/wiki/artifacts/{artifact_id}")
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "ARTIFACT_NOT_PUBLISHED"
+
+
+def test_unknown_artifact_is_four_hundred_four(client, member):
+    """없는 문서도 404다."""
+    response = client.get(f"/api/v1/wiki/artifacts/{uuid.uuid4()}")
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "ARTIFACT_NOT_FOUND"
+
+
+def test_other_workspace_artifact_is_four_hundred_four(
+    client, member, db, workspace_id, company_id
+):
+    """다른 workspace의 발행 문서도 없는 것으로 답한다."""
+    other = Workspace(name=f"남의-{uuid.uuid4().hex[:8]}", company_id=company_id)
+    db.add(other)
+    db.flush()
+    artifact_id, _ = _publish(db, workspace_id=other.id, narrative="문장이다.")
+
+    response = client.get(f"/api/v1/wiki/artifacts/{artifact_id}")
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "ARTIFACT_NOT_FOUND"
+
+
+def test_requires_workspace_membership(client, outsider):
+    """소속이 없으면 403이다."""
+    response = client.get(f"/api/v1/wiki/artifacts/{uuid.uuid4()}")
+
+    assert response.status_code == 403
+
+
+def test_document_carries_folder_owners_and_favorite(
+    client, member, db, workspace_id
+):
+    """문서 응답에 폴더·담당자·즐겨찾기가 함께 실린다.
+
+    문서 화면은 본문만으로 그려지지 않는다. 담당자와 즐겨찾기를 따로 물어
+    보게 하면 화면 한 장에 왕복이 세 번 생기고, 그 사이에 값이 갈린다.
+    """
+    artifact_id, _ = _publish(db, workspace_id=workspace_id, narrative="문장이다.")
+    db.add(ArtifactOwner(artifact_id=artifact_id, user_id=member.id))
+    db.add(
+        WikiArtifactFavorite(
+            user_id=member.id,
+            artifact_id=artifact_id,
+            workspace_id=workspace_id,
+        )
+    )
+    db.flush()
+
+    body = client.get(f"/api/v1/wiki/artifacts/{artifact_id}").json()
+
+    assert body["folder_id"] is None
+    assert body["owners"][0]["user_id"] == member.id
+    assert body["owners"][0]["display_name"] == member.name
+    assert body["is_favorite"] is True
+
+
+def test_document_without_owner_or_favorite(client, member, db, workspace_id):
+    """담당자도 즐겨찾기도 없으면 빈 목록과 False다."""
+    artifact_id, _ = _publish(db, workspace_id=workspace_id, narrative="문장이다.")
+
+    body = client.get(f"/api/v1/wiki/artifacts/{artifact_id}").json()
+
+    assert body["owners"] == []
+    assert body["is_favorite"] is False
+
+
+def test_document_carries_last_editor(client, member, db, workspace_id):
+    """문서 응답에 최신 발행판을 승인한 사람과 그 시각이 함께 실린다."""
+    artifact_id, _ = _publish(
+        db,
+        workspace_id=workspace_id,
+        narrative="문장이다.",
+        reviewer=f"user:{member.id}",
+        reviewed_at=datetime(2026, 8, 20, tzinfo=timezone.utc),
+    )
+
+    body = client.get(f"/api/v1/wiki/artifacts/{artifact_id}").json()
+
+    assert body["last_edited_by"]["user_id"] == member.id
+    assert body["last_edited_by"]["display_name"] == member.name
+    assert body["last_edited_at"].startswith("2026-08-20")
+
+
+def test_document_debug_reviewer_has_no_last_editor(
+    client, member, db, workspace_id
+):
+    """승인자가 사용자로 이어지지 않으면 사람은 비우고 시각만 싣는다."""
+    artifact_id, _ = _publish(
+        db,
+        workspace_id=workspace_id,
+        narrative="문장이다.",
+        reviewer="debug:test-user",
+    )
+
+    body = client.get(f"/api/v1/wiki/artifacts/{artifact_id}").json()
+
+    assert body["last_edited_by"] is None
+    assert body["last_edited_at"].startswith("2026-08-15")
+
+
+def test_document_last_editor_follows_newest_revision(
+    client, member, db, workspace_id
+):
+    """다시 발행하면 최종 편집자가 새 판의 승인자로 바뀐다."""
+    other = _make_user(db, email=f"editor-{uuid.uuid4().hex[:8]}@example.com")
+    _join(db, user=other, workspace_id=workspace_id)
+    artifact_id, _ = _publish(
+        db,
+        workspace_id=workspace_id,
+        narrative="첫 판이다.",
+        reviewer=f"user:{member.id}",
+    )
+    _publish(
+        db,
+        workspace_id=workspace_id,
+        narrative="두 번째 판이다.",
+        artifact_id=artifact_id,
+        revision_number=2,
+        reviewer=f"user:{other.id}",
+        reviewed_at=datetime(2026, 8, 21, tzinfo=timezone.utc),
+    )
+
+    body = client.get(f"/api/v1/wiki/artifacts/{artifact_id}").json()
+
+    assert body["last_edited_by"]["user_id"] == other.id
+    assert body["last_edited_at"].startswith("2026-08-21")
+
+
+# ======================= 읽기 레이아웃 =======================
+
+
+def _layout_blocks() -> list[ArtifactBlock]:
+    """요약 블록과 양식이 이름을 댄 절 블록들을 만든다.
+
+    저장 순서를 양식 순서와 일부러 어긋나게 둔다. 응답의 layout이 저장
+    순서가 아니라 양식 순서를 따르는지 보려면 두 순서가 달라야 한다.
+    """
+    return [
+        _block("요약 문장이다.", heading="요청 현황: 요청 A", block_kind="summary"),
+        _block("마지막 보고는 8월이다.", heading="last_reported_at"),
+        _block("상태는 검토 중이다.", heading="request_status"),
+    ]
+
+
+def test_document_read_includes_layout_in_catalog_order(
+    client, member, db, workspace_id
+):
+    """발행판 응답에 양식 순서로 정렬한 layout이 함께 실린다."""
+    artifact_id, _ = _publish(
+        db,
+        workspace_id=workspace_id,
+        narrative=None,
+        blocks=_layout_blocks(),
+    )
+
+    body = client.get(f"/api/v1/wiki/artifacts/{artifact_id}").json()
+
+    items = body["layout"]
+    assert items[0]["item_kind"] == "block"
+    first = body["blocks"][items[0]["block_index"]]
+    assert first["block_kind"] == "summary"
+    headings = [item["heading"] for item in items]
+    assert headings.index("요청 상태") < headings.index("최근 보고")
+    assert headings.index("요청 상태") < headings.index("우회 방법")
+    assert any(
+        item["item_kind"] == "placeholder" and item["heading"] == "우회 방법"
+        for item in items
+    )
+
+
+def test_document_layout_keeps_original_block_indexes(
+    client, member, db, workspace_id
+):
+    """layout 항목의 block_index는 저장된 블록 배열의 자리 그대로다."""
+    artifact_id, _ = _publish(
+        db,
+        workspace_id=workspace_id,
+        narrative=None,
+        blocks=_layout_blocks(),
+    )
+
+    body = client.get(f"/api/v1/wiki/artifacts/{artifact_id}").json()
+
+    for item in body["layout"]:
+        if item["item_kind"] != "block":
+            assert item["block_index"] is None
+            continue
+        block = body["blocks"][item["block_index"]]
+        assert block["block_index"] == item["block_index"]
+
+
+def test_former_table_sections_come_out_as_separate_blocks(
+    client, member, db, workspace_id
+):
+    """한 표로 묶던 세 칸이 각각 별도 block 항목으로 나온다."""
+    artifact_id, _ = _publish(
+        db,
+        workspace_id=workspace_id,
+        narrative=None,
+        blocks=[
+            _block("주 3회 쓴다.", heading="frequency"),
+            _block("담당자가 요청했다.", heading="requester_role"),
+            _block("모바일에서 쓴다.", heading="usage_context"),
+        ],
+    )
+
+    body = client.get(f"/api/v1/wiki/artifacts/{artifact_id}").json()
+
+    items = body["layout"]
+    assert all(item["item_kind"] != "table" for item in items)
+    picked = [
+        (item["heading"], item["block_index"])
+        for item in items
+        if item["item_kind"] == "block"
+    ]
+    assert picked == [("사용 상황", 2), ("요청자 역할", 1), ("빈도", 0)]
+
+
+def test_document_layout_without_catalog_kind_keeps_block_order(
+    client, member, db, workspace_id
+):
+    """양식에 없는 kind면 layout이 저장된 블록 순서 그대로다."""
+    artifact_id, _ = _publish(
+        db,
+        workspace_id=workspace_id,
+        narrative=None,
+        blocks=_layout_blocks(),
+        kind="entity_summary",
+    )
+
+    body = client.get(f"/api/v1/wiki/artifacts/{artifact_id}").json()
+
+    assert [item["block_index"] for item in body["layout"]] == [0, 1, 2]
+    assert all(item["item_kind"] == "block" for item in body["layout"])

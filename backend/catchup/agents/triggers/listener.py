@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from catchup.agents.factory import get_execution_service
 from catchup.agents.schemas import AgentSpec as AgentSpecSchema
 from catchup.agents.tools.registry import ToolRegistry
+from catchup.agents.triggers.channel_talk_context import CHANNEL_TALK_CHANNEL_ID_KEY
 from catchup.agents.triggers.channel_talk_context import (
     CHANNEL_TALK_USER_CHAT_CONTEXT_KEY,
 )
@@ -279,17 +280,17 @@ def run_agent_request(
 
 async def _execute_agent_run(
     context: AgentRunExecutionContext,
-) -> tuple[str | None, str | None]:
+) -> tuple[Any | None, str | None]:
     """DB 트랜잭션 밖에서 실제 agent를 실행해 lock 보유 시간을 만들지 않는다."""
     if _is_channeltalk_inquiry_event(context.event):
         try:
             automation_input = await _build_automation_input(context)
             if automation_input is not None:
-                await run_inquiry_automation(automation_input)
-                return "", None
+                guide_result = await run_inquiry_automation(automation_input)
+                return guide_result, None
         except Exception as exc:
             return None, str(exc)
-        return "", None
+        return None, None
 
     ToolRegistry.bind_execution_context(
         context.spec.tools,
@@ -328,6 +329,7 @@ async def _build_automation_input(
         return None
 
     inquiry_text: str = ct_inputs.get(CHANNEL_TALK_USER_CHAT_CONTEXT_KEY, "")
+    channel_talk_channel_id: str = ct_inputs.get(CHANNEL_TALK_CHANNEL_ID_KEY, "")
     user_chat_id: str = ct_inputs.get(CHANNEL_TALK_USER_CHAT_ID_KEY, "")
 
     try:
@@ -341,6 +343,7 @@ async def _build_automation_input(
 
     return AutomationInput(
         inquiry_text=inquiry_text,
+        channel_talk_channel_id=channel_talk_channel_id,
         user_chat_id=user_chat_id,
         slack_channel_id=config.slack_channel_id,
         slack_credential_id=config.slack_credential_id,
@@ -368,7 +371,7 @@ async def _build_execution_user_inputs(
 def _record_agent_run_terminal_state(
     *,
     run_id: int,
-    result: str | None,
+    result: Any | None,
     error: str | None,
 ) -> bool:
     """실행 결과를 run ledger에 닫고 ACK 가능 여부를 결정한다."""

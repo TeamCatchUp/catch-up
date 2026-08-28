@@ -8,6 +8,7 @@ from langchain_core.messages import HumanMessage
 
 from catchup.automations.graph import build_inquiry_automation_graph
 from catchup.automations.state import AutomationState
+from catchup.automations.structures import GuideDraft
 from catchup.db.models import SourceType
 from catchup.schemas.context import GlobalCompanyContext
 from catchup.schemas.context import GlobalContext
@@ -28,6 +29,7 @@ def _make_global_context() -> GlobalContext:
 def _initial_state(inquiry: str = "환불 방법") -> AutomationState:
     return AutomationState(
         inquiry_text=inquiry,
+        channel_talk_channel_id="channel-001",
         user_chat_id="chat-001",
         slack_channel_id="C123",
         slack_credential_id=1,
@@ -40,6 +42,8 @@ def _initial_state(inquiry: str = "환불 방법") -> AutomationState:
         rerank_count=0,
         grade_result=None,
         guide_text=None,
+        guide_explanation=None,
+        citations=None,
     )
 
 
@@ -77,8 +81,12 @@ async def test_graph_reusable_path():
     )
 
     mock_llm_large = MagicMock()
-    mock_llm_large.ainvoke = AsyncMock(
-        return_value=MagicMock(content="마이페이지에서 환불 신청을 안내하세요.")
+    mock_llm_large.with_structured_output.return_value.ainvoke = AsyncMock(
+        return_value=GuideDraft(
+            draft="마이페이지에서 환불 신청을 안내하세요.",
+            explanation="환불 규정에 근거한 표준 안내입니다.",
+            cited_indices=[1],
+        )
     )
 
     mock_vector_db = MagicMock()
@@ -106,7 +114,7 @@ async def test_graph_reusable_path():
             return_value=[MagicMock()],
         ),
         patch(
-            "catchup.rag.nodes.generate_vector_queries.generate_vector_queries"
+            "catchup.langgraph.nodes.generate_vector_queries.generate_vector_queries"
             ".prompt_loader.get_prompt",
             return_value=[MagicMock()],
         ),
@@ -140,8 +148,12 @@ async def test_graph_not_reusable_path():
     )
 
     mock_llm_large = MagicMock()
-    mock_llm_large.ainvoke = AsyncMock(
-        return_value=MagicMock(content="에스컬레이션이 필요합니다.")
+    mock_llm_large.with_structured_output.return_value.ainvoke = AsyncMock(
+        return_value=GuideDraft(
+            draft="",
+            explanation="에스컬레이션이 필요합니다.",
+            cited_indices=[],
+        )
     )
 
     mock_vector_db = MagicMock()
@@ -169,11 +181,11 @@ async def test_graph_not_reusable_path():
             return_value=[MagicMock()],
         ),
         patch(
-            "catchup.rag.nodes.generate_vector_queries.generate_vector_queries"
+            "catchup.langgraph.nodes.generate_vector_queries.generate_vector_queries"
             ".prompt_loader.get_prompt",
             return_value=[MagicMock()],
         ),
-        patch("catchup.rag.nodes.rerank.rerank.service_semaphores"),
+        patch("catchup.langgraph.nodes.rerank.rerank.service_semaphores"),
     ):
         graph = build_inquiry_automation_graph(
             llm_small=mock_llm_small,

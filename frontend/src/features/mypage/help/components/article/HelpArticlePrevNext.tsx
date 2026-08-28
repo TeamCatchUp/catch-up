@@ -17,7 +17,7 @@ function ArticleNavCard({ item, direction }: { item: HelpArticleLinkItem; direct
     <Link
       href={item.href}
       className={cn(
-        'border-line-normal-assistive bg-fill-normal-strong hover:bg-fill-normal-interaction-hover flex min-w-px flex-1 items-center gap-4 rounded-xl border p-3 transition-colors',
+        'border-line-normal-assistive bg-fill-normal-strong hover:fill-overlay-hover flex min-w-px flex-1 items-center gap-4 rounded-xl border p-3 transition-colors',
         !isPrev && 'justify-end',
       )}
     >

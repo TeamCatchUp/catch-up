@@ -1,0 +1,121 @@
+import { Canvas, Meta } from '@storybook/addon-docs/blocks';
+
+import * as ChannelCardStories from '../components/management/channel-talk/ChannelTalkChannelCard.stories';
+import * as EmbeddingFooterStories from '../components/management/channel-talk/embedding/ChannelTalkEmbeddingFooterBar.stories';
+import * as TargetPickerStories from '../components/management/channel-talk/embedding/ChannelTalkEmbeddingTargetPicker.stories';
+import * as CatalogStories from '../components/management/catalog/ConnectorCatalog.stories';
+import * as MappingCheckPopoverStories from '../components/management/detail/MappingCheckPopover.stories';
+import * as PreConnectStories from '../components/management/detail/ConnectorPreConnectDetail.stories';
+import * as StateBoundaryStories from '../components/management/states/ConnectorStateBoundary.stories';
+import * as Screens from '../components/view/ConnectorConnectScreen.stories';
+
+<Meta title="Flows/커넥터 연결" />
+
+# 커넥터 연결 flow
+
+관리자가 외부 도구(Jira·Github·Confluence·채널톡 등)를 CatchUp에 연동하는 여정이다.
+연동이 끝나면 도구의 데이터가 임베딩되어 검색·에이전트의 재료가 된다.
+
+여정은 다섯 단계다:
+
+1. **카탈로그** — 연동할 도구를 고른다
+2. **연결 전 상세** — 이 도구를 연동하면 무엇이 좋아지는지, 어떤 범위를 읽는지 확인한다
+3. **채널톡 스텝 ①** — 채널을 연결하고 테스트한다
+4. **채널톡 스텝 ②** — 임베딩할 대상과 기간을 고른다
+5. **연결됨 상세** — 임베딩 현황을 관리한다
+
+3·4단계는 채널톡 전용 동선이다. 다른 도구는 연결 전 상세에서 바로 연결로 넘어간다.
+후속 단계인 계정 연결은 [이용자 매핑 flow](?path=/docs/flows-이용자-매핑--docs)가 다룬다.
+임베딩의 진행·실패·재시도는 [임베딩 flow](?path=/docs/flows-임베딩--docs)가 다룬다.
+
+## 1. 카탈로그
+
+진입점. 연동 가능한 도구가 카드로 나열되고, 이미 연동된 도구는 카드에 연동됨 상태가 표시된다.
+사용자가 여기서 결정하는 것은 하나 — 어떤 도구를 연동할 것인가.
+
+<Canvas of={Screens.Catalog} />
+
+### 주요 분기
+
+**아직 아무것도 연동하지 않았을 때** — 사이드바 없이 카탈로그 카드 하나만 있는 화면으로 진입한다.
+
+<Canvas of={Screens.Empty} />
+
+**일부만 연동됐을 때** — 연동된 카드와 미연동 카드가 섞여 보인다.
+
+<Canvas of={CatalogStories.PartiallyConnected} />
+
+## 2. 연결 전 상세
+
+카탈로그에서 도구를 고르면 도착하는 화면. 좌측 사이드바로 도구를 오가며,
+도구별 안내 문구·샘플 질문·연동 범위 표를 보고 연결 여부를 결정한다.
+안내 카피는 Confluence 확정본("커넥터 연동 안내 문구")을 그대로 쓴다.
+
+<Canvas of={Screens.PreConnectDetail} />
+
+### 주요 분기
+
+**Github** — 아직 연결 동선이 열려 있지 않아 [연결하기] 버튼이 숨겨진다. 안내와 연동 범위만 보여준다.
+
+<Canvas of={PreConnectStories.Github} />
+
+**매핑 확인 팝오버** — 연동 전에 이용자 매핑 상태를 먼저 확인하라는 비차단 안내가 뜬다.
+닫아도 연결 진행에는 영향이 없다. (Figma의 차단형 매핑 확인 모달은 구현하지 않기로 결정 — 이 팝오버가 그 역할을 맡는다.)
+
+<Canvas of={MappingCheckPopoverStories.Default} />
+
+## 3. 채널톡 스텝 ① — 채널 연결
+
+채널톡의 [연결하기]를 누르면 2스텝 플로우로 들어온다. 스텝 ①에서는 채널 카드마다
+Access Key·Secret을 넣고 연결 테스트를 통과시킨다. 테스트를 통과한 카드는 "테스트 완료"로 접힌다.
+상단 스텝퍼의 칩은 클릭으로 스텝을 오갈 수 있다.
+
+<Canvas of={Screens.ChannelTalkStep1} />
+
+### 주요 분기
+
+**연결 테스트 실패** — 카드가 에러 상태로 바뀌고 원인 안내가 나온다.
+
+<Canvas of={ChannelCardStories.ErrorState} />
+
+**도큐먼트 스페이스 추가** — 채널에 도큐먼트 스페이스를 붙여서 함께 테스트할 수 있다.
+
+<Canvas of={ChannelCardStories.WithDocumentSpaces} />
+
+## 4. 채널톡 스텝 ② — 임베딩 대상 선택
+
+연결된 채널·도큐먼트 스페이스가 계층 표로 나오고, 임베딩할 대상과 데이터 기간을 고른다.
+선택이 0개면 하단 [임베딩하기]가 비활성이고, 하나라도 고르면 활성화된다.
+"전체 선택하기"는 라벨 텍스트를 클릭해도 토글된다.
+선택한 기간이 실제 요청으로 어떻게 계산되는지는 [임베딩 flow](?path=/docs/flows-임베딩--docs) 참고.
+
+<Canvas of={Screens.ChannelTalkStep2} />
+
+### 주요 분기
+
+**채널 단독 임베딩** — 도큐먼트 스페이스 없이 채널만 골라도 임베딩할 수 있다.
+하단 바가 선택 개수를 채널/도큐먼트로 나눠 보여준다.
+
+<Canvas of={EmbeddingFooterStories.ChannelOnly} />
+
+**선택 가능한 항목이 없을 때** — 표시 토글로 전부 숨기면 선택기가 빈 상태 안내를 보여준다.
+
+<Canvas of={TargetPickerStories.NothingVisible} />
+
+## 5. 연결됨 상세 — 임베딩 관리
+
+연동이 끝난 도구의 상세. 세그먼트 탭 두 개로 나뉜다 —
+**임베딩 관리**(요약 카드 + 채널→도큐먼트 2단 계층 표)와 **임베딩 현황**(진행 중 + 히스토리).
+
+<Canvas of={Screens.ConnectedDetail} />
+
+### 주요 분기
+
+임베딩 현황·실패 이력·재시도는 [임베딩 flow](?path=/docs/flows-임베딩--docs)에서 다룬다.
+
+**화면 부트스트랩 경계** — 커넥터 화면 전체는 진입 시 로딩/에러 경계로 감싸져 있다.
+로딩 중엔 스켈레톤이 나오고(빈 상태 플래시 방지), 실패하면 에러 안내가 나온다.
+
+<Canvas of={StateBoundaryStories.Loading} />
+
+<Canvas of={StateBoundaryStories.Error} />

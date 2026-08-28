@@ -1,0 +1,140 @@
+/* 위키 문서 읽기 규격(.markdown-reading) — markdown.css 기본 규격 위에 얹는 변형.
+   조회·미리보기·에디터·온보딩 미리보기가 함께 쓴다. 챗 등 UI 맥락은 기본 규격 몫. */
+@layer base {
+  .markdown-body.markdown-reading h1 {
+    @apply text-heading-xlarge;
+    color: var(--text-strong);
+  }
+
+  .markdown-body.markdown-reading h2 {
+    @apply text-reading-heading-sb-large;
+    color: var(--text-strong);
+    margin-bottom: 8px;
+  }
+
+  /* 디자이너 확정값 170%가 토큰(1.75)과 달라 토큰 대신 리터럴로 둔다 */
+  .markdown-body.markdown-reading h3 {
+    font-size: 17px;
+    line-height: 170%;
+    letter-spacing: -0.005em;
+    color: var(--text-strong);
+  }
+
+  /* 스펙 밖 심급 — 본문 크기(16) 그대로 굵기·마진만 세워 위계 역전을 막는다 */
+  .markdown-body.markdown-reading h4,
+  .markdown-body.markdown-reading h5,
+  .markdown-body.markdown-reading h6 {
+    font-weight: 600;
+    color: var(--text-strong);
+    margin-top: 24px;
+    margin-bottom: 8px;
+  }
+
+  /* 16px은 토큰 스케일에 없는 확정값이라 변형이 직접 고정한다. 색은 상속(인용문 뮤트 유지) */
+  .markdown-body.markdown-reading p,
+  .markdown-body.markdown-reading li {
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 175%;
+    letter-spacing: -0.005em;
+  }
+
+  .markdown-body.markdown-reading strong {
+    color: var(--text-strong);
+  }
+
+  /* 한글 본문이라 이탤릭 대신 굵기로 강조한다 */
+  .markdown-body.markdown-reading em {
+    font-style: normal;
+    font-weight: 600;
+  }
+
+  .markdown-body.markdown-reading :not(pre) > code {
+    padding: 2px 8px;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    color: var(--accent-red);
+  }
+
+  /* 기본 규격의 strong > code(600)가 여기 인라인 코드(500)에 지므로 다시 세운다 */
+  .markdown-body.markdown-reading strong > code {
+    font-weight: 600;
+  }
+
+  .markdown-body.markdown-reading pre {
+    padding: 16px 20px;
+    margin: 20px 0;
+    border-radius: 12px;
+  }
+
+  .markdown-body.markdown-reading pre code {
+    font-size: 14px;
+    line-height: 160%;
+    color: var(--text-normal);
+  }
+
+  .markdown-body.markdown-reading ul,
+  .markdown-body.markdown-reading ol {
+    padding-left: 20px;
+  }
+
+  .markdown-body.markdown-reading li {
+    margin: 4px 0;
+  }
+
+  .markdown-body.markdown-reading li > ul,
+  .markdown-body.markdown-reading li > ol {
+    margin: 4px 0;
+  }
+
+  .markdown-body.markdown-reading blockquote {
+    color: var(--text-alternative);
+  }
+
+  /* 스펙 밖 요소 — 에디터 유틸과 같은 값으로 두 표면을 맞춘다 */
+  .markdown-body.markdown-reading hr {
+    margin: 16px 0;
+    border-color: var(--line-normal);
+  }
+
+  .markdown-body.markdown-reading a,
+  .markdown-body.markdown-reading a:visited {
+    color: var(--text-primary-assistive);
+  }
+
+  /* 기본 규격의 a:visited(text-decoration: none)가 hover 밑줄을 이기므로 다시 세운다 */
+  .markdown-body.markdown-reading a:hover {
+    text-decoration: underline;
+  }
+
+  /* 표 블록 마진은 래퍼가 있으면 래퍼가, 없으면(react-markdown·에디터) 표 자신이 갖는다 */
+  .markdown-body.markdown-reading .table-wrapper,
+  .markdown-body.markdown-reading :not(.table-wrapper) > table {
+    margin: 20px 0;
+  }
+
+  .markdown-body.markdown-reading table {
+    min-width: 560px;
+  }
+
+  .markdown-body.markdown-reading th {
+    padding: 8px 12px;
+    font-weight: 600;
+    color: var(--text-alternative);
+  }
+
+  .markdown-body.markdown-reading td {
+    @apply text-reading-body-md-small;
+    padding: 8px 12px;
+    color: var(--text-normal);
+  }
+
+  .markdown-body.markdown-reading tbody tr:not(:last-child) {
+    border-bottom: 1px solid var(--line-normal);
+  }
+
+  .markdown-body.markdown-reading img {
+    max-width: 100%;
+    border-radius: 12px;
+  }
+}

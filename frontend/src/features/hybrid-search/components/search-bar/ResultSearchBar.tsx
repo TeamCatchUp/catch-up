@@ -8,11 +8,11 @@
 
 import type { DateRange } from 'react-day-picker';
 
-import IconAi from '@/public/icons/icon/ai.svg';
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
 import IconCancel from '@/public/icons/icon/cancel.svg';
 import IconSearch from '@/public/icons/icon/search_2.svg';
 import SmartFilterStatusPill from '@/shared/components/query/filter/SmartFilterStatusPill';
+import AiModeButton from '@/shared/components/search/AiModeButton';
 import type { SearchHistoryEntry } from '@/shared/types/searchHistory';
 import type { DocsSource } from '@/shared/types/source';
 import { cn } from '@/shared/utils/cn';
@@ -39,20 +39,6 @@ interface ResultSearchBarProps {
   initialExpanded?: boolean;
   historyEntries?: SearchHistoryEntry[];
   historyLoading?: boolean;
-}
-
-function AiModeButton({ expanded, onClick }: { expanded: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onMouseDown={(e) => expanded && e.preventDefault()}
-      onClick={onClick}
-      className="bg-fill-primary-normal-neutral text-text-primary-normal flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 transition-colors"
-    >
-      <IconAi aria-hidden className="size-5" />
-      <span className="text-body-small font-medium whitespace-nowrap">AI 모드</span>
-    </button>
-  );
 }
 
 export default function ResultSearchBar({

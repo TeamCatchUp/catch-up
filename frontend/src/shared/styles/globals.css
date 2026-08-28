@@ -11,8 +11,20 @@
 @import './layout.css';
 @import './animation.css';
 @import './markdown.css';
+@import './markdown-reading.css';
 
 @custom-variant dark (&:is(.dark *));
+
+/* fill-interaction-* 는 배경을 갈아끼우는 색이 아니라 기존 배경 위에 얹는 알파다.
+   자기 배경이 있는 요소에 bg-* 로 걸면 그 배경이 사라지므로, background-image 로 한 겹 덮는다.
+   (배경이 없는 요소는 bg-* 로 걸어도 부모 위에 그대로 합성되므로 이 유틸이 필요 없다) */
+@utility fill-overlay-hover {
+  background-image: linear-gradient(var(--fill-interaction-hover), var(--fill-interaction-hover));
+}
+
+@utility fill-overlay-pressed {
+  background-image: linear-gradient(var(--fill-interaction-pressed), var(--fill-interaction-pressed));
+}
 
 @layer base {
   ::-webkit-scrollbar {

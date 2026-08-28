@@ -179,7 +179,7 @@ async def test_execute_agent_run_skips_execution_for_channeltalk_with_invalid_co
 
     result, error = await listener._execute_agent_run(context)
 
-    assert result == ""
+    assert result is None
     assert error is None
 
 
@@ -218,6 +218,7 @@ async def test_build_automation_input_reads_inquiry_automation_config(
         AsyncMock(
             return_value={
                 "channel_talk_user_chat_context": "결제가 안 돼요",
+                "channel_talk_channel_id": "channel-001",
                 "channel_talk_user_chat_id": "uc-1",
             }
         ),
@@ -226,6 +227,7 @@ async def test_build_automation_input_reads_inquiry_automation_config(
     result = await listener._build_automation_input(context)
 
     assert result is not None
+    assert result.channel_talk_channel_id == "channel-001"
     assert result.slack_channel_id == "C123"
     assert result.slack_credential_id == 42
     assert result.inquiry_text == "결제가 안 돼요"

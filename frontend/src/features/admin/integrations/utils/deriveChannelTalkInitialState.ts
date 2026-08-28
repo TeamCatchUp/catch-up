@@ -1,5 +1,5 @@
 import type { ChannelTalkConnectionState } from '../types/channelTalkModel';
-import { DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT, MASKED_PLACEHOLDER } from '../types/channelTalkModel';
+import { MASKED_PLACEHOLDER, syncIntervalFromHours } from '../types/channelTalkModel';
 import type { ChannelTalkConnectionStatusResponse } from '../types/connectionStatusApi';
 
 // connection-status 응답 → viewModel 초기 state
@@ -15,7 +15,7 @@ export function deriveChannelTalkInitialState(
   );
 
   if (channelItems.length === 0) {
-    return { connected: false, lastSyncedAt: null, channels: [] };
+    return { connected: false, credentialVerifiedAt: null, channels: [] };
   }
 
   const spaceItems = items.filter(
@@ -37,7 +37,8 @@ export function deriveChannelTalkInitialState(
         name: space.name ?? '',
         accessKey: MASKED_PLACEHOLDER,
         accessSecret: MASKED_PLACEHOLDER,
-        syncInterval: DOCUMENT_SPACE_SYNC_INTERVAL_DEFAULT,
+        // 서버 저장값으로 hydrate — 기본값으로 채우면 재제출 때 서버 주기를 덮어쓴다
+        syncInterval: syncIntervalFromHours(space.metadata.polling_cycle_hours),
         connectionStatus: 'tested' as const,
       })),
     connectionStatus: 'tested' as const,
@@ -46,11 +47,11 @@ export function deriveChannelTalkInitialState(
   const verifiedTimes = channelItems
     .map((item) => item.metadata.last_verified_at)
     .filter((t): t is string => !!t);
-  const lastSyncedAt = verifiedTimes.length > 0 ? [...verifiedTimes].sort().at(-1) ?? null : null;
+  const credentialVerifiedAt = verifiedTimes.length > 0 ? [...verifiedTimes].sort().at(-1) ?? null : null;
 
   return {
     connected: true,
-    lastSyncedAt,
+    credentialVerifiedAt,
     channels,
   };
 }

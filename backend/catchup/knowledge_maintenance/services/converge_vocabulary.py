@@ -1,0 +1,662 @@
+"""어휘 자동 수렴의 기계 가드·버전·병합을 정의한다.
+
+사람 검수 대신 기계 가드가 LLM 제안을 받아들일지 판정한다. 가드는 순수
+함수다. DB도 LLM도 부르지 않으므로 같은 입력이면 같은 판정이 나오고,
+판정 근거를 그대로 감사 기록에 쓸 수 있다.
+
+항목 하나의 기각이 나머지 처리를 멈추지 않는다. LLM 출력은 항목 단위로
+결함이 생기므로, 전체 파싱을 무너뜨리는 대신 결함 항목만 떨어뜨린다.
+
+이번 슬라이스의 사전은 단조 증가한다. 기존 엔트리 개정은 재추출 계약을
+바꾸는 일이므로 기계가 자동으로 하지 않는다.
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Sequence
+from dataclasses import dataclass
+
+from pydantic import ValidationError
+
+from catchup.knowledge_maintenance.contracts.extraction import ExtractionVocabulary
+from catchup.knowledge_maintenance.contracts.extraction import PredicateEntry
+from catchup.knowledge_maintenance.contracts.extraction import RelationTypeEntry
+from catchup.knowledge_maintenance.contracts.vocabulary_convergence import (
+    PredicateUsage,
+)
+from catchup.knowledge_maintenance.contracts.vocabulary_convergence import (
+    ProposedPredicateEntry,
+)
+from catchup.knowledge_maintenance.contracts.vocabulary_convergence import (
+    ProposedRelationEntry,
+)
+from catchup.knowledge_maintenance.contracts.vocabulary_convergence import RelationUsage
+from catchup.knowledge_maintenance.contracts.vocabulary_convergence import (
+    SynonymAbsorption,
+)
+from catchup.knowledge_maintenance.contracts.vocabulary_convergence import (
+    VocabularyConvergenceProposal,
+)
+from catchup.knowledge_maintenance.ports.knowledge_candidates import (
+    KnowledgeCandidateUnitOfWork,
+)
+from catchup.observability.logging import get_logger
+
+logger = get_logger(__name__)
+
+# 발행된 어휘 스냅샷의 이름 체계다. `round-4`처럼 실험용으로 만든 스냅샷은
+# 여기 걸리지 않아 최신 발행본 계산에서 빠진다.
+PUBLISHED_VERSION_PATTERN = re.compile(r"^v(\d+)$")
+
+
+def resolve_latest_published_version(
+    versions: Sequence[str],
+) -> str | None:
+    """발행본 체계(`vN`)의 최신 버전을 고른다.
+
+    문자열이 아니라 숫자로 비교한다. 사전순으로 보면 `v10`이 `v9`보다
+    작아진다.
+    """
+    numbers = [
+        int(match.group(1))
+        for version in versions
+        if (match := PUBLISHED_VERSION_PATTERN.match(version))
+    ]
+    if not numbers:
+        return None
+    return f"v{max(numbers)}"
+
+
+def next_published_version(versions: Sequence[str]) -> str:
+    """다음 발행 버전 이름을 만든다."""
+    latest = resolve_latest_published_version(versions)
+    if latest is None:
+        return "v1"
+    return f"v{int(latest[1:]) + 1}"
+
+
+def normalize_vocabulary_name(name: str) -> str:
+    """어휘 이름을 snake_case로 정규화한다.
+
+    ASCII 소문자·숫자·밑줄만 남긴다. 한글만으로 된 이름은 빈 문자열이
+    되어 가드에서 기각된다.
+    """
+    lowered = name.strip().lower()
+    replaced = re.sub(r"[\s\-]+", "_", lowered)
+    cleaned = re.sub(r"[^a-z0-9_]", "", replaced)
+    collapsed = re.sub(r"_+", "_", cleaned)
+    return collapsed.strip("_")
+
+
+@dataclass(frozen=True, slots=True)
+class GuardRejection:
+    """기각된 항목의 이름과 첫 위반 사유를 담는다."""
+
+    name: str
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class ConvergenceGuardResult:
+    """가드를 통과한 것과 기각된 것을 나눠 담는다.
+
+    Attributes:
+        predicate_entries: 통과한 predicate 사전 항목을 담는다.
+        relation_entries: 통과한 relation 사전 항목을 담는다.
+        absorptions: 통과한 동의어 흡수 판정을 담는다.
+        rejections: 기각된 항목과 사유를 담는다.
+        covered_names: 통과 entry의 이름·source_candidates와 통과
+            absorption의 candidate_name을 모은 목록이다. 러너가 잔여
+            OOV를 계산하는 근거다.
+    """
+
+    predicate_entries: tuple[PredicateEntry, ...]
+    relation_entries: tuple[RelationTypeEntry, ...]
+    absorptions: tuple[SynonymAbsorption, ...]
+    rejections: tuple[GuardRejection, ...]
+    covered_names: tuple[str, ...]
+
+
+def _observed_names(
+    usage: Sequence[PredicateUsage] | Sequence[RelationUsage],
+    known: Sequence[str],
+) -> set[str]:
+    """사전 밖에서 관측된 이름 집합을 만든다.
+
+    원본 이름과 정규화형을 모두 담는다. 제안이 어느 쪽 표기로 근거를
+    적어도 매칭되게 하려는 것이다.
+    """
+    known_set = set(known)
+    names: set[str] = set()
+    for item in usage:
+        if item.name in known_set:
+            continue
+        names.add(item.name)
+        names.add(normalize_vocabulary_name(item.name))
+    return names
+
+
+def _summarize_validation_error(error: ValidationError) -> str:
+    """검증 오류를 한 줄 사유로 줄인다."""
+    parts = []
+    for detail in error.errors():
+        location = ".".join(str(item) for item in detail["loc"]) or "model"
+        parts.append(f"{location}: {detail['msg']}")
+    return "; ".join(parts)
+
+
+def _matched_usage(
+    usage: Sequence[PredicateUsage],
+    sources: set[str],
+) -> list[PredicateUsage]:
+    """근거 이름 집합에 걸리는 usage를 고른다."""
+    return [
+        item
+        for item in usage
+        if item.name in sources or normalize_vocabulary_name(item.name) in sources
+    ]
+
+
+def _resolve_name(
+    proposed_name: str,
+    *,
+    known: Sequence[str],
+    seen: set[str],
+) -> str | GuardRejection:
+    """이름 가드(규칙 1~3)를 순서대로 검사한다.
+
+    통과하면 정규화된 이름을 돌려주고, 아니면 첫 위반 사유로 기각을
+    돌려준다. 통과한 이름은 곧바로 `seen`에 등록한다. 규칙 3은
+    무조건적이어서 이 항목이 뒤에서 스키마·enum으로 떨어져도 같은 이름의
+    다음 항목은 중복으로 기각돼야 한다.
+    """
+    normalized = normalize_vocabulary_name(proposed_name)
+    if not normalized:
+        return GuardRejection(name=proposed_name, reason="이름이 비었다")
+    if normalized in set(known):
+        return GuardRejection(name=normalized, reason="기존 엔트리 개정 금지")
+    if normalized in seen:
+        return GuardRejection(name=normalized, reason="제안 내 중복")
+    seen.add(normalized)
+    return normalized
+
+
+def _evidence_sources(
+    normalized: str,
+    source_candidates: Sequence[str],
+) -> set[str]:
+    """이 항목의 근거가 될 이름 집합을 만든다.
+
+    원본 표기와 정규화형을 모두 담는다. 제안이 어느 쪽 표기로 근거를
+    적어도 관측 집합과 매칭되게 하려는 것이다.
+    """
+    sources = {normalize_vocabulary_name(candidate) for candidate in source_candidates}
+    sources.update(source_candidates)
+    sources.add(normalized)
+    sources.discard("")
+    return sources
+
+
+def _guard_predicates(
+    proposed: Sequence[ProposedPredicateEntry],
+    *,
+    current: ExtractionVocabulary,
+    predicate_usage: Sequence[PredicateUsage],
+    observed: set[str],
+) -> tuple[list[PredicateEntry], list[GuardRejection], list[str]]:
+    """predicate 제안을 항목별로 판정한다."""
+    entries: list[PredicateEntry] = []
+    rejections: list[GuardRejection] = []
+    covered: list[str] = []
+    seen: set[str] = set()
+
+    for item in proposed:
+        resolved = _resolve_name(
+            item.name,
+            known=current.predicates,
+            seen=seen,
+        )
+        if isinstance(resolved, GuardRejection):
+            rejections.append(resolved)
+            continue
+        normalized = resolved
+
+        try:
+            entry = PredicateEntry.model_validate(
+                {
+                    "name": normalized,
+                    "definition": item.definition,
+                    "domain": item.domain,
+                    "value_type": item.value_type,
+                    "enum_values": item.enum_values,
+                    "examples": item.examples,
+                }
+            )
+        except ValidationError as error:
+            rejections.append(
+                GuardRejection(
+                    name=normalized,
+                    reason=(f"스키마 검증 실패: {_summarize_validation_error(error)}"),
+                )
+            )
+            continue
+
+        sources = _evidence_sources(normalized, item.source_candidates)
+        if not sources & observed:
+            rejections.append(GuardRejection(name=normalized, reason="관측 증거 없음"))
+            continue
+
+        if entry.value_type == "enum":
+            matched = _matched_usage(predicate_usage, sources)
+            observed_values: set[str] = set()
+            for usage in matched:
+                observed_values.update(usage.observed_values)
+            uncovered = sorted(observed_values - set(entry.enum_values))
+            if uncovered:
+                rejections.append(
+                    GuardRejection(
+                        name=normalized,
+                        reason=(
+                            f"enum 치역이 관측을 못 덮는다: {', '.join(uncovered)}"
+                        ),
+                    )
+                )
+                continue
+
+        entries.append(entry)
+        covered.append(normalized)
+        covered.extend(item.source_candidates)
+        logger.info(
+            "vocabulary_entry_accepted",
+            kind="predicate",
+            name=normalized,
+            value_type=entry.value_type,
+            reason=item.reason,
+        )
+
+    return entries, rejections, covered
+
+
+def _guard_relations(
+    proposed: Sequence[ProposedRelationEntry],
+    *,
+    current: ExtractionVocabulary,
+    observed: set[str],
+) -> tuple[list[RelationTypeEntry], list[GuardRejection], list[str]]:
+    """relation 제안을 항목별로 판정한다.
+
+    enum 치역 가드는 relation에 해당 개념이 없어 빠진다.
+    """
+    entries: list[RelationTypeEntry] = []
+    rejections: list[GuardRejection] = []
+    covered: list[str] = []
+    seen: set[str] = set()
+
+    for item in proposed:
+        resolved = _resolve_name(
+            item.name,
+            known=current.relation_types,
+            seen=seen,
+        )
+        if isinstance(resolved, GuardRejection):
+            rejections.append(resolved)
+            continue
+        normalized = resolved
+
+        try:
+            entry = RelationTypeEntry.model_validate(
+                {
+                    "name": normalized,
+                    "definition": item.definition,
+                    "domain": item.domain,
+                    "range_": item.range_,
+                    "examples": item.examples,
+                }
+            )
+        except ValidationError as error:
+            rejections.append(
+                GuardRejection(
+                    name=normalized,
+                    reason=(f"스키마 검증 실패: {_summarize_validation_error(error)}"),
+                )
+            )
+            continue
+
+        sources = _evidence_sources(normalized, item.source_candidates)
+        if not sources & observed:
+            rejections.append(GuardRejection(name=normalized, reason="관측 증거 없음"))
+            continue
+
+        entries.append(entry)
+        covered.append(normalized)
+        covered.extend(item.source_candidates)
+        logger.info(
+            "vocabulary_entry_accepted",
+            kind="relation",
+            name=normalized,
+            reason=item.reason,
+        )
+
+    return entries, rejections, covered
+
+
+def _guard_absorptions(
+    proposed: Sequence[SynonymAbsorption],
+    *,
+    current: ExtractionVocabulary,
+    observed: set[str],
+) -> tuple[list[SynonymAbsorption], list[GuardRejection], list[str]]:
+    """동의어 흡수 판정을 검사한다.
+
+    사전은 바뀌지 않는다. 통과분은 감사·리포트용으로만 남는다.
+    """
+    canonical = set(current.predicates) | set(current.relation_types)
+    absorptions: list[SynonymAbsorption] = []
+    rejections: list[GuardRejection] = []
+    covered: list[str] = []
+
+    for item in proposed:
+        if item.canonical_name not in canonical:
+            rejections.append(
+                GuardRejection(
+                    name=item.candidate_name,
+                    reason="정본이 사전에 없다",
+                )
+            )
+            continue
+        candidates = {
+            item.candidate_name,
+            normalize_vocabulary_name(item.candidate_name),
+        }
+        candidates.discard("")
+        if not candidates & observed:
+            rejections.append(
+                GuardRejection(
+                    name=item.candidate_name,
+                    reason="흡수 대상이 관측되지 않았다",
+                )
+            )
+            continue
+        absorptions.append(item)
+        covered.append(item.candidate_name)
+        logger.info(
+            "vocabulary_absorption_judged",
+            candidate_name=item.candidate_name,
+            canonical_name=item.canonical_name,
+            reason=item.reason,
+        )
+
+    return absorptions, rejections, covered
+
+
+def guard_convergence(
+    proposal: VocabularyConvergenceProposal,
+    *,
+    current: ExtractionVocabulary,
+    predicate_usage: Sequence[PredicateUsage],
+    relation_usage: Sequence[RelationUsage],
+) -> ConvergenceGuardResult:
+    """LLM 제안을 기계 가드로 걸러 통과분과 기각분을 나눈다."""
+    predicate_observed = _observed_names(predicate_usage, current.predicates)
+    relation_observed = _observed_names(relation_usage, current.relation_types)
+
+    predicate_entries, predicate_rejections, predicate_covered = _guard_predicates(
+        proposal.predicate_entries,
+        current=current,
+        predicate_usage=predicate_usage,
+        observed=predicate_observed,
+    )
+    relation_entries, relation_rejections, relation_covered = _guard_relations(
+        proposal.relation_entries,
+        current=current,
+        observed=relation_observed,
+    )
+    absorptions, absorption_rejections, absorption_covered = _guard_absorptions(
+        proposal.absorptions,
+        current=current,
+        observed=predicate_observed | relation_observed,
+    )
+
+    covered: list[str] = []
+    for name in (
+        *predicate_covered,
+        *relation_covered,
+        *absorption_covered,
+    ):
+        if name and name not in covered:
+            covered.append(name)
+
+    rejections = (
+        *predicate_rejections,
+        *relation_rejections,
+        *absorption_rejections,
+    )
+    # 판정 사유는 감사 기록이다. 러너 stdout만으로는 남지 않으므로
+    # 항목별로 structlog에도 싣는다. 예문·관측값은 상담 원문 조각이라
+    # 싣지 않는다.
+    for rejection in rejections:
+        logger.info(
+            "vocabulary_entry_rejected",
+            name=rejection.name,
+            reason=rejection.reason,
+        )
+
+    return ConvergenceGuardResult(
+        predicate_entries=tuple(predicate_entries),
+        relation_entries=tuple(relation_entries),
+        absorptions=tuple(absorptions),
+        rejections=rejections,
+        covered_names=tuple(covered),
+    )
+
+
+def merge_vocabulary(
+    current: ExtractionVocabulary,
+    guarded: ConvergenceGuardResult,
+    *,
+    version: str,
+) -> ExtractionVocabulary:
+    """현행 어휘에 통과분을 더한 새 스냅샷을 만든다.
+
+    이름 목록을 항상 명시해서 넘긴다. `ExtractionVocabulary`는 이름
+    목록이 비었을 때만 entry에서 파생시키므로, entry 없이 이름만 있는
+    예전 스냅샷을 병합하면 그 이름들이 조용히 사라진다.
+    """
+    predicates = (
+        *current.predicates,
+        *(entry.name for entry in guarded.predicate_entries),
+    )
+    relation_types = (
+        *current.relation_types,
+        *(entry.name for entry in guarded.relation_entries),
+    )
+    return ExtractionVocabulary(
+        snapshot_id=version,
+        predicates=predicates,
+        relation_types=relation_types,
+        entity_type_entries=current.entity_type_entries,
+        predicate_entries=(
+            *current.predicate_entries,
+            *guarded.predicate_entries,
+        ),
+        relation_type_entries=(
+            *current.relation_type_entries,
+            *guarded.relation_entries,
+        ),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class PublishOutcome:
+    """발행 결과를 표현한다.
+
+    Attributes:
+        version: 새로 발행한 버전 이름이다. 발행하지 않았으면 None이다.
+        added_predicates: 이번 버전에서 더한 predicate 이름을 담는다.
+        added_relations: 이번 버전에서 더한 relation 이름을 담는다.
+    """
+
+    version: str | None
+    added_predicates: tuple[str, ...] = ()
+    added_relations: tuple[str, ...] = ()
+
+
+def _reject_stale_base(
+    current: ExtractionVocabulary,
+    versions: Sequence[str],
+    *,
+    workspace_id: int,
+    ontology_id: str,
+) -> None:
+    """기준 사전이 최신 발행본이 아니면 발행을 거부한다.
+
+    병합은 `current` 위에만 쌓는다. `v3`이 있는데 `v1`을 기준으로 발행하면
+    새 최신본 `v4`에서 `v2`·`v3`의 항목이 조용히 사라진다.
+
+    이름이 빈 기준 사전은 "읽을 당시 발행본이 하나도 없었다"는 뜻이다.
+    그런데 지금 발행본이 보인다면 그 사이에 누군가(예: 온보딩 seed 설치)
+    가 계보를 열었다는 말이므로, 빈 사전 위에 쌓아 올리면 그 발행본의
+    항목이 새 최신본에서 통째로 빠진다. 그래서 이 경우도 거부한다.
+
+    이름이 있으면서 발행 체계 밖인 이름(`round-4`, `2`)은 계보의 일부가
+    아닌 실험용 스냅샷이므로 검사하지 않는다.
+    """
+    latest = resolve_latest_published_version(versions)
+    if not current.snapshot_id:
+        if latest is None:
+            return
+        _raise_stale_base(
+            workspace_id=workspace_id,
+            ontology_id=ontology_id,
+            base_snapshot_id=current.snapshot_id,
+            latest=latest,
+            message=(
+                f"기준 사전을 읽을 때는 발행본이 없었는데 그 뒤 {latest}이 "
+                "발행됐다. 이 상태로 발행하면 그 발행본의 항목이 새 "
+                "최신본에서 사라진다. 최신 발행본을 기준으로 다시 돌린다."
+            ),
+        )
+    if not PUBLISHED_VERSION_PATTERN.match(current.snapshot_id):
+        return
+    if latest == current.snapshot_id:
+        return
+    _raise_stale_base(
+        workspace_id=workspace_id,
+        ontology_id=ontology_id,
+        base_snapshot_id=current.snapshot_id,
+        latest=latest,
+        message=(
+            f"기준 사전 {current.snapshot_id}이 최신 발행본 {latest}이 "
+            "아니다. 이 상태로 발행하면 그 사이 버전의 항목이 새 "
+            "최신본에서 사라진다. 최신 발행본을 기준으로 다시 돌린다."
+        ),
+    )
+
+
+def _raise_stale_base(
+    *,
+    workspace_id: int,
+    ontology_id: str,
+    base_snapshot_id: str,
+    latest: str | None,
+    message: str,
+) -> None:
+    """낡은 기준 사전을 감사 로그에 남기고 발행을 중단시킨다.
+
+    거부 사유는 러너 stdout이 아니라 로그에 남아야 한다. 발행이 왜 안
+    됐는지는 나중에 되짚어야 하는 감사 기록이다.
+    """
+    logger.error(
+        "vocabulary_publish_refused",
+        workspace_id=workspace_id,
+        ontology_id=ontology_id,
+        base_snapshot_id=base_snapshot_id,
+        latest_published_version=latest,
+        reason="stale_base",
+    )
+    raise RuntimeError(message)
+
+
+def publish_converged_vocabulary(
+    guarded: ConvergenceGuardResult,
+    *,
+    workspace_id: int,
+    ontology_id: str,
+    current: ExtractionVocabulary,
+    uow: KnowledgeCandidateUnitOfWork,
+) -> PublishOutcome:
+    """가드를 통과한 신규 entry를 새 버전 스냅샷으로 발행한다.
+
+    신규 entry가 하나도 없으면 버전을 만들지 않는다. 동의어 흡수만 통과한
+    라운드도 마찬가지다 — 흡수는 정본 사전의 내용을 바꾸지 않으므로, 발행하면
+    내용이 같은 버전만 늘어나 계보가 무엇이 달라졌는지 말해주지 못한다.
+
+    버전 번호는 저장된 발행본 목록에서 계산한다. 인자로 받은 `current`의
+    이름을 믿지 않는 것은 그것이 `round-4`처럼 발행 체계 밖의 실험용
+    스냅샷일 수 있기 때문이다.
+
+    발행은 계보 잠금 안에서 한다. 버전 번호를 목록에서 세는 방식이라
+    두 트랜잭션이 같은 계보를 동시에 읽으면 같은 번호를 세고 뒤에
+    커밋하는 쪽이 버전 UNIQUE 제약에 걸린다. 목록을 읽기 전에 잠그면
+    뒤에 온 쪽은 앞의 커밋을 본 뒤에 번호를 센다.
+
+    `current`가 `vN` 체계이면서 최신 발행본이 아니면 `RuntimeError`로
+    발행을 거부한다. 이름이 빈 `current`도 마찬가지다 — 기준 사전을 읽은
+    뒤 LLM 호출 동안 다른 쪽이 계보를 열었다는 뜻이라, 그대로 발행하면
+    그 발행본의 항목이 새 최신본에서 빠진다.
+    """
+    added_predicates = tuple(entry.name for entry in guarded.predicate_entries)
+    added_relations = tuple(entry.name for entry in guarded.relation_entries)
+
+    if not added_predicates and not added_relations:
+        logger.info(
+            "vocabulary_publish_skipped",
+            workspace_id=workspace_id,
+            ontology_id=ontology_id,
+            base_snapshot_id=current.snapshot_id,
+            absorption_count=len(guarded.absorptions),
+            rejection_count=len(guarded.rejections),
+        )
+        return PublishOutcome(version=None)
+
+    with uow:
+        uow.ontology.lock_lineage(
+            workspace_id=workspace_id,
+            ontology_id=ontology_id,
+        )
+        versions = uow.ontology.list_versions(
+            workspace_id=workspace_id,
+            ontology_id=ontology_id,
+        )
+        _reject_stale_base(
+            current,
+            versions,
+            workspace_id=workspace_id,
+            ontology_id=ontology_id,
+        )
+        version = next_published_version(versions)
+        merged = merge_vocabulary(current, guarded, version=version)
+        uow.ontology.ensure(
+            workspace_id=workspace_id,
+            ontology_id=ontology_id,
+            vocabulary=merged,
+        )
+        uow.commit()
+
+    logger.info(
+        "vocabulary_published",
+        workspace_id=workspace_id,
+        ontology_id=ontology_id,
+        version=version,
+        base_snapshot_id=current.snapshot_id,
+        added_predicate_count=len(added_predicates),
+        added_relation_count=len(added_relations),
+        absorption_count=len(guarded.absorptions),
+        rejection_count=len(guarded.rejections),
+    )
+    return PublishOutcome(
+        version=version,
+        added_predicates=added_predicates,
+        added_relations=added_relations,
+    )

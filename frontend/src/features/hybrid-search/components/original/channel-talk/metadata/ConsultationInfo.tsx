@@ -45,7 +45,7 @@ export default function ConsultationInfo({ metadata }: ConsultationInfoProps) {
                   className="size-6.25 shrink-0 rounded-full object-cover"
                 />
               ) : (
-                <DefaultProfileIcon aria-hidden className="size-6.25 shrink-0" />
+                <DefaultProfileIcon aria-hidden className="size-6.25 shrink-0 rounded-full" />
               )}
               <span className="text-body-small text-text-normal-neutral truncate">{assigneeName}</span>
             </>

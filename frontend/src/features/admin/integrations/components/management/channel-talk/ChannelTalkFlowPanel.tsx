@@ -1,0 +1,294 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import { useQueries, useQuery } from '@tanstack/react-query';
+
+import { Skeleton } from '@/shared/components/ui/skeleton';
+
+import { CONNECTOR_CONTENT } from '../../../constants/connectorContent';
+import { DEFAULT_PERIOD } from '../../../constants/period';
+import { useChannelTalkEmbeddingSubmit } from '../../../hooks/useChannelTalkEmbeddingSubmit';
+import { useChannelTalkSelection } from '../../../hooks/useChannelTalkSelection';
+import { useChannelTalkViewModel } from '../../../hooks/useChannelTalkViewModel';
+import { useEmbeddingJobs } from '../../../hooks/useEmbeddingJobs';
+import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
+import type { ChannelTalkConnectionState } from '../../../types/channelTalkModel';
+import type { ChannelTalkConnectionStatusResponse } from '../../../types/connectionStatusApi';
+import { deriveChannelTalkInitialState } from '../../../utils/deriveChannelTalkInitialState';
+import { type ChannelTalkChannel, mapChannelTalkSyncTargets } from '../../../utils/mapChannelTalkSyncTargets';
+import ConnectorDetailHeader from '../detail/ConnectorDetailHeader';
+import ChannelTalkChannelCard from './ChannelTalkChannelCard';
+import ChannelTalkFooterBar from './ChannelTalkFooterBar';
+import ChannelTalkStepper, { type ChannelTalkStep } from './ChannelTalkStepper';
+import ChannelTalkEmbeddingFooterBar from './embedding/ChannelTalkEmbeddingFooterBar';
+import type { ChannelTalkChannelTarget } from './embedding/channelTalkEmbeddingTarget';
+import ChannelTalkEmbeddingTargetPicker from './embedding/ChannelTalkEmbeddingTargetPicker';
+
+interface ChannelTalkFlowPanelProps {
+  /** (D) 연결하기 · (E) 채널 연결하기 모두 스텝 ①로 들어온다 */
+  initialStep?: ChannelTalkStep;
+  /** 헤더 제목에 쓰는 대표 이름 — connection-status `items[].name` */
+  workspaceName?: string | null;
+  /** 스텝퍼 "임베딩 관리로" + 임베딩 접수 시 — (E)로 복귀 */
+  onExit: () => void;
+}
+
+/**
+ * (F) 채널톡 2스텝 플로우. 스펙 §5-4.
+ * 스텝바 + [① 채널 연결 관리 | ② 임베딩하기] + 각 스텝의 하단 바.
+ *
+ * 구 `ChannelTalkManagementPanel`의 연동 상태·데이터 범위 섹션은 신규 (F)에
+ * 없다 — (E) 요약 카드로 흡수됐다. 스텝①의 채널 카드 흐름(키 마스킹·연결
+ * 테스트·collapsed lock·삭제 확인)은 `useChannelTalkViewModel`을 그대로 쓴다.
+ * 스텝②는 구 `ChannelTalkEmbeddingModal`의 데이터 흐름
+ * (credentials → channel_id별 sync targets → 선택 → POST /sync/full)을 승계한다.
+ */
+export default function ChannelTalkFlowPanel({
+  initialStep = 'connect',
+  workspaceName,
+  onExit,
+}: ChannelTalkFlowPanelProps) {
+  const [step, setStep] = useState<ChannelTalkStep>(initialStep);
+  const statusQuery = useQuery(adminConnectorQueries.connectionStatus('channel_talk'));
+  const channelTalkStatus =
+    statusQuery.data?.vendor === 'channel_talk' ? (statusQuery.data as ChannelTalkConnectionStatusResponse) : undefined;
+
+  // TanStack Query stable reference 덕분에 cache hit 시 derive 1회만 실행
+  const initialState = useMemo(() => deriveChannelTalkInitialState(channelTalkStatus), [channelTalkStatus]);
+
+  if (statusQuery.isLoading) {
+    return (
+      <div className="flex flex-col gap-6 px-8 py-6">
+        <Skeleton className="h-15 w-80" />
+        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    );
+  }
+
+  // fetch 실패 시 "등록 없음"으로 오인 방지 — 명시적 에러 표시
+  if (statusQuery.isError) {
+    return (
+      <div className="border-line-normal-assistive bg-fill-normal-strong text-body-small text-status-destructive mx-8 my-6 rounded-xl border px-4 py-3">
+        채널톡 연동 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.
+      </div>
+    );
+  }
+
+  /*
+   * pane padding은 이 패널이 갖는다(ConnectorConnectView가 넘겨준다). 하단바의 위
+   * 경계선이 pane 전폭을 써야 해서, 각 스텝은 `[padding 콘텐츠][전폭 하단바]` 두
+   * 형제를 낸다.
+   */
+  return (
+    <div className="flex flex-col">
+      {/* 스텝퍼 위에 커넥터 헤더(로고 + 이름 + 설명)가 온다 */}
+      <div className="flex flex-col gap-6 px-8 pt-6">
+        <ConnectorDetailHeader
+          service="channel_talk"
+          title={workspaceName ?? CONNECTOR_CONTENT.channel_talk.name}
+          description={CONNECTOR_CONTENT.channel_talk.headerDescription}
+        />
+        <ChannelTalkStepper current={step} onStepChange={setStep} onBack={onExit} />
+      </div>
+      {step === 'connect' ? (
+        <ConnectStep key={statusQuery.dataUpdatedAt} initialState={initialState} onProceed={() => setStep('embed')} />
+      ) : (
+        <EmbedStep onDone={onExit} />
+      )}
+    </div>
+  );
+}
+
+interface ConnectStepProps {
+  initialState: ChannelTalkConnectionState;
+  onProceed: () => void;
+}
+
+/** 스텝 ① — 채널 카드 목록 + 하단 바. 구 CredentialSection의 카드 흐름 승계 */
+function ConnectStep({ initialState, onProceed }: ConnectStepProps) {
+  const {
+    state,
+    pendingChannelIds,
+    pendingDocumentSpaceIds,
+    addChannel,
+    updateChannel,
+    removeChannel,
+    addDocumentSpace,
+    updateDocumentSpace,
+    removeDocumentSpace,
+    testChannelConnection,
+    testDocumentSpaceConnection,
+  } = useChannelTalkViewModel(initialState);
+
+  // 하단 바 카운트는 tested만 — 미검증 카드는 "등록된 데이터" 정의에서 제외
+  const { testedChannelCount, testedDocumentSpaceCount } = useMemo(() => {
+    const testedChannels = state.channels.filter((ch) => ch.connectionStatus === 'tested');
+    return {
+      testedChannelCount: testedChannels.length,
+      testedDocumentSpaceCount: testedChannels.reduce(
+        (sum, ch) => sum + ch.documentSpaces.filter((ds) => ds.connectionStatus === 'tested').length,
+        0,
+      ),
+    };
+  }, [state.channels]);
+
+  // 콘텐츠와 하단바는 형제다 — 하단바 경계선이 pane 전폭을 쓰게 한다(패널 주석 참조)
+  return (
+    <>
+      <div className="flex flex-col gap-3 px-8 pt-6 pb-6">
+        {state.channels.map((channel) => (
+          <ChannelTalkChannelCard
+            key={channel.id}
+            channel={channel}
+            isTesting={pendingChannelIds.has(channel.id)}
+            testingDocumentSpaceIds={pendingDocumentSpaceIds}
+            onUpdate={(patch) => updateChannel(channel.id, patch)}
+            onRemove={() => removeChannel(channel.id)}
+            onAddDocumentSpace={() => addDocumentSpace(channel.id)}
+            onUpdateDocumentSpace={(dsId, patch) => updateDocumentSpace(channel.id, dsId, patch)}
+            onRemoveDocumentSpace={(dsId) => removeDocumentSpace(channel.id, dsId)}
+            onTestConnection={() => testChannelConnection(channel.id)}
+            onTestDocumentSpaceConnection={(dsId) => testDocumentSpaceConnection(channel.id, dsId)}
+          />
+        ))}
+      </div>
+
+      <ChannelTalkFooterBar
+        channelCount={testedChannelCount}
+        documentCount={testedDocumentSpaceCount}
+        onAddChannel={addChannel}
+        onProceed={onProceed}
+      />
+    </>
+  );
+}
+
+interface EmbedStepProps {
+  onDone: () => void;
+}
+
+/** 스텝 ② — 임베딩 대상 선택기 + 하단 바. 구 모달의 데이터 흐름 승계 */
+function EmbedStep({ onDone }: EmbedStepProps) {
+  // 1) 채널 credential 목록 GET → 등록된 N개 channel_id 수집
+  const channelStatusQuery = useQuery(adminConnectorQueries.connectionStatus('channel_talk'));
+  const installedChannelIds = useMemo(() => {
+    if (channelStatusQuery.data?.vendor !== 'channel_talk') return [];
+    return channelStatusQuery.data.items
+      .filter((item) => item.metadata.credential_type === 'channel')
+      .map((item) => item.id);
+  }, [channelStatusQuery.data]);
+
+  // 2) sync targets — 각 channel_id별로 호출 (백엔드는 scope_id 단일이라 channel당 1회)
+  const targetsQueries = useQueries({
+    queries: installedChannelIds.map((channelId) => ({
+      ...adminConnectorQueries.syncTargets('channel_talk', channelId),
+      enabled: !!channelId,
+    })),
+  });
+
+  // 3) channel별 응답 → 1:N 합치기. memoization 불요 (selection은 id 기준 reset)
+  const channels: ChannelTalkChannel[] = targetsQueries.flatMap((q) =>
+    q.data ? mapChannelTalkSyncTargets(q.data.targets) : [],
+  );
+
+  // 4) 선택 + 기간 state — 구 모달과 같은 훅
+  const {
+    visibleChannelIds,
+    selectedChannelIds,
+    selectedSpaceIds,
+    channelPeriods,
+    spacePeriods,
+    channelCount,
+    spaceCount,
+    isAllSelected,
+    toggleVisibility,
+    toggleChannel,
+    toggleAll,
+    toggleSpace,
+    setChannelPeriod,
+    setSpacePeriod,
+  } = useChannelTalkSelection(channels);
+
+  // 5) 제출 — 접수되면 (E)로 복귀. job 추적은 sessionStorage 공유라 (E)의 훅이 이어받는다
+  const { handleJobStart } = useEmbeddingJobs();
+  const { submit, isSubmitting } = useChannelTalkEmbeddingSubmit({ onSettled: onDone, onJobStart: handleJobStart });
+
+  /*
+   * 로딩·에러·채널 없음을 각각 명시한다 — 셋 다 channels가 []라서 구분 없이는
+   * 똑같은 빈 선택기로 보인다. 스텝퍼로 ②에 바로 진입할 수 있어 실제 도달 경로다.
+   */
+  const isTargetsLoading = channelStatusQuery.isLoading || targetsQueries.some((q) => q.isLoading);
+  const isTargetsError = channelStatusQuery.isError || targetsQueries.some((q) => q.isError);
+
+  if (isTargetsLoading) {
+    return (
+      <div className="px-8 pt-6 pb-6">
+        <div className="border-line-normal-neutral flex flex-col gap-3 rounded-xl border p-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-9 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (isTargetsError) {
+    return (
+      <div className="mx-8 my-6 border-line-normal-assistive bg-fill-normal-strong text-body-small text-status-destructive rounded-xl border px-4 py-3">
+        임베딩 대상을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.
+      </div>
+    );
+  }
+
+  if (channels.length === 0) {
+    return (
+      <div className="mx-8 my-6 border-line-normal-assistive bg-fill-normal-strong text-body-small text-text-normal-alternative rounded-xl border px-4 py-3">
+        등록된 채널이 없습니다. 스텝 ①에서 채널을 먼저 연결해주세요.
+      </div>
+    );
+  }
+
+  // 선택기 모델로 어댑트 — 기간은 명시 설정만 보관하므로 기본값을 여기서 채운다
+  const pickerChannels: ChannelTalkChannelTarget[] = channels.map((ch) => ({
+    id: ch.channel_id,
+    name: ch.display_name,
+    dataRange: channelPeriods[ch.channel_id] ?? DEFAULT_PERIOD,
+    documentSpaces: ch.document_spaces.map((sp) => ({
+      id: sp.space_id,
+      name: sp.display_name,
+      dataRange: spacePeriods[sp.space_id] ?? DEFAULT_PERIOD,
+    })),
+  }));
+
+  // 콘텐츠와 하단바는 형제다 — 하단바 경계선이 pane 전폭을 쓰게 한다(패널 주석 참조)
+  return (
+    <>
+      <div className="px-8 pt-6 pb-6">
+        <ChannelTalkEmbeddingTargetPicker
+          channels={pickerChannels}
+          visibleChannelIds={visibleChannelIds}
+          selectedChannelIds={selectedChannelIds}
+          selectedDocumentIds={selectedSpaceIds}
+          onToggleVisibility={toggleVisibility}
+          onToggleChannel={toggleChannel}
+          onToggleDocument={(_channelId, spaceId) => toggleSpace(spaceId)}
+          onChannelDataRangeChange={(channelId, next) => setChannelPeriod(channelId, next)}
+          onDocumentDataRangeChange={(_channelId, spaceId, next) => setSpacePeriod(spaceId, next)}
+        />
+      </div>
+
+      <ChannelTalkEmbeddingFooterBar
+        channelCount={channelCount}
+        documentCount={spaceCount}
+        allSelected={isAllSelected}
+        isSubmitting={isSubmitting}
+        onToggleAll={toggleAll}
+        onEmbed={() => {
+          if (isSubmitting) return;
+          void submit(channels, { selectedChannelIds, selectedSpaceIds, channelPeriods, spacePeriods });
+        }}
+      />
+    </>
+  );
+}

@@ -1,0 +1,1445 @@
+"""LongMemEval 답변을 채점하고 깔때기 진단 리포트를 쓴다.
+
+채점은 문자열 일치가 아니라 LLM 판정이다. 같은 사실을 다른 문장으로
+쓰면 정답이어야 하는데, 문자열 비교는 그것을 오답으로 센다.
+
+판정 프롬프트는 공식 `evaluate_qa.py`의 재현이 아니라 이식이다.
+오프라인이라 원문을 대조하지 못했고, 스펙에 적힌 유형별 규칙(시간
+추론의 ±1 허용, 지식 갱신의 최신 값 요구, abstention의 "모른다가
+정답")을 그대로 옮겨 썼다. 그래서 이 값은 공식 리더보드 점수와 직접
+비교할 수 없다. 리포트가 그 사실을 매번 적는다.
+
+읽을 QA 산출물은 `--results-dir` 바로 아래가 아니라 `current_run.json`이
+가리키는 run 디렉토리에서 가져온다. 포인터 하나만 원자적으로 바뀌므로
+결과·trace·비용 셋은 늘 같은 실행의 것이다. 포인터가 없거나 완주를
+말하지 않으면 시끄럽게 멈춘다 — 옛 방식으로 디렉토리에 바로 놓인
+산출물을 읽어 주면 서로 다른 run이 섞인 묶음을 다시 채점하게 된다.
+
+쓰는 쪽은 반대로 예외를 둔다. 채점 산출물 셋(`grades.jsonl`·`report.md`·
+`grade_usage.json`)은 QA 산출물과 달리 run 디렉토리와 포인터 원자 공개를
+쓰지 않고 `--results-dir` 루트에 flat으로 쓴다. 채점 산출물은 사람이 읽는
+종착점이고 어떤 코드도 다시 소비하지 않아서, 서로 다른 run의 묶음이
+섞이더라도 하류로 번지지 않는다. 반대로 QA 산출물은 채점기가 읽으므로
+포인터로 묶음을 지켜야 한다. 나중에 자동 재소비(예: 회귀 대시보드)가
+생기면 그때 채점 산출물에도 `staged_outputs`를 씌운다.
+
+순서는 "선택 후 검사"다. 먼저 채점 대상 집합을 정하고, QA 산출물에서 그
+집합에 드는 행만 고른 다음, 고른 집합 안에서만 누락·중복을 본다. 부분
+결과에 점수를 매기면 분모가 남은 문항 수로 줄어 중간에 깨진 실행이 오히려
+높은 정답률로 보이기 때문이다. 반대로 완주 산출물에 `--limit`으로 앞
+N문항만 채점하는 것은 정상 사용이므로, 대상 밖 행은 오류가 아니라 "채점
+제외"로 세어 stdout과 리포트에 남긴다.
+
+읽지 못한 판정은 오답으로 세지 않고 error로 따로 센다. 못 읽은 응답을
+조용히 오답으로 접으면 점수가 낮아진 이유가 파이프라인인지 채점기인지
+구분되지 않는다.
+
+리포트의 값어치는 점수가 아니라 귀속이다. 오답마다 깔때기 어디에서
+샜는지를 하나로 지목하려면 QA trace만으로는 모자라서, 근거 세션에서
+claim이 실제로 나왔는지와 모순 안건이 판정됐는지를 DB에서 읽는다.
+읽기 전용이며 `knowledge_maintenance`를 거치지 않고 evaluation 쪽에서
+직접 select한다 — 진단용 조회는 지식 유지보수의 계약이 아니다.
+
+진단 근거를 어느 workspace에서 읽을지는 수집 러너가 쓴 manifest가 정한다.
+문항마다 haystack이 따로 격리되어 있으므로 진단도 문항마다 자기
+workspace에서 읽어야 한다. manifest가 없으면 `--workspace-id` 하나로 전부
+읽던 옛 방식으로 돌아간다.
+
+실행:
+    uv run python -m catchup.evaluation.longmemeval.grade \\
+        --results-dir experiments/longmemeval/results/
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import time
+import uuid
+from collections import Counter
+from collections.abc import Callable
+from collections.abc import Iterable
+from collections.abc import Mapping
+from collections.abc import Sequence
+from dataclasses import dataclass
+from dataclasses import field
+from datetime import datetime
+from datetime import timezone
+from pathlib import Path
+from typing import Any
+
+from langchain_core.language_models import BaseChatModel
+from sqlalchemy import String
+from sqlalchemy import cast
+from sqlalchemy import create_engine
+from sqlalchemy import func
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from sqlalchemy.orm import sessionmaker
+
+from catchup.components.llm.constants import LlmProvider
+from catchup.components.llm.constants import ModelCapacity
+from catchup.components.llm.factory import get_llm_service
+from catchup.configs.config import settings
+from catchup.db.models import KnowledgeCandidateEvidenceLink
+from catchup.db.models import KnowledgeClaimCandidate
+from catchup.db.models import KnowledgeMutationOperation
+from catchup.db.models import KnowledgeMutationProposal
+from catchup.db.models import KnowledgeNode
+from catchup.db.models import Observation
+from catchup.db.models import SourceVersion
+from catchup.evaluation.longmemeval.atomic_publish import current_run_directory
+from catchup.evaluation.longmemeval.dataset import OracleQuestion
+from catchup.evaluation.longmemeval.dataset import load_oracle
+from catchup.evaluation.longmemeval.dataset import select_subset
+from catchup.evaluation.longmemeval.diagnosis import FAILURE_CAUSES
+from catchup.evaluation.longmemeval.diagnosis import EvidenceStats
+from catchup.evaluation.longmemeval.diagnosis import FailureAttribution
+from catchup.evaluation.longmemeval.diagnosis import attribute_failure
+from catchup.evaluation.longmemeval.diagnosis import subject_miss_of
+from catchup.evaluation.longmemeval.run_qa import DEFAULT_ORACLE_PATH
+from catchup.evaluation.longmemeval.run_qa import RESULTS_FILENAME
+from catchup.evaluation.longmemeval.run_qa import TRACE_FILENAME
+from catchup.evaluation.longmemeval.run_qa import USAGE_FILENAME
+from catchup.evaluation.longmemeval.usage import UsageTotals
+from catchup.evaluation.longmemeval.usage import message_text
+from catchup.evaluation.longmemeval.usage import usage_from_message
+from catchup.evaluation.longmemeval.workspace_manifest import DEFAULT_MANIFEST_PATH
+from catchup.evaluation.longmemeval.workspace_manifest import resolve_workspace_for
+
+DEFAULT_WORKSPACE_ID = 902
+GRADES_FILENAME = "grades.jsonl"
+REPORT_FILENAME = "report.md"
+GRADE_USAGE_FILENAME = "grade_usage.json"
+
+SHARED_WORKSPACE_EVENT = "bench_grade_shared_workspace"
+"""manifest 없이 공용 workspace에서 진단할 때 남길 로그 이름을 나타낸다."""
+
+DEFAULT_INPUT_PRICE = 3.0
+DEFAULT_OUTPUT_PRICE = 15.0
+TOKENS_PER_UNIT_PRICE = 1_000_000
+
+VERDICT_YES = "yes"
+VERDICT_NO = "no"
+VERDICT_ERROR = "error"
+
+JUDGE_PROMPT_VERSION = "catchup-port-of-longmemeval-evaluate_qa/v1"
+"""채점 프롬프트의 출처와 판을 나타낸다.
+
+공식 저장소의 `evaluate_qa.py` 원문을 그대로 옮긴 것이 아니라, 그
+프롬프트가 유형별로 나뉜다는 사실과 각 유형의 판정 규칙만 이식한
+것이다. 점수를 공식 리더보드와 나란히 놓을 수 없다는 뜻이므로 버전
+문자열을 리포트에 남긴다.
+"""
+
+# 모순 안건에 사람(여기서는 벤치마크 규칙)이 결정을 내린 상태다.
+# pending은 아직 아무도 판단하지 않은 것이라 결정으로 세지 않는다.
+DECIDED_PROPOSAL_STATUSES = frozenset({"approved", "applied", "rejected"})
+CONTRADICTION_KIND = "contradiction"
+
+DEFAULT_RULE = (
+    "The response is correct if it conveys the same information as the "
+    "reference answer, even when it is worded differently or adds "
+    "harmless detail. Answer no if it omits, contradicts, or changes the "
+    "fact the reference answer states."
+)
+
+TEMPORAL_RULE = (
+    "This question asks about dates, durations, or ordering. The response "
+    "is correct if its calculation matches the reference answer within one "
+    "unit of whatever the question asks about (one day, one week, one "
+    "month, or one year). Answer no if the gap is larger than one unit or "
+    "the direction in time is wrong."
+)
+
+KNOWLEDGE_UPDATE_RULE = (
+    "The reference answer states the most recent value, after the fact "
+    "changed. The response is correct only if it gives that latest value. "
+    "Answer no if it gives only an older, superseded value, even when that "
+    "older value was once true."
+)
+
+ABSTENTION_RULE = (
+    "The information needed to answer this question was never present in "
+    "the conversation history, so there is no reference answer. The "
+    "response is correct only if it says it does not know or has no "
+    "information about it. Answer no if it states any specific fact as the "
+    "answer, however plausible it sounds."
+)
+
+JUDGE_PROMPT_TEMPLATE = """\
+You are grading one answer produced by a long-term memory QA system.
+
+Grading rule:
+{rule}
+
+Question:
+{question}
+
+{reference_block}
+Response to grade:
+{hypothesis}
+
+Reply with exactly one word, "yes" or "no". No punctuation, no
+explanation.
+Answer:"""
+
+REFERENCE_BLOCK_TEMPLATE = """\
+Reference answer:
+{answer}
+"""
+
+ABSTENTION_REFERENCE_BLOCK = """\
+Reference answer:
+(none — the conversation history never contained this information)
+"""
+
+
+def judge_rule(question_type: str, *, is_abstention: bool) -> str:
+    """이 문항을 어느 규칙으로 잴지 고른다.
+
+    abstention이 유형보다 먼저다. `_abs` 문항에는 정답 정보 자체가
+    haystack에 없어서 유형별 규칙으로 재면 "모른다"가 전부 오답이 된다.
+    """
+    if is_abstention:
+        return ABSTENTION_RULE
+    if question_type == "temporal-reasoning":
+        return TEMPORAL_RULE
+    if question_type == "knowledge-update":
+        return KNOWLEDGE_UPDATE_RULE
+    return DEFAULT_RULE
+
+
+def build_judge_prompt(
+    *,
+    question: str,
+    answer: str,
+    hypothesis: str,
+    question_type: str,
+    is_abstention: bool,
+) -> str:
+    """판정 프롬프트 한 건을 만든다.
+
+    abstention 문항에는 정답을 싣지 않는다. 없는 정답을 지어내 보여주면
+    채점자가 "정답과 같은가"를 재게 되어, 재려던 것("모른다고 말했는가")
+    이 아닌 값이 나온다.
+    """
+    if is_abstention:
+        reference_block = ABSTENTION_REFERENCE_BLOCK
+    else:
+        reference_block = REFERENCE_BLOCK_TEMPLATE.format(answer=answer)
+    return JUDGE_PROMPT_TEMPLATE.format(
+        rule=judge_rule(question_type, is_abstention=is_abstention),
+        question=question.strip(),
+        reference_block=reference_block,
+        hypothesis=hypothesis.strip(),
+    )
+
+
+def parse_verdict(text: str | None) -> str:
+    """판정 응답의 첫 단어만 읽어 yes·no·error로 접는다.
+
+    읽지 못한 응답을 오답으로 세지 않는다. 그러면 점수가 낮아진 이유가
+    파이프라인인지 채점기인지 사후에 구분되지 않는다.
+    """
+    words = (text or "").strip().split()
+    if not words:
+        return VERDICT_ERROR
+    token = words[0].strip("*_`\"'.,!:;()[]").casefold()
+    if token == VERDICT_YES:
+        return VERDICT_YES
+    if token == VERDICT_NO:
+        return VERDICT_NO
+    return VERDICT_ERROR
+
+
+def estimate_cost(
+    usage: UsageTotals,
+    *,
+    input_price: float,
+    output_price: float,
+) -> float:
+    """토큰 사용량을 백만 토큰 단가로 환산한다."""
+    return (
+        usage.input_tokens / TOKENS_PER_UNIT_PRICE * input_price
+        + usage.output_tokens / TOKENS_PER_UNIT_PRICE * output_price
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class JudgeResult:
+    """판정 호출 한 번의 결과를 담는다.
+
+    Attributes:
+        verdict: yes·no·error 중 하나를 나타낸다.
+        raw: 모델이 실제로 쓴 응답을 그대로 담는다.
+        usage: 판정 호출이 쓴 토큰을 담는다.
+    """
+
+    verdict: str
+    raw: str
+    usage: UsageTotals = field(default_factory=UsageTotals)
+
+
+JudgeFn = Callable[..., JudgeResult]
+"""문항 하나를 판정하는 함수를 나타낸다."""
+
+
+@dataclass(frozen=True, slots=True)
+class GradeRow:
+    """문항 한 건의 채점 결과와 진단 근거를 담는다.
+
+    Attributes:
+        question_id: 문항 식별자를 나타낸다.
+        question_type: 유형별 집계에 쓸 질문 유형을 나타낸다.
+        is_abstention: 거절이 정답인 문항인지 나타낸다.
+        verdict: yes·no·error 중 하나를 나타낸다.
+        hypothesis: 채점 대상 답변을 담는다.
+        judge_raw: 판정 모델의 원문 응답을 담는다.
+        abstained: QA 러너가 답변을 거절했는지 나타낸다.
+        subject_miss: subject 조회가 전부 빗나갔는지 나타낸다.
+        evidence_stats: 근거 세션에서 DB가 만든 것들의 집계를 담는다.
+        attribution: 오답일 때의 대표 원인을 담고, 그 밖에는 None이다.
+        usage: 이 문항 판정이 쓴 토큰을 담는다.
+        similarity_used: 유사 후보를 되짚은 블록이 실제로 컨텍스트에
+            실렸는지 나타낸다.
+        similarity_candidates: 되짚어 본 유사 후보 수를 나타낸다. 후보를
+            떠올렸지만 컨텍스트까지 가지 못한 문항은 이 값만 0보다 크다.
+    """
+
+    question_id: str
+    question_type: str
+    is_abstention: bool
+    verdict: str
+    hypothesis: str
+    judge_raw: str
+    abstained: bool
+    subject_miss: bool
+    evidence_stats: EvidenceStats
+    attribution: FailureAttribution | None
+    usage: UsageTotals
+    similarity_used: bool = False
+    similarity_candidates: int = 0
+
+    @property
+    def bucket(self) -> str:
+        """유형별 표에서 이 문항이 들어갈 행 이름을 나타낸다."""
+        if self.is_abstention:
+            return f"{self.question_type} (abstention)"
+        return self.question_type
+
+    def as_dict(self) -> dict[str, Any]:
+        """grades 파일에 담을 한 줄로 바꾼다."""
+        return {
+            "question_id": self.question_id,
+            "question_type": self.question_type,
+            "is_abstention": self.is_abstention,
+            "verdict": self.verdict,
+            "hypothesis": self.hypothesis,
+            "judge_raw": self.judge_raw,
+            "abstained": self.abstained,
+            "subject_miss": self.subject_miss,
+            "similarity_used": self.similarity_used,
+            "similarity_candidates": self.similarity_candidates,
+            "evidence_stats": self.evidence_stats.as_dict(),
+            "attribution": (
+                None
+                if self.attribution is None
+                else self.attribution.as_dict()
+            ),
+            "usage": self.usage.as_dict(),
+        }
+
+
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    """JSONL 파일을 한 줄씩 읽어 dict 목록으로 돌려준다."""
+    rows: list[dict[str, Any]] = []
+    with path.open(encoding="utf-8") as file:
+        for line in file:
+            stripped = line.strip()
+            if stripped:
+                rows.append(json.loads(stripped))
+    return rows
+
+
+def _id_preview(question_ids: Sequence[str]) -> str:
+    """어긋난 문항 목록을 한 줄로 줄여 보여준다."""
+    head = ", ".join(question_ids[:10])
+    return head + (" …" if len(question_ids) > 10 else "")
+
+
+def check_question_coverage(
+    expected: Sequence[str],
+    actual: Sequence[str],
+    *,
+    label: str,
+) -> None:
+    """채점 대상과 고른 산출물 행의 문항 집합이 정확히 같은지 확인한다.
+
+    QA가 중간에 깨진 실행은 앞쪽 문항의 결과만 남긴다. 그 파일을 그대로
+    채점하면 분모가 남은 문항 수로 줄고, 못 푼 문항이 뒤쪽에 몰려 있으면
+    실패한 실행의 정답률이 오히려 높게 나온다. 중복 question_id도 같은
+    문항을 두 번 세어 분모를 부풀린다.
+
+    그래서 판정을 한 번이라도 부르기 전에 막는다. judge를 돌린 뒤에
+    알아채면 이미 쓴 토큰은 돌아오지 않는다.
+
+    `actual`은 이미 채점 대상으로 골라낸 행들의 식별자여야 한다.
+    `select_rows_to_grade`가 대상 밖 행을 먼저 빼고 부르므로 초과는
+    보통 일어나지 않지만, 다른 호출자가 거르지 않고 넘길 때를 대비해
+    검사는 남겨 둔다.
+
+    Raises:
+        SystemExit: 누락·중복·초과가 하나라도 있을 때 낸다.
+    """
+    expected_ids = set(expected)
+    counted = Counter(actual)
+    missing = sorted(expected_ids - set(counted))
+    unexpected = sorted(set(counted) - expected_ids)
+    duplicated = sorted(
+        question_id for question_id, count in counted.items() if count > 1
+    )
+    if not (missing or unexpected or duplicated):
+        return
+
+    problems: list[str] = []
+    if missing:
+        problems.append(f"누락 {len(missing)}건({_id_preview(missing)})")
+    if duplicated:
+        problems.append(f"중복 {len(duplicated)}건({_id_preview(duplicated)})")
+    if unexpected:
+        problems.append(
+            f"대상 밖 {len(unexpected)}건({_id_preview(unexpected)})"
+        )
+    raise SystemExit(
+        f"{label}가 채점 대상 {len(expected_ids)}문항과 어긋난다: "
+        + ", ".join(problems)
+        + ". QA 러너를 같은 `--per-type`으로 다시 완주시킨다."
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class GradingSelection:
+    """완주 산출물에서 골라낸 채점 대상 행과 제외 문항을 함께 담는다.
+
+    Attributes:
+        rows: 채점 대상 집합에 드는 산출물 행을 원래 순서대로 담는다.
+        excluded_ids: 대상 밖이라 채점하지 않은 문항 식별자를 담는다.
+            오류가 아니라 집계용이다.
+    """
+
+    rows: tuple[Mapping[str, Any], ...]
+    excluded_ids: tuple[str, ...]
+
+
+def select_rows_to_grade(
+    rows: Sequence[Mapping[str, Any]],
+    expected: Sequence[str],
+    *,
+    label: str,
+) -> GradingSelection:
+    """완주 산출물에서 채점 대상 문항의 행만 고르고 그 안을 검사한다.
+
+    선택이 검사보다 먼저다. 산출물 전체가 대상 집합과 같아야 한다고 보면
+    40문항을 완주한 뒤 `--limit 1`로 앞 한 문항만 채점하는 정상 사용이
+    "대상 밖 39건"으로 거절된다. 완주 산출물에 부분 채점을 거는 것은
+    비용 제어 수단이지 오류가 아니다.
+
+    반대로 고른 집합 안의 누락과 중복은 그대로 막는다. 그쪽은 분모를
+    줄이거나 부풀려 점수 자체를 틀리게 만들기 때문이다.
+
+    Raises:
+        SystemExit: 고른 집합에 누락이나 중복이 있을 때 낸다.
+    """
+    expected_ids = set(expected)
+    selected: list[Mapping[str, Any]] = []
+    excluded: set[str] = set()
+    for row in rows:
+        question_id = str(row.get("question_id") or "")
+        if question_id in expected_ids:
+            selected.append(row)
+        else:
+            excluded.add(question_id)
+    check_question_coverage(
+        expected,
+        [str(row.get("question_id") or "") for row in selected],
+        label=label,
+    )
+    return GradingSelection(
+        rows=tuple(selected),
+        excluded_ids=tuple(sorted(excluded)),
+    )
+
+
+def grade_questions(
+    results: Sequence[Mapping[str, Any]],
+    *,
+    questions: Mapping[str, OracleQuestion],
+    traces: Mapping[str, Mapping[str, Any]],
+    evidence: Mapping[str, EvidenceStats],
+    judge: JudgeFn,
+    on_row: Callable[[GradeRow], None] | None = None,
+    on_skip: Callable[[str], None] | None = None,
+) -> list[GradeRow]:
+    """답변 목록을 하나씩 판정하고 오답에 원인을 붙인다.
+
+    귀속은 오답(`no`)에만 붙인다. 못 읽은 판정(`error`)에 원인을 붙이면
+    파이프라인이 실패했다는 증거가 없는데도 실패 분포가 커진다.
+
+    채점 서브셋에 없는 question_id는 판정하지 않고 건너뛰되 `on_skip`으로
+    알린다. 조용히 버리면 결과 파일과 서브셋이 어긋났을 때 분모만 작아진
+    정답률이 정상처럼 보인다.
+    """
+    rows: list[GradeRow] = []
+    for result in results:
+        question_id = str(result["question_id"])
+        question = questions.get(question_id)
+        if question is None:
+            if on_skip is not None:
+                on_skip(question_id)
+            continue
+        hypothesis = str(result.get("hypothesis") or "")
+        trace = traces.get(question_id, {})
+        stats = evidence.get(question_id, EvidenceStats())
+
+        judged = judge(
+            question=question.question,
+            answer=question.answer,
+            hypothesis=hypothesis,
+            question_type=question.question_type,
+            is_abstention=question.is_abstention,
+        )
+        attribution = (
+            attribute_failure(trace, stats)
+            if judged.verdict == VERDICT_NO
+            else None
+        )
+        row = GradeRow(
+            question_id=question_id,
+            question_type=question.question_type,
+            is_abstention=question.is_abstention,
+            verdict=judged.verdict,
+            hypothesis=hypothesis,
+            judge_raw=judged.raw,
+            abstained=bool(trace.get("abstained", False)),
+            subject_miss=subject_miss_of(trace),
+            evidence_stats=stats,
+            attribution=attribution,
+            usage=judged.usage,
+            similarity_used=bool(trace.get("similarity_used", False)),
+            similarity_candidates=len(
+                trace.get("similarity_candidates") or ()
+            ),
+        )
+        rows.append(row)
+        if on_row is not None:
+            on_row(row)
+    return rows
+
+
+def load_claim_sessions(
+    session: Session,
+    *,
+    workspace_id: int,
+) -> dict[uuid.UUID, set[str]]:
+    """claim candidate마다 그 근거가 온 세션 식별자를 모은다.
+
+    사슬은 claim candidate → evidence link → observation node →
+    observation → source version이다. 수집 러너가 세션 하나를 문서
+    하나로 넣으면서 `external_document_id`에 session_id를 그대로 썼으므로
+    마지막 칸이 곧 세션 식별자다.
+
+    `resource_id`는 문자열 칸이라 UUID를 캐스팅해 잇는다.
+    """
+    rows = session.execute(
+        select(
+            KnowledgeCandidateEvidenceLink.claim_candidate_id,
+            SourceVersion.external_document_id,
+        )
+        .join(
+            KnowledgeNode,
+            (
+                KnowledgeNode.id
+                == KnowledgeCandidateEvidenceLink.evidence_node_id
+            )
+            & (
+                KnowledgeNode.workspace_id
+                == KnowledgeCandidateEvidenceLink.workspace_id
+            ),
+        )
+        .join(
+            Observation,
+            (cast(Observation.id, String) == KnowledgeNode.resource_id)
+            & (Observation.workspace_id == KnowledgeNode.workspace_id),
+        )
+        .join(
+            SourceVersion,
+            (SourceVersion.id == Observation.source_version_id)
+            & (SourceVersion.workspace_id == Observation.workspace_id),
+        )
+        .where(
+            KnowledgeCandidateEvidenceLink.workspace_id == workspace_id,
+            KnowledgeCandidateEvidenceLink.claim_candidate_id.isnot(None),
+            KnowledgeNode.resource_type == "observation",
+        )
+    ).all()
+
+    mapping: dict[uuid.UUID, set[str]] = {}
+    for claim_candidate_id, external_document_id in rows:
+        mapping.setdefault(claim_candidate_id, set()).add(
+            external_document_id
+        )
+    return mapping
+
+
+@dataclass(frozen=True, slots=True)
+class ContradictionProposal:
+    """모순 안건 하나와 거기 물린 claim candidate를 담는다.
+
+    Attributes:
+        proposal_id: 안건 식별자를 나타낸다.
+        status: 안건의 현재 상태를 나타낸다.
+        claim_candidate_ids: 이 안건이 건드리는 claim 후보를 담는다.
+    """
+
+    proposal_id: uuid.UUID
+    status: str
+    claim_candidate_ids: frozenset[uuid.UUID]
+
+    @property
+    def decided(self) -> bool:
+        """규칙이 승패를 정한 안건인지 나타낸다."""
+        return self.status in DECIDED_PROPOSAL_STATUSES
+
+
+def load_contradiction_proposals(
+    session: Session,
+    *,
+    workspace_id: int,
+) -> list[ContradictionProposal]:
+    """모순 안건과 그 안건이 건드리는 claim 후보를 읽는다.
+
+    trigger 하나만 보면 안 된다. 안건의 trigger는 모순 그룹의 한 쪽일
+    뿐이라, 정답 근거가 진 쪽에 있으면 문항과 안건이 이어지지 않는다.
+    그래서 operation이 가리키는 claim 후보까지 합쳐 본다.
+    """
+    proposals = session.execute(
+        select(
+            KnowledgeMutationProposal.id,
+            KnowledgeMutationProposal.status,
+            KnowledgeMutationProposal.trigger_claim_candidate_id,
+        ).where(
+            KnowledgeMutationProposal.workspace_id == workspace_id,
+            KnowledgeMutationProposal.proposal_kind == CONTRADICTION_KIND,
+        )
+    ).all()
+    if not proposals:
+        return []
+
+    proposal_ids = [row[0] for row in proposals]
+    operations = session.execute(
+        select(
+            KnowledgeMutationOperation.proposal_id,
+            KnowledgeMutationOperation.claim_candidate_id,
+        ).where(
+            KnowledgeMutationOperation.workspace_id == workspace_id,
+            KnowledgeMutationOperation.proposal_id.in_(proposal_ids),
+            KnowledgeMutationOperation.claim_candidate_id.isnot(None),
+        )
+    ).all()
+
+    by_proposal: dict[uuid.UUID, set[uuid.UUID]] = {}
+    for proposal_id, claim_candidate_id in operations:
+        by_proposal.setdefault(proposal_id, set()).add(claim_candidate_id)
+
+    collected: list[ContradictionProposal] = []
+    for proposal_id, status, trigger_claim_id in proposals:
+        claim_ids = set(by_proposal.get(proposal_id, ()))
+        if trigger_claim_id is not None:
+            claim_ids.add(trigger_claim_id)
+        collected.append(
+            ContradictionProposal(
+                proposal_id=proposal_id,
+                status=status,
+                claim_candidate_ids=frozenset(claim_ids),
+            )
+        )
+    return collected
+
+
+def build_evidence_stats(
+    questions: Iterable[OracleQuestion],
+    *,
+    claim_sessions: Mapping[uuid.UUID, set[str]],
+    proposals: Sequence[ContradictionProposal],
+) -> dict[str, EvidenceStats]:
+    """문항마다 근거 세션이 실제로 만든 것들을 센다.
+
+    기준은 oracle이 지목한 `answer_session_ids`다. 그 세션에서 나온
+    claim이 0이면 조회가 아니라 추출에서 샌 것이고, 그 claim이 물린
+    모순 안건이 0이면 감지에서 샌 것이다.
+    """
+    stats: dict[str, EvidenceStats] = {}
+    for question in questions:
+        session_ids = set(question.answer_session_ids)
+        claim_ids = {
+            claim_id
+            for claim_id, sessions in claim_sessions.items()
+            if sessions & session_ids
+        }
+        detected = [
+            proposal
+            for proposal in proposals
+            if proposal.claim_candidate_ids & claim_ids
+        ]
+        stats[question.question_id] = EvidenceStats(
+            extracted_claims=len(claim_ids),
+            contradictions_detected=len(detected),
+            contradictions_decided=sum(
+                1 for proposal in detected if proposal.decided
+            ),
+        )
+    return stats
+
+
+def load_vocabulary_snapshots(
+    session: Session,
+    *,
+    workspace_id: int,
+) -> list[tuple[str, str, int]]:
+    """추출에 실제로 쓰인 어휘 스냅샷과 그 건수를 읽는다.
+
+    스냅샷이 하나가 아니면 같은 workspace 안에서 서로 다른 규칙으로 뽑힌
+    claim이 섞였다는 뜻이라 점수를 하나의 어휘 아래 해석할 수 없다. 그
+    사실을 사후 검토 플래그로 리포트에 남긴다.
+    """
+    rows = session.execute(
+        select(
+            KnowledgeClaimCandidate.ontology_id,
+            KnowledgeClaimCandidate.ontology_version,
+            func.count().label("candidates"),
+        )
+        .where(KnowledgeClaimCandidate.workspace_id == workspace_id)
+        .group_by(
+            KnowledgeClaimCandidate.ontology_id,
+            KnowledgeClaimCandidate.ontology_version,
+        )
+        .order_by(
+            KnowledgeClaimCandidate.ontology_id,
+            KnowledgeClaimCandidate.ontology_version,
+        )
+    ).all()
+    return [(row[0], row[1], int(row[2])) for row in rows]
+
+
+@dataclass(frozen=True, slots=True)
+class Diagnostics:
+    """진단에 쓸 DB 집계를 문항별로 모아 담는다.
+
+    Attributes:
+        evidence: 문항마다 근거 세션이 만든 것들의 집계를 담는다.
+        contradiction_total: 읽은 workspace들의 모순 안건 총수를 담는다.
+        contradiction_decided: 그중 결정이 내려진 안건 수를 담는다.
+        vocabulary_snapshots: 추출에 쓰인 어휘 스냅샷을 합쳐 담는다.
+    """
+
+    evidence: dict[str, EvidenceStats]
+    contradiction_total: int
+    contradiction_decided: int
+    vocabulary_snapshots: tuple[tuple[str, str, int], ...]
+
+
+def collect_diagnostics(
+    session: Session,
+    questions: Sequence[OracleQuestion],
+    *,
+    workspace_id: int,
+    workspace_for: Mapping[str, int] | None = None,
+) -> Diagnostics:
+    """문항마다 자기 workspace에서 진단 근거를 읽어 합친다.
+
+    `workspace_for`가 있으면 문항별 격리 실행이다. 문항 하나의 근거를
+    다른 문항의 workspace에서 세면 그 문항이 만들지도 않은 claim과 안건이
+    잡혀 실패 귀속이 통째로 어긋난다. 그래서 workspace마다 한 번씩 읽고
+    그 workspace에 속한 문항만 그 값으로 센다.
+
+    어휘 스냅샷은 workspace를 가로질러 합친다. 서로 다른 어휘로 뽑힌
+    claim이 섞였는지는 실행 전체에 대한 질문이기 때문이다.
+    """
+    groups: dict[int, list[OracleQuestion]] = {}
+    if workspace_for is None:
+        groups[workspace_id] = list(questions)
+    else:
+        for question in questions:
+            target = workspace_for[question.question_id]
+            groups.setdefault(target, []).append(question)
+
+    evidence: dict[str, EvidenceStats] = {}
+    total = 0
+    decided = 0
+    snapshot_counts: dict[tuple[str, str], int] = {}
+    for target, group in sorted(groups.items()):
+        claim_sessions = load_claim_sessions(session, workspace_id=target)
+        proposals = load_contradiction_proposals(
+            session,
+            workspace_id=target,
+        )
+        evidence.update(
+            build_evidence_stats(
+                group,
+                claim_sessions=claim_sessions,
+                proposals=proposals,
+            )
+        )
+        total += len(proposals)
+        decided += sum(1 for proposal in proposals if proposal.decided)
+        for ontology_id, version, count in load_vocabulary_snapshots(
+            session,
+            workspace_id=target,
+        ):
+            key = (ontology_id, version)
+            snapshot_counts[key] = snapshot_counts.get(key, 0) + count
+
+    return Diagnostics(
+        evidence=evidence,
+        contradiction_total=total,
+        contradiction_decided=decided,
+        vocabulary_snapshots=tuple(
+            (ontology_id, version, count)
+            for (ontology_id, version), count in sorted(
+                snapshot_counts.items()
+            )
+        ),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ReportInputs:
+    """리포트 한 장을 쓰는 데 필요한 모든 값을 담는다.
+
+    Attributes:
+        workspace_id: 지식을 읽어 온 평가 workspace를 나타낸다.
+        results_dir: 채점한 결과 디렉토리를 나타낸다.
+        rows: 문항별 채점 결과를 담는다.
+        qa_usage: QA 러너가 쓴 토큰 집계를 담는다.
+        qa_elapsed_ms: QA trace의 문항 소요 시간 합을 담는다.
+        grade_elapsed_ms: 이번 채점 실행의 실측 소요 시간을 담는다.
+        contradiction_total: workspace 전체 모순 안건 수를 나타낸다.
+        contradiction_decided: 그중 결정이 내려진 안건 수를 나타낸다.
+        vocabulary_snapshots: 추출에 쓰인 어휘 스냅샷 목록을 담는다.
+        qa_run_id: 채점한 QA run의 식별자를 담는다. 결과·trace·비용이
+            어느 실행에서 함께 나온 것인지를 리포트만 보고 알 수 있게
+            한다.
+        excluded_question_ids: 채점 대상 밖이라 판정하지 않은 결과 행의
+            식별자를 담는다. 정답률 분모에 들어가지 않은 문항이며,
+            `--limit`으로 부분 채점하면 정상적으로 생긴다.
+        manifest_path: 문항별 격리 실행이면 대응표 경로를 담고, 단일
+            workspace 실행이면 None이다.
+        input_price: 입력 토큰 백만 개당 단가를 나타낸다.
+        output_price: 출력 토큰 백만 개당 단가를 나타낸다.
+        similarity_fallback: 채점한 QA 실행이 유사 후보 되짚기를 켠 채
+            돌았는지를 나타낸다. 비용 집계 파일이 이 값을 안 담은 옛
+            실행이면 None이다.
+    """
+
+    workspace_id: int
+    results_dir: Path
+    rows: tuple[GradeRow, ...]
+    qa_usage: UsageTotals
+    qa_elapsed_ms: float
+    grade_elapsed_ms: float
+    contradiction_total: int
+    contradiction_decided: int
+    vocabulary_snapshots: tuple[tuple[str, str, int], ...]
+    qa_run_id: str | None = None
+    excluded_question_ids: tuple[str, ...] = ()
+    manifest_path: Path | None = None
+    input_price: float = DEFAULT_INPUT_PRICE
+    output_price: float = DEFAULT_OUTPUT_PRICE
+    similarity_fallback: bool | None = None
+
+    @property
+    def judge_usage(self) -> UsageTotals:
+        """채점이 쓴 토큰 합계를 나타낸다."""
+        total = UsageTotals()
+        for row in self.rows:
+            total = total.plus(row.usage)
+        return total
+
+
+def _ratio(part: int, whole: int) -> str:
+    """비율을 백분율 문자열로 만든다. 분모가 0이면 대시를 쓴다."""
+    if whole <= 0:
+        return "-"
+    return f"{part / whole * 100:.1f}%"
+
+
+def render_report(inputs: ReportInputs) -> str:
+    """채점 결과를 리포트 markdown 한 장으로 편다."""
+    rows = inputs.rows
+    graded = [row for row in rows if row.verdict != VERDICT_ERROR]
+    correct = [row for row in rows if row.verdict == VERDICT_YES]
+    errors = [row for row in rows if row.verdict == VERDICT_ERROR]
+
+    lines: list[str] = ["# LongMemEval 채점 리포트", ""]
+    if inputs.manifest_path is None:
+        lines.append(f"- workspace: {inputs.workspace_id} (전 문항 공용)")
+    else:
+        lines.append(
+            f"- workspace: 문항별 격리 (manifest: `{inputs.manifest_path}`)"
+        )
+    lines.append(f"- 결과 디렉토리: `{inputs.results_dir}`")
+    if inputs.qa_run_id is not None:
+        lines.append(f"- QA run: `{inputs.qa_run_id}`")
+    lines.append(
+        f"- 채점 시각: {datetime.now(timezone.utc).isoformat(timespec='seconds')}"
+    )
+    lines.append(f"- judge 프롬프트 버전: `{JUDGE_PROMPT_VERSION}`")
+    lines.append(
+        "- 프롬프트 출처: 공식 `evaluate_qa.py`의 재현이 아니라 그 "
+        "유형별 분기 규칙을 이식한 것이다. 원문을 대조하지 못했으므로 "
+        "이 점수는 공식 리더보드 값과 직접 비교할 수 없다."
+    )
+    lines.append("")
+    lines.append(
+        f"전체 {len(rows)}문항 중 채점 {len(graded)}건, "
+        f"정답 {len(correct)}건 "
+        f"({_ratio(len(correct), len(graded))}), "
+        f"미채점 {len(errors)}건."
+    )
+    lines.append("")
+
+    excluded = inputs.excluded_question_ids
+    if excluded:
+        lines.append(
+            f"채점 제외 {len(excluded)}건: QA 산출물에는 있으나 이번 채점 "
+            "대상 밖이라 판정하지 않았다. `--limit`이나 다른 `--per-type`"
+            "으로 완주 산출물의 일부만 채점하면 정상적으로 생기는 값이며, "
+            "위 분모에는 들어가지 않는다. 그럴 의도가 아니었다면 결과 "
+            "파일과 서브셋이 같은 실행에서 나온 것인지 확인하라. 위 QA "
+            "비용은 제외분까지 포함한 실행 전체 값이다."
+        )
+        preview = ", ".join(f"`{qid}`" for qid in sorted(excluded)[:10])
+        suffix = " …" if len(excluded) > 10 else ""
+        lines.append(f"채점 제외 문항: {preview}{suffix}")
+        lines.append("")
+
+    lines.append("## 유형별 정답률")
+    lines.append("")
+    lines.append("| 유형 | 문항 | 정답 | 오답 | 미채점 | 정답률 |")
+    lines.append("| --- | ---: | ---: | ---: | ---: | ---: |")
+    buckets: dict[str, list[GradeRow]] = {}
+    for row in rows:
+        buckets.setdefault(row.bucket, []).append(row)
+    for bucket in sorted(buckets):
+        bucket_rows = buckets[bucket]
+        yes = sum(1 for row in bucket_rows if row.verdict == VERDICT_YES)
+        no = sum(1 for row in bucket_rows if row.verdict == VERDICT_NO)
+        err = sum(1 for row in bucket_rows if row.verdict == VERDICT_ERROR)
+        lines.append(
+            f"| {bucket} | {len(bucket_rows)} | {yes} | {no} | {err} | "
+            f"{_ratio(yes, yes + no)} |"
+        )
+    lines.append("")
+
+    lines.append("## 실패 귀속 분포")
+    lines.append("")
+    failures = [row for row in rows if row.attribution is not None]
+    counts = Counter(
+        row.attribution.cause for row in failures if row.attribution
+    )
+    lines.append("| 대표 원인 | 건수 | 오답 중 비율 |")
+    lines.append("| --- | ---: | ---: |")
+    for cause in FAILURE_CAUSES:
+        lines.append(
+            f"| {cause} | {counts.get(cause, 0)} | "
+            f"{_ratio(counts.get(cause, 0), len(failures))} |"
+        )
+    lines.append(f"| (합계) | {len(failures)} | - |")
+    lines.append("")
+    lines.append(
+        "귀속은 상류 우선이다. 한 문항에 증상이 겹치면 위 표의 위쪽 "
+        "원인 하나만 대표로 센다."
+    )
+    lines.append("")
+
+    lines.append("## 유사 후보 되짚기")
+    lines.append("")
+    if inputs.similarity_fallback is False:
+        lines.append("이 실행은 fallback off로 돌았다. 아래 값은 모두 0이다.")
+        lines.append("")
+    elif inputs.similarity_fallback is None:
+        lines.append(
+            "이 실행의 비용 집계에 on·off 기록이 없다. 아래 값은 trace에 "
+            "남은 흔적만으로 센 것이다."
+        )
+        lines.append("")
+    similarity_used = sum(1 for row in rows if row.similarity_used)
+    similarity_tried = sum(1 for row in rows if row.similarity_candidates > 0)
+    lines.append("| 지표 | 값 | 비율 |")
+    lines.append("| --- | ---: | ---: |")
+    lines.append(
+        f"| 후보를 되짚어 본 문항 | {similarity_tried} | "
+        f"{_ratio(similarity_tried, len(rows))} |"
+    )
+    lines.append(
+        f"| 되짚은 블록이 컨텍스트에 실린 문항 | {similarity_used} | "
+        f"{_ratio(similarity_used, len(rows))} |"
+    )
+    lines.append("")
+    lines.append(
+        "되짚은 블록이 실린 문항은 위 귀속 표에서 `subject_miss`로 세지 "
+        "않는다. 정확 매칭은 빗나갔어도 답변 재료는 실렸으므로 상류에서 "
+        "샌 것이 아니다. 그래서 아래 `조회 깔때기`의 subject miss 수는 "
+        "이 문항들을 그대로 포함한다 — 두 값은 다른 것을 센다."
+    )
+    lines.append("")
+
+    lines.append("## 진단 한계")
+    lines.append("")
+    lines.append(
+        "위 분포는 정확한 인과 추적이 아니라 근사다. 네 한계 모두 "
+        "실패를 실제보다 적게 세는 쪽으로 기울므로, 이 표를 낙관 쪽으로 "
+        "더 읽으면 안 된다."
+    )
+    lines.append("")
+    if inputs.manifest_path is None:
+        lines.append(
+            "1. 문항과 모순 안건은 claim 집합이 겹치는지로만 잇는다. 한 "
+            "workspace에 여러 문항의 세션이 섞이므로 다른 문항 때문에 열린 "
+            "안건이 이 문항에 잡힐 수 있다. 그래서 `conflict_missed`는 "
+            "위음성 쪽으로 기운다 — 실제로 놓친 모순보다 적게 잡힌다."
+        )
+    else:
+        lines.append(
+            "1. 문항과 모순 안건은 claim 집합이 겹치는지로만 잇는다. "
+            "workspace가 문항별로 갈려 있어 다른 문항의 안건은 섞이지 "
+            "않지만, 같은 문항의 distractor 세션에서 열린 안건은 여전히 "
+            "이 문항에 잡힌다. 그래서 `conflict_missed`는 위음성 쪽으로 "
+            "기운다 — 실제로 놓친 모순보다 적게 잡힌다."
+        )
+    lines.append(
+        "2. `extracted_claims`는 근거 세션 단위 집계이지 has_answer 턴 "
+        "단위가 아니다. 정답과 무관한 다른 턴에서 나온 claim도 세므로 "
+        "`claim_not_extracted`는 관대하다 — 실제 추출 실패보다 적게 "
+        "잡힌다."
+    )
+    lines.append(
+        "3. QA trace가 승자 claim의 id를 담지 않아, "
+        "`adjudication_wrong`은 \"판정 결과가 QA 컨텍스트까지 오지 "
+        "않았다\"를 컨텍스트 claim이 0인지로 근사한다. 승자가 아닌 다른 "
+        "claim이 실려 있으면 이 규칙은 걸리지 않고 `answer_generation`으로 "
+        "흐른다."
+    )
+    lines.append(
+        "4. relation 조회 경로가 없다. 조회는 subject 단위 as-of 질의뿐"
+        "이라, 두 subject를 잇는 relation을 물어야 풀리는 multi-session "
+        "문항은 근거가 지식에 있어도 컨텍스트에 실리지 않는다. 이 오답은 "
+        "귀속에서 별도 원인으로 갈라지지 않고 `answer_generation` 쪽으로 "
+        "흘러 실제 조회 실패보다 적게 잡힌다."
+    )
+    lines.append("")
+
+    lines.append("## 조회 깔때기")
+    lines.append("")
+    misses = sum(1 for row in rows if row.subject_miss)
+    abstains = sum(1 for row in rows if row.abstained)
+    no_claims = sum(
+        1 for row in rows if row.evidence_stats.extracted_claims == 0
+    )
+    lines.append("| 지표 | 값 | 비율 |")
+    lines.append("| --- | ---: | ---: |")
+    lines.append(f"| subject miss | {misses} | {_ratio(misses, len(rows))} |")
+    lines.append(
+        f"| 근거 세션에서 claim 0 | {no_claims} | "
+        f"{_ratio(no_claims, len(rows))} |"
+    )
+    lines.append(
+        f"| QA 거절(abstain) | {abstains} | "
+        f"{_ratio(abstains, len(rows))} |"
+    )
+    lines.append("")
+
+    lines.append("## 모순 감지·판정")
+    lines.append("")
+    linked = sum(
+        1 for row in rows if row.evidence_stats.contradictions_detected > 0
+    )
+    decided_rows = sum(
+        1 for row in rows if row.evidence_stats.contradictions_decided > 0
+    )
+    lines.append("| 지표 | 값 |")
+    lines.append("| --- | ---: |")
+    lines.append(f"| workspace 전체 모순 안건 | {inputs.contradiction_total} |")
+    lines.append(f"| 그중 결정된 안건 | {inputs.contradiction_decided} |")
+    lines.append(f"| 모순 안건이 걸린 문항 | {linked} |")
+    lines.append(f"| 그중 결정까지 간 문항 | {decided_rows} |")
+    lines.append("")
+
+    lines.append("## 단계별 소요 시간")
+    lines.append("")
+    lines.append("| 단계 | 초 | 출처 |")
+    lines.append("| --- | ---: | --- |")
+    lines.append(
+        f"| QA 답변 | {inputs.qa_elapsed_ms / 1000:.1f} | "
+        f"`{TRACE_FILENAME}`의 문항별 elapsed 합 |"
+    )
+    lines.append(
+        f"| 채점 | {inputs.grade_elapsed_ms / 1000:.1f} | 이번 실행 실측 |"
+    )
+    lines.append(
+        f"| 합계 | "
+        f"{(inputs.qa_elapsed_ms + inputs.grade_elapsed_ms) / 1000:.1f} | - |"
+    )
+    lines.append("")
+    lines.append(
+        "수집·추출·해소·판정 단계의 시간은 이 리포트가 재지 않는다. "
+        "각 러너를 돌린 wall-clock을 실행 기록에서 옮겨 적는다."
+    )
+    lines.append("")
+
+    judge_usage = inputs.judge_usage
+    total_usage = inputs.qa_usage.plus(judge_usage)
+    lines.append("## 토큰·비용")
+    lines.append("")
+    lines.append(
+        f"단가: 입력 ${inputs.input_price}/M, 출력 ${inputs.output_price}/M."
+    )
+    lines.append("")
+    lines.append("| 단계 | 호출 | 입력 토큰 | 출력 토큰 | 비용(USD) |")
+    lines.append("| --- | ---: | ---: | ---: | ---: |")
+    for label, usage in (
+        ("QA", inputs.qa_usage),
+        ("채점", judge_usage),
+        ("합계", total_usage),
+    ):
+        cost = estimate_cost(
+            usage,
+            input_price=inputs.input_price,
+            output_price=inputs.output_price,
+        )
+        lines.append(
+            f"| {label} | {usage.calls} | {usage.input_tokens} | "
+            f"{usage.output_tokens} | {cost:.4f} |"
+        )
+    lines.append("")
+    lines.append(
+        "수집·추출·해소 단계의 토큰은 각 러너의 usage JSON에 따로 있다. "
+        "전체 실행 비용은 그 값들을 이 표에 더해야 나온다."
+    )
+    lines.append("")
+
+    lines.append("## 사후 검토 플래그")
+    lines.append("")
+    lines.append("- 어휘 스냅샷:")
+    if not inputs.vocabulary_snapshots:
+        lines.append("  - 이 workspace에 claim candidate가 없다.")
+    for ontology_id, version, count in inputs.vocabulary_snapshots:
+        lines.append(f"  - `{ontology_id}` / `{version}` — candidate {count}건")
+    if len(inputs.vocabulary_snapshots) > 1:
+        lines.append(
+            "  - 경고: 스냅샷이 둘 이상이다. 서로 다른 어휘로 뽑힌 claim이 "
+            "섞였으므로 이 점수를 하나의 어휘 아래 해석할 수 없다."
+        )
+    lines.append(
+        "- 어휘 초안은 부트스트랩 workspace에서 만들어 사람이 검토한 뒤 "
+        "발행한 것이다. 정답률이 특정 predicate에서만 낮다면 점수보다 "
+        "그 스냅샷의 value_type을 먼저 의심한다."
+    )
+    lines.append(
+        "- 판정 규칙은 벤치마크 전용(최근 관찰이 이긴다)이다. 이 값을 "
+        "제품의 모순 판정 품질로 읽지 않는다."
+    )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def bedrock_judge(llm: BaseChatModel) -> JudgeFn:
+    """Bedrock 모델을 판정 함수로 감싼다."""
+
+    def judge(
+        *,
+        question: str,
+        answer: str,
+        hypothesis: str,
+        question_type: str,
+        is_abstention: bool,
+    ) -> JudgeResult:
+        message = llm.invoke(
+            build_judge_prompt(
+                question=question,
+                answer=answer,
+                hypothesis=hypothesis,
+                question_type=question_type,
+                is_abstention=is_abstention,
+            )
+        )
+        raw = message_text(message)
+        return JudgeResult(
+            verdict=parse_verdict(raw),
+            raw=raw,
+            usage=usage_from_message(message),
+        )
+
+    return judge
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--workspace-id",
+        type=int,
+        default=DEFAULT_WORKSPACE_ID,
+        help=(
+            "manifest가 없을 때 진단 근거를 읽어올 단일 workspace를 정한다."
+        ),
+    )
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=DEFAULT_MANIFEST_PATH,
+        help=(
+            "수집 러너가 쓴 문항-workspace 대응표를 정한다. 파일이 없으면 "
+            "`--workspace-id` 하나로 전부 읽는 옛 방식으로 돈다."
+        ),
+    )
+    parser.add_argument(
+        "--results-dir",
+        type=Path,
+        required=True,
+        help=(
+            "QA 러너에 넘겼던 산출물 루트를 정한다. 읽을 세 파일은 "
+            "`current_run.json`이 가리키는 run 디렉토리에서 가져오고, "
+            "채점 산출물은 이 루트에 쓴다."
+        ),
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help=(
+            "채점 대상을 서브셋 앞에서부터 N문항으로 줄인다. QA 산출물은 "
+            "완주본 그대로 두고 그중 이 N문항만 판정하며, 나머지는 "
+            "`채점 제외`로 집계한다. judge 비용 제어용이다."
+        ),
+    )
+    parser.add_argument("--per-type", type=int, default=10)
+    parser.add_argument(
+        "--oracle-path",
+        type=Path,
+        default=DEFAULT_ORACLE_PATH,
+    )
+    parser.add_argument(
+        "--input-price",
+        type=float,
+        default=DEFAULT_INPUT_PRICE,
+        help="입력 토큰 백만 개당 단가(USD)를 정한다.",
+    )
+    parser.add_argument(
+        "--output-price",
+        type=float,
+        default=DEFAULT_OUTPUT_PRICE,
+        help="출력 토큰 백만 개당 단가(USD)를 정한다.",
+    )
+    parser.add_argument(
+        "--capacity",
+        choices=[capacity.value for capacity in ModelCapacity],
+        default=ModelCapacity.LARGE.value,
+    )
+    args = parser.parse_args()
+
+    # 세 파일은 포인터가 가리키는 run 디렉토리에서만 읽는다. 포인터
+    # 교체가 원자적이라 어느 시점에 읽어도 셋은 같은 run의 것이다.
+    qa_run_dir = current_run_directory(args.results_dir)
+    results_path = qa_run_dir / RESULTS_FILENAME
+    trace_path = qa_run_dir / TRACE_FILENAME
+    if not results_path.exists():
+        raise SystemExit(f"QA 결과 파일이 없다: {results_path}")
+    if not trace_path.exists():
+        raise SystemExit(f"QA trace 파일이 없다: {trace_path}")
+    if not args.oracle_path.exists():
+        raise SystemExit(f"oracle 파일이 없다: {args.oracle_path}")
+
+    subset = select_subset(
+        load_oracle(args.oracle_path),
+        per_type=args.per_type,
+    )
+    if args.limit is not None:
+        subset = subset[: max(args.limit, 0)]
+    if not subset:
+        raise SystemExit("채점할 문항이 없다.")
+    questions = {question.question_id: question for question in subset}
+
+    # `--limit`은 산출물이 아니라 채점 대상에 건다. QA 산출물은 완주본
+    # 전체를 읽고 그중 대상 집합에 드는 행만 고른 뒤, 고른 집합 안에서만
+    # 누락·중복을 본다. 완주본에 부분 채점을 거는 것은 정상 사용이므로
+    # 대상 밖 행은 오류가 아니라 제외 집계로 남긴다.
+    expected_ids = [question.question_id for question in subset]
+    result_selection = select_rows_to_grade(
+        read_jsonl(results_path),
+        expected_ids,
+        label=f"QA 결과({results_path.name})",
+    )
+    trace_selection = select_rows_to_grade(
+        read_jsonl(trace_path),
+        expected_ids,
+        label=f"QA trace({trace_path.name})",
+    )
+    results = result_selection.rows
+    excluded_ids = sorted(
+        set(result_selection.excluded_ids) | set(trace_selection.excluded_ids)
+    )
+
+    traces = {str(row["question_id"]): row for row in trace_selection.rows}
+    qa_elapsed_ms = sum(
+        float(row.get("elapsed_ms") or 0.0) for row in traces.values()
+    )
+
+    workspace_for = resolve_workspace_for(
+        args.manifest,
+        questions,
+        event=SHARED_WORKSPACE_EVENT,
+    )
+
+    qa_usage = UsageTotals()
+    similarity_fallback: bool | None = None
+    usage_path = qa_run_dir / USAGE_FILENAME
+    if usage_path.exists():
+        payload = json.loads(usage_path.read_text(encoding="utf-8"))
+        qa_usage = UsageTotals(
+            calls=int(payload.get("calls") or 0),
+            input_tokens=int(payload.get("input_tokens") or 0),
+            output_tokens=int(payload.get("output_tokens") or 0),
+        )
+        raw_fallback = payload.get("similarity_fallback")
+        if raw_fallback is not None:
+            similarity_fallback = bool(raw_fallback)
+
+    engine = create_engine(settings.sqlalchemy_database_url)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    try:
+        with session_factory() as session:
+            diagnostics = collect_diagnostics(
+                session,
+                subset,
+                workspace_id=args.workspace_id,
+                workspace_for=workspace_for,
+            )
+        evidence = diagnostics.evidence
+
+        service = get_llm_service(
+            provider=LlmProvider.AWS_BEDROCK,
+            model_capacity=ModelCapacity(args.capacity),
+            streaming=False,
+        )
+        judge = bedrock_judge(service.get_llm())
+
+        grades_path = args.results_dir / GRADES_FILENAME
+        # 대상 밖 행은 이미 골라내고 들어왔다. `on_skip`은 그래도 걸어
+        # 둔다 — 선택이 뚫리면 조용히 분모만 줄어드는 대신 드러난다.
+        excluded: list[str] = list(excluded_ids)
+        started = time.perf_counter()
+        with grades_path.open("w", encoding="utf-8") as grades_file:
+
+            def _record(row: GradeRow) -> None:
+                grades_file.write(
+                    json.dumps(row.as_dict(), ensure_ascii=False) + "\n"
+                )
+                grades_file.flush()
+                cause = (
+                    ""
+                    if row.attribution is None
+                    else f"  {row.attribution.cause}"
+                )
+                print(f"  {row.question_id}  {row.verdict.upper()}{cause}")
+
+            rows = grade_questions(
+                results,
+                questions=questions,
+                traces=traces,
+                evidence=evidence,
+                judge=judge,
+                on_row=_record,
+                on_skip=excluded.append,
+            )
+        grade_elapsed_ms = (time.perf_counter() - started) * 1000
+    finally:
+        engine.dispose()
+
+    report_inputs = ReportInputs(
+        workspace_id=args.workspace_id,
+        results_dir=args.results_dir,
+        rows=tuple(rows),
+        qa_usage=qa_usage,
+        qa_elapsed_ms=qa_elapsed_ms,
+        grade_elapsed_ms=grade_elapsed_ms,
+        contradiction_total=diagnostics.contradiction_total,
+        contradiction_decided=diagnostics.contradiction_decided,
+        vocabulary_snapshots=diagnostics.vocabulary_snapshots,
+        qa_run_id=qa_run_dir.name,
+        excluded_question_ids=tuple(excluded),
+        manifest_path=args.manifest if workspace_for is not None else None,
+        input_price=args.input_price,
+        output_price=args.output_price,
+        similarity_fallback=similarity_fallback,
+    )
+    report_path = args.results_dir / REPORT_FILENAME
+    report_path.write_text(render_report(report_inputs), encoding="utf-8")
+
+    judge_usage = report_inputs.judge_usage
+    grade_usage_path = args.results_dir / GRADE_USAGE_FILENAME
+    grade_usage_path.write_text(
+        json.dumps(
+            {
+                "workspace_id": (
+                    None if workspace_for is not None else args.workspace_id
+                ),
+                "manifest": (
+                    str(args.manifest) if workspace_for is not None else None
+                ),
+                "capacity": args.capacity,
+                "judge_prompt_version": JUDGE_PROMPT_VERSION,
+                "graded": len(rows),
+                "input_price": args.input_price,
+                "output_price": args.output_price,
+                "estimated_cost_usd": round(
+                    estimate_cost(
+                        judge_usage,
+                        input_price=args.input_price,
+                        output_price=args.output_price,
+                    ),
+                    6,
+                ),
+                "elapsed_ms": round(grade_elapsed_ms, 3),
+                **judge_usage.as_dict(),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    correct = sum(1 for row in rows if row.verdict == VERDICT_YES)
+    graded = sum(1 for row in rows if row.verdict != VERDICT_ERROR)
+    scope = (
+        f"문항별 격리, manifest={args.manifest}"
+        if workspace_for is not None
+        else f"ws={args.workspace_id}"
+    )
+    print(f"\n=== 채점 결과 ({scope}) ===")
+    print(f"  정답 {correct}/{graded}  (미채점 {len(rows) - graded})")
+    if excluded:
+        print(
+            f"  채점 제외 {len(excluded)}건(대상 밖): "
+            + ", ".join(sorted(excluded)[:10])
+            + (" …" if len(excluded) > 10 else "")
+        )
+    print(f"  {args.results_dir / GRADES_FILENAME}")
+    print(f"  {report_path}")
+    print(f"  {grade_usage_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
