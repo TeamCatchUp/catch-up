@@ -42,7 +42,7 @@ def get_eval_context() -> GlobalContext:
     user_ctx = GlobalUserContext(
         id=1,
         name="Evaluator",
-        email="user@example.com",
+        email="eval@example.com",
     )
     return GlobalContext(user=user_ctx)
 

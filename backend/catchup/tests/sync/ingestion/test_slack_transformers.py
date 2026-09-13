@@ -54,7 +54,7 @@ class SlackTransformerBlockBodyTests(TestCase):
                         "type": "section",
                         "text": {
                             "type": "mrkdwn",
-                            "text": "*[요청]* Agentic RAG 파이프라인 확정 (0.4.2 포함)\n*위치* : <https://example.atlassian.net/wiki/x/AQDbBQ>",
+                            "text": "*[요청]* Agentic RAG 파이프라인 확정 (0.4.2 포함)\n*위치* : <https://example.atlassian.net/wiki/x/AAAAAA>",
                         },
                     },
                     {"type": "divider"},
@@ -107,7 +107,7 @@ class SlackTransformerBlockBodyTests(TestCase):
         contextual_content = document.metadata["contextual_content"]
 
         self.assertIn(
-            "위치 : https://example.atlassian.net/wiki/x/AQDbBQ",
+            "위치 : https://example.atlassian.net/wiki/x/AAAAAA",
             contextual_content,
         )
         self.assertIn("Agentic RAG 파이프라인 수정 완료했습니다.", contextual_content)

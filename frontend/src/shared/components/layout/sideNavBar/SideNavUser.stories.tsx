@@ -40,7 +40,7 @@ const meta = {
   args: {
     isOpen: true,
     name: '권보라',
-    email: 'user@example.com',
+    email: 'bora.kwon@example.com',
     role: 'admin',
   },
   argTypes: {
@@ -88,7 +88,7 @@ export const AdminOpen: Story = {
 
     await step('show user identity', async () => {
       await expect(canvas.getByText('권보라')).toBeInTheDocument();
-      await expect(canvas.getByText('user@example.com')).toBeInTheDocument();
+      await expect(canvas.getByText('bora.kwon@example.com')).toBeInTheDocument();
     });
 
     await step('open admin user menu', async () => {
@@ -102,7 +102,7 @@ export const AdminOpen: Story = {
 export const UserOpen: Story = {
   args: {
     name: '이서연',
-    email: 'user@example.com',
+    email: 'seoyeon.lee@example.com',
     role: 'user',
   },
   render: (args) => <SideNavUserSurface key={`${args.isOpen}:${args.role}:${args.email}`} {...args} />,

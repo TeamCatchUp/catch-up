@@ -5,7 +5,7 @@ import { catchupParameters } from '../../../../../../.storybook/catchupStoryPara
 import type { UserMappingRow } from '../../types/userMappingModel';
 import UserMappingTable from './UserMappingTable';
 
-const account = (name: string) => ({ name, identifier: 'dlkjfcccldjl@gmail.comcomcomcom' });
+const account = (name: string) => ({ name, identifier: 'user@example.com' });
 
 const ROWS: readonly UserMappingRow[] = [
   {
