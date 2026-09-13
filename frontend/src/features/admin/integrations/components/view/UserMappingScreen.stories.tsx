@@ -62,10 +62,10 @@ const ROWS_FIXTURE: readonly UserMappingRow[] = [
     user: { name: '김수현' },
     fullyMapped: true,
     accounts: {
-      atlassian: account('김수현', 'user@example.com'),
-      github: account('soohyun-kim', 'user@example.com'),
-      slack: account('김수현', 'user@example.com'),
-      channel_talk: account('김수현', 'user@example.com'),
+      atlassian: account('김수현', 'soohyun@example.com'),
+      github: account('soohyun-kim', 'soohyun@example.com'),
+      slack: account('김수현', 'soohyun@example.com'),
+      channel_talk: account('김수현', 'soohyun@example.com'),
     },
   },
   {
@@ -73,8 +73,8 @@ const ROWS_FIXTURE: readonly UserMappingRow[] = [
     user: { name: '이정원' },
     fullyMapped: false,
     accounts: {
-      atlassian: account('이정원', 'user@example.com'),
-      github: account('jungwon-lee', 'user@example.com'),
+      atlassian: account('이정원', 'jungwon@example.com'),
+      github: account('jungwon-lee', 'jungwon@example.com'),
       slack: null,
       channel_talk: null,
     },
@@ -84,10 +84,10 @@ const ROWS_FIXTURE: readonly UserMappingRow[] = [
     user: { name: '박민지' },
     fullyMapped: true,
     accounts: {
-      atlassian: account('박민지', 'user@example.com'),
+      atlassian: account('박민지', 'minji@example.com'),
       github: 'unused',
-      slack: account('박민지', 'user@example.com'),
-      channel_talk: account('박민지', 'user@example.com'),
+      slack: account('박민지', 'minji@example.com'),
+      channel_talk: account('박민지', 'minji@example.com'),
     },
   },
   {
@@ -96,8 +96,8 @@ const ROWS_FIXTURE: readonly UserMappingRow[] = [
     fullyMapped: false,
     accounts: {
       atlassian: null,
-      github: account('daeun-choi', 'user@example.com'),
-      slack: account('최다은', 'user@example.com'),
+      github: account('daeun-choi', 'daeun@example.com'),
+      slack: account('최다은', 'daeun@example.com'),
       channel_talk: null,
     },
   },
@@ -106,9 +106,9 @@ const ROWS_FIXTURE: readonly UserMappingRow[] = [
     user: { name: '직원25' },
     fullyMapped: true,
     accounts: {
-      atlassian: account('직원25', 'user@example.com'),
-      github: account('haneul-jung', 'user@example.com'),
-      slack: account('직원25', 'user@example.com'),
+      atlassian: account('직원25', 'haneul@example.com'),
+      github: account('haneul-jung', 'haneul@example.com'),
+      slack: account('직원25', 'haneul@example.com'),
       channel_talk: 'unused',
     },
   },
@@ -116,15 +116,15 @@ const ROWS_FIXTURE: readonly UserMappingRow[] = [
 
 const EDIT_OPTIONS: Partial<Record<MappingSource, AccountOption[]>> = {
   atlassian: [
-    { id: 'at-1', name: '김수현', identifier: 'user@example.com' },
-    { id: 'at-2', name: '이정원', identifier: 'user@example.com' },
+    { id: 'at-1', name: '김수현', identifier: 'soohyun@example.com' },
+    { id: 'at-2', name: '이정원', identifier: 'jungwon@example.com' },
   ],
   github: [
-    { id: 'gh-1', name: 'soohyun-kim', identifier: 'user@example.com' },
-    { id: 'gh-2', name: 'jungwon-lee', identifier: 'user@example.com' },
+    { id: 'gh-1', name: 'soohyun-kim', identifier: 'soohyun@example.com' },
+    { id: 'gh-2', name: 'jungwon-lee', identifier: 'jungwon@example.com' },
   ],
-  slack: [{ id: 'sl-1', name: '김수현', identifier: 'user@example.com' }],
-  channel_talk: [{ id: 'ct-1', name: '김수현', identifier: 'user@example.com' }],
+  slack: [{ id: 'sl-1', name: '김수현', identifier: 'soohyun@example.com' }],
+  channel_talk: [{ id: 'ct-1', name: '김수현', identifier: 'soohyun@example.com' }],
 };
 
 /** UserMappingPageClient의 셸 — 커넥터 연결과 같은 규칙(px-16, gap 40) */

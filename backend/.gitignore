@@ -25,6 +25,10 @@ catchup/experiments/channel_talk/
 # 커밋에 딸려 들어간다.
 experiments/longmemeval/
 
-# 평가 데이터셋은 코드와 함께 관리한다
+# 평가 데이터셋은 코드와 함께 관리한다. 단, 실측 질문셋과 트러블슈팅 원문은
+# 저장소 밖에서 관리한다. 별도 스토리지에서
+# 받아 이 디렉토리에 두고 러너를 돌린다.
 !catchup/evaluation/data/
 !catchup/evaluation/data/**
+catchup/evaluation/data/baseline_*.json
+catchup/evaluation/data/llm_wiki_extraction_sources_*.yaml
