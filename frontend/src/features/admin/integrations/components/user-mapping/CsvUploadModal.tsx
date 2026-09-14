@@ -7,7 +7,6 @@ import { toast } from 'sonner';
 import IconAdd from '@/public/icons/icon/add.svg';
 import IconCancelSmall from '@/public/icons/icon/cancel_small.svg';
 import IconError from '@/public/icons/icon/error.svg';
-import IconFile from '@/public/icons/icon/file.svg';
 import IconLink from '@/public/icons/icon/link.svg';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
@@ -231,16 +230,6 @@ export default function CsvUploadModal({ open, onOpenChange }: CsvUploadModalPro
 
             {/* 콘텐츠 */}
             <div className="border-line-normal-neutral flex flex-col gap-3 overflow-y-auto border-t pt-4">
-              {/* CSV 가이드 버튼 */}
-              <a
-                href="/docs/user_mapping_guide.pdf"
-                download="[Catch Up] 유저 맵핑 가이드.pdf"
-                className="border-line-normal-neutral text-body-xsmall text-text-normal-normal hover:bg-fill-normal-strong bg-fill-normal-normal flex h-7.5 w-fit cursor-pointer items-center gap-1 rounded-lg border px-2 py-1"
-              >
-                <IconFile className="text-icon-normal-normal size-5 shrink-0" />
-                CSV 업로드 가이드(PDF) 보기
-              </a>
-
               {/* 벤더 섹션  */}
               <div className="flex flex-col gap-6">
                 {VENDOR_CONFIGS.map(({ vendor, label, helperText }) => (
