@@ -33,14 +33,6 @@ export default function GithubGuideSection() {
         <p className="text-label-small text-text-normal-normal">
           이후 GitHub 연동 페이지로 이동하여 팀이 함께 볼 Organization을 선택하고 접근 권한을 승인해주세요.
         </p>
-        <div className="border-line-normal-neutral bg-fill-normal-normal overflow-clip rounded-xl border px-4 py-2.5">
-          <Image
-            src={GITHUB_GUIDE_IMAGES.install}
-            alt="GitHub CatchUp Connector 설치 화면"
-            quality={100}
-            className="h-auto w-full"
-          />
-        </div>
       </div>
 
       {/* 2. 동기화할 Repository 선택 */}

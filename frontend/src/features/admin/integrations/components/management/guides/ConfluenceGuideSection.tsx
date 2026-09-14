@@ -42,22 +42,6 @@ export default function ConfluenceGuideSection() {
           </a>
           )를 선택하고 권한을 승인해주세요.
         </p>
-        <div className="border-line-normal-neutral bg-fill-normal-normal overflow-clip rounded-xl border px-4 py-2.5">
-          <Image
-            src={CONFLUENCE_GUIDE_IMAGES.siteSelection}
-            alt="Atlassian 사이트 선택 및 권한 요청 화면"
-            quality={100}
-            className="h-auto w-full"
-          />
-        </div>
-        <div className="border-line-normal-neutral bg-fill-normal-normal overflow-clip rounded-xl border px-4 py-2.5">
-          <Image
-            src={CONFLUENCE_GUIDE_IMAGES.accept}
-            alt="Atlassian 권한 승인 화면"
-            quality={100}
-            className="h-auto w-full"
-          />
-        </div>
         <button
           type="button"
           onClick={() => window.open(ATLASSIAN_PROFILE_URL, '_blank')}
